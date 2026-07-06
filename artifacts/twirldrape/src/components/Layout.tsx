@@ -13,12 +13,13 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const isHome = location === "/";
+  const isCollections = location === "/collections";
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <AnnouncementBar />
       <Navbar />
-      {!isHome && <SectionSwitcher />}
+      {!isHome && !isCollections && <SectionSwitcher />}
       <main className="flex-grow">
         {children}
       </main>

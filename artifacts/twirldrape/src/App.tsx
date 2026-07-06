@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { WishlistProvider } from "@/context/WishlistContext";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
+import Collections from "@/pages/Collections";
 import Paithani from "@/pages/Paithani";
 import Designer from "@/pages/Designer";
 import PaithaniShop from "@/pages/PaithaniShop";
@@ -146,6 +147,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/collections" component={Collections} />
       <Route path="/paithani" component={Paithani} />
       <Route path="/paithani/shop" component={PaithaniShop} />
       <Route path="/designer" component={Designer} />

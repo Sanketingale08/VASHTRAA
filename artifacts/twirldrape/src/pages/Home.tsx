@@ -18,7 +18,7 @@ import {
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { StatsBar } from "@/components/StatsBar";
-import { mockProducts } from "@/lib/mock-data";
+import { useListProducts } from "@workspace/api-client-react";
 
 const GOLD = "#C9A84C";
 const MAROON = "#7B1C2C";
@@ -96,7 +96,8 @@ function PeacockIcon({ size = 40 }: { size?: number }) {
 }
 
 export default function Home() {
-  const picks = mockProducts.slice(0, 8);
+  const { data: picksData } = useListProducts({ limit: 8 });
+  const picks = picksData?.products ?? [];
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);

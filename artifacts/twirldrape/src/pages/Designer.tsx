@@ -4,7 +4,8 @@ import { HeroSlider } from "@/components/HeroSlider";
 import { StatsBar } from "@/components/StatsBar";
 import { SectionHeading } from "@/components/SectionHeading";
 import { ProductCard } from "@/components/ProductCard";
-import { mockProducts, vendors, lookbooks } from "@/lib/mock-data";
+import { vendors, lookbooks } from "@/lib/mock-data";
+import { useListProducts } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
 import { Star } from "lucide-react";
 import { Link } from "wouter";
@@ -42,6 +43,9 @@ function BrowseAllLink({ href }: { href: string }) {
 }
 
 export default function Designer() {
+  const { data } = useListProducts({ category: "designer", limit: 16 });
+  const products = data?.products ?? [];
+
   return (
     <div className="dark">
       <Layout>
@@ -58,7 +62,7 @@ export default function Designer() {
                 <BrowseAllLink href="/designer/shop" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {mockProducts.slice(0, 4).map((product, i) => (
+                {products.slice(0, 4).map((product, i) => (
                   <ProductCard key={`bollywood-${product.id}`} product={product} index={i} />
                 ))}
               </div>
@@ -76,7 +80,7 @@ export default function Designer() {
                 <BrowseAllLink href="/designer/shop" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {mockProducts.slice(8, 12).map((product, i) => (
+                {products.slice(4, 8).map((product, i) => (
                   <ProductCard key={`party-${product.id}`} product={product} index={i} />
                 ))}
               </div>
@@ -89,7 +93,7 @@ export default function Designer() {
                 <BrowseAllLink href="/designer/shop" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {mockProducts.slice(6, 10).map((product, i) => (
+                {products.slice(0, 4).map((product, i) => (
                   <ProductCard key={`reception-${product.id}`} product={product} index={i} />
                 ))}
               </div>
@@ -112,7 +116,7 @@ export default function Designer() {
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {mockProducts.slice(3, 7).map((product, i) => (
+                {products.slice(0, 4).map((product, i) => (
                   <ProductCard key={`cocktail-${product.id}`} product={product} index={i} />
                 ))}
               </div>
@@ -125,7 +129,7 @@ export default function Designer() {
                 <BrowseAllLink href="/designer/shop" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                {mockProducts.slice(4, 10).map((product, i) => (
+                {products.slice(0, 6).map((product, i) => (
                   <ProductCard key={`wedding-${product.id}`} product={product} index={i} />
                 ))}
               </div>
@@ -138,7 +142,7 @@ export default function Designer() {
                 <BrowseAllLink href="/designer/shop" />
               </div>
               <div className="flex overflow-x-auto gap-6 pb-8 snap-x snap-mandatory hide-scrollbar">
-                {mockProducts.slice(0, 6).map((product, i) => (
+                {products.slice(0, 6).map((product, i) => (
                   <div key={`contemporary-${product.id}`} className="min-w-[280px] md:min-w-[320px] snap-start">
                     <ProductCard product={product} index={i} />
                   </div>

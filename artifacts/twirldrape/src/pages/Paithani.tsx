@@ -4,7 +4,8 @@ import { HeroSlider } from "@/components/HeroSlider";
 import { StatsBar } from "@/components/StatsBar";
 import { SectionHeading } from "@/components/SectionHeading";
 import { ProductCard } from "@/components/ProductCard";
-import { mockProducts, artisanStories, lookbooks } from "@/lib/mock-data";
+import { artisanStories, lookbooks } from "@/lib/mock-data";
+import { useListProducts } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 
@@ -41,6 +42,9 @@ function BrowseAllLink({ href }: { href: string }) {
 }
 
 export default function Paithani() {
+  const { data } = useListProducts({ category: "paithani", limit: 16 });
+  const products = data?.products ?? [];
+
   return (
     <Layout>
       <HeroSlider slides={slides} />
@@ -56,7 +60,7 @@ export default function Paithani() {
               <BrowseAllLink href="/paithani/shop" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {mockProducts.slice(0, 4).map((product, i) => (
+              {products.slice(0, 4).map((product, i) => (
                 <ProductCard key={`royal-${product.id}`} product={product} index={i} />
               ))}
             </div>
@@ -74,7 +78,7 @@ export default function Paithani() {
               <BrowseAllLink href="/paithani/shop" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {mockProducts.slice(4, 10).map((product, i) => (
+              {products.slice(0, 6).map((product, i) => (
                 <ProductCard key={`bridal-${product.id}`} product={product} index={i} />
               ))}
             </div>
@@ -87,7 +91,7 @@ export default function Paithani() {
               <BrowseAllLink href="/paithani/shop" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {mockProducts.slice(2, 6).map((product, i) => (
+              {products.slice(0, 4).map((product, i) => (
                 <ProductCard key={`heritage-${product.id}`} product={product} index={i} />
               ))}
             </div>
@@ -125,7 +129,7 @@ export default function Paithani() {
               <BrowseAllLink href="/paithani/shop" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {mockProducts.slice(6, 10).map((product, i) => (
+              {products.slice(4, 8).map((product, i) => (
                 <ProductCard key={`handcraft-${product.id}`} product={product} index={i} />
               ))}
             </div>
@@ -148,7 +152,7 @@ export default function Paithani() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {mockProducts.slice(1, 5).map((product, i) => (
+              {products.slice(0, 4).map((product, i) => (
                 <ProductCard key={`luxury-${product.id}`} product={product} index={i} />
               ))}
             </div>
@@ -185,7 +189,7 @@ export default function Paithani() {
               <BrowseAllLink href="/paithani/shop" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {mockProducts.filter(p => p.isBestSeller).slice(0, 4).map((product, i) => (
+              {products.filter(p => p.isBestSeller).slice(0, 4).map((product, i) => (
                 <ProductCard key={`premium-${product.id}`} product={product} index={i} />
               ))}
             </div>

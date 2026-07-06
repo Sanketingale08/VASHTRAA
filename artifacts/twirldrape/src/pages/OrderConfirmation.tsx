@@ -64,7 +64,16 @@ export function OrderConfirmationPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !orderId) return;
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setLoading(false);
+      return;
+    }
+    if (!orderId) {
+      setError("Order not found");
+      setLoading(false);
+      return;
+    }
     fetch(`${BASE}/api/orders/${orderId}`, { credentials: "include" })
       .then(async r => {
         if (!r.ok) throw new Error("Order not found");

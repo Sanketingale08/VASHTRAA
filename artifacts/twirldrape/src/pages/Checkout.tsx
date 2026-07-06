@@ -78,6 +78,7 @@ export function CheckoutPage() {
   const [buyNowItems, setBuyNowItems] = useState<CartItem[] | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState("");
+  const orderPlacedRef = React.useRef(false);
 
   const [address, setAddress] = useState<Address>({
     name: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "",
@@ -105,6 +106,11 @@ export function CheckoutPage() {
         }
       }
     } catch {}
+    return () => {
+      if (!orderPlacedRef.current) {
+        sessionStorage.removeItem(BUY_NOW_KEY);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -181,6 +187,7 @@ export function CheckoutPage() {
         throw new Error((err as any).error || "Failed to place order");
       }
       const data = await res.json();
+      orderPlacedRef.current = true;
       sessionStorage.removeItem(BUY_NOW_KEY);
       if (!buyNowItems) await clearCart();
       setLocation(`/orders/${data.orderId}`);

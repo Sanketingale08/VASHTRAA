@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { ordersTable, cartItemsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { ordersTable, cartItemsTable, productsTable } from "@workspace/db";
+import { eq, and, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -16,23 +16,28 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 
+const SERVER_COUPONS: Record<string, { type: "percent" | "flat"; value: number }> = {
+  SAVE10: { type: "percent", value: 10 },
+  WELCOME50: { type: "flat", value: 50 },
+};
+
+function computeShipping(deliveryMethod: string, afterDiscount: number): number {
+  if (deliveryMethod === "express") return 499;
+  return afterDiscount >= 5000 ? 0 : 199;
+}
+
 router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
     const {
-      items,
+      items: clientItems,
       address,
       deliveryMethod,
       paymentMethod,
       couponCode,
-      subtotal,
-      discount,
-      shipping,
-      tax,
-      total,
       isBuyNow,
     } = req.body;
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    if (!clientItems || !Array.isArray(clientItems) || clientItems.length === 0) {
       res.status(400).json({ error: "No items in order" });
       return;
     }
@@ -49,20 +54,69 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
       return;
     }
 
+    const productIds: string[] = clientItems.map((i: any) => i.productId);
+    const dbProducts = await db
+      .select({
+        id: productsTable.id,
+        name: productsTable.name,
+        price: productsTable.price,
+        images: productsTable.images,
+        vendorName: productsTable.vendorName,
+        stock: productsTable.stock,
+      })
+      .from(productsTable)
+      .where(inArray(productsTable.id, productIds));
+
+    if (dbProducts.length !== productIds.length) {
+      res.status(400).json({ error: "One or more products not found" });
+      return;
+    }
+
+    const productMap = new Map(dbProducts.map(p => [p.id, p]));
+
+    const resolvedItems = clientItems.map((i: any) => {
+      const p = productMap.get(i.productId)!;
+      const qty = Math.max(1, Math.min(parseInt(i.quantity, 10) || 1, p.stock));
+      return {
+        productId: p.id,
+        name: p.name,
+        price: p.price,
+        quantity: qty,
+        images: p.images,
+        vendorName: p.vendorName,
+      };
+    });
+
+    const subtotal = resolvedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+
+    let discount = 0;
+    const normalizedCoupon = couponCode ? String(couponCode).trim().toUpperCase() : null;
+    const coupon = normalizedCoupon ? SERVER_COUPONS[normalizedCoupon] : null;
+    if (coupon) {
+      discount = coupon.type === "percent"
+        ? Math.round(subtotal * coupon.value / 100)
+        : Math.min(coupon.value, subtotal);
+    }
+
+    const afterDiscount = subtotal - discount;
+    const shipping = computeShipping(deliveryMethod, afterDiscount);
+    const tax = Math.round(afterDiscount * 0.05);
+    const total = afterDiscount + shipping + tax;
+
     const [order] = await db
       .insert(ordersTable)
       .values({
         userId: req.userId,
-        items,
+        items: resolvedItems,
         address,
         deliveryMethod,
         paymentMethod,
-        couponCode: couponCode || null,
-        subtotal: Math.round(subtotal),
-        discount: Math.round(discount ?? 0),
-        shipping: Math.round(shipping),
-        tax: Math.round(tax),
-        total: Math.round(total),
+        couponCode: coupon ? normalizedCoupon : null,
+        subtotal,
+        discount,
+        shipping,
+        tax,
+        total,
         status: "confirmed",
       })
       .returning({ id: ordersTable.id });

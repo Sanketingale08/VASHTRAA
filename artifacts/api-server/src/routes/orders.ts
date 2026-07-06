@@ -74,18 +74,38 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
 
     const productMap = new Map(dbProducts.map(p => [p.id, p]));
 
-    const resolvedItems = clientItems.map((i: any) => {
-      const p = productMap.get(i.productId)!;
-      const qty = Math.max(1, Math.min(parseInt(i.quantity, 10) || 1, p.stock));
-      return {
+    const resolvedItems: Array<{
+      productId: string; name: string; price: number; quantity: number;
+      images: unknown; vendorName: string;
+    }> = [];
+    for (const i of clientItems) {
+      const p = productMap.get(i.productId);
+      if (!p) {
+        res.status(400).json({ error: "One or more products not found" });
+        return;
+      }
+      if (p.stock <= 0) {
+        res.status(400).json({ error: `"${p.name}" is currently out of stock` });
+        return;
+      }
+      const requestedQty = parseInt(i.quantity, 10);
+      if (!Number.isInteger(requestedQty) || requestedQty <= 0) {
+        res.status(400).json({ error: `Invalid quantity for "${p.name}"` });
+        return;
+      }
+      if (requestedQty > p.stock) {
+        res.status(400).json({ error: `Only ${p.stock} unit(s) of "${p.name}" available` });
+        return;
+      }
+      resolvedItems.push({
         productId: p.id,
         name: p.name,
         price: p.price,
-        quantity: qty,
+        quantity: requestedQty,
         images: p.images,
         vendorName: p.vendorName,
-      };
-    });
+      });
+    }
 
     const subtotal = resolvedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
 

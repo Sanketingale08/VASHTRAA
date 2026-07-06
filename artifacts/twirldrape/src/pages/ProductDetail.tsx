@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import {
@@ -94,13 +94,25 @@ function ZoomLightbox({
   onClose: () => void;
   onNav: (dir: 1 | -1) => void;
 }) {
-  const touchStartX = React.useRef<number | null>(null);
+  const [imgScale, setImgScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartScale = useRef(1);
+  const dragStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const swipeStartX = useRef<number | null>(null);
+  const lastTap = useRef(0);
+
+  useEffect(() => {
+    setImgScale(1);
+    setPan({ x: 0, y: 0 });
+  }, [activeIndex]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft") onNav(-1);
-      if (e.key === "ArrowRight") onNav(1);
+      if (e.key === "ArrowLeft" && imgScale === 1) onNav(-1);
+      if (e.key === "ArrowRight" && imgScale === 1) onNav(1);
     };
     window.addEventListener("keydown", handler);
     document.body.style.overflow = "hidden";
@@ -108,17 +120,60 @@ function ZoomLightbox({
       window.removeEventListener("keydown", handler);
       document.body.style.overflow = "";
     };
-  }, [onClose, onNav]);
+  }, [onClose, onNav, imgScale]);
+
+  function dist(t: React.Touch, t2: React.Touch) {
+    return Math.hypot(t2.clientX - t.clientX, t2.clientY - t.clientY);
+  }
 
   function handleTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0]?.clientX ?? null;
+    if (e.touches.length === 2) {
+      pinchStartDist.current = dist(e.touches[0], e.touches[1]);
+      pinchStartScale.current = imgScale;
+      dragStart.current = null;
+      swipeStartX.current = null;
+    } else if (e.touches.length === 1) {
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        setImgScale(1);
+        setPan({ x: 0, y: 0 });
+        lastTap.current = 0;
+      } else {
+        lastTap.current = now;
+      }
+      swipeStartX.current = e.touches[0].clientX;
+      dragStart.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        panX: pan.x,
+        panY: pan.y,
+      };
+    }
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    e.stopPropagation();
+    if (e.touches.length === 2 && pinchStartDist.current !== null) {
+      const newDist = dist(e.touches[0], e.touches[1]);
+      const ratio = newDist / pinchStartDist.current;
+      const newScale = Math.min(5, Math.max(1, pinchStartScale.current * ratio));
+      setImgScale(newScale);
+      if (newScale === 1) setPan({ x: 0, y: 0 });
+    } else if (e.touches.length === 1 && dragStart.current && imgScale > 1) {
+      const dx = e.touches[0].clientX - dragStart.current.x;
+      const dy = e.touches[0].clientY - dragStart.current.y;
+      setPan({ x: dragStart.current.panX + dx, y: dragStart.current.panY + dy });
+      swipeStartX.current = null;
+    }
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
-    if (touchStartX.current === null) return;
-    const deltaX = (e.changedTouches[0]?.clientX ?? 0) - touchStartX.current;
-    if (Math.abs(deltaX) > 50) onNav(deltaX < 0 ? 1 : -1);
-    touchStartX.current = null;
+    if (imgScale <= 1 && swipeStartX.current !== null) {
+      const deltaX = (e.changedTouches[0]?.clientX ?? 0) - swipeStartX.current;
+      if (Math.abs(deltaX) > 50) onNav(deltaX < 0 ? 1 : -1);
+    }
+    if (e.touches.length < 2) pinchStartDist.current = null;
+    if (e.touches.length === 0) dragStart.current = null;
   }
 
   return (
@@ -126,54 +181,67 @@ function ZoomLightbox({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[999] bg-black/95 flex items-center justify-center"
-      onClick={onClose}
+      className="fixed inset-0 z-[999] bg-black/95 flex items-center justify-center select-none"
+      onClick={imgScale === 1 ? onClose : undefined}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      style={{ touchAction: "none" }}
     >
       <button
-        className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors"
+        className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors z-10"
         onClick={onClose}
       >
         <X size={28} />
       </button>
 
-      {images.length > 1 && (
+      {images.length > 1 && imgScale === 1 && (
         <>
           <button
-            className="absolute left-4 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNav(-1);
-            }}
+            className="absolute left-4 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all z-10"
+            onClick={(e) => { e.stopPropagation(); onNav(-1); }}
           >
             <ChevronLeft size={24} />
           </button>
           <button
-            className="absolute right-4 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNav(1);
-            }}
+            className="absolute right-4 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all z-10"
+            onClick={(e) => { e.stopPropagation(); onNav(1); }}
           >
             <ChevronRight size={24} />
           </button>
         </>
       )}
 
-      <motion.img
-        key={activeIndex}
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        src={images[activeIndex]}
-        alt="Product zoom"
-        className="max-w-[90vw] max-h-[90vh] object-contain rounded"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={activeIndex}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          src={images[activeIndex]}
+          alt="Product zoom"
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded"
+          style={{
+            transform: `scale(${imgScale}) translate(${pan.x / imgScale}px, ${pan.y / imgScale}px)`,
+            cursor: imgScale > 1 ? "grab" : "zoom-in",
+            transition: imgScale === 1 ? "transform 0.25s ease" : "none",
+          }}
+          onClick={(e) => e.stopPropagation()}
+          draggable={false}
+        />
+      </AnimatePresence>
 
-      {images.length > 1 && (
+      {imgScale > 1 && (
+        <button
+          className="absolute bottom-4 right-4 text-[10px] text-white/60 bg-white/10 px-3 py-1 rounded-full"
+          onClick={(e) => { e.stopPropagation(); setImgScale(1); setPan({ x: 0, y: 0 }); }}
+        >
+          Reset zoom
+        </button>
+      )}
+
+      {images.length > 1 && imgScale === 1 && (
         <div className="absolute bottom-4 flex gap-2">
           {images.map((_, i) => (
             <div
@@ -185,6 +253,12 @@ function ZoomLightbox({
             />
           ))}
         </div>
+      )}
+
+      {imgScale === 1 && (
+        <p className="absolute bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-white/30 pointer-events-none">
+          Pinch to zoom · Swipe to navigate
+        </p>
       )}
     </motion.div>
   );
@@ -736,7 +810,16 @@ export default function ProductDetail() {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="flex flex-col"
               >
-                {/* Brand & Shop callout */}
+                <h1
+                  className={cn(
+                    "font-serif text-3xl md:text-4xl font-bold leading-tight mb-3",
+                    isDesigner ? "text-[#F5EDE0]" : "text-[#7B1C2C]"
+                  )}
+                >
+                  {product.name}
+                </h1>
+
+                {/* Brand & Shop callout — below product title */}
                 <div className={cn(
                   "flex items-center gap-4 rounded-lg border p-3 mb-4",
                   isDesigner ? "bg-[#2A2E35] border-[#C9A84C]/20" : "bg-white border-[#C9A84C]/15"
@@ -755,15 +838,6 @@ export default function ProductDetail() {
                     Visit Shop <ExternalLink size={11} />
                   </Link>
                 </div>
-
-                <h1
-                  className={cn(
-                    "font-serif text-3xl md:text-4xl font-bold leading-tight mb-3",
-                    isDesigner ? "text-[#F5EDE0]" : "text-[#7B1C2C]"
-                  )}
-                >
-                  {product.name}
-                </h1>
 
                 {/* Rating */}
                 <div className="flex items-center gap-2 mb-5">

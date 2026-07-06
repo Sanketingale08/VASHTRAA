@@ -15,6 +15,13 @@
       "when": 1783360800000,
       "tag": "0001_add_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783361400000,
+      "tag": "0002_add_saved_addresses",
+      "breakpoints": true
     }
   ]
 }

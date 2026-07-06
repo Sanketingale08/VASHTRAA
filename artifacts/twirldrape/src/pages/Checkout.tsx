@@ -33,6 +33,8 @@ type Address = {
   city: string; state: string; pincode: string;
 };
 
+type SavedAddress = Address & { id: string; isDefault: boolean };
+
 type DeliveryMethod = "standard" | "express";
 type PaymentMethod = "upi" | "card" | "cod";
 
@@ -80,6 +82,11 @@ export function CheckoutPage() {
   const [placeError, setPlaceError] = useState("");
   const orderPlacedRef = React.useRef(false);
 
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
+  const [saveThisAddress, setSaveThisAddress] = useState(false);
+  const [enteringNew, setEnteringNew] = useState(false);
+
   const [address, setAddress] = useState<Address>({
     name: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "",
   });
@@ -118,6 +125,27 @@ export function CheckoutPage() {
       setLocation("/sign-in");
     }
   }, [isLoaded, isSignedIn, setLocation]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    fetch(`${BASE}/api/addresses`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : { addresses: [] })
+      .then(data => {
+        const addrs: SavedAddress[] = data.addresses ?? [];
+        setSavedAddresses(addrs);
+        const def = addrs.find(a => a.isDefault) ?? addrs[0];
+        if (def) {
+          setSelectedSavedId(def.id);
+          setAddress({
+            name: def.name, phone: def.phone, line1: def.line1,
+            line2: def.line2 ?? "", city: def.city, state: def.state, pincode: def.pincode,
+          });
+        } else {
+          setEnteringNew(true);
+        }
+      })
+      .catch(() => setEnteringNew(true));
+  }, [isLoaded, isSignedIn]);
 
   const orderItems = buyNowItems ?? cartItems;
 
@@ -275,36 +303,143 @@ export function CheckoutPage() {
                     className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-6"
                   >
                     <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-5">Shipping Address</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Field label="Full Name *" value={address.name} onChange={v => setAddress(a => ({ ...a, name: v }))} placeholder="Priya Sharma" />
-                      <Field label="Phone Number *" value={address.phone} onChange={v => setAddress(a => ({ ...a, phone: v.replace(/\D/g, "").slice(0, 10) }))} placeholder="9876543210" type="tel" />
-                      <div className="sm:col-span-2">
-                        <Field label="Address Line 1 *" value={address.line1} onChange={v => setAddress(a => ({ ...a, line1: v }))} placeholder="House / Flat / Block No., Street" />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <Field label="Address Line 2" value={address.line2} onChange={v => setAddress(a => ({ ...a, line2: v }))} placeholder="Area, Landmark (optional)" />
-                      </div>
-                      <Field label="City *" value={address.city} onChange={v => setAddress(a => ({ ...a, city: v }))} placeholder="Mumbai" />
-                      <div>
-                        <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">State *</label>
-                        <select
-                          value={address.state}
-                          onChange={e => setAddress(a => ({ ...a, state: e.target.value }))}
-                          className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
+
+                    {/* Saved addresses */}
+                    {savedAddresses.length > 0 && !enteringNew && (
+                      <div className="mb-5 space-y-3">
+                        <p className="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-2">Saved Addresses</p>
+                        {savedAddresses.map(sa => (
+                          <button
+                            key={sa.id}
+                            onClick={() => {
+                              setSelectedSavedId(sa.id);
+                              setAddress({
+                                name: sa.name, phone: sa.phone, line1: sa.line1,
+                                line2: sa.line2 ?? "", city: sa.city, state: sa.state, pincode: sa.pincode,
+                              });
+                            }}
+                            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                              selectedSavedId === sa.id
+                                ? "border-[#7B1C2C] bg-[#7B1C2C]/5"
+                                : "border-[#C9A84C]/20 hover:border-[#C9A84C]/50"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <p className="font-semibold text-sm">{sa.name}</p>
+                                  {sa.isDefault && (
+                                    <span className="text-[10px] bg-[#C9A84C]/20 text-[#7B1C2C] font-bold px-1.5 py-0.5 rounded">Default</span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500">{sa.phone}</p>
+                                <p className="text-xs text-gray-500 truncate mt-0.5">
+                                  {[sa.line1, sa.line2, sa.city, sa.state, sa.pincode].filter(Boolean).join(", ")}
+                                </p>
+                              </div>
+                              {selectedSavedId === sa.id && <Check size={16} className="text-[#7B1C2C] shrink-0 mt-1" />}
+                            </div>
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => {
+                            setSelectedSavedId(null);
+                            setEnteringNew(true);
+                            setAddress({ name: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "" });
+                          }}
+                          className="w-full py-2.5 border border-dashed border-[#C9A84C]/40 rounded-xl text-sm font-semibold text-[#7B1C2C] hover:border-[#C9A84C] hover:bg-[#C9A84C]/5 transition-all"
                         >
-                          <option value="">Select State</option>
-                          {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                          + Add a new address
+                        </button>
                       </div>
-                      <Field
-                        label="Pincode *"
-                        value={address.pincode}
-                        onChange={v => setAddress(a => ({ ...a, pincode: v.replace(/\D/g, "").slice(0, 6) }))}
-                        placeholder="400001"
-                      />
-                    </div>
+                    )}
+
+                    {/* New address form */}
+                    {(enteringNew || savedAddresses.length === 0) && (
+                      <>
+                        {savedAddresses.length > 0 && (
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-semibold text-[#7B1C2C]">New Address</p>
+                            <button
+                              onClick={() => {
+                                setEnteringNew(false);
+                                const def = savedAddresses.find(a => a.isDefault) ?? savedAddresses[0];
+                                if (def) {
+                                  setSelectedSavedId(def.id);
+                                  setAddress({
+                                    name: def.name, phone: def.phone, line1: def.line1,
+                                    line2: def.line2 ?? "", city: def.city, state: def.state, pincode: def.pincode,
+                                  });
+                                }
+                              }}
+                              className="text-xs text-[#7B1C2C] font-semibold hover:underline"
+                            >
+                              ← Back to saved
+                            </button>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Field label="Full Name *" value={address.name} onChange={v => setAddress(a => ({ ...a, name: v }))} placeholder="Priya Sharma" />
+                          <Field label="Phone Number *" value={address.phone} onChange={v => setAddress(a => ({ ...a, phone: v.replace(/\D/g, "").slice(0, 10) }))} placeholder="9876543210" type="tel" />
+                          <div className="sm:col-span-2">
+                            <Field label="Address Line 1 *" value={address.line1} onChange={v => setAddress(a => ({ ...a, line1: v }))} placeholder="House / Flat / Block No., Street" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <Field label="Address Line 2" value={address.line2} onChange={v => setAddress(a => ({ ...a, line2: v }))} placeholder="Area, Landmark (optional)" />
+                          </div>
+                          <Field label="City *" value={address.city} onChange={v => setAddress(a => ({ ...a, city: v }))} placeholder="Mumbai" />
+                          <div>
+                            <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">State *</label>
+                            <select
+                              value={address.state}
+                              onChange={e => setAddress(a => ({ ...a, state: e.target.value }))}
+                              className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
+                            >
+                              <option value="">Select State</option>
+                              {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <Field
+                            label="Pincode *"
+                            value={address.pincode}
+                            onChange={v => setAddress(a => ({ ...a, pincode: v.replace(/\D/g, "").slice(0, 6) }))}
+                            placeholder="400001"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2.5 mt-4 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={saveThisAddress}
+                            onChange={e => setSaveThisAddress(e.target.checked)}
+                            className="w-4 h-4 accent-[#7B1C2C] cursor-pointer"
+                          />
+                          <span className="text-sm text-gray-600 dark:text-gray-300 group-hover:text-[#7B1C2C] transition-colors">
+                            Save this address for future orders
+                          </span>
+                        </label>
+                      </>
+                    )}
+
                     <button
-                      onClick={() => { if (validateAddress()) setStep(2); }}
+                      onClick={async () => {
+                        if (!validateAddress()) return;
+                        if (saveThisAddress && enteringNew && !selectedSavedId) {
+                          try {
+                            const r = await fetch(`${BASE}/api/addresses`, {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ ...address }),
+                            });
+                            if (r.ok) {
+                              const data = await r.json();
+                              setSavedAddresses(prev => [data.address, ...prev]);
+                              setSelectedSavedId(data.address.id);
+                            }
+                          } catch {}
+                        }
+                        setStep(2);
+                      }}
                       disabled={!validateAddress()}
                       className="mt-6 w-full bg-[#7B1C2C] hover:bg-[#6a1826] disabled:opacity-50 disabled:cursor-not-allowed text-[#FAF6EE] py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
                     >

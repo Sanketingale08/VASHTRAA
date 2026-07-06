@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useRouter } from "wouter";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 
 export function Navbar() {
   const [location] = useLocation();
+  const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,16 +23,56 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+        setSearchQuery("");
+      }
+    };
+    if (searchOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [searchOpen]);
+
+  const searchParams = { search: debouncedQuery, limit: 5 };
+  const { data: searchResults } = useListProducts(
+    searchParams,
+    { query: { enabled: debouncedQuery.trim().length >= 2, queryKey: getListProductsQueryKey(searchParams) } }
+  );
+
   const isDesigner = location.startsWith("/designer");
   const isPaithani = location.startsWith("/paithani");
   const isHome = location === "/";
 
-  // Determine theme based on route
-  const themeClasses = isDesigner 
-    ? "bg-[#1E2329]/95 text-[#F5EDE0] border-[#C9A84C]/20" 
-    : (isPaithani || isHome) 
+  const themeClasses = isDesigner
+    ? "bg-[#1E2329]/95 text-[#F5EDE0] border-[#C9A84C]/20"
+    : (isPaithani || isHome)
       ? "bg-[#7B1C2C]/95 text-[#FAF6EE] border-[#C9A84C]/20"
-      : "bg-white text-black";
+      : "bg-[#7B1C2C]/95 text-[#FAF6EE] border-[#C9A84C]/20";
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      const category = isDesigner ? "designer" : "paithani";
+      const path = isDesigner ? "/designer/shop" : "/paithani/shop";
+      setSearchOpen(false);
+      setSearchQuery("");
+      window.location.href = `${path}?search=${encodeURIComponent(searchQuery.trim())}`;
+    }
+  }
 
   return (
     <nav className={cn(
@@ -35,9 +82,9 @@ export function Navbar() {
     )}>
       <div className="container mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between">
-          
+
           {/* Mobile Menu Toggle */}
-          <button 
+          <button
             className="lg:hidden p-2 -ml-2"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
@@ -57,17 +104,125 @@ export function Navbar() {
           {/* Desktop Links */}
           <div className="hidden lg:flex items-center gap-8 text-sm uppercase tracking-wider font-medium">
             <Link href="/" className="hover:text-[#C9A84C] transition-colors">Home</Link>
-            <Link href="/paithani" className="hover:text-[#C9A84C] transition-colors">Paithani</Link>
-            <Link href="/designer" className="hover:text-[#C9A84C] transition-colors">Designer</Link>
-            <Link href="#" className="hover:text-[#C9A84C] transition-colors">Collections</Link>
+            <div className="group relative">
+              <Link href="/paithani" className="hover:text-[#C9A84C] transition-colors">Paithani</Link>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 hidden group-hover:block">
+                <div className="bg-white text-gray-800 shadow-xl border border-gray-100 rounded-md py-2 w-44 text-xs">
+                  <Link href="/paithani" className="block px-4 py-2 hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors">
+                    Paithani Sarees
+                  </Link>
+                  <Link href="/paithani/shop" className="block px-4 py-2 hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors">
+                    Shop All Paithani
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <div className="group relative">
+              <Link href="/designer" className="hover:text-[#C9A84C] transition-colors">Designer</Link>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 hidden group-hover:block">
+                <div className="bg-white text-gray-800 shadow-xl border border-gray-100 rounded-md py-2 w-44 text-xs">
+                  <Link href="/designer" className="block px-4 py-2 hover:bg-[#1E2329] hover:text-[#C9A84C] transition-colors">
+                    Designer Sarees
+                  </Link>
+                  <Link href="/designer/shop" className="block px-4 py-2 hover:bg-[#1E2329] hover:text-[#C9A84C] transition-colors">
+                    Shop All Designer
+                  </Link>
+                </div>
+              </div>
+            </div>
             <Link href="#" className="hover:text-[#C9A84C] transition-colors">About Us</Link>
           </div>
 
           {/* Icons */}
           <div className="flex items-center gap-4 md:gap-6">
-            <button className="hover:text-[#C9A84C] transition-colors">
-              <Search size={20} />
-            </button>
+            <div ref={searchContainerRef} className="relative">
+              <button
+                className="hover:text-[#C9A84C] transition-colors"
+                onClick={() => setSearchOpen(!searchOpen)}
+              >
+                <Search size={20} />
+              </button>
+
+              {/* Search Dropdown */}
+              {searchOpen && (
+                <div className="absolute right-0 top-full mt-3 w-80 bg-white rounded-lg shadow-2xl border border-gray-100 overflow-hidden z-50">
+                  <form onSubmit={handleSearchSubmit} className="p-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Search size={16} className="text-gray-400 shrink-0" />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search sarees, fabrics, occasions…"
+                        className="flex-1 text-sm text-gray-800 outline-none placeholder-gray-400 bg-transparent"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery("")}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </form>
+
+                  {debouncedQuery.trim().length >= 2 && (
+                    <div className="max-h-72 overflow-y-auto">
+                      {searchResults?.products && searchResults.products.length > 0 ? (
+                        <>
+                          {searchResults.products.map((product) => (
+                            <Link
+                              key={product.id}
+                              href={`/products/${product.id}`}
+                              onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+                              className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors"
+                            >
+                              <img
+                                src={product.images[0] ?? "/images/product-1.png"}
+                                alt={product.name}
+                                className="w-10 h-10 rounded object-cover shrink-0 border border-gray-100"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-800 font-medium line-clamp-1">{product.name}</p>
+                                <p className="text-xs text-gray-500">{product.vendorName} · ₹{product.price.toLocaleString("en-IN")}</p>
+                              </div>
+                            </Link>
+                          ))}
+                          <button
+                            onClick={handleSearchSubmit as any}
+                            className="w-full flex items-center justify-center gap-2 p-3 text-xs font-bold text-[#7B1C2C] bg-[#FAF6EE] hover:bg-[#F5EDE0] transition-colors border-t border-gray-100"
+                          >
+                            View all results for "{debouncedQuery}" <ArrowRight size={12} />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="p-6 text-center text-sm text-gray-400">
+                          No results found for "{debouncedQuery}"
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {debouncedQuery.trim().length < 2 && (
+                    <div className="p-4">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Quick Links</p>
+                      <div className="space-y-2">
+                        <Link href="/paithani/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#7B1C2C] transition-colors">
+                          <ArrowRight size={12} /> All Paithani Sarees
+                        </Link>
+                        <Link href="/designer/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#7B1C2C] transition-colors">
+                          <ArrowRight size={12} /> All Designer Sarees
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button className="hover:text-[#C9A84C] transition-colors hidden md:block">
               <User size={20} />
             </button>
@@ -88,9 +243,9 @@ export function Navbar() {
           <div className="lg:hidden absolute top-full left-0 w-full bg-[#7B1C2C] border-b border-[#C9A84C]/20 shadow-xl py-4 px-4 flex flex-col gap-4 text-sm uppercase tracking-wider">
             <Link href="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
             <Link href="/paithani" onClick={() => setMobileMenuOpen(false)}>Paithani Sarees</Link>
+            <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>Shop All Paithani</Link>
             <Link href="/designer" onClick={() => setMobileMenuOpen(false)}>Designer Sarees</Link>
-            <Link href="#" onClick={() => setMobileMenuOpen(false)}>Collections</Link>
-            <Link href="#" onClick={() => setMobileMenuOpen(false)}>Login / Register</Link>
+            <Link href="/designer/shop" onClick={() => setMobileMenuOpen(false)}>Shop All Designer</Link>
           </div>
         )}
       </div>

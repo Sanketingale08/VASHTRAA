@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: products
+    description: Product operations
+  - name: vendors
+    description: Vendor operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,108 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products
+      description: Returns a paginated list of products with optional filters
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [paithani, designer]
+        - name: fabric
+          in: query
+          schema:
+            type: string
+        - name: color
+          in: query
+          schema:
+            type: string
+        - name: occasion
+          in: query
+          schema:
+            type: string
+        - name: vendorId
+          in: query
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [price_asc, price_desc, rating_desc, newest]
+        - name: page
+          in: query
+          schema:
+            type: number
+        - name: limit
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductListResponse"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get a single product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      summary: List vendors
+      responses:
+        "200":
+          description: List of vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +140,121 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    ProductSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        originalPrice:
+          type: number
+          nullable: true
+        category:
+          type: string
+          enum: [paithani, designer]
+        fabric:
+          type: string
+        color:
+          type: string
+        occasion:
+          type: string
+        vendorId:
+          type: string
+          nullable: true
+        vendorName:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        isBestSeller:
+          type: boolean
+        isNewArrival:
+          type: boolean
+        rating:
+          type: number
+        reviewCount:
+          type: number
+        stock:
+          type: number
+      required:
+        - id
+        - name
+        - description
+        - price
+        - category
+        - fabric
+        - color
+        - occasion
+        - vendorName
+        - images
+        - isBestSeller
+        - isNewArrival
+        - rating
+        - reviewCount
+        - stock
+
+    ProductDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProductSummary"
+
+    ProductListResponse:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductSummary"
+        total:
+          type: number
+        page:
+          type: number
+        limit:
+          type: number
+        totalPages:
+          type: number
+      required:
+        - products
+        - total
+        - page
+        - limit
+        - totalPages
+
+    VendorSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+        rating:
+          type: number
+        sareesCount:
+          type: number
+        avatar:
+          type: string
+        bio:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - location
+        - rating
+        - sareesCount
+        - avatar

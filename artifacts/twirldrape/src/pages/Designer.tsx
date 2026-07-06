@@ -8,6 +8,7 @@ import { FlashSaleTimer } from "@/components/FlashSaleTimer";
 import { mockProducts, vendors, lookbooks } from "@/lib/mock-data";
 import { motion } from "framer-motion";
 import { Star } from "lucide-react";
+import { Link } from "wouter";
 
 const slides = [
   {
@@ -45,11 +46,21 @@ export default function Designer() {
             
             {/* 1. Celebrity Collections */}
             <section className="relative z-10">
-              <SectionHeading title="Celebrity Collections" subtitle="Star-Studded Ensembles" />
+              <div className="flex items-end justify-between mb-0">
+                <SectionHeading title="Celebrity Collections" subtitle="Star-Studded Ensembles" centered={false} />
+                <Link href="/designer/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#C9A84C] hover:opacity-80 transition-opacity mb-8">
+                  Browse All →
+                </Link>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {mockProducts.slice(0, 4).map((product, i) => (
                   <ProductCard key={`celeb-${product.id}`} product={product} index={i} />
                 ))}
+              </div>
+              <div className="mt-8 text-center md:hidden">
+                <Link href="/designer/shop" className="inline-block bg-[#C9A84C] text-[#1E2329] px-8 py-3 text-sm font-bold uppercase tracking-wider hover:bg-white transition-colors">
+                  Browse All Designer Sarees
+                </Link>
               </div>
             </section>
 

@@ -5,6 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Paithani from "@/pages/Paithani";
 import Designer from "@/pages/Designer";
+import PaithaniShop from "@/pages/PaithaniShop";
+import DesignerShop from "@/pages/DesignerShop";
+import ProductDetail from "@/pages/ProductDetail";
 
 const queryClient = new QueryClient();
 
@@ -13,7 +16,10 @@ function Router() {
     <Switch>
       <Route path="/">{() => <Redirect to="/paithani" />}</Route>
       <Route path="/paithani" component={Paithani} />
+      <Route path="/paithani/shop" component={PaithaniShop} />
       <Route path="/designer" component={Designer} />
+      <Route path="/designer/shop" component={DesignerShop} />
+      <Route path="/products/:id" component={ProductDetail} />
       <Route component={NotFound} />
     </Switch>
   );

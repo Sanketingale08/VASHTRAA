@@ -8,6 +8,7 @@ import { FlashSaleTimer } from "@/components/FlashSaleTimer";
 import { mockProducts, artisanStories, vendors, lookbooks } from "@/lib/mock-data";
 import { motion } from "framer-motion";
 import { Star } from "lucide-react";
+import { Link } from "wouter";
 
 const slides = [
   {
@@ -44,11 +45,21 @@ export default function Paithani() {
           
           {/* 1. Royal Festival Collections */}
           <section className="relative z-10">
-            <SectionHeading title="Royal Festival Collections" subtitle="Curated for Celebrations" />
+            <div className="flex items-end justify-between mb-0">
+              <SectionHeading title="Royal Festival Collections" subtitle="Curated for Celebrations" centered={false} />
+              <Link href="/paithani/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#C9A84C] hover:opacity-80 transition-opacity mb-8">
+                Browse All →
+              </Link>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {mockProducts.slice(0, 4).map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} />
               ))}
+            </div>
+            <div className="mt-8 text-center md:hidden">
+              <Link href="/paithani/shop" className="inline-block bg-[#7B1C2C] text-[#FAF6EE] border border-[#C9A84C]/50 px-8 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors">
+                Browse All Paithani Sarees
+              </Link>
             </div>
           </section>
 

@@ -7,10 +7,12 @@ import { Heart, Star, ChevronRight, ShoppingBag, Package, ArrowLeft, ZoomIn } fr
 import { cn } from "@/lib/utils";
 import { ProductCard } from "@/components/ProductCard";
 import type { ProductSummary } from "@workspace/api-client-react";
+import { useWishlist } from "@/context/WishlistContext";
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { wishlistedIds, toggle } = useWishlist();
+  const isWishlisted = wishlistedIds.has(id ?? "");
   const [activeImage, setActiveImage] = useState(0);
   const [addedToCart, setAddedToCart] = useState(false);
 
@@ -237,7 +239,7 @@ export default function ProductDetail() {
                     {addedToCart ? "Added!" : "Add to Cart"}
                   </button>
                   <button
-                    onClick={() => setIsWishlisted(!isWishlisted)}
+                    onClick={() => toggle(id ?? "")}
                     className={cn(
                       "flex items-center justify-center gap-2 px-6 py-4 border font-bold uppercase tracking-wider text-sm rounded-sm transition-all",
                       isWishlisted

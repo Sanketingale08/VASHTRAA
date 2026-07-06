@@ -29,18 +29,33 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
 
+  const fetchWishlist = useCallback(() => {
+    setIsLoading(true);
+    apiFetch("/api/wishlists/ids")
+      .then((data) => setWishlistedIds(new Set(data.productIds)))
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
   useEffect(() => {
     if (!isLoaded) return;
     if (!isSignedIn) {
       setWishlistedIds(new Set());
       return;
     }
-    setIsLoading(true);
-    apiFetch("/api/wishlists/ids")
-      .then((data) => setWishlistedIds(new Set(data.productIds)))
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, [isSignedIn, isLoaded]);
+    fetchWishlist();
+  }, [isSignedIn, isLoaded, fetchWishlist]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchWishlist();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isLoaded, isSignedIn, fetchWishlist]);
 
   const toggle = useCallback(async (productId: string) => {
     if (!isSignedIn) return;

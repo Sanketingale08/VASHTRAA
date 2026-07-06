@@ -59,9 +59,11 @@ export function Navbar() {
 
   const themeClasses = isDesigner
     ? "bg-[#1E2329]/95 text-[#F5EDE0] border-[#C9A84C]/20"
-    : (isPaithani || isHome)
-      ? "bg-[#7B1C2C]/95 text-[#FAF6EE] border-[#C9A84C]/20"
-      : "bg-[#7B1C2C]/95 text-[#FAF6EE] border-[#C9A84C]/20";
+    : isHome
+      ? "bg-[#FAF6EE]/98 text-[#3D1515] border-[#C9A84C]/30"
+      : isPaithani
+        ? "bg-[#7B1C2C]/95 text-[#FAF6EE] border-[#C9A84C]/20"
+        : "bg-[#7B1C2C]/95 text-[#FAF6EE] border-[#C9A84C]/20";
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();

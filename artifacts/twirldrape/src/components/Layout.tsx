@@ -9,8 +9,6 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const [location] = useLocation();
-
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <AnnouncementBar />

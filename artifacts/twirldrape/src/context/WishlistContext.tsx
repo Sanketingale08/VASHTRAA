@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/react";
+import { useToast } from "@/hooks/use-toast";
 
 interface WishlistContextType {
   wishlistedIds: Set<string>;
@@ -26,6 +27,7 @@ async function apiFetch(path: string, options?: RequestInit) {
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoaded } = useUser();
+  const { toast } = useToast();
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
 
@@ -79,8 +81,13 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         else next.delete(productId);
         return next;
       });
+      toast({
+        variant: "destructive",
+        title: isWishlisted ? "Could not remove from wishlist" : "Could not add to wishlist",
+        description: "Something went wrong. Please try again.",
+      });
     }
-  }, [isSignedIn, wishlistedIds]);
+  }, [isSignedIn, wishlistedIds, toast]);
 
   return (
     <WishlistContext.Provider value={{ wishlistedIds, toggle, isLoading }}>

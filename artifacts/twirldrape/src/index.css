@@ -1,3 +1,4 @@
+@layer theme, base, clerk, components, utilities;
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -144,4 +145,10 @@
   opacity: 0.05;
   mix-blend-mode: overlay;
   pointer-events: none;
+}
+
+/* Clerk placeholder text visibility */
+.cl-formFieldInput::placeholder {
+  color: #9b8a75;
+  opacity: 1;
 }

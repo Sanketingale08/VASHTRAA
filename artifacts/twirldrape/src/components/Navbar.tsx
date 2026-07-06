@@ -1,19 +1,28 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useRouter } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useUser, useClerk, Show } from "@clerk/react";
+import { useWishlist } from "@/context/WishlistContext";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Navbar() {
   const [location] = useLocation();
-  const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const { user, isSignedIn } = useUser();
+  const { signOut } = useClerk();
+  const { wishlistedIds } = useWishlist();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -47,6 +56,18 @@ export function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [searchOpen]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuOpen]);
+
   const searchParams = { search: debouncedQuery, limit: 5 };
   const { data: searchResults } = useListProducts(
     searchParams,
@@ -68,13 +89,14 @@ export function Navbar() {
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (searchQuery.trim()) {
-      const category = isDesigner ? "designer" : "paithani";
       const path = isDesigner ? "/designer/shop" : "/paithani/shop";
       setSearchOpen(false);
       setSearchQuery("");
-      window.location.href = `${path}?search=${encodeURIComponent(searchQuery.trim())}`;
+      window.location.href = `${basePath}${path}?search=${encodeURIComponent(searchQuery.trim())}`;
     }
   }
+
+  const wishlistCount = wishlistedIds.size;
 
   return (
     <nav className={cn(
@@ -248,12 +270,71 @@ export function Navbar() {
               )}
             </div>
 
-            <button className="hover:text-[#C9A84C] transition-colors hidden md:block">
-              <User size={20} />
-            </button>
-            <button className="hover:text-[#C9A84C] transition-colors">
+            {/* User Menu */}
+            <div ref={userMenuRef} className="relative hidden md:block">
+              <Show when="signed-out">
+                <Link
+                  href="/sign-in"
+                  className="hover:text-[#C9A84C] transition-colors"
+                  title="Sign In"
+                >
+                  <User size={20} />
+                </Link>
+              </Show>
+              <Show when="signed-in">
+                <button
+                  className="hover:text-[#C9A84C] transition-colors flex items-center gap-1"
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  title={user?.firstName ?? "Account"}
+                >
+                  <User size={20} />
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-3 w-52 bg-white text-gray-800 shadow-xl border border-gray-100 rounded-md py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="text-sm font-semibold text-[#7B1C2C] truncate">
+                        {user?.firstName} {user?.lastName}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {user?.primaryEmailAddress?.emailAddress}
+                      </p>
+                    </div>
+                    <Link
+                      href="/wishlist"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                    >
+                      <Heart size={14} /> My Wishlist
+                      {wishlistCount > 0 && (
+                        <span className="ml-auto text-xs bg-[#7B1C2C] text-white rounded-full w-5 h-5 flex items-center justify-center">
+                          {wishlistCount}
+                        </span>
+                      )}
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        signOut({ redirectUrl: basePath || "/" });
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                    >
+                      <LogOut size={14} /> Sign Out
+                    </button>
+                  </div>
+                )}
+              </Show>
+            </div>
+
+            {/* Wishlist Icon */}
+            <Link href="/wishlist" className="hover:text-[#C9A84C] transition-colors relative">
               <Heart size={20} />
-            </button>
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-[#C9A84C] text-[#7B1C2C] text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
+                  {wishlistCount > 9 ? "9+" : wishlistCount}
+                </span>
+              )}
+            </Link>
+
             <button className="hover:text-[#C9A84C] transition-colors relative">
               <ShoppingBag size={20} />
               <span className="absolute -top-1.5 -right-1.5 bg-[#C9A84C] text-[#7B1C2C] text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
@@ -265,14 +346,35 @@ export function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden absolute top-full left-0 w-full bg-[#7B1C2C] border-b border-[#C9A84C]/20 shadow-xl py-4 px-4 flex flex-col gap-4 text-sm uppercase tracking-wider text-[#FAF6EE]">
+          <div className="lg:hidden absolute top-full left-0 w-full bg-[#7B1C2C] border-b border-[#C9A84C]/20 shadow-xl py-4 px-4 flex flex-col gap-4 text-sm uppercase tracking-wider text-[#FAF6EE] z-50">
             <Link href="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
             <Link href="/paithani" onClick={() => setMobileMenuOpen(false)}>Paithani Sarees</Link>
             <Link href="/designer" onClick={() => setMobileMenuOpen(false)}>Designer Sarees</Link>
             <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>Collections</Link>
             <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>New Arrivals</Link>
+            <Link href="/designer/shop" onClick={() => setMobileMenuOpen(false)}>Shop All Designer</Link>
             <Link href="#" onClick={() => setMobileMenuOpen(false)}>About Us</Link>
             <Link href="#" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+            <Link href="/wishlist" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
+              <Heart size={14} /> My Wishlist
+              {wishlistCount > 0 && <span className="ml-1 text-xs">({wishlistCount})</span>}
+            </Link>
+            <Show when="signed-out">
+              <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
+                <LogIn size={14} /> Sign In
+              </Link>
+            </Show>
+            <Show when="signed-in">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  signOut({ redirectUrl: basePath || "/" });
+                }}
+                className="flex items-center gap-2 text-left"
+              >
+                <LogOut size={14} /> Sign Out
+              </button>
+            </Show>
           </div>
         )}
       </div>

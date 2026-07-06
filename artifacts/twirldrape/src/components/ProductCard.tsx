@@ -1,9 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import { Heart, Star } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import { useWishlist } from "@/context/WishlistContext";
+import { useUser } from "@clerk/react";
 import type { ProductSummary } from "@workspace/api-client-react";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ProductCardProduct = {
   id: string;
@@ -27,7 +31,9 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { wishlistedIds, toggle } = useWishlist();
+  const { isSignedIn } = useUser();
+  const isWishlisted = wishlistedIds.has(product.id);
 
   const vendorLabel = product.vendorName ?? product.vendor ?? "";
   const reviewCount = product.reviewCount ?? product.reviews ?? 0;
@@ -35,6 +41,16 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     (product.images && product.images.length > 0 ? product.images[0] : undefined) ??
     product.image ??
     "/images/product-1.png";
+
+  function handleWishlistClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isSignedIn) {
+      window.location.href = `${basePath}/sign-in`;
+      return;
+    }
+    toggle(product.id);
+  }
 
   return (
     <Link href={`/products/${product.id}`}>
@@ -67,16 +83,18 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
 
         {/* Wishlist Button */}
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsWishlisted(!isWishlisted);
-          }}
+          onClick={handleWishlistClick}
+          title={isSignedIn ? (isWishlisted ? "Remove from wishlist" : "Add to wishlist") : "Sign in to save"}
           className="absolute top-2 right-2 z-10 p-2 bg-white/80 dark:bg-black/40 backdrop-blur rounded-full hover:bg-white transition-colors"
         >
           <Heart
             size={18}
-            className={cn("transition-colors", isWishlisted ? "fill-[#7B1C2C] text-[#7B1C2C]" : "text-gray-600 dark:text-gray-300")}
+            className={cn(
+              "transition-colors",
+              isWishlisted
+                ? "fill-[#7B1C2C] text-[#7B1C2C]"
+                : "text-gray-600 dark:text-gray-300",
+            )}
           />
         </button>
 

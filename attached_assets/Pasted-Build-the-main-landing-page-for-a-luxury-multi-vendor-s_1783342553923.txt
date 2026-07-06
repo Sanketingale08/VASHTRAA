@@ -1,0 +1,35 @@
+Build the main landing page for a luxury multi-vendor saree marketplace called TwirlDrape. This is the entry point of a premium royal Indian ethnic e-commerce platform.
+
+IMPORTANT: Use the reference image provided and make sure the UI is designed exactly like the provided image — match its layout, section order, color palette, typography, spacing, and overall visual style as the definitive design source. Do not improvise a different structure or style.
+
+Requirements:
+- The homepage must first let the user choose between two sections:
+  1. "Explore Paithani Sarees"
+  2. "Explore Designer Sarees"
+
+SHOP BY CATEGORY:
+- Section heading "Shop by Category" with decorative flourishes on either side
+- Row of circular category images (6 total): Paithani Sarees, Designer Sarees, Bridal Collection, Party Wear, Festival Collection, New Arrivals — each circle has a photo and a label underneath, clickable to filter/browse
+
+OUR EXCLUSIVE COLLECTIONS:
+- Section heading "Our Exclusive Collections"
+- Two large side-by-side banner cards:
+  1. "Authentic Paithani Sarees" — subtext "Handwoven Heritage. Timeless Artistry." with an "Explore Now" link, maroon-toned saree fabric close-up as background
+  2. "Premium Designer Sarees" — subtext "Contemporary designs for every you." with an "Explore Now" link, soft blush fabric close-up as background
+
+ROUTING BEHAVIOR:
+- Once a section is chosen, route to a distinct landing page for that section:
+
+PAITHANI SECTION LANDING PAGE:
+- Traditional Maharashtrian theme, gold-bordered design elements, silk-inspired background textures
+- Use placeholder/sample product data and images for now (products aren't built yet — just the visual layout and structure)
+
+DESIGNER SECTION LANDING PAGE:
+- Modern editorial, Bollywood-fashion-forward aesthetic, high-end fashion visuals
+- Use placeholder/sample product data and images for now
+
+Technical notes:
+- Fully responsive, mobile-first.
+- Component-based frontend architecture (login, product browsing, cart, and checkout will be added in later steps against this same app, so keep routing and layout clean and reusable).
+- No placeholder "lorem ipsum" text — use real, on-brand copy for section names/labels, but product data can be sample/mock for now.
+- Include a shared top navigation bar and footer that persists across both sections, with a way to switch between Paithani and Designer sections at any time.

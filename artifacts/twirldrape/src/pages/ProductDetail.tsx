@@ -94,6 +94,8 @@ function ZoomLightbox({
   onClose: () => void;
   onNav: (dir: 1 | -1) => void;
 }) {
+  const touchStartX = React.useRef<number | null>(null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -108,6 +110,17 @@ function ZoomLightbox({
     };
   }, [onClose, onNav]);
 
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return;
+    const deltaX = (e.changedTouches[0]?.clientX ?? 0) - touchStartX.current;
+    if (Math.abs(deltaX) > 50) onNav(deltaX < 0 ? 1 : -1);
+    touchStartX.current = null;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -115,6 +128,8 @@ function ZoomLightbox({
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[999] bg-black/95 flex items-center justify-center"
       onClick={onClose}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       <button
         className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors"
@@ -189,14 +204,14 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
             <Truck size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Standard Delivery (5–7 Business Days)</p>
-              <p className="opacity-70">Free shipping on all orders above ₹3,000. Orders below ₹3,000 attract a flat ₹149 shipping fee.</p>
+              <p className="opacity-70">Orders are dispatched within 2 business days of confirmation. Delivery in 5–7 business days nationwide. Free shipping on all orders above ₹3,000; a flat ₹149 fee applies below that.</p>
             </div>
           </div>
           <div className="flex gap-3">
             <Package size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Express Delivery (2–3 Business Days)</p>
-              <p className="opacity-70">Available at ₹299 additional charge. Select at checkout. Not available for remote PIN codes.</p>
+              <p className="opacity-70">Available at ₹299 additional charge. Dispatched same day if ordered before 2 PM. Select at checkout. Not available for remote PIN codes.</p>
             </div>
           </div>
           <div className="flex gap-3">
@@ -579,6 +594,7 @@ export default function ProductDetail() {
       : "Contemporary Embroidery";
 
   const DEMO_VIDEO_URL = "https://www.youtube.com/embed/MuUSVu2UBvg?si=hS5E8jLZ3JlzOoXE";
+  const videoUrl: string | null = product.category === "paithani" ? DEMO_VIDEO_URL : null;
 
   const specRows = [
     { label: "Category", value: categoryLabel },
@@ -586,7 +602,8 @@ export default function ProductDetail() {
     { label: "Fabric", value: product.fabric.charAt(0).toUpperCase() + product.fabric.slice(1) },
     { label: "Color", value: product.color.charAt(0).toUpperCase() + product.color.slice(1) },
     { label: "Pattern", value: pattern },
-    { label: "Brand / Weaver", value: product.vendorName },
+    { label: "Brand Name", value: product.vendorName },
+    { label: "Shop Name", value: `${product.vendorName} – TwirlDrape` },
     { label: "In Stock", value: product.stock > 0 ? `${product.stock} units available` : "Out of stock" },
   ];
 
@@ -617,7 +634,7 @@ export default function ProductDetail() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                {/* Tab switcher */}
+                {/* Tab switcher — Video tab hidden when no videoUrl */}
                 <div className="flex gap-1 mb-3">
                   <button
                     onClick={() => setGalleryTab("photos")}
@@ -630,18 +647,20 @@ export default function ProductDetail() {
                   >
                     Photos
                   </button>
-                  <button
-                    onClick={() => setGalleryTab("video")}
-                    className={cn(
-                      "flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-all",
-                      galleryTab === "video"
-                        ? "bg-[#C9A84C] text-[#7B1C2C]"
-                        : "opacity-50 hover:opacity-80"
-                    )}
-                  >
-                    <Play size={11} />
-                    Video
-                  </button>
+                  {videoUrl && (
+                    <button
+                      onClick={() => setGalleryTab("video")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-all",
+                        galleryTab === "video"
+                          ? "bg-[#C9A84C] text-[#7B1C2C]"
+                          : "opacity-50 hover:opacity-80"
+                      )}
+                    >
+                      <Play size={11} />
+                      Video
+                    </button>
+                  )}
                 </div>
 
                 {galleryTab === "photos" ? (
@@ -697,17 +716,17 @@ export default function ProductDetail() {
                       ))}
                     </div>
                   </>
-                ) : (
+                ) : videoUrl ? (
                   <div className="aspect-video rounded-lg overflow-hidden border border-[#C9A84C]/20 bg-black">
                     <iframe
-                      src={DEMO_VIDEO_URL}
+                      src={videoUrl}
                       title="Saree video showcase"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                       className="w-full h-full"
                     />
                   </div>
-                )}
+                ) : null}
               </motion.div>
 
               {/* Product Info */}

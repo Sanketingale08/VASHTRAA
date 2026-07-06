@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TwirlDrape"
+version = "1.0.0"
+id = "artifacts/twirldrape"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23779
+
+[services.development]
+run = "pnpm --filter @workspace/twirldrape run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/twirldrape", "run", "build" ]
+publicDir = "artifacts/twirldrape/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23779"
+BASE_PATH = "/"

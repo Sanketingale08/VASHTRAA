@@ -1,0 +1,110 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "zoohhR_4QhTJOr-WaSSLK"
+uri = "file://artifacts/twirldrape/public/images/hero-paithani-1.png"
+type = "image"
+title = "Paithani Hero 1"
+
+[[generated]]
+id = "9wTDl2x_XR6FJ3SzgHfhC"
+uri = "file://artifacts/twirldrape/public/images/hero-paithani-2.png"
+type = "image"
+title = "Paithani Hero 2"
+
+[[generated]]
+id = "iGc4RK4Al7iC7olwr9uu8"
+uri = "file://artifacts/twirldrape/public/images/hero-paithani-3.png"
+type = "image"
+title = "Paithani Hero 3"
+
+[[generated]]
+id = "x2albkoizvzxNe2hyePze"
+uri = "file://artifacts/twirldrape/public/images/hero-designer-1.png"
+type = "image"
+title = "Designer Hero 1"
+
+[[generated]]
+id = "PtN-PcoQLfRR0DdgEiZZC"
+uri = "file://artifacts/twirldrape/public/images/hero-designer-2.png"
+type = "image"
+title = "Designer Hero 2"
+
+[[generated]]
+id = "NJy2Pk5hVS03QfPEr48Ks"
+uri = "file://artifacts/twirldrape/public/images/home-paithani.png"
+type = "image"
+title = "Home Paithani Half"
+
+[[generated]]
+id = "nnyovAnot6QKvFYVsYOdi"
+uri = "file://artifacts/twirldrape/public/images/home-designer.png"
+type = "image"
+title = "Home Designer Half"
+
+[[generated]]
+id = "o3e2n31bZgkrTslkFP22K"
+uri = "file://artifacts/twirldrape/public/images/product-1.png"
+type = "image"
+title = "Saree Product 1"
+
+[[generated]]
+id = "aP1Oq3gUIhM322EK6TfiH"
+uri = "file://artifacts/twirldrape/public/images/product-2.png"
+type = "image"
+title = "Saree Product 2"
+
+[[generated]]
+id = "22b8sj6JCSvquNcqhnBfw"
+uri = "file://artifacts/twirldrape/public/images/product-3.png"
+type = "image"
+title = "Saree Product 3"
+
+[[generated]]
+id = "Kd7I9m_q-dOXv1cC7pbA9"
+uri = "file://artifacts/twirldrape/public/images/product-4.png"
+type = "image"
+title = "Saree Product 4"
+
+[[generated]]
+id = "5IUIiUeFP-_9jV1C0IaEQ"
+uri = "file://artifacts/twirldrape/public/images/product-5.png"
+type = "image"
+title = "Saree Product 5"
+
+[[generated]]
+id = "x9lEg2IVA14JKpI20UyKn"
+uri = "file://artifacts/twirldrape/public/images/product-6.png"
+type = "image"
+title = "Saree Product 6"
+
+[[generated]]
+id = "JSpVgfqRlmcDnM047SRne"
+uri = "file://artifacts/twirldrape/public/images/product-7.png"
+type = "image"
+title = "Saree Product 7"
+
+[[generated]]
+id = "rQoI1IC127FdyBVxDV6Hv"
+uri = "file://artifacts/twirldrape/public/images/product-8.png"
+type = "image"
+title = "Saree Product 8"
+
+[[generated]]
+id = "ZZ55Ju3lqz2a5V2h0Nay7"
+uri = "file://artifacts/twirldrape/public/images/artisan-1.png"
+type = "image"
+title = "Artisan Story 1"
+
+[[generated]]
+id = "aMOvFTYP40klxwfuNN7BX"
+uri = "file://artifacts/twirldrape/public/images/artisan-2.png"
+type = "image"
+title = "Artisan Story 2"
+
+[[generated]]
+id = "uhytBlPwtHUujmqNREpPB"
+uri = "file://artifacts/twirldrape/public/images/artisan-3.png"
+type = "image"
+title = "Artisan Story 3"

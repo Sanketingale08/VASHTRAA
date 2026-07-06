@@ -1,0 +1,25 @@
+import React from "react";
+import { AnnouncementBar } from "./AnnouncementBar";
+import { Navbar } from "./Navbar";
+import { SectionSwitcher } from "./SectionSwitcher";
+import { NewsletterSection } from "./NewsletterSection";
+import { Footer } from "./Footer";
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export function Layout({ children }: LayoutProps) {
+  return (
+    <div className="min-h-screen flex flex-col font-sans">
+      <AnnouncementBar />
+      <Navbar />
+      <SectionSwitcher />
+      <main className="flex-grow">
+        {children}
+      </main>
+      <NewsletterSection />
+      <Footer />
+    </div>
+  );
+}

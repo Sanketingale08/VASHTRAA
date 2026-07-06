@@ -5,8 +5,6 @@ import { cn } from "@/lib/utils";
 export function SectionSwitcher() {
   const [location] = useLocation();
 
-  if (location === "/") return null;
-
   const isPaithani = location.startsWith("/paithani");
   const isDesigner = location.startsWith("/designer");
 

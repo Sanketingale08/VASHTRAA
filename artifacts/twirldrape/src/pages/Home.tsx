@@ -1,10 +1,12 @@
 import React from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
+import { Layout } from "@/components/Layout";
 
 export default function Home() {
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row overflow-hidden bg-black text-white relative">
+    <Layout>
+    <div className="w-full flex flex-col md:flex-row overflow-hidden bg-black text-white relative" style={{ minHeight: "calc(100vh - 120px)" }}>
       {/* Central Logo Overlay */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center justify-center bg-black/60 md:bg-transparent md:backdrop-blur-none backdrop-blur-sm p-8 md:p-0 rounded-full w-48 h-48 md:w-auto md:h-auto">
         <motion.div 
@@ -88,5 +90,6 @@ export default function Home() {
         </Link>
       </div>
     </div>
+    </Layout>
   );
 }

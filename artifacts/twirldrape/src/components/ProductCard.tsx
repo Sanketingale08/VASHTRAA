@@ -24,6 +24,7 @@ type ProductCardProduct = {
   images?: string[];
   isBestSeller?: boolean;
   isNewArrival?: boolean;
+  stock?: number;
 };
 
 interface ProductCardProps {
@@ -122,7 +123,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                   originalPrice: product.originalPrice ?? null,
                   images: product.images ?? (product.image ? [product.image] : []),
                   vendorName: vendorLabel,
-                  stock: 99,
+                  stock: product.stock ?? 10,
                   category: "",
                 });
               }}

@@ -77,6 +77,7 @@ bestSeller?: boolean;
 newArrival?: boolean;
 hasDiscount?: boolean;
 minRating?: number;
+ids?: string;
 };
 
 export interface ProductFacets {

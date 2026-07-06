@@ -58,6 +58,9 @@ router.post("/cart/:productId", requireAuth, async (req: any, res) => {
     if (product.length === 0) {
       return res.status(404).json({ error: "Product not found" });
     }
+    if (product[0].stock === 0) {
+      return res.status(400).json({ error: "Product is out of stock" });
+    }
 
     const existing = await db
       .select({ quantity: cartItemsTable.quantity })
@@ -95,6 +98,9 @@ router.put("/cart/:productId", requireAuth, async (req: any, res) => {
 
     if (product.length === 0) {
       return res.status(404).json({ error: "Product not found" });
+    }
+    if (product[0].stock === 0) {
+      return res.status(400).json({ error: "Product is out of stock" });
     }
 
     const cappedQty = Math.min(quantity, product[0].stock);

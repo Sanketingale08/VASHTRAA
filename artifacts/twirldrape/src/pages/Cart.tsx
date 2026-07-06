@@ -81,6 +81,17 @@ export function CartPage() {
     removeItem(productId);
   }
 
+  function getDeliveryDate() {
+    const date = new Date();
+    let businessDays = 0;
+    while (businessDays < 7) {
+      date.setDate(date.getDate() + 1);
+      const day = date.getDay();
+      if (day !== 0 && day !== 6) businessDays++;
+    }
+    return date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  }
+
   if (items.length === 0) {
     return (
       <Layout>
@@ -300,9 +311,19 @@ export function CartPage() {
                 </p>
               )}
 
+              <div className="text-xs text-center text-gray-500 bg-[#FAF6EE] dark:bg-[#2A2E35] rounded px-3 py-2">
+                📦 Estimated delivery: <span className="font-semibold">{getDeliveryDate()}</span>
+              </div>
+
               <Link href="/checkout">
                 <button className="w-full bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
                   Proceed to Checkout
+                </button>
+              </Link>
+
+              <Link href="/paithani/shop">
+                <button className="w-full py-2.5 border border-[#C9A84C]/40 text-[#7B1C2C] dark:text-[#C9A84C] hover:border-[#C9A84C] text-sm font-semibold rounded-sm transition-colors">
+                  Continue Shopping
                 </button>
               </Link>
 

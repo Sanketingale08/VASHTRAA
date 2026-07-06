@@ -99,7 +99,7 @@ export default function Wishlist() {
       originalPrice: item.originalPrice ?? null,
       images: item.images ?? [],
       vendorName: item.vendorName ?? "",
-      stock: (item as any).stock ?? 99,
+      stock: item.stock ?? 10,
       category: item.category ?? "",
     });
     toggleWishlist(item.id);

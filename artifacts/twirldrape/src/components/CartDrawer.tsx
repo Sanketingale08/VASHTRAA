@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ShoppingBag, Minus, Plus, Trash2, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
@@ -8,6 +8,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function CartDrawer() {
   const { items, isDrawerOpen, closeDrawer, removeItem, updateQuantity, totalItems } = useCart();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDrawer();
+    };
+    if (isDrawerOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isDrawerOpen, closeDrawer]);
 
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const shipping = subtotal >= 5000 ? 0 : 199;

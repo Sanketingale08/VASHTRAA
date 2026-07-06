@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useDeferredValue } from "react";
 import { Layout } from "@/components/Layout";
-import { useListProducts, useListVendors } from "@workspace/api-client-react";
-import type { ListProductsParams, ListProductsSort } from "@workspace/api-client-react";
+import { useListProducts, useListVendors, useGetProductFacets } from "@workspace/api-client-react";
+import type { ListProductsParams, ListProductsSort, GetProductFacetsParams } from "@workspace/api-client-react";
 import { ProductCard } from "@/components/ProductCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { SlidersHorizontal, X, ChevronDown, Search, Star } from "lucide-react";
@@ -85,6 +85,23 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
 
   const { data, isLoading } = useListProducts(params);
   const { data: vendors } = useListVendors();
+
+  const facetParams: GetProductFacetsParams = {
+    category,
+    ...(deferredSearch && { search: deferredSearch }),
+    ...(fabric && { fabric }),
+    ...(color && { color }),
+    ...(occasion && { occasion }),
+    ...(vendorId && { vendorId }),
+    ...(minPrice !== undefined && { minPrice }),
+    ...(maxPrice !== undefined && { maxPrice }),
+    ...(quickChip === "bestSeller" && { bestSeller: true }),
+    ...(quickChip === "newArrival" && { newArrival: true }),
+    ...(quickChip === "onSale" || hasDiscount ? { hasDiscount: true } : {}),
+    ...(minRating !== undefined && { minRating }),
+  };
+
+  const { data: facets } = useGetProductFacets(facetParams);
 
   const resetFilters = useCallback(() => {
     setFabric(undefined);
@@ -266,31 +283,38 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                       <div>
                         <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Customer Rating</h4>
                         <div className="space-y-2">
-                          {RATING_OPTIONS.map((opt) => (
-                            <label key={String(opt.value)} className="flex items-center gap-3 cursor-pointer group">
-                              <input
-                                type="radio"
-                                name="minRating"
-                                checked={minRating === opt.value}
-                                onChange={() => { setMinRating(opt.value); setPage(1); }}
-                                className="accent-[#C9A84C]"
-                              />
-                              <span className="text-sm flex items-center gap-1 group-hover:text-[#C9A84C] transition-colors">
-                                {opt.value !== undefined && (
-                                  <span className="flex">
-                                    {[1, 2, 3, 4, 5].map((s) => (
-                                      <Star
-                                        key={s}
-                                        size={10}
-                                        className={s <= Math.floor(opt.value!) ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-300"}
-                                      />
-                                    ))}
-                                  </span>
-                                )}
-                                {opt.label}
-                              </span>
-                            </label>
-                          ))}
+                          {RATING_OPTIONS.map((opt) => {
+                            const ratingCount = opt.value !== undefined ? (facets?.rating[String(opt.value)] ?? 0) : undefined;
+                            const isZero = ratingCount === 0;
+                            return (
+                              <label key={String(opt.value)} className={cn("flex items-center gap-3 cursor-pointer group", isZero && "opacity-40")}>
+                                <input
+                                  type="radio"
+                                  name="minRating"
+                                  checked={minRating === opt.value}
+                                  onChange={() => { setMinRating(opt.value); setPage(1); }}
+                                  className="accent-[#C9A84C]"
+                                />
+                                <span className="text-sm flex items-center gap-1 group-hover:text-[#C9A84C] transition-colors">
+                                  {opt.value !== undefined && (
+                                    <span className="flex">
+                                      {[1, 2, 3, 4, 5].map((s) => (
+                                        <Star
+                                          key={s}
+                                          size={10}
+                                          className={s <= Math.floor(opt.value!) ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-300"}
+                                        />
+                                      ))}
+                                    </span>
+                                  )}
+                                  {opt.label}
+                                  {ratingCount !== undefined && (
+                                    <span className="text-[10px] opacity-50 ml-0.5">({ratingCount})</span>
+                                  )}
+                                </span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -333,23 +357,34 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                       <div>
                         <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Color</h4>
                         <div className="flex flex-wrap gap-2">
-                          {COLORS.map((c) => (
-                            <button
-                              key={c.value}
-                              title={c.label}
-                              onClick={() => { setColor(color === c.value ? undefined : c.value); setPage(1); }}
-                              className={cn(
-                                "w-7 h-7 rounded-full border-2 transition-all",
-                                color === c.value
-                                  ? "border-[#C9A84C] scale-110 shadow-md"
-                                  : "border-transparent hover:border-[#C9A84C]/50"
-                              )}
-                              style={{ backgroundColor: c.hex }}
-                            />
-                          ))}
+                          {COLORS.map((c) => {
+                            const colorCount = facets?.color[c.value] ?? 0;
+                            const isZero = colorCount === 0;
+                            return (
+                              <button
+                                key={c.value}
+                                title={`${c.label} (${colorCount})`}
+                                onClick={() => { setColor(color === c.value ? undefined : c.value); setPage(1); }}
+                                className={cn(
+                                  "w-7 h-7 rounded-full border-2 transition-all",
+                                  color === c.value
+                                    ? "border-[#C9A84C] scale-110 shadow-md"
+                                    : isZero
+                                      ? "border-transparent opacity-30 cursor-not-allowed"
+                                      : "border-transparent hover:border-[#C9A84C]/50"
+                                )}
+                                style={{ backgroundColor: c.hex }}
+                              />
+                            );
+                          })}
                         </div>
                         {color && (
-                          <p className="text-xs mt-2 opacity-60 capitalize">{color} selected</p>
+                          <p className="text-xs mt-2 opacity-60 capitalize">
+                            {color} selected
+                            {facets?.color[color] !== undefined && (
+                              <span className="ml-1">({facets.color[color]})</span>
+                            )}
+                          </p>
                         )}
                       </div>
 
@@ -357,17 +392,24 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                       <div>
                         <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Fabric</h4>
                         <div className="space-y-1">
-                          {FABRICS.map((f) => (
-                            <label key={f} className="flex items-center gap-3 cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={fabric === f}
-                                onChange={() => { setFabric(fabric === f ? undefined : f); setPage(1); }}
-                                className="accent-[#C9A84C]"
-                              />
-                              <span className="text-sm capitalize group-hover:text-[#C9A84C] transition-colors">{f}</span>
-                            </label>
-                          ))}
+                          {FABRICS.map((f) => {
+                            const fabricCount = facets?.fabric[f] ?? 0;
+                            const isZero = fabricCount === 0;
+                            return (
+                              <label key={f} className={cn("flex items-center justify-between gap-3 cursor-pointer group", isZero && "opacity-40")}>
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={fabric === f}
+                                    onChange={() => { setFabric(fabric === f ? undefined : f); setPage(1); }}
+                                    className="accent-[#C9A84C]"
+                                  />
+                                  <span className="text-sm capitalize group-hover:text-[#C9A84C] transition-colors">{f}</span>
+                                </div>
+                                <span className="text-[11px] opacity-50 shrink-0">({fabricCount})</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -375,17 +417,24 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                       <div>
                         <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Subcategory / Occasion</h4>
                         <div className="space-y-1">
-                          {OCCASIONS.map((o) => (
-                            <label key={o} className="flex items-center gap-3 cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={occasion === o}
-                                onChange={() => { setOccasion(occasion === o ? undefined : o); setPage(1); }}
-                                className="accent-[#C9A84C]"
-                              />
-                              <span className="text-sm capitalize group-hover:text-[#C9A84C] transition-colors">{o}</span>
-                            </label>
-                          ))}
+                          {OCCASIONS.map((o) => {
+                            const occasionCount = facets?.occasion[o] ?? 0;
+                            const isZero = occasionCount === 0;
+                            return (
+                              <label key={o} className={cn("flex items-center justify-between gap-3 cursor-pointer group", isZero && "opacity-40")}>
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={occasion === o}
+                                    onChange={() => { setOccasion(occasion === o ? undefined : o); setPage(1); }}
+                                    className="accent-[#C9A84C]"
+                                  />
+                                  <span className="text-sm capitalize group-hover:text-[#C9A84C] transition-colors">{o}</span>
+                                </div>
+                                <span className="text-[11px] opacity-50 shrink-0">({occasionCount})</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -394,17 +443,24 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                         <div>
                           <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Brand / Shop</h4>
                           <div className="space-y-1">
-                            {vendors.map((v) => (
-                              <label key={v.id} className="flex items-center gap-3 cursor-pointer group">
-                                <input
-                                  type="checkbox"
-                                  checked={vendorId === v.id}
-                                  onChange={() => { setVendorId(vendorId === v.id ? undefined : v.id); setPage(1); }}
-                                  className="accent-[#C9A84C]"
-                                />
-                                <span className="text-sm group-hover:text-[#C9A84C] transition-colors">{v.name}</span>
-                              </label>
-                            ))}
+                            {vendors.map((v) => {
+                              const vendorCount = facets?.vendor[v.id] ?? 0;
+                              const isZero = vendorCount === 0;
+                              return (
+                                <label key={v.id} className={cn("flex items-center justify-between gap-3 cursor-pointer group", isZero && "opacity-40")}>
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={vendorId === v.id}
+                                      onChange={() => { setVendorId(vendorId === v.id ? undefined : v.id); setPage(1); }}
+                                      className="accent-[#C9A84C]"
+                                    />
+                                    <span className="text-sm group-hover:text-[#C9A84C] transition-colors">{v.name}</span>
+                                  </div>
+                                  <span className="text-[11px] opacity-50 shrink-0">({vendorCount})</span>
+                                </label>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

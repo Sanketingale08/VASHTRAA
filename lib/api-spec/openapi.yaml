@@ -106,6 +106,70 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductListResponse"
 
+  /products/facets:
+    get:
+      operationId: getProductFacets
+      tags: [products]
+      summary: Get product facet counts
+      description: Returns counts per filter dimension for faceted search
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [paithani, designer]
+        - name: fabric
+          in: query
+          schema:
+            type: string
+        - name: color
+          in: query
+          schema:
+            type: string
+        - name: occasion
+          in: query
+          schema:
+            type: string
+        - name: vendorId
+          in: query
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+        - name: bestSeller
+          in: query
+          schema:
+            type: boolean
+        - name: newArrival
+          in: query
+          schema:
+            type: boolean
+        - name: hasDiscount
+          in: query
+          schema:
+            type: boolean
+        - name: minRating
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Facet counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFacets"
+
   /products/{id}:
     get:
       operationId: getProduct
@@ -248,6 +312,36 @@ components:
         - page
         - limit
         - totalPages
+
+    ProductFacets:
+      type: object
+      properties:
+        fabric:
+          type: object
+          additionalProperties:
+            type: number
+        occasion:
+          type: object
+          additionalProperties:
+            type: number
+        color:
+          type: object
+          additionalProperties:
+            type: number
+        vendor:
+          type: object
+          additionalProperties:
+            type: number
+        rating:
+          type: object
+          additionalProperties:
+            type: number
+      required:
+        - fabric
+        - occasion
+        - color
+        - vendor
+        - rating
 
     VendorSummary:
       type: object

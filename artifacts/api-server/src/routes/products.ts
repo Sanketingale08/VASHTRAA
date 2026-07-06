@@ -102,6 +102,110 @@ router.get("/products", async (req, res) => {
   }
 });
 
+router.get("/products/facets", async (req, res) => {
+  try {
+    const {
+      search,
+      category,
+      fabric,
+      color,
+      occasion,
+      vendorId,
+      minPrice,
+      maxPrice,
+      bestSeller,
+      newArrival,
+      hasDiscount,
+      minRating,
+    } = req.query as Record<string, string>;
+
+    function buildConditions(overrides: {
+      fabric?: string | null;
+      color?: string | null;
+      occasion?: string | null;
+      vendorId?: string | null;
+      minRating?: string | null;
+      ratingThreshold?: number;
+    } = {}) {
+      const conds = [];
+      const { ratingThreshold, ...rest } = overrides;
+      const eff = { fabric, color, occasion, vendorId, minRating, ...rest };
+
+      if (search && search.trim()) {
+        const term = `%${search.trim()}%`;
+        conds.push(or(
+          ilike(productsTable.name, term),
+          ilike(productsTable.description, term),
+          ilike(productsTable.vendorName, term),
+        ));
+      }
+      if (category) conds.push(eq(productsTable.category, category as any));
+      if (eff.fabric !== null && eff.fabric) conds.push(eq(productsTable.fabric, eff.fabric as any));
+      if (eff.color !== null && eff.color) conds.push(eq(productsTable.color, eff.color as any));
+      if (eff.occasion !== null && eff.occasion) conds.push(eq(productsTable.occasion, eff.occasion as any));
+      if (eff.vendorId !== null && eff.vendorId) conds.push(eq(productsTable.vendorId, eff.vendorId));
+      if (minPrice) conds.push(gte(productsTable.price, parseInt(minPrice)));
+      if (maxPrice) conds.push(lte(productsTable.price, parseInt(maxPrice)));
+      if (bestSeller === "true") conds.push(eq(productsTable.isBestSeller, true));
+      if (newArrival === "true") conds.push(eq(productsTable.isNewArrival, true));
+      if (hasDiscount === "true") conds.push(isNotNull(productsTable.originalPrice));
+      if (eff.minRating !== null && eff.minRating) conds.push(gte(productsTable.rating, parseFloat(eff.minRating)));
+      if (ratingThreshold !== undefined) conds.push(gte(productsTable.rating, ratingThreshold));
+
+      return conds.length > 0 ? and(...conds) : undefined;
+    }
+
+    const [fabricRows, occasionRows, colorRows, vendorRows, ratingRows] = await Promise.all([
+      db
+        .select({ value: productsTable.fabric, count: sql<number>`count(*)::int` })
+        .from(productsTable)
+        .where(buildConditions({ fabric: null }))
+        .groupBy(productsTable.fabric),
+      db
+        .select({ value: productsTable.occasion, count: sql<number>`count(*)::int` })
+        .from(productsTable)
+        .where(buildConditions({ occasion: null }))
+        .groupBy(productsTable.occasion),
+      db
+        .select({ value: productsTable.color, count: sql<number>`count(*)::int` })
+        .from(productsTable)
+        .where(buildConditions({ color: null }))
+        .groupBy(productsTable.color),
+      db
+        .select({ value: productsTable.vendorId, count: sql<number>`count(*)::int` })
+        .from(productsTable)
+        .where(buildConditions({ vendorId: null }))
+        .groupBy(productsTable.vendorId),
+      Promise.all(
+        [3, 4, 4.5].map((threshold) =>
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(productsTable)
+            .where(buildConditions({ minRating: null, ratingThreshold: threshold }))
+            .then((rows) => ({ threshold, count: rows[0]?.count ?? 0 }))
+        )
+      ),
+    ]);
+
+    const toMap = (rows: { value: string | null; count: number }[]) => {
+      const m: Record<string, number> = {};
+      for (const r of rows) if (r.value) m[r.value] = r.count;
+      return m;
+    };
+
+    res.json({
+      fabric: toMap(fabricRows),
+      occasion: toMap(occasionRows),
+      color: toMap(colorRows),
+      vendor: toMap(vendorRows as any),
+      rating: Object.fromEntries(ratingRows.map((r) => [String(r.threshold), r.count])),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to compute facets");
+    res.status(500).json({ error: "Failed to compute facets" });
+  }
+});
+
 router.get("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;

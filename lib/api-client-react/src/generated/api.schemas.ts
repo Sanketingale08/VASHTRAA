@@ -79,6 +79,29 @@ hasDiscount?: boolean;
 minRating?: number;
 };
 
+export interface ProductFacets {
+  fabric: Record<string, number>;
+  occasion: Record<string, number>;
+  color: Record<string, number>;
+  vendor: Record<string, number>;
+  rating: Record<string, number>;
+}
+
+export type GetProductFacetsParams = {
+search?: string;
+category?: ListProductsCategory;
+fabric?: string;
+color?: string;
+occasion?: string;
+vendorId?: string;
+minPrice?: number;
+maxPrice?: number;
+bestSeller?: boolean;
+newArrival?: boolean;
+hasDiscount?: boolean;
+minRating?: number;
+};
+
 export type ListProductsCategory = typeof ListProductsCategory[keyof typeof ListProductsCategory];
 
 

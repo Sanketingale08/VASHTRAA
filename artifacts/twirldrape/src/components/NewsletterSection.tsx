@@ -33,6 +33,27 @@ export function NewsletterSection() {
       {/* Decorative background elements */}
       <div className="absolute -top-24 -left-24 w-64 h-64 border border-[#C9A84C]/10 rounded-full"></div>
       <div className="absolute -bottom-24 -right-24 w-80 h-80 border border-[#C9A84C]/10 rounded-full"></div>
+      {/* Peacock decorative illustration */}
+      <div className="absolute right-8 top-1/2 -translate-y-1/2 opacity-15 pointer-events-none hidden lg:block">
+        <svg width="180" height="180" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="24" cy="37" rx="5" ry="7" fill="#C9A84C" />
+          <path d="M24 30 Q22 23 23 18" stroke="#C9A84C" strokeWidth="2.5" strokeLinecap="round" />
+          <circle cx="23" cy="15.5" r="3.5" fill="#C9A84C" />
+          <path d="M21 13 Q18 9 20 7" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+          <path d="M23 12 Q22 8 23 6" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+          <path d="M25 13 Q27 9 26 7" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+          <path d="M24 29 Q14 22 9 18" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M24 29 Q17 20 15 14" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M24 29 Q24 19 24 13" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M24 29 Q31 20 33 14" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M24 29 Q34 22 39 18" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" />
+          <circle cx="9" cy="17" r="2.5" fill="#C9A84C" />
+          <circle cx="15" cy="13" r="2.5" fill="#C9A84C" />
+          <circle cx="24" cy="12" r="2.5" fill="#C9A84C" />
+          <circle cx="33" cy="13" r="2.5" fill="#C9A84C" />
+          <circle cx="39" cy="17" r="2.5" fill="#C9A84C" />
+        </svg>
+      </div>
     </section>
   );
 }

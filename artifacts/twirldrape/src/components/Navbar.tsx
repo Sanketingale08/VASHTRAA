@@ -94,13 +94,33 @@ export function Navbar() {
           </button>
 
           {/* Logo */}
-          <Link href="/" className="flex flex-col items-center group">
-            <span className="font-serif text-2xl md:text-3xl font-bold tracking-wider text-[#C9A84C] group-hover:opacity-90 transition-opacity">
-              TWIRLDRAPE
-            </span>
-            <span className="text-[0.6rem] md:text-xs tracking-[0.2em] uppercase opacity-80 mt-0.5">
-              Authentic Paithani & Designer
-            </span>
+          <Link href="/" className="flex items-center gap-2 group">
+            <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-none group-hover:opacity-90 transition-opacity">
+              <ellipse cx="24" cy="37" rx="5" ry="7" fill="#C9A84C" />
+              <path d="M24 30 Q22 23 23 18" stroke="#C9A84C" strokeWidth="2.5" strokeLinecap="round" />
+              <circle cx="23" cy="15.5" r="3.5" fill="#C9A84C" />
+              <path d="M21 13 Q18 9 20 7" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+              <path d="M23 12 Q22 8 23 6" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+              <path d="M25 13 Q27 9 26 7" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+              <path d="M24 29 Q14 22 9 18" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" opacity="0.9" />
+              <path d="M24 29 Q17 20 15 14" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" opacity="0.9" />
+              <path d="M24 29 Q24 19 24 13" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" opacity="0.9" />
+              <path d="M24 29 Q31 20 33 14" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" opacity="0.9" />
+              <path d="M24 29 Q34 22 39 18" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" opacity="0.9" />
+              <circle cx="9" cy="17" r="2" fill="#C9A84C" opacity="0.6" />
+              <circle cx="15" cy="13" r="2" fill="#C9A84C" opacity="0.6" />
+              <circle cx="24" cy="12" r="2" fill="#C9A84C" opacity="0.6" />
+              <circle cx="33" cy="13" r="2" fill="#C9A84C" opacity="0.6" />
+              <circle cx="39" cy="17" r="2" fill="#C9A84C" opacity="0.6" />
+            </svg>
+            <div className="flex flex-col">
+              <span className="font-serif text-2xl md:text-3xl font-bold tracking-wider text-[#C9A84C] group-hover:opacity-90 transition-opacity leading-none">
+                TWIRLDRAPE
+              </span>
+              <span className="text-[0.6rem] md:text-xs tracking-[0.2em] uppercase opacity-80 mt-0.5">
+                Authentic Paithani & Designer
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Links */}

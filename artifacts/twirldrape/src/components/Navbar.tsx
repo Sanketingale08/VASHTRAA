@@ -104,14 +104,14 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Links */}
-          <div className="hidden lg:flex items-center gap-8 text-sm uppercase tracking-wider font-medium">
+          <div className="hidden lg:flex items-center gap-5 text-xs uppercase tracking-wider font-medium">
             <Link href="/" className="hover:text-[#C9A84C] transition-colors">Home</Link>
             <div className="group relative">
-              <Link href="/paithani" className="hover:text-[#C9A84C] transition-colors">Paithani</Link>
+              <Link href="/paithani" className="hover:text-[#C9A84C] transition-colors">Paithani Sarees</Link>
               <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 hidden group-hover:block">
                 <div className="bg-white text-gray-800 shadow-xl border border-gray-100 rounded-md py-2 w-44 text-xs">
                   <Link href="/paithani" className="block px-4 py-2 hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors">
-                    Paithani Sarees
+                    Paithani Landing
                   </Link>
                   <Link href="/paithani/shop" className="block px-4 py-2 hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors">
                     Shop All Paithani
@@ -120,11 +120,11 @@ export function Navbar() {
               </div>
             </div>
             <div className="group relative">
-              <Link href="/designer" className="hover:text-[#C9A84C] transition-colors">Designer</Link>
+              <Link href="/designer" className="hover:text-[#C9A84C] transition-colors">Designer Sarees</Link>
               <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 hidden group-hover:block">
                 <div className="bg-white text-gray-800 shadow-xl border border-gray-100 rounded-md py-2 w-44 text-xs">
                   <Link href="/designer" className="block px-4 py-2 hover:bg-[#1E2329] hover:text-[#C9A84C] transition-colors">
-                    Designer Sarees
+                    Designer Landing
                   </Link>
                   <Link href="/designer/shop" className="block px-4 py-2 hover:bg-[#1E2329] hover:text-[#C9A84C] transition-colors">
                     Shop All Designer
@@ -132,7 +132,10 @@ export function Navbar() {
                 </div>
               </div>
             </div>
+            <Link href="/paithani/shop" className="hover:text-[#C9A84C] transition-colors">Collections</Link>
+            <Link href="/paithani/shop" className="hover:text-[#C9A84C] transition-colors">New Arrivals</Link>
             <Link href="#" className="hover:text-[#C9A84C] transition-colors">About Us</Link>
+            <Link href="#" className="hover:text-[#C9A84C] transition-colors">Contact</Link>
           </div>
 
           {/* Icons */}
@@ -242,12 +245,14 @@ export function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden absolute top-full left-0 w-full bg-[#7B1C2C] border-b border-[#C9A84C]/20 shadow-xl py-4 px-4 flex flex-col gap-4 text-sm uppercase tracking-wider">
+          <div className="lg:hidden absolute top-full left-0 w-full bg-[#7B1C2C] border-b border-[#C9A84C]/20 shadow-xl py-4 px-4 flex flex-col gap-4 text-sm uppercase tracking-wider text-[#FAF6EE]">
             <Link href="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
             <Link href="/paithani" onClick={() => setMobileMenuOpen(false)}>Paithani Sarees</Link>
-            <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>Shop All Paithani</Link>
             <Link href="/designer" onClick={() => setMobileMenuOpen(false)}>Designer Sarees</Link>
-            <Link href="/designer/shop" onClick={() => setMobileMenuOpen(false)}>Shop All Designer</Link>
+            <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>Collections</Link>
+            <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>New Arrivals</Link>
+            <Link href="#" onClick={() => setMobileMenuOpen(false)}>About Us</Link>
+            <Link href="#" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
           </div>
         )}
       </div>

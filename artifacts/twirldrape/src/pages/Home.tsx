@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
+import useEmblaCarousel from "embla-carousel-react";
 import {
   ShieldCheck,
   BadgeCheck,
@@ -71,10 +72,43 @@ const testimonials = [
 
 const VISIBLE = 4;
 
+function PeacockIcon({ size = 40 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="24" cy="36" rx="5" ry="7" fill="#7B1C2C" />
+      <path d="M24 29 Q22 22 23 17" stroke="#7B1C2C" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="23" cy="14.5" r="3.5" fill="#7B1C2C" />
+      <path d="M21 12 Q18 8 20 6" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M23 11 Q22 7 23 5" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M25 12 Q27 8 26 6" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M24 28 Q14 21 9 17" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      <path d="M24 28 Q17 19 15 13" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      <path d="M24 28 Q24 18 24 12" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      <path d="M24 28 Q31 19 33 13" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      <path d="M24 28 Q34 21 39 17" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      <circle cx="9" cy="16" r="2.2" fill="#C9A84C" opacity="0.7" />
+      <circle cx="15" cy="12" r="2.2" fill="#C9A84C" opacity="0.7" />
+      <circle cx="24" cy="11" r="2.2" fill="#C9A84C" opacity="0.7" />
+      <circle cx="33" cy="12" r="2.2" fill="#C9A84C" opacity="0.7" />
+      <circle cx="39" cy="16" r="2.2" fill="#C9A84C" opacity="0.7" />
+    </svg>
+  );
+}
+
 export default function Home() {
-  const [carouselIdx, setCarouselIdx] = useState(0);
   const picks = mockProducts.slice(0, 8);
-  const maxIdx = Math.max(0, picks.length - VISIBLE);
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(true);
+  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => { setCanPrev(emblaApi.canScrollPrev()); setCanNext(emblaApi.canScrollNext()); };
+    emblaApi.on("select", onSelect);
+    onSelect();
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi]);
 
   return (
     <Layout>
@@ -125,9 +159,12 @@ export default function Home() {
                 <div className="rounded-2xl overflow-hidden shadow-2xl border-4" style={{ borderColor: GOLD + "55" }}>
                   <img src="/images/home-paithani.png" alt="Elegant Paithani saree" className="w-full object-cover" style={{ maxHeight: "520px", objectPosition: "top center" }} />
                 </div>
-                <div className="absolute -bottom-5 -left-5 bg-[#FAF6EE] rounded-xl p-4 shadow-xl border" style={{ borderColor: GOLD + "44" }}>
-                  <p className="font-serif text-lg font-bold tracking-wider" style={{ color: MAROON }}>TWIRLDRAPE</p>
-                  <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">Authentic · Curated · Trusted</p>
+                <div className="absolute -bottom-5 -left-5 bg-[#FAF6EE] rounded-xl p-4 shadow-xl border flex items-center gap-3" style={{ borderColor: GOLD + "44" }}>
+                  <PeacockIcon size={40} />
+                  <div>
+                    <p className="font-serif text-lg font-bold tracking-wider" style={{ color: MAROON }}>TWIRLDRAPE</p>
+                    <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">Authentic · Curated · Trusted</p>
+                  </div>
                 </div>
                 <div className="absolute -top-4 -right-4 rounded-full w-20 h-20 flex flex-col items-center justify-center shadow-lg text-white font-bold text-center text-xs" style={{ background: MAROON }}>
                   <span className="text-lg font-serif leading-none" style={{ color: GOLD }}>50K+</span>
@@ -223,21 +260,22 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <SectionTitle subtitle="Our most-loved sarees, curated for you">Popular Picks</SectionTitle>
           <div className="relative">
-            <button onClick={() => setCarouselIdx((p) => Math.max(0, p - 1))} disabled={carouselIdx === 0}
+            <button onClick={scrollPrev} disabled={!canPrev}
               className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-all disabled:opacity-30"
               style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}>
               <ChevronLeft size={20} />
             </button>
-            <button onClick={() => setCarouselIdx((p) => Math.min(maxIdx, p + 1))} disabled={carouselIdx >= maxIdx}
+            <button onClick={scrollNext} disabled={!canNext}
               className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-all disabled:opacity-30"
               style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}>
               <ChevronRight size={20} />
             </button>
-            <div className="overflow-hidden px-1">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4"
-                style={{ transform: `translateX(-${(carouselIdx * 100) / VISIBLE}%)`, transition: "transform 0.4s ease" }}>
+            <div ref={emblaRef} className="overflow-hidden px-1">
+              <div className="flex gap-4">
                 {picks.map((p, i) => (
-                  <ProductCard key={p.id} product={p} index={i} />
+                  <div key={p.id} className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)]">
+                    <ProductCard product={p} index={i} />
+                  </div>
                 ))}
               </div>
             </div>

@@ -3,9 +3,8 @@ import { Layout } from "@/components/Layout";
 import { useListProducts, useListVendors } from "@workspace/api-client-react";
 import type { ListProductsParams, ListProductsSort } from "@workspace/api-client-react";
 import { ProductCard } from "@/components/ProductCard";
-import { SectionHeading } from "@/components/SectionHeading";
 import { motion, AnimatePresence } from "framer-motion";
-import { SlidersHorizontal, X, ChevronDown, Search } from "lucide-react";
+import { SlidersHorizontal, X, ChevronDown, Search, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ProductsListingProps {
@@ -38,9 +37,17 @@ const SORT_OPTIONS: { value: ListProductsSort; label: string }[] = [
   { value: "price_desc", label: "Price: High to Low" },
 ];
 
+type QuickChip = "all" | "bestSeller" | "newArrival" | "onSale";
+
+const RATING_OPTIONS: { label: string; value: number | undefined }[] = [
+  { label: "Any Rating", value: undefined },
+  { label: "3★ & above", value: 3 },
+  { label: "4★ & above", value: 4 },
+  { label: "4.5★ & above", value: 4.5 },
+];
+
 export function ProductsListing({ category, title, subtitle }: ProductsListingProps) {
   const isDesigner = category === "designer";
-  const isPaithani = category === "paithani";
 
   const [search, setSearch] = useState("");
   const [fabric, setFabric] = useState<string | undefined>();
@@ -52,6 +59,9 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
   const [sort, setSort] = useState<ListProductsSort>("rating_desc");
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [quickChip, setQuickChip] = useState<QuickChip>("all");
+  const [minRating, setMinRating] = useState<number | undefined>();
+  const [hasDiscount, setHasDiscount] = useState(false);
 
   const deferredSearch = useDeferredValue(search);
 
@@ -67,6 +77,10 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
     ...(vendorId && { vendorId }),
     ...(minPrice !== undefined && { minPrice }),
     ...(maxPrice !== undefined && { maxPrice }),
+    ...(quickChip === "bestSeller" && { bestSeller: true }),
+    ...(quickChip === "newArrival" && { newArrival: true }),
+    ...(quickChip === "onSale" || hasDiscount ? { hasDiscount: true } : {}),
+    ...(minRating !== undefined && { minRating }),
   };
 
   const { data, isLoading } = useListProducts(params);
@@ -80,10 +94,31 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
     setMinPrice(undefined);
     setMaxPrice(undefined);
     setSearch("");
+    setQuickChip("all");
+    setMinRating(undefined);
+    setHasDiscount(false);
     setPage(1);
   }, []);
 
-  const hasActiveFilters = !!(fabric || color || occasion || vendorId || minPrice || maxPrice || search);
+  function handleQuickChip(chip: QuickChip) {
+    setQuickChip((prev) => (prev === chip ? "all" : chip));
+    setPage(1);
+  }
+
+  const activeFilterCount = [
+    fabric,
+    color,
+    occasion,
+    vendorId,
+    minPrice,
+    maxPrice,
+    search,
+    quickChip !== "all" ? quickChip : undefined,
+    minRating,
+    hasDiscount ? true : undefined,
+  ].filter(Boolean).length;
+
+  const hasActiveFilters = activeFilterCount > 0;
   const products = data?.products ?? [];
   const totalPages = data?.totalPages ?? 1;
 
@@ -92,6 +127,12 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
   const inputCls = isDesigner
     ? "bg-[#1E2329] border-[#C9A84C]/30 text-[#F5EDE0] placeholder-[#F5EDE0]/40"
     : "bg-[#FAF6EE] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40";
+
+  const chipBase = "shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full border transition-all";
+  const chipActive = "bg-[#C9A84C] text-[#7B1C2C] border-[#C9A84C]";
+  const chipInactive = isDesigner
+    ? "border-[#C9A84C]/30 text-[#F5EDE0]/70 hover:border-[#C9A84C] hover:text-[#F5EDE0]"
+    : "border-[#C9A84C]/30 text-[#3D1A1A]/70 hover:border-[#C9A84C] hover:text-[#3D1A1A]";
 
   return (
     <div className={isDesigner ? "dark" : ""}>
@@ -110,6 +151,36 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
           </div>
 
           <div className="container mx-auto px-4 py-8 max-w-7xl">
+
+            {/* Quick-filter chip bar — horizontally scrollable on mobile */}
+            <div className="overflow-x-auto pb-1 mb-6 -mx-4 px-4">
+              <div className="flex gap-2 flex-nowrap">
+                <button
+                  onClick={() => handleQuickChip("all")}
+                  className={cn(chipBase, quickChip === "all" ? chipActive : chipInactive)}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => handleQuickChip("bestSeller")}
+                  className={cn(chipBase, quickChip === "bestSeller" ? chipActive : chipInactive)}
+                >
+                  ⭐ Best Sellers
+                </button>
+                <button
+                  onClick={() => handleQuickChip("newArrival")}
+                  className={cn(chipBase, quickChip === "newArrival" ? chipActive : chipInactive)}
+                >
+                  ✨ New Arrivals
+                </button>
+                <button
+                  onClick={() => handleQuickChip("onSale")}
+                  className={cn(chipBase, quickChip === "onSale" ? chipActive : chipInactive)}
+                >
+                  🏷️ On Sale
+                </button>
+              </div>
+            </div>
 
             {/* Search + Sort Bar */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -159,7 +230,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                   Filters
                   {hasActiveFilters && (
                     <span className="bg-[#7B1C2C] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-                      {[fabric, color, occasion, vendorId, minPrice, maxPrice, search].filter(Boolean).length}
+                      {activeFilterCount}
                     </span>
                   )}
                 </button>
@@ -189,6 +260,52 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                             <X size={12} /> Clear all
                           </button>
                         )}
+                      </div>
+
+                      {/* Customer Rating */}
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Customer Rating</h4>
+                        <div className="space-y-2">
+                          {RATING_OPTIONS.map((opt) => (
+                            <label key={String(opt.value)} className="flex items-center gap-3 cursor-pointer group">
+                              <input
+                                type="radio"
+                                name="minRating"
+                                checked={minRating === opt.value}
+                                onChange={() => { setMinRating(opt.value); setPage(1); }}
+                                className="accent-[#C9A84C]"
+                              />
+                              <span className="text-sm flex items-center gap-1 group-hover:text-[#C9A84C] transition-colors">
+                                {opt.value !== undefined && (
+                                  <span className="flex">
+                                    {[1, 2, 3, 4, 5].map((s) => (
+                                      <Star
+                                        key={s}
+                                        size={10}
+                                        className={s <= Math.floor(opt.value!) ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-300"}
+                                      />
+                                    ))}
+                                  </span>
+                                )}
+                                {opt.label}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* On Sale / Discounts */}
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Discounts</h4>
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={hasDiscount}
+                            onChange={(e) => { setHasDiscount(e.target.checked); setPage(1); }}
+                            className="accent-[#C9A84C]"
+                          />
+                          <span className="text-sm group-hover:text-[#C9A84C] transition-colors">🏷️ On Sale only</span>
+                        </label>
                       </div>
 
                       {/* Price Range */}
@@ -254,9 +371,9 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                         </div>
                       </div>
 
-                      {/* Occasion */}
+                      {/* Subcategory / Occasion (renamed from Occasion) */}
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Occasion</h4>
+                        <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Subcategory / Occasion</h4>
                         <div className="space-y-1">
                           {OCCASIONS.map((o) => (
                             <label key={o} className="flex items-center gap-3 cursor-pointer group">
@@ -272,10 +389,10 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                         </div>
                       </div>
 
-                      {/* Vendor */}
+                      {/* Brand / Shop (renamed from Vendor) */}
                       {vendors && vendors.length > 0 && (
                         <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Vendor</h4>
+                          <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Brand / Shop</h4>
                           <div className="space-y-1">
                             {vendors.map((v) => (
                               <label key={v.id} className="flex items-center gap-3 cursor-pointer group">

@@ -20,4 +20,8 @@ maxPrice?: number;
 sort?: ListProductsSort;
 page?: number;
 limit?: number;
+bestSeller?: boolean;
+newArrival?: boolean;
+hasDiscount?: boolean;
+minRating?: number;
 };

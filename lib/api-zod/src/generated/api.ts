@@ -32,7 +32,11 @@ export const ListProductsQueryParams = zod.object({
   "maxPrice": zod.coerce.number().optional(),
   "sort": zod.enum(['price_asc', 'price_desc', 'rating_desc', 'newest']).optional(),
   "page": zod.coerce.number().optional(),
-  "limit": zod.coerce.number().optional()
+  "limit": zod.coerce.number().optional(),
+  "bestSeller": zod.coerce.boolean().optional(),
+  "newArrival": zod.coerce.boolean().optional(),
+  "hasDiscount": zod.coerce.boolean().optional(),
+  "minRating": zod.coerce.number().optional()
 })
 
 export const ListProductsResponse = zod.object({

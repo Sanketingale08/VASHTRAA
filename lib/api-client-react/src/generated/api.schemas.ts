@@ -73,6 +73,10 @@ maxPrice?: number;
 sort?: ListProductsSort;
 page?: number;
 limit?: number;
+bestSeller?: boolean;
+newArrival?: boolean;
+hasDiscount?: boolean;
+minRating?: number;
 };
 
 export type ListProductsCategory = typeof ListProductsCategory[keyof typeof ListProductsCategory];
@@ -92,4 +96,3 @@ export const ListProductsSort = {
   rating_desc: 'rating_desc',
   newest: 'newest',
 } as const;
-

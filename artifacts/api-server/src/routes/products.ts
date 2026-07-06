@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { productsTable, vendorsTable } from "@workspace/db/schema";
-import { eq, ilike, and, gte, lte, desc, asc, sql, or } from "drizzle-orm";
+import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull } from "drizzle-orm";
 
 const router = Router();
 
@@ -19,6 +19,10 @@ router.get("/products", async (req, res) => {
       sort,
       page = "1",
       limit = "24",
+      bestSeller,
+      newArrival,
+      hasDiscount,
+      minRating,
     } = req.query as Record<string, string>;
 
     const pageNum = Math.max(1, parseInt(page) || 1);
@@ -44,6 +48,10 @@ router.get("/products", async (req, res) => {
     if (vendorId) conditions.push(eq(productsTable.vendorId, vendorId));
     if (minPrice) conditions.push(gte(productsTable.price, parseInt(minPrice)));
     if (maxPrice) conditions.push(lte(productsTable.price, parseInt(maxPrice)));
+    if (bestSeller === "true") conditions.push(eq(productsTable.isBestSeller, true));
+    if (newArrival === "true") conditions.push(eq(productsTable.isNewArrival, true));
+    if (hasDiscount === "true") conditions.push(isNotNull(productsTable.originalPrice));
+    if (minRating) conditions.push(gte(productsTable.rating, parseFloat(minRating)));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

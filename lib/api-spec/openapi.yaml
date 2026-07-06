@@ -82,6 +82,22 @@ paths:
           in: query
           schema:
             type: number
+        - name: bestSeller
+          in: query
+          schema:
+            type: boolean
+        - name: newArrival
+          in: query
+          schema:
+            type: boolean
+        - name: hasDiscount
+          in: query
+          schema:
+            type: boolean
+        - name: minRating
+          in: query
+          schema:
+            type: number
       responses:
         "200":
           description: List of products

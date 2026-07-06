@@ -20,6 +20,8 @@ import DesignerShop from "@/pages/DesignerShop";
 import ProductDetail from "@/pages/ProductDetail";
 import Wishlist from "@/pages/Wishlist";
 import { CartPage } from "@/pages/Cart";
+import { CheckoutPage } from "@/pages/Checkout";
+import { OrderConfirmationPage } from "@/pages/OrderConfirmation";
 
 const queryClient = new QueryClient();
 
@@ -158,6 +160,8 @@ function Router() {
       <Route path="/products/:id" component={ProductDetail} />
       <Route path="/wishlist" component={Wishlist} />
       <Route path="/cart" component={CartPage} />
+      <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/orders/:id" component={OrderConfirmationPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

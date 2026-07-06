@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import {
   useGetProduct,
@@ -557,8 +557,11 @@ function ReviewsSection({
   );
 }
 
+const BUY_NOW_KEY = "twirl_buy_now";
+
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
   const { wishlistedIds, toggle } = useWishlist();
   const { addItem } = useCart();
   const isWishlisted = wishlistedIds.has(id ?? "");
@@ -949,7 +952,7 @@ export default function ProductDetail() {
                 )}
 
                 {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <button
                     onClick={() => {
                       addItem({
@@ -990,6 +993,41 @@ export default function ProductDetail() {
                     Wishlist
                   </button>
                 </div>
+                <button
+                  onClick={() => {
+                    try {
+                      sessionStorage.setItem(
+                        BUY_NOW_KEY,
+                        JSON.stringify({
+                          productId: product.id,
+                          quantity: 1,
+                          product: {
+                            id: product.id,
+                            productId: product.id,
+                            name: product.name,
+                            price: product.price,
+                            originalPrice: product.originalPrice ?? null,
+                            images: product.images ?? [],
+                            vendorName: product.vendorName ?? "",
+                            stock: product.stock ?? 99,
+                            category: product.category ?? "",
+                          },
+                        })
+                      );
+                    } catch {}
+                    setLocation("/checkout");
+                  }}
+                  disabled={product.stock === 0}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-2 py-4 border-2 font-bold uppercase tracking-wider text-sm rounded-sm transition-all mb-6 disabled:opacity-50 disabled:cursor-not-allowed",
+                    isDesigner
+                      ? "border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10"
+                      : "border-[#7B1C2C] text-[#7B1C2C] hover:bg-[#7B1C2C]/5"
+                  )}
+                >
+                  <Package size={18} />
+                  Buy Now
+                </button>
 
                 {/* Delivery & Returns Accordion */}
                 <DeliveryAccordion isDesigner={isDesigner} />

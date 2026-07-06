@@ -45,7 +45,7 @@ router.get("/cart", requireAuth, async (req: any, res) => {
   }
 });
 
-router.post("/cart/:productId", requireAuth, async (req: any, res) => {
+router.post("/cart/:productId", requireAuth, async (req: any, res: any): Promise<void> => {
   const { productId } = req.params;
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
@@ -56,10 +56,12 @@ router.post("/cart/:productId", requireAuth, async (req: any, res) => {
       .limit(1);
 
     if (product.length === 0) {
-      return res.status(404).json({ error: "Product not found" });
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
     if (product[0].stock === 0) {
-      return res.status(400).json({ error: "Product is out of stock" });
+      res.status(400).json({ error: "Product is out of stock" });
+      return;
     }
 
     const existing = await db
@@ -69,7 +71,7 @@ router.post("/cart/:productId", requireAuth, async (req: any, res) => {
       .limit(1);
 
     const newQty = existing.length > 0 ? existing[0].quantity + quantity : quantity;
-    const cappedQty = Math.min(newQty, product[0].stock);
+    const cappedQty = Math.max(1, Math.min(newQty, product[0].stock));
 
     await db
       .insert(cartItemsTable)
@@ -86,7 +88,7 @@ router.post("/cart/:productId", requireAuth, async (req: any, res) => {
   }
 });
 
-router.put("/cart/:productId", requireAuth, async (req: any, res) => {
+router.put("/cart/:productId", requireAuth, async (req: any, res: any): Promise<void> => {
   const { productId } = req.params;
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
@@ -97,13 +99,15 @@ router.put("/cart/:productId", requireAuth, async (req: any, res) => {
       .limit(1);
 
     if (product.length === 0) {
-      return res.status(404).json({ error: "Product not found" });
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
     if (product[0].stock === 0) {
-      return res.status(400).json({ error: "Product is out of stock" });
+      res.status(400).json({ error: "Product is out of stock" });
+      return;
     }
 
-    const cappedQty = Math.min(quantity, product[0].stock);
+    const cappedQty = Math.max(1, Math.min(quantity, product[0].stock));
 
     await db
       .insert(cartItemsTable)

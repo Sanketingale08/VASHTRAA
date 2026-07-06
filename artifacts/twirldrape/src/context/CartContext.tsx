@@ -137,17 +137,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [isSignedIn, isLoaded]);
 
   const addItem = useCallback(async (product: Omit<CartItem, "quantity">, qty = 1) => {
+    if (product.stock <= 0) return;
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === product.productId);
       let next: CartItem[];
       if (existing) {
+        const newQty = Math.min(existing.quantity + qty, product.stock);
+        if (newQty === existing.quantity) return prev;
         next = prev.map((i) =>
-          i.productId === product.productId
-            ? { ...i, quantity: Math.min(i.quantity + qty, product.stock) }
-            : i
+          i.productId === product.productId ? { ...i, quantity: newQty } : i
         );
       } else {
-        next = [...prev, { ...product, quantity: Math.min(qty, product.stock) }];
+        next = [...prev, { ...product, quantity: Math.max(1, Math.min(qty, product.stock)) }];
       }
       saveLocalCart(next);
       return next;

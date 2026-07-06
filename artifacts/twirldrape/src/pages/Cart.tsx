@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { useUser } from "@clerk/react";
 import { useListProducts } from "@workspace/api-client-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -27,6 +28,7 @@ function getRecentlyViewed(): string[] {
 export function CartPage() {
   const { items, removeItem, updateQuantity, clearCart } = useCart();
   const { wishlistedIds, toggle: toggleWishlist } = useWishlist();
+  const { isSignedIn } = useUser();
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: "percent" | "flat"; value: number; label: string }>(null);
   const [couponError, setCouponError] = useState("");
@@ -77,6 +79,10 @@ export function CartPage() {
   }
 
   function moveToWishlist(productId: string) {
+    if (!isSignedIn) {
+      alert("Please sign in to save items to your wishlist.");
+      return;
+    }
     toggleWishlist(productId);
     removeItem(productId);
   }
@@ -321,11 +327,12 @@ export function CartPage() {
                 </button>
               </Link>
 
-              <Link href="/paithani/shop">
-                <button className="w-full py-2.5 border border-[#C9A84C]/40 text-[#7B1C2C] dark:text-[#C9A84C] hover:border-[#C9A84C] text-sm font-semibold rounded-sm transition-colors">
-                  Continue Shopping
-                </button>
-              </Link>
+              <button
+                onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.href = `${basePath}/`; }}
+                className="w-full py-2.5 border border-[#C9A84C]/40 text-[#7B1C2C] dark:text-[#C9A84C] hover:border-[#C9A84C] text-sm font-semibold rounded-sm transition-colors"
+              >
+                Continue Shopping
+              </button>
 
               <div className="flex gap-4 text-center text-xs text-gray-400 pt-1">
                 <div className="flex-1">🔒 Secure Payment</div>

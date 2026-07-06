@@ -29,6 +29,16 @@ import {
 import { cn } from "@/lib/utils";
 import { ProductCard } from "@/components/ProductCard";
 import { useWishlist } from "@/context/WishlistContext";
+import { useCart } from "@/context/CartContext";
+
+const RECENTLY_VIEWED_KEY = "twirl_recently_viewed";
+function trackRecentlyViewed(productId: string) {
+  try {
+    const prev: string[] = JSON.parse(localStorage.getItem(RECENTLY_VIEWED_KEY) ?? "[]");
+    const updated = [productId, ...prev.filter((id) => id !== productId)].slice(0, 8);
+    localStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(updated));
+  } catch {}
+}
 
 const SAMPLE_REVIEWS = [
   {
@@ -550,6 +560,7 @@ function ReviewsSection({
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const { wishlistedIds, toggle } = useWishlist();
+  const { addItem } = useCart();
   const isWishlisted = wishlistedIds.has(id ?? "");
 
   const [activeImage, setActiveImage] = useState(0);
@@ -558,6 +569,10 @@ export default function ProductDetail() {
   const [galleryTab, setGalleryTab] = useState<"photos" | "video">("photos");
 
   const { data: product, isLoading, isError } = useGetProduct(id ?? "");
+
+  useEffect(() => {
+    if (id) trackRecentlyViewed(id);
+  }, [id]);
 
   const isDesigner = product?.category === "designer";
 
@@ -937,6 +952,17 @@ export default function ProductDetail() {
                 <div className="flex flex-col sm:flex-row gap-3 mb-6">
                   <button
                     onClick={() => {
+                      addItem({
+                        id: product.id,
+                        productId: product.id,
+                        name: product.name,
+                        price: product.price,
+                        originalPrice: product.originalPrice ?? null,
+                        images: product.images ?? [],
+                        vendorName: product.vendorName ?? "",
+                        stock: product.stock ?? 99,
+                        category: product.category ?? "",
+                      });
                       setAddedToCart(true);
                       setTimeout(() => setAddedToCart(false), 2000);
                     }}

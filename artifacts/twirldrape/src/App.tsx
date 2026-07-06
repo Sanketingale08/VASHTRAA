@@ -8,6 +8,8 @@ import { useClerk } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WishlistProvider } from "@/context/WishlistContext";
+import { CartProvider } from "@/context/CartContext";
+import { CartDrawer } from "@/components/CartDrawer";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Collections from "@/pages/Collections";
@@ -17,6 +19,7 @@ import PaithaniShop from "@/pages/PaithaniShop";
 import DesignerShop from "@/pages/DesignerShop";
 import ProductDetail from "@/pages/ProductDetail";
 import Wishlist from "@/pages/Wishlist";
+import { CartPage } from "@/pages/Cart";
 
 const queryClient = new QueryClient();
 
@@ -154,6 +157,7 @@ function Router() {
       <Route path="/designer/shop" component={DesignerShop} />
       <Route path="/products/:id" component={ProductDetail} />
       <Route path="/wishlist" component={Wishlist} />
+      <Route path="/cart" component={CartPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />
@@ -192,8 +196,11 @@ function ClerkProviderWithRoutes() {
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <WishlistProvider>
-            <Router />
-            <Toaster />
+            <CartProvider>
+              <Router />
+              <CartDrawer />
+              <Toaster />
+            </CartProvider>
           </WishlistProvider>
         </TooltipProvider>
       </QueryClientProvider>

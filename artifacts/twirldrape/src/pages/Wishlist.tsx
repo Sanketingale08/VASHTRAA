@@ -1,15 +1,27 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useWishlist } from "@/context/WishlistContext";
-import { useUser, useClerk } from "@clerk/react";
-import { Heart, LogIn, Loader2 } from "lucide-react";
+import { useCart } from "@/context/CartContext";
+import { useUser } from "@clerk/react";
+import { Heart, LogIn, Loader2, ShoppingBag, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ProductCard } from "@/components/ProductCard";
+import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const basePath = BASE;
+
+const RECENTLY_VIEWED_KEY = "twirl_recently_viewed";
+
+function getRecentlyViewed(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENTLY_VIEWED_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
 
 interface WishlistItem extends ProductSummary {
   addedAt: string;
@@ -28,9 +40,22 @@ function useWishlistItems(isSignedIn: boolean) {
 }
 
 export default function Wishlist() {
-  const { isSignedIn, isLoaded, user } = useUser();
-  const { wishlistedIds } = useWishlist();
+  const { isSignedIn, isLoaded } = useUser();
+  const { wishlistedIds, toggle: toggleWishlist } = useWishlist();
+  const { addItem, openDrawer } = useCart();
   const { data, isLoading, isError } = useWishlistItems(!!isSignedIn);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [movingToCart, setMovingToCart] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ids = getRecentlyViewed().slice(0, 8);
+    setRecentIds(ids);
+  }, []);
+
+  const { data: recentData } = useListProducts(
+    { ids: recentIds.join(","), limit: 8 } as any,
+    { query: { enabled: recentIds.length > 0 } }
+  );
 
   if (!isLoaded) {
     return (
@@ -63,6 +88,31 @@ export default function Wishlist() {
   }
 
   const items = data?.items ?? [];
+
+  async function handleMoveToCart(item: WishlistItem) {
+    setMovingToCart(item.id);
+    await addItem({
+      id: item.id,
+      productId: item.id,
+      name: item.name,
+      price: item.price,
+      originalPrice: item.originalPrice ?? null,
+      images: item.images ?? [],
+      vendorName: item.vendorName ?? "",
+      stock: (item as any).stock ?? 99,
+      category: item.category ?? "",
+    });
+    toggleWishlist(item.id);
+    setMovingToCart(null);
+    openDrawer();
+  }
+
+  const wishlistRecentIds = recentIds.filter(
+    (id) => !items.some((item) => item.id === id)
+  );
+  const recentProducts = (recentData?.products ?? []).filter(
+    (p) => !items.some((item) => item.id === p.id)
+  );
 
   return (
     <Layout>
@@ -114,11 +164,61 @@ export default function Wishlist() {
         )}
 
         {!isLoading && !isError && items.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
             {items.map((item, i) => (
-              <ProductCard key={item.id} product={item} index={i} />
+              <div key={item.id} className="flex flex-col gap-2">
+                <ProductCard product={item} index={i} />
+                <button
+                  onClick={() => handleMoveToCart(item)}
+                  disabled={movingToCart === item.id}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#7B1C2C] text-[#7B1C2C] text-sm font-semibold rounded hover:bg-[#7B1C2C] hover:text-[#FAF6EE] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {movingToCart === item.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ShoppingBag size={14} />
+                  )}
+                  Move to Cart
+                </button>
+              </div>
             ))}
           </div>
+        )}
+
+        {/* Recently Viewed */}
+        {wishlistRecentIds.length > 0 && recentProducts.length > 0 && (
+          <section className="mt-16">
+            <div className="flex items-center gap-3 mb-6">
+              <Clock size={18} className="text-[#C9A84C]" />
+              <h2 className="font-serif text-2xl font-bold text-[#7B1C2C]">
+                Recently Viewed
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {recentProducts.slice(0, 8).map((product) => (
+                <Link key={product.id} href={`/products/${product.id}`}>
+                  <div className="bg-white rounded-lg border border-[#C9A84C]/10 overflow-hidden hover:border-[#C9A84C] hover:shadow-md transition-all cursor-pointer group">
+                    <div className="aspect-square overflow-hidden">
+                      <img
+                        src={product.images?.[0] ?? "/images/product-1.png"}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    </div>
+                    <div className="p-3">
+                      <p className="text-xs text-gray-500 mb-0.5">{product.vendorName}</p>
+                      <p className="text-sm font-serif font-semibold text-[#7B1C2C] line-clamp-2">
+                        {product.name}
+                      </p>
+                      <p className="text-sm font-bold text-[#7B1C2C] mt-1">
+                        ₹{product.price?.toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </Layout>

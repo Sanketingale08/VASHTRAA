@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk, Show } from "@clerk/react";
 import { useWishlist } from "@/context/WishlistContext";
+import { useCart } from "@/context/CartContext";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -96,6 +97,7 @@ export function Navbar() {
     }
   }
 
+  const { totalItems: cartCount, openDrawer: openCart } = useCart();
   const wishlistCount = wishlistedIds.size;
 
   return (
@@ -288,11 +290,17 @@ export function Navbar() {
               )}
             </Link>
 
-            <button className="hover:text-[#C9A84C] transition-colors relative">
+            <button
+              onClick={openCart}
+              className="hover:text-[#C9A84C] transition-colors relative"
+              title="Shopping Cart"
+            >
               <ShoppingBag size={20} />
-              <span className="absolute -top-1.5 -right-1.5 bg-[#C9A84C] text-[#7B1C2C] text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
-                3
-              </span>
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-[#C9A84C] text-[#7B1C2C] text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
+                  {cartCount > 9 ? "9+" : cartCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

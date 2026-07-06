@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { useWishlist } from "@/context/WishlistContext";
+import { useCart } from "@/context/CartContext";
 import { useUser } from "@clerk/react";
 import type { ProductSummary } from "@workspace/api-client-react";
 
@@ -32,6 +33,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { wishlistedIds, toggle } = useWishlist();
+  const { addItem } = useCart();
   const { isSignedIn } = useUser();
   const isWishlisted = wishlistedIds.has(product.id);
 
@@ -109,7 +111,21 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
           {/* Quick Add Overlay */}
           <div className="absolute inset-x-0 bottom-0 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/80 to-transparent">
             <button
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addItem({
+                  id: product.id,
+                  productId: product.id,
+                  name: product.name,
+                  price: product.price,
+                  originalPrice: product.originalPrice ?? null,
+                  images: product.images ?? (product.image ? [product.image] : []),
+                  vendorName: vendorLabel,
+                  stock: 99,
+                  category: "",
+                });
+              }}
               className="w-full bg-[#C9A84C] hover:bg-[#b59539] text-[#7B1C2C] font-semibold py-2 text-sm transition-colors rounded"
             >
               Quick Add

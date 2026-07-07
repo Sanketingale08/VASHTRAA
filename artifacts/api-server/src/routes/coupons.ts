@@ -38,11 +38,18 @@ router.get("/coupons/validate", async (req: any, res: any): Promise<void> => {
       return;
     }
 
+    if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
+      res.status(400).json({ error: "This coupon has reached its usage limit" });
+      return;
+    }
+
     res.json({
       code: coupon.code,
       type: coupon.type,
       value: coupon.value,
       description: coupon.description,
+      maxUses: coupon.maxUses ?? null,
+      usedCount: coupon.usedCount,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to validate coupon");

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { ordersTable, cartItemsTable, productsTable, couponsTable } from "@workspace/db";
+import { ordersTable, cartItemsTable, productsTable, couponsTable, couponRedemptionsTable } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 
 const router = Router();
@@ -16,7 +16,7 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 
-async function lookupCoupon(code: string): Promise<{ type: "percent" | "flat"; value: number } | null> {
+async function lookupCoupon(code: string): Promise<{ id: string; type: "percent" | "flat"; value: number; maxUses: number | null; usedCount: number } | null> {
   const rows = await db
     .select()
     .from(couponsTable)
@@ -26,7 +26,7 @@ async function lookupCoupon(code: string): Promise<{ type: "percent" | "flat"; v
   const coupon = rows[0];
   if (!coupon.active) return null;
   if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) return null;
-  return { type: coupon.type, value: coupon.value };
+  return { id: coupon.id, type: coupon.type, value: coupon.value, maxUses: coupon.maxUses ?? null, usedCount: coupon.usedCount };
 }
 
 function computeShipping(deliveryMethod: string, afterDiscount: number): number {
@@ -119,6 +119,33 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
           });
         }
 
+        if (coupon) {
+          const [freshCoupon] = await tx
+            .select({ usedCount: couponsTable.usedCount, maxUses: couponsTable.maxUses })
+            .from(couponsTable)
+            .where(eq(couponsTable.id, coupon.id))
+            .for("update");
+
+          if (freshCoupon.maxUses !== null && freshCoupon.usedCount >= freshCoupon.maxUses) {
+            throw Object.assign(new Error("This coupon has reached its usage limit"), { status: 400 });
+          }
+
+          const existingRedemption = await tx
+            .select({ id: couponRedemptionsTable.id })
+            .from(couponRedemptionsTable)
+            .where(
+              and(
+                eq(couponRedemptionsTable.couponId, coupon.id),
+                eq(couponRedemptionsTable.userId, req.userId)
+              )
+            )
+            .limit(1);
+
+          if (existingRedemption.length > 0) {
+            throw Object.assign(new Error("You have already used this coupon"), { status: 400 });
+          }
+        }
+
         const subtotal = resolvedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
 
         let discount = 0;
@@ -157,6 +184,21 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             .update(productsTable)
             .set({ stock: sql`${productsTable.stock} - ${item.quantity}` })
             .where(eq(productsTable.id, item.productId));
+        }
+
+        if (coupon) {
+          await tx
+            .update(couponsTable)
+            .set({ usedCount: sql`${couponsTable.usedCount} + 1` })
+            .where(eq(couponsTable.id, coupon.id));
+
+          await tx
+            .insert(couponRedemptionsTable)
+            .values({
+              couponId: coupon.id,
+              userId: req.userId,
+              orderId: order.id,
+            });
         }
 
         if (!isBuyNow) {

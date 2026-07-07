@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star } from "lucide-react";
+import { Heart, Star, Eye } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -25,14 +25,19 @@ type ProductCardProduct = {
   isBestSeller?: boolean;
   isNewArrival?: boolean;
   stock?: number;
+  category?: string;
+  description?: string;
+  occasion?: string;
+  fabric?: string;
 };
 
 interface ProductCardProps {
   product: ProductCardProduct;
   index?: number;
+  onQuickView?: (product: ProductSummary) => void;
 }
 
-export function ProductCard({ product, index = 0 }: ProductCardProps) {
+export function ProductCard({ product, index = 0, onQuickView }: ProductCardProps) {
   const { wishlistedIds, toggle } = useWishlist();
   const { addItem } = useCart();
   const { isSignedIn } = useUser();
@@ -45,6 +50,10 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     product.image ??
     "/images/product-1.png";
 
+  const discount = product.originalPrice
+    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+    : 0;
+
   function handleWishlistClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -55,13 +64,21 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     toggle(product.id);
   }
 
+  function handleQuickView(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onQuickView) {
+      onQuickView(product as ProductSummary);
+    }
+  }
+
   return (
     <Link href={`/products/${product.id}`}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.5, delay: index * 0.1 }}
+        transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3) }}
         className="group relative bg-[#F5EDE0] dark:bg-[#2A2E35] rounded-lg overflow-hidden border border-[#C9A84C]/10 hover:border-[#C9A84C] transition-all duration-300 hover:shadow-[0_0_15px_rgba(201,168,76,0.3)] cursor-pointer"
         data-testid={`card-product-${product.id}`}
       >
@@ -77,9 +94,9 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               New Arrival
             </span>
           )}
-          {product.originalPrice && (
+          {discount > 0 && (
             <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
-              Sale
+              {discount}% Off
             </span>
           )}
         </div>
@@ -107,10 +124,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             src={image}
             alt={product.name}
             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
+            onError={(e) => { (e.target as HTMLImageElement).src = "/images/product-1.png"; }}
           />
 
-          {/* Quick Add Overlay */}
-          <div className="absolute inset-x-0 bottom-0 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/80 to-transparent">
+          {/* Hover Overlay */}
+          <div className="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/80 to-transparent flex gap-2">
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -124,39 +142,51 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                   images: product.images ?? (product.image ? [product.image] : []),
                   vendorName: vendorLabel,
                   stock: product.stock ?? 10,
-                  category: "",
+                  category: product.category ?? "",
                 });
               }}
-              className="w-full bg-[#C9A84C] hover:bg-[#b59539] text-[#7B1C2C] font-semibold py-2 text-sm transition-colors rounded"
+              className="flex-1 bg-[#C9A84C] hover:bg-[#b59539] text-[#7B1C2C] font-semibold py-2 text-xs transition-colors rounded"
             >
-              Quick Add
+              Add to Cart
             </button>
+            {onQuickView && (
+              <button
+                onClick={handleQuickView}
+                title="Quick View"
+                className="p-2 bg-white/20 hover:bg-white/40 text-white rounded transition-colors"
+              >
+                <Eye size={16} />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Content */}
         <div className="p-4">
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{vendorLabel}</p>
-          <h3 className="font-serif text-lg leading-tight mb-2 line-clamp-2 min-h-[2.75rem] text-[#7B1C2C] dark:text-[#FAF6EE]">
+          <h3 className="font-serif text-base leading-tight mb-2 line-clamp-2 min-h-[2.6rem] text-[#7B1C2C] dark:text-[#FAF6EE]">
             {product.name}
           </h3>
 
           <div className="flex items-center gap-1 mb-2">
             <div className="flex text-[#C9A84C]">
-              <Star size={14} className="fill-current" />
+              <Star size={13} className="fill-current" />
             </div>
-            <span className="text-xs font-medium">{product.rating}</span>
-            <span className="text-xs text-gray-500">({reviewCount})</span>
+            <span className="text-xs font-semibold">{product.rating}</span>
+            <span className="text-xs text-gray-400">({reviewCount})</span>
           </div>
 
-          <div className="flex items-end gap-2">
-            <span className="font-semibold text-lg text-[#7B1C2C] dark:text-[#C9A84C]">
+          <div className="flex items-end gap-2 flex-wrap">
+            <span className="font-bold text-base text-[#7B1C2C] dark:text-[#C9A84C]">
               ₹{product.price.toLocaleString("en-IN")}
             </span>
             {product.originalPrice && (
-              <span className="text-sm text-gray-500 line-through mb-0.5">
-                ₹{product.originalPrice.toLocaleString("en-IN")}
-              </span>
+              <>
+                <span className="text-xs text-gray-400 line-through mb-0.5">
+                  ₹{product.originalPrice.toLocaleString("en-IN")}
+                </span>
+                <span className="text-xs font-bold text-green-600 mb-0.5">{discount}% off</span>
+              </>
             )}
           </div>
         </div>

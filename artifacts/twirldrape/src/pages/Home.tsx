@@ -1,29 +1,37 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import useEmblaCarousel from "embla-carousel-react";
 import {
   ShieldCheck,
   BadgeCheck,
   Star,
-  ChevronLeft,
-  ChevronRight,
   Truck,
   RefreshCcw,
   CreditCard,
   Store,
   Headphones,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
+import { ProductSection } from "@/components/ProductSection";
+import { VendorCard } from "@/components/VendorCard";
+import { QuickViewModal } from "@/components/QuickViewModal";
 import { StatsBar } from "@/components/StatsBar";
-import { useListProducts } from "@workspace/api-client-react";
+import type { ProductSummary, VendorSummary } from "@workspace/api-client-react";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const GOLD = "#C9A84C";
 const MAROON = "#7B1C2C";
 const IVORY = "#FAF6EE";
 const CREAM = "#F5EDE0";
+
+const PAITHANI_DESIGNER_TABS = [
+  { label: "Paithani", category: "paithani" as const },
+  { label: "Designer", category: "designer" as const },
+];
 
 function SectionTitle({
   children,
@@ -51,8 +59,8 @@ const categories = [
   { label: "Designer Sarees", image: "/images/hero-designer-1.png", href: "/designer" },
   { label: "Bridal Collection", image: "/images/hero-paithani-2.png", href: "/paithani/shop" },
   { label: "Party Wear", image: "/images/hero-designer-2.png", href: "/designer/shop" },
-  { label: "Festival Collection", image: "/images/hero-paithani-3.png", href: "/paithani/shop" },
-  { label: "New Arrivals", image: "/images/product-1.png", href: "/paithani/shop" },
+  { label: "Festival Collection", image: "/images/hero-paithani-3.png", href: "/paithani/shop?occasion=festival" },
+  { label: "New Arrivals", image: "/images/product-1.png", href: "/paithani/shop?newArrival=true" },
 ];
 
 const trustFeatures = [
@@ -69,8 +77,6 @@ const testimonials = [
   { name: "Ananya Kulkarni", city: "Pune", rating: 5, quote: "TwirlDrape made finding my bridal saree a dream. The vendor was super responsive and the saree arrived beautifully packed. Highly recommend!", avatar: "/images/artisan-2.png" },
   { name: "Deepa Menon", city: "Bangalore", rating: 5, quote: "I've been searching for authentic Yeola Paithani for years. TwirlDrape connected me directly with the weaver and the saree is a masterpiece. Worth every rupee.", avatar: "/images/artisan-3.png" },
 ];
-
-const VISIBLE = 4;
 
 function PeacockIcon({ size = 40 }: { size?: number }) {
   return (
@@ -95,21 +101,131 @@ function PeacockIcon({ size = 40 }: { size?: number }) {
   );
 }
 
-export default function Home() {
-  const { data: picksData } = useListProducts({ limit: 8 });
-  const picks = picksData?.products ?? [];
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
-  const [canPrev, setCanPrev] = useState(false);
-  const [canNext, setCanNext] = useState(true);
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+function FeaturedShopsSection({ onQuickView }: { onQuickView: (p: ProductSummary) => void }) {
+  const [vendors, setVendors] = useState<VendorSummary[]>([]);
+  const [scrollIdx, setScrollIdx] = useState(0);
+
   useEffect(() => {
-    if (!emblaApi) return;
-    const onSelect = () => { setCanPrev(emblaApi.canScrollPrev()); setCanNext(emblaApi.canScrollNext()); };
-    emblaApi.on("select", onSelect);
-    onSelect();
-    return () => { emblaApi.off("select", onSelect); };
-  }, [emblaApi]);
+    fetch(`${BASE}/api/vendors`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setVendors(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  const visibleCount = 4;
+  const canPrev = scrollIdx > 0;
+  const canNext = scrollIdx + visibleCount < vendors.length;
+
+  return (
+    <section className="py-16 md:py-20 bg-white">
+      <div className="container mx-auto px-4">
+        <div className="flex items-end justify-between mb-8 md:mb-10">
+          <div>
+            <div className="flex items-center gap-4 mb-2">
+              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+              <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#7B1C2C]">
+                Featured Shops
+              </h2>
+              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
+            </div>
+            <p className="text-center text-sm text-gray-500">Discover our most trusted weaver collectives and artisan studios</p>
+          </div>
+        </div>
+
+        <div className="relative">
+          {canPrev && (
+            <button
+              onClick={() => setScrollIdx(i => Math.max(0, i - 1))}
+              className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border"
+              style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}
+            >
+              <ChevronLeft size={20} />
+            </button>
+          )}
+          {canNext && (
+            <button
+              onClick={() => setScrollIdx(i => Math.min(vendors.length - visibleCount, i + 1))}
+              className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border"
+              style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}
+            >
+              <ChevronRight size={20} />
+            </button>
+          )}
+          <div className="overflow-hidden">
+            <div
+              className="flex gap-4 transition-transform duration-500"
+              style={{ transform: `translateX(calc(-${scrollIdx} * (220px + 16px)))` }}
+            >
+              {vendors.map(v => (
+                <div key={v.id} className="flex-none">
+                  <VendorCard vendor={v} />
+                </div>
+              ))}
+              {vendors.length === 0 && (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex-none w-[200px] h-[220px] rounded-2xl bg-gray-100 animate-pulse" />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummary) => void }) {
+  const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const ids: string[] = JSON.parse(localStorage.getItem("twirl_recently_viewed") ?? "[]");
+      if (!ids.length) { setLoaded(true); return; }
+      fetch(`${BASE}/api/products?ids=${ids.join(",")}&limit=8`, { credentials: "include" })
+        .then(r => r.ok ? r.json() : { products: [] })
+        .then(data => {
+          const ordered = ids
+            .map(id => (data.products as ProductSummary[]).find(p => p.id === id))
+            .filter((p): p is ProductSummary => !!p);
+          setProducts(ordered);
+          setLoaded(true);
+        })
+        .catch(() => setLoaded(true));
+    } catch {
+      setLoaded(true);
+    }
+  }, []);
+
+  if (!loaded || products.length === 0) return null;
+
+  return (
+    <section className="py-16 md:py-20 bg-white">
+      <div className="container mx-auto px-4">
+        <SectionTitle subtitle="Pick up where you left off">
+          Recently Viewed
+        </SectionTitle>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {products.slice(0, 8).map((p, i) => (
+            <ProductCard key={p.id} product={p} index={i} onQuickView={onQuickView} />
+          ))}
+        </div>
+        <div className="mt-8 text-center">
+          <Link
+            href="/paithani/shop"
+            className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-3.5 rounded-sm border-2 transition-all hover:bg-[#7B1C2C]/5"
+            style={{ borderColor: MAROON, color: MAROON }}
+          >
+            Continue Shopping →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function Home() {
+  const [quickViewProduct, setQuickViewProduct] = useState<ProductSummary | null>(null);
 
   return (
     <Layout>
@@ -117,8 +233,6 @@ export default function Home() {
       <section className="relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${IVORY} 0%, ${CREAM} 60%, #EDD9C0 100%)` }}>
         <div className="container mx-auto px-4 lg:px-12 py-12 md:py-20 lg:py-24">
           <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-
-            {/* Left */}
             <motion.div className="flex-1 max-w-xl" initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }}>
               <p className="text-xs md:text-sm font-bold uppercase tracking-[0.25em] mb-4" style={{ color: GOLD }}>
                 Celebrate Tradition. Embrace Elegance.
@@ -130,7 +244,6 @@ export default function Home() {
               <p className="text-gray-600 text-base md:text-lg mb-8 leading-relaxed">
                 Handpicked from master weavers across India — discover sarees that tell a story of heritage, craftsmanship, and timeless beauty.
               </p>
-
               <div className="flex flex-wrap gap-5 mb-8">
                 {[
                   { icon: <BadgeCheck size={15} />, text: "Authenticity Assured" },
@@ -143,7 +256,6 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link href="/paithani" className="inline-flex items-center justify-center gap-2 px-7 py-3.5 font-bold text-sm uppercase tracking-widest rounded-sm transition-opacity hover:opacity-90" style={{ background: MAROON, color: IVORY }}>
                   Explore Paithani Sarees →
@@ -154,7 +266,6 @@ export default function Home() {
               </div>
             </motion.div>
 
-            {/* Right */}
             <motion.div className="flex-1 flex justify-center lg:justify-end w-full max-w-sm lg:max-w-none" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, delay: 0.15 }}>
               <div className="relative w-full max-w-sm lg:max-w-md">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border-4" style={{ borderColor: GOLD + "55" }}>
@@ -193,7 +304,7 @@ export default function Home() {
               <motion.div key={cat.label} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i * 0.08 }}>
                 <Link href={cat.href} className="flex flex-col items-center group cursor-pointer">
                   <div className="w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 rounded-full overflow-hidden border-4 mb-3 transition-all duration-300 group-hover:shadow-lg group-hover:scale-105" style={{ borderColor: GOLD + "66" }}>
-                    <img src={cat.image} alt={cat.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <img src={cat.image} alt={cat.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={e => { (e.target as HTMLImageElement).src = "/images/product-1.png"; }} />
                   </div>
                   <span className="text-xs md:text-sm font-semibold text-center transition-colors group-hover:text-[#C9A84C]" style={{ color: MAROON }}>{cat.label}</span>
                 </Link>
@@ -212,7 +323,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
               className="relative rounded-2xl overflow-hidden group cursor-pointer min-h-[280px] md:min-h-[340px]" style={{ background: MAROON }}>
-              <img src="/images/hero-paithani-1.png" alt="Paithani" className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:opacity-40 group-hover:scale-105 transition-all duration-700" />
+              <img src="/images/hero-paithani-1.png" alt="Paithani" className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:opacity-40 group-hover:scale-105 transition-all duration-700" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
               <div className="relative z-10 flex flex-col justify-end h-full p-8 md:p-10">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] mb-2" style={{ color: GOLD }}>Authentic Paithani Sarees</p>
                 <h3 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-3 leading-tight">Handwoven Heritage.<br />Timeless Artistry.</h3>
@@ -220,10 +331,9 @@ export default function Home() {
                 <Link href="/paithani" className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest self-start transition-opacity hover:opacity-80" style={{ color: GOLD }}>Explore Now →</Link>
               </div>
             </motion.div>
-
             <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.1 }}
               className="relative rounded-2xl overflow-hidden group cursor-pointer min-h-[280px] md:min-h-[340px]" style={{ background: "#F9ECE8" }}>
-              <img src="/images/hero-designer-1.png" alt="Designer" className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:opacity-35 group-hover:scale-105 transition-all duration-700" />
+              <img src="/images/hero-designer-1.png" alt="Designer" className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:opacity-35 group-hover:scale-105 transition-all duration-700" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
               <div className="relative z-10 flex flex-col justify-end h-full p-8 md:p-10">
                 <p className="text-xs font-bold uppercase tracking-[0.25em] mb-2" style={{ color: MAROON }}>Premium Designer Sarees</p>
                 <h3 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold mb-3 leading-tight" style={{ color: MAROON }}>Contemporary Designs<br />For Every You.</h3>
@@ -256,39 +366,100 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── POPULAR PICKS ────────────────────────────────── */}
-      <section className="py-16 md:py-20" style={{ background: CREAM }}>
-        <div className="container mx-auto px-4">
-          <SectionTitle subtitle="Our most-loved sarees, curated for you">Popular Picks</SectionTitle>
-          <div className="relative">
-            <button onClick={scrollPrev} disabled={!canPrev}
-              className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-all disabled:opacity-30"
-              style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}>
-              <ChevronLeft size={20} />
-            </button>
-            <button onClick={scrollNext} disabled={!canNext}
-              className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-all disabled:opacity-30"
-              style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}>
-              <ChevronRight size={20} />
-            </button>
-            <div ref={emblaRef} className="overflow-hidden px-1">
-              <div className="flex gap-4">
-                {picks.map((p, i) => (
-                  <div key={p.id} className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)]">
-                    <ProductCard product={p} index={i} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="mt-10 text-center">
-            <Link href="/paithani/shop" className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-3.5 rounded-sm border-2 transition-all hover:bg-[#7B1C2C]/5"
-              style={{ borderColor: MAROON, color: MAROON }}>
-              View All Products →
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* ── 1. FEATURED PRODUCTS ─────────────────────────── */}
+      <ProductSection
+        title="Featured Products"
+        subtitle="Handpicked masterpieces — the finest from our entire collection"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ sort: "rating_desc", minRating: 4.5, limit: 8 }}
+        bg={CREAM}
+        viewAllHref="/paithani/shop"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 2. FEATURED SHOPS ────────────────────────────── */}
+      <FeaturedShopsSection onQuickView={setQuickViewProduct} />
+
+      {/* ── 3. NEW ARRIVALS ──────────────────────────────── */}
+      <ProductSection
+        title="New Arrivals"
+        subtitle="Fresh weaves and contemporary designs — just landed this season"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ newArrival: true, sort: "newest", limit: 8 }}
+        bg={IVORY}
+        viewAllHref="/paithani/shop?newArrival=true"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 4. BEST SELLERS ──────────────────────────────── */}
+      <ProductSection
+        title="Best Sellers"
+        subtitle="Our most-loved sarees, chosen by thousands of happy customers"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ bestSeller: true, sort: "rating_desc", limit: 8 }}
+        bg={CREAM}
+        viewAllHref="/paithani/shop?bestSeller=true"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 5. TRENDING PRODUCTS ─────────────────────────── */}
+      <ProductSection
+        title="Trending Now"
+        subtitle="What India's most stylish women are draping this season"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ sort: "rating_desc", minRating: 4.0, limit: 8 }}
+        bg="white"
+        viewAllHref="/paithani/shop?sort=rating_desc"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 6. FESTIVAL COLLECTIONS ──────────────────────── */}
+      <ProductSection
+        title="Festival Collections"
+        subtitle="Celebrate every occasion in sarees that capture the joy of India's festivals"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ occasion: "festival", sort: "rating_desc", limit: 8 }}
+        bg="#FFF3E0"
+        viewAllHref="/paithani/shop?occasion=festival"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 7. FLASH SALES ───────────────────────────────── */}
+      <ProductSection
+        title="Flash Sales"
+        subtitle="Limited-time deals on premium sarees — shop before they're gone"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ hasDiscount: true, sort: "rating_desc", limit: 8 }}
+        bg="#3D1A1A"
+        viewAllHref="/paithani/shop?hasDiscount=true"
+        onQuickView={setQuickViewProduct}
+        flashSale
+      />
+
+      {/* ── 8. RECOMMENDED FOR YOU ───────────────────────── */}
+      <ProductSection
+        title="Recommended For You"
+        subtitle="Curated just for you — sarees we think you'll adore"
+        params={{ sort: "rating_desc", minRating: 4.5, limit: 8 }}
+        bg={IVORY}
+        viewAllHref="/paithani/shop?sort=rating_desc"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 9. FREQUENTLY BOUGHT TOGETHER ────────────────── */}
+      <ProductSection
+        title="Frequently Bought Together"
+        subtitle="Sarees that our customers love to pair and gift together"
+        tabs={PAITHANI_DESIGNER_TABS}
+        params={{ sort: "rating_desc", limit: 8 }}
+        bg={CREAM}
+        viewAllHref="/paithani/shop"
+        onQuickView={setQuickViewProduct}
+      />
+
+      {/* ── 10. RECENTLY VIEWED ──────────────────────────── */}
+      <RecentlyViewedSection onQuickView={setQuickViewProduct} />
 
       {/* ── TESTIMONIALS ─────────────────────────────────── */}
       <section className="py-16 md:py-20 bg-white">
@@ -307,7 +478,7 @@ export default function Home() {
                 </div>
                 <p className="text-gray-600 text-sm leading-relaxed italic flex-1">&ldquo;{t.quote}&rdquo;</p>
                 <div className="flex items-center gap-3 pt-2 border-t" style={{ borderColor: GOLD + "22" }}>
-                  <img src={t.avatar} alt={t.name} className="w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: GOLD + "55" }} />
+                  <img src={t.avatar} alt={t.name} className="w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: GOLD + "55" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   <div>
                     <p className="font-semibold text-sm" style={{ color: MAROON }}>{t.name}</p>
                     <p className="text-xs text-gray-400">{t.city}</p>
@@ -319,6 +490,12 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ── QUICK VIEW MODAL ─────────────────────────────── */}
+      <QuickViewModal
+        product={quickViewProduct}
+        onClose={() => setQuickViewProduct(null)}
+      />
     </Layout>
   );
 }

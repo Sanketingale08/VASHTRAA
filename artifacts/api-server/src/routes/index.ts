@@ -9,6 +9,7 @@ import addressesRouter from "./addresses";
 import couponsRouter from "./coupons";
 import shippingRouter from "./shipping";
 import accountRouter from "./account";
+import rewardsRouter from "./rewards";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(addressesRouter);
 router.use(couponsRouter);
 router.use(shippingRouter);
 router.use(accountRouter);
+router.use(rewardsRouter);
 
 export default router;

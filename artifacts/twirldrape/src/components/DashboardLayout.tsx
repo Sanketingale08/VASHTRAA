@@ -24,7 +24,7 @@ const navItems = [
   { href: "/account/addresses", icon: MapPin, label: "Addresses" },
   { href: "/account/wishlist", icon: Heart, label: "Wishlist" },
   { href: "/account/coupons", icon: Tag, label: "Coupons & Offers" },
-  { href: "/account/rewards", icon: Gift, label: "Rewards", stub: true },
+  { href: "/account/rewards", icon: Gift, label: "Rewards" },
   { href: "/account/notifications", icon: Bell, label: "Notifications", stub: true },
   { href: "/account/support", icon: HelpCircle, label: "Support", stub: true },
 ];

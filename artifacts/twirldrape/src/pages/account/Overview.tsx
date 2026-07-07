@@ -62,6 +62,18 @@ function useCouponCount(enabled: boolean) {
   });
 }
 
+function useRewardsSummary(enabled: boolean) {
+  return useQuery<{ balance: number; tier: string }>({
+    queryKey: ["rewards-summary"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/rewards/summary`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled,
+  });
+}
+
 function StatCard({
   icon: Icon,
   label,
@@ -128,6 +140,7 @@ export function AccountOverviewPage() {
   const { data: ordersData, isLoading: ordersLoading } = useOrders(!!isSignedIn);
   const { data: wishlistData, isLoading: wishlistLoading } = useWishlistCount(!!isSignedIn);
   const { data: couponsData, isLoading: couponsLoading } = useCouponCount(!!isSignedIn);
+  const { data: rewardsData, isLoading: rewardsLoading } = useRewardsSummary(!!isSignedIn);
 
   const orders = ordersData?.orders ?? [];
   const totalOrders = orders.length;
@@ -205,8 +218,10 @@ export function AccountOverviewPage() {
           <StatCard
             icon={Gift}
             label="Reward Points"
-            value={0}
-            sub="Coming soon"
+            value={rewardsLoading ? "—" : (rewardsData?.balance ?? 0).toLocaleString("en-IN")}
+            sub={rewardsData?.tier ? `${rewardsData.tier.charAt(0).toUpperCase() + rewardsData.tier.slice(1)} tier` : undefined}
+            href="/account/rewards"
+            loading={rewardsLoading}
             accent="#C9A84C"
             delay={0.2}
           />

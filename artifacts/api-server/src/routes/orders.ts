@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { ordersTable, cartItemsTable, productsTable, couponsTable, couponRedemptionsTable } from "@workspace/db";
+import {
+  ordersTable, cartItemsTable, productsTable, couponsTable,
+  couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
+} from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 
 const router = Router();
@@ -15,6 +18,21 @@ const requireAuth = (req: any, res: any, next: any) => {
   req.userId = userId;
   next();
 };
+
+function computeTier(totalPoints: number): "silver" | "gold" | "platinum" {
+  if (totalPoints >= 5000) return "platinum";
+  if (totalPoints >= 1000) return "gold";
+  return "silver";
+}
+
+function generateReferralCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
 
 async function lookupCoupon(code: string): Promise<{ id: string; type: "percent" | "flat"; value: number; maxUses: number | null; usedCount: number } | null> {
   const rows = await db
@@ -203,6 +221,61 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
 
         if (!isBuyNow) {
           await tx.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
+        }
+
+        // Award loyalty points: 1 point per ₹10 of subtotal
+        const earnedPoints = Math.floor(subtotal / 10);
+        if (earnedPoints > 0) {
+          let refCode = generateReferralCode();
+          let codeAttempts = 0;
+          while (codeAttempts < 10) {
+            const conflict = await tx
+              .select({ userId: userProfilesTable.userId })
+              .from(userProfilesTable)
+              .where(eq(userProfilesTable.referralCode, refCode))
+              .limit(1);
+            if (conflict.length === 0) break;
+            refCode = generateReferralCode();
+            codeAttempts++;
+          }
+
+          await tx
+            .insert(userProfilesTable)
+            .values({
+              userId: req.userId,
+              referralCode: refCode,
+              totalPoints: 0,
+              lifetimePoints: 0,
+              loyaltyTier: "silver",
+            })
+            .onConflictDoNothing();
+
+          const [profile] = await tx
+            .select({ totalPoints: userProfilesTable.totalPoints, lifetimePoints: userProfilesTable.lifetimePoints })
+            .from(userProfilesTable)
+            .where(eq(userProfilesTable.userId, req.userId))
+            .limit(1);
+
+          const newTotal = (profile?.totalPoints ?? 0) + earnedPoints;
+          const newLifetime = (profile?.lifetimePoints ?? 0) + earnedPoints;
+
+          await tx
+            .update(userProfilesTable)
+            .set({
+              totalPoints: newTotal,
+              lifetimePoints: newLifetime,
+              loyaltyTier: computeTier(newTotal),
+              updatedAt: new Date(),
+            })
+            .where(eq(userProfilesTable.userId, req.userId));
+
+          await tx.insert(rewardPointsLogTable).values({
+            userId: req.userId,
+            points: earnedPoints,
+            type: "earned",
+            description: "Points earned on order",
+            orderId: order.id,
+          });
         }
 
         return order.id;

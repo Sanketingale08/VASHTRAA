@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk, Show } from "@clerk/react";
@@ -255,6 +255,13 @@ export function Navbar() {
                       </p>
                     </div>
                     <Link
+                      href="/orders"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                    >
+                      <ClipboardList size={14} /> My Orders
+                    </Link>
+                    <Link
                       href="/wishlist"
                       onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
@@ -313,6 +320,11 @@ export function Navbar() {
             <Link href="/paithani/shop" onClick={() => setMobileMenuOpen(false)}>New Arrivals</Link>
             <Link href="#" onClick={() => setMobileMenuOpen(false)}>About Us</Link>
             <Link href="#" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+            <Show when="signed-in">
+              <Link href="/orders" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
+                <ClipboardList size={14} /> My Orders
+              </Link>
+            </Show>
             <Link href="/wishlist" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
               <Heart size={14} /> My Wishlist
               {wishlistCount > 0 && <span className="ml-1 text-xs">({wishlistCount})</span>}

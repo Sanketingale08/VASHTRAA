@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { ordersTable, cartItemsTable, productsTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -149,6 +149,21 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
   } catch (err) {
     req.log.error({ err }, "Failed to create order");
     res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
+router.get("/orders", requireAuth, async (req: any, res: any): Promise<void> => {
+  try {
+    const rows = await db
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.userId, req.userId))
+      .orderBy(desc(ordersTable.createdAt));
+
+    res.json({ orders: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch orders");
+    res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
 

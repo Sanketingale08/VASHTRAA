@@ -22,6 +22,7 @@ import Wishlist from "@/pages/Wishlist";
 import { CartPage } from "@/pages/Cart";
 import { CheckoutPage } from "@/pages/Checkout";
 import { OrderConfirmationPage } from "@/pages/OrderConfirmation";
+import { OrderHistoryPage } from "@/pages/OrderHistory";
 
 const queryClient = new QueryClient();
 
@@ -161,6 +162,7 @@ function Router() {
       <Route path="/wishlist" component={Wishlist} />
       <Route path="/cart" component={CartPage} />
       <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/orders" component={OrderHistoryPage} />
       <Route path="/orders/:id" component={OrderConfirmationPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />

@@ -266,7 +266,7 @@ export function OrderConfirmationPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-center pt-2 pb-8"
+              className="text-center pt-2 pb-8 flex flex-col items-center gap-3"
             >
               <Link
                 href="/"
@@ -274,7 +274,13 @@ export function OrderConfirmationPage() {
               >
                 Continue Shopping
               </Link>
-              <p className="mt-4 text-xs text-gray-400">
+              <Link
+                href="/orders"
+                className="text-sm text-[#7B1C2C] hover:underline font-medium"
+              >
+                View all orders
+              </Link>
+              <p className="mt-1 text-xs text-gray-400">
                 Questions? <a href="mailto:support@twirldrape.com" className="text-[#7B1C2C] hover:underline">Contact support</a>
               </p>
             </motion.div>

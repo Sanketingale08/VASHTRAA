@@ -10,6 +10,7 @@ export const vendorsTable = pgTable("vendors", {
   sareesCount: integer("sarees_count").notNull().default(0),
   avatar: text("avatar").notNull().default("/images/artisan-1.png"),
   bio: text("bio"),
+  ownerId: text("owner_id"),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

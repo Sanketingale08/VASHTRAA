@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable } from "@workspace/db";
+import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
 
 const router = Router();
@@ -252,7 +253,11 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
 
   try {
     const [before] = await db
-      .select({ stock: productsTable.stock, name: productsTable.name })
+      .select({
+        stock: productsTable.stock,
+        name: productsTable.name,
+        vendorId: productsTable.vendorId,
+      })
       .from(productsTable)
       .where(eq(productsTable.id, id))
       .limit(1);
@@ -260,6 +265,20 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
     if (!before) {
       res.status(404).json({ error: "Product not found" });
       return;
+    }
+
+    // Enforce vendor ownership: if the product has a vendor, the caller must own that vendor
+    if (before.vendorId) {
+      const [vendor] = await db
+        .select({ ownerId: vendorsTable.ownerId })
+        .from(vendorsTable)
+        .where(eq(vendorsTable.id, before.vendorId))
+        .limit(1);
+      // If vendor exists and has an ownerId set, caller must match
+      if (vendor?.ownerId && vendor.ownerId !== req.userId) {
+        res.status(403).json({ error: "Forbidden: you do not own this product's vendor" });
+        return;
+      }
     }
 
     const [updated] = await db

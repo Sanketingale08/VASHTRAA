@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ShoppingBag, Minus, Plus, Trash2, ArrowRight } from "lucide-react";
+import { X, ShoppingBag, Minus, Plus, Trash2, ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { useCart } from "@/context/CartContext";
 
@@ -88,8 +88,15 @@ export function CartDrawer() {
                 items.map((item) => (
                   <div
                     key={item.productId}
-                    className="flex gap-3 bg-white dark:bg-[#2A2E35] rounded-lg p-3 border border-[#C9A84C]/10"
+                    className={`flex flex-col gap-2 bg-white dark:bg-[#2A2E35] rounded-lg p-3 border ${item.stock === 0 ? "border-red-400/60" : "border-[#C9A84C]/10"}`}
                   >
+                    {item.stock === 0 && (
+                      <div className="flex items-center gap-1.5 text-red-500 text-xs font-semibold bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">
+                        <AlertTriangle size={13} className="shrink-0" />
+                        This item is now out of stock and cannot be purchased. Please remove it.
+                      </div>
+                    )}
+                    <div className="flex gap-3">
                     <Link
                       href={`/products/${item.productId}`}
                       onClick={closeDrawer}
@@ -140,6 +147,7 @@ export function CartDrawer() {
                           <Trash2 size={14} />
                         </button>
                       </div>
+                    </div>
                     </div>
                   </div>
                 ))

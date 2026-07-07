@@ -104,17 +104,22 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
       >
         {/* Badges */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-          {product.isBestSeller && (
+          {product.stock === 0 && (
+            <span className="bg-gray-700 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+              Sold Out
+            </span>
+          )}
+          {product.stock !== 0 && product.isBestSeller && (
             <span className="bg-[#C9A84C] text-[#7B1C2C] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
               Best Seller
             </span>
           )}
-          {product.isNewArrival && (
+          {product.stock !== 0 && product.isNewArrival && (
             <span className="bg-[#7B1C2C] text-[#FAF6EE] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
               New Arrival
             </span>
           )}
-          {discount > 0 && (
+          {product.stock !== 0 && discount > 0 && (
             <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
               {discount}% Off
             </span>
@@ -161,6 +166,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if ((product.stock ?? 1) === 0) return;
                 addItem({
                   id: product.id,
                   productId: product.id,
@@ -173,9 +179,15 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
                   category: product.category ?? "",
                 });
               }}
-              className="flex-1 bg-[#C9A84C] hover:bg-[#b59539] text-[#7B1C2C] font-semibold py-2 text-xs transition-colors rounded"
+              disabled={(product.stock ?? 1) === 0}
+              className={cn(
+                "flex-1 font-semibold py-2 text-xs transition-colors rounded",
+                (product.stock ?? 1) === 0
+                  ? "bg-gray-500 text-white cursor-not-allowed opacity-80"
+                  : "bg-[#C9A84C] hover:bg-[#b59539] text-[#7B1C2C]"
+              )}
             >
-              Add to Cart
+              {(product.stock ?? 1) === 0 ? "Sold Out" : "Add to Cart"}
             </button>
             {onQuickView && (
               <button

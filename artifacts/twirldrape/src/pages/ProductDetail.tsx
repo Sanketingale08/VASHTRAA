@@ -955,6 +955,7 @@ export default function ProductDetail() {
                 <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <button
                     onClick={() => {
+                      if (product.stock === 0) return;
                       addItem({
                         id: product.id,
                         productId: product.id,
@@ -971,14 +972,16 @@ export default function ProductDetail() {
                     }}
                     disabled={product.stock === 0}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-4 font-bold uppercase tracking-wider text-sm transition-all rounded-sm disabled:opacity-50 disabled:cursor-not-allowed",
-                      addedToCart
+                      "flex-1 flex items-center justify-center gap-2 py-4 font-bold uppercase tracking-wider text-sm transition-all rounded-sm disabled:cursor-not-allowed",
+                      product.stock === 0
+                        ? "bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                        : addedToCart
                         ? "bg-green-600 text-white"
                         : "bg-[#C9A84C] text-[#7B1C2C] hover:bg-[#b59539]"
                     )}
                   >
                     <ShoppingBag size={18} />
-                    {addedToCart ? "Added to Cart!" : "Add to Cart"}
+                    {product.stock === 0 ? "Sold Out" : addedToCart ? "Added to Cart!" : "Add to Cart"}
                   </button>
                   <button
                     onClick={() => toggle(id ?? "")}

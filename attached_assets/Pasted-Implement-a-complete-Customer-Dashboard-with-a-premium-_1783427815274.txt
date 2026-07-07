@@ -1,0 +1,117 @@
+Implement a complete Customer Dashboard with a premium, modern, and fully responsive UI for both 
+the Paithani Sarees and Designer Sarees marketplace. 
+The dashboard should provide customers with a centralized place to manage their profile, orders, 
+wishlist, payments, rewards, and account settings. 
+Dashboard Overview  
+Display the following summary cards at the top of the dashboard: 
+* Total Orders Placed 
+* Orders In Progress (Pending/Processing) 
+* Orders Delivered 
+* Orders Cancelled/Returned 
+* Total Amount Spent 
+* Reward Points Balance 
+* Active Coupons Available 
+* Wishlist Items Count 
+* Pending Reviews (Delivered but Not Reviewed) 
+* Loyalty Tier / Membership Status 
+1. My Profile 
+Allow users to manage their personal information with the following features: 
+* Personal Details (Name, Email, Phone Number, Date of Birth, Gender) 
+* Edit Profile 
+* Upload/Change Profile Picture 
+* Change Password 
+* Link Social Accounts 
+* Preferred Language (English, Marathi, Hindi) 
+* Account Deletion Request 
+2. My Addresses 
+Implement complete address management functionality: 
+* View Saved Addresses 
+* Add New Address 
+* Edit Address 
+* Delete Address 
+* Set Default Address 
+* Google Address Autocomplete 
+* PIN Code Serviceability Check 
+3. My Orders 
+Develop a comprehensive order management section with: 
+ View All Orders (List View with Status Tags) 
+ Order Details Page (Items, Pricing Breakdown, Shop Information) 
+ Real-Time Order Tracking 
+ Cancel Order 
+ Return/Exchange Request 
+ Refund Status Tracker 
+ Download Invoice (PDF) 
+ Reorder (Buy Again) 
+ Filter Orders by Status, Date, and Shop 
+4. My Wishlist 
+Implement a complete wishlist management system: 
+ View Saved Products 
+ Move Product to Cart 
+ Remove Product from Wishlist 
+ Price Drop Alerts 
+ Stock Availability Alerts 
+5. Recently Viewed & Saved for Later 
+Include the following sections: 
+ Recently Viewed Products 
+ Saved for Later Products (Moved from Cart) 
+6. Rewards & Loyalty 
+Implement a loyalty and rewards system with: 
+ Reward Points History (Earned & Redeemed) 
+ Referral Code 
+ Referral Tracking 
+ Referral Earnings 
+ Loyalty Membership Tier (Silver, Gold, Platinum) 
+ Tier Benefits Overview 
+7. Coupons & Offers 
+Provide users with coupon management features: 
+ Available Coupons 
+ Used Coupons History 
+ Expired Coupons 
+ Auto-Apply Coupon Suggestions During Checkout 
+8. My Reviews & Ratings 
+Allow customers to manage their product reviews: 
+ Reviewed Products 
+ Pending Reviews 
+ Edit Review 
+ Delete Review 
+ Upload Review Images 
+9. Payment Methods(develop after payment integration ) 
+Implement secure payment management: 
+ Saved Cards 
+ Saved UPI IDs 
+ Saved Wallets 
+ Add Payment Method 
+ Remove Payment Method 
+ Transaction History 
+ Payment Failure Logs 
+10. Notifications Center 
+Provide a centralized notification hub with: 
+ Order Updates 
+ Delivery Updates 
+ Offer & Flash Sale Notifications 
+ Price Drop Alerts 
+ Wishlist Stock Availability Alerts 
+ Notification Preferences (Email, SMS, Push Notifications) 
+11. Support & Help 
+Implement a complete customer support section: 
+ My Support Tickets (Open & Closed) 
+ Raise New Support Ticket 
+ Live Chat Support 
+ Frequently Asked Questions (FAQs) 
+ Complaint Status Tracker 
+12. Security 
+Provide account security features including: 
+ Login History 
+ Active Sessions 
+ Logout from All Devices 
+ Two-Factor Authentication (2FA) / OTP Settings 
+Additional Requirements 
+ Maintain a premium luxury UI consistent with the rest of the marketplace. 
+ Ensure the dashboard is fully responsive across desktop, tablet, and mobile devices. 
+ Use modern cards, charts, badges, and status indicators for an enhanced user experience. 
+ Ensure all modules are fully functional and connected to the appropriate backend APIs and 
+database. 
+ Preserve all existing functionality and ensure that implementing the Customer Dashboard does 
+not affect any other feature, routing, API, or business logic. 
+ The dashboard should integrate seamlessly with the Wishlist, Shopping Cart, Checkout, Orders, 
+Reviews, Rewards, and Notification systems. 

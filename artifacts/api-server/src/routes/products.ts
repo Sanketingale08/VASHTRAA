@@ -267,18 +267,20 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
       return;
     }
 
-    // Enforce vendor ownership: if the product has a vendor, the caller must own that vendor
-    if (before.vendorId) {
-      const [vendor] = await db
-        .select({ ownerId: vendorsTable.ownerId })
-        .from(vendorsTable)
-        .where(eq(vendorsTable.id, before.vendorId))
-        .limit(1);
-      // If vendor exists and has an ownerId set, caller must match
-      if (vendor?.ownerId && vendor.ownerId !== req.userId) {
-        res.status(403).json({ error: "Forbidden: you do not own this product's vendor" });
-        return;
-      }
+    // Strict vendor ownership: product must belong to a vendor AND that vendor must be owned
+    // by the caller. Any gap (no vendorId, no ownerId, mismatch) results in 403.
+    if (!before.vendorId) {
+      res.status(403).json({ error: "Forbidden: product has no vendor owner" });
+      return;
+    }
+    const [vendor] = await db
+      .select({ ownerId: vendorsTable.ownerId })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, before.vendorId))
+      .limit(1);
+    if (!vendor?.ownerId || vendor.ownerId !== req.userId) {
+      res.status(403).json({ error: "Forbidden: you do not own this product's vendor" });
+      return;
     }
 
     const [updated] = await db

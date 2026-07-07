@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -31,12 +31,20 @@ router.get("/notifications", requireAuth, async (req: any, res: any): Promise<vo
   try {
     const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
-    const type = req.query.type as string | undefined;
+    const rawType = req.query.type;
     const offset = (page - 1) * limit;
 
+    // rawType may be a string or array (Express parses repeated ?type= as array)
+    const types: string[] = rawType
+      ? (Array.isArray(rawType) ? rawType : String(rawType).split(",")).map(String).filter(Boolean)
+      : [];
+
     let whereClause = eq(notificationsTable.userId, req.userId) as any;
-    if (type && type !== "all") {
-      whereClause = and(eq(notificationsTable.userId, req.userId), eq(notificationsTable.type, type));
+    if (types.length > 0) {
+      const typeFilter = types.length === 1
+        ? eq(notificationsTable.type, types[0])
+        : inArray(notificationsTable.type, types);
+      whereClause = and(eq(notificationsTable.userId, req.userId), typeFilter);
     }
 
     const rows = await db

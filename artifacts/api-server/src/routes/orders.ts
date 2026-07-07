@@ -35,7 +35,7 @@ function generateReferralCode(): string {
   return code;
 }
 
-async function lookupCoupon(code: string): Promise<{ id: string; type: "percent" | "flat"; value: number; maxUses: number | null; usedCount: number } | null> {
+async function lookupCoupon(code: string): Promise<{ id: string; code: string; type: "percent" | "flat"; value: number; maxUses: number | null; usedCount: number; expiresAt: Date | null } | null> {
   const rows = await db
     .select()
     .from(couponsTable)
@@ -45,7 +45,7 @@ async function lookupCoupon(code: string): Promise<{ id: string; type: "percent"
   const coupon = rows[0];
   if (!coupon.active) return null;
   if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) return null;
-  return { id: coupon.id, type: coupon.type, value: coupon.value, maxUses: coupon.maxUses ?? null, usedCount: coupon.usedCount };
+  return { id: coupon.id, code: coupon.code, type: coupon.type, value: coupon.value, maxUses: coupon.maxUses ?? null, usedCount: coupon.usedCount, expiresAt: coupon.expiresAt ? new Date(coupon.expiresAt) : null };
 }
 
 function computeShipping(deliveryMethod: string, afterDiscount: number): number {
@@ -162,6 +162,42 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
 
           if (existingRedemption.length > 0) {
             throw Object.assign(new Error("You have already used this coupon"), { status: 400 });
+          }
+
+          // Lazy coupon-expiry notification: if coupon expires within 72h, warn once per user+coupon
+          if (coupon.expiresAt) {
+            const hoursLeft = (coupon.expiresAt.getTime() - Date.now()) / 3600000;
+            if (hoursLeft > 0 && hoursLeft <= 72) {
+              const offerPrefs = await tx
+                .select({ offerAlerts: notificationPreferencesTable.offerAlerts })
+                .from(notificationPreferencesTable)
+                .where(eq(notificationPreferencesTable.userId, req.userId))
+                .limit(1);
+              const wantsOffers = offerPrefs.length === 0 || offerPrefs[0].offerAlerts;
+              if (wantsOffers) {
+                const existingExpiry = await tx
+                  .select({ id: notificationsTable.id })
+                  .from(notificationsTable)
+                  .where(
+                    and(
+                      eq(notificationsTable.userId, req.userId),
+                      eq(notificationsTable.type, "coupon_expiry"),
+                      sql`${notificationsTable.metadata}->>'couponId' = ${coupon.id}`
+                    )
+                  )
+                  .limit(1);
+                if (existingExpiry.length === 0) {
+                  const daysLeft = Math.max(1, Math.ceil(hoursLeft / 24));
+                  await tx.insert(notificationsTable).values({
+                    userId: req.userId,
+                    type: "coupon_expiry",
+                    title: `Coupon "${coupon.code}" expiring soon`,
+                    body: `Your coupon expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}. Use it before it's gone!`,
+                    metadata: { couponId: coupon.id, couponCode: coupon.code },
+                  });
+                }
+              }
+            }
           }
         }
 

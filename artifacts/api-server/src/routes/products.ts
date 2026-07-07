@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { productsTable, vendorsTable } from "@workspace/db/schema";
+import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable } from "@workspace/db";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
 
 const router = Router();
@@ -229,6 +230,66 @@ router.get("/products/:id", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get product");
     res.status(500).json({ error: "Failed to fetch product" });
+  }
+});
+
+router.patch("/products/:id/stock", async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  const { stock } = req.body;
+
+  if (typeof stock !== "number" || !Number.isInteger(stock) || stock < 0) {
+    res.status(400).json({ error: "stock must be a non-negative integer" });
+    return;
+  }
+
+  try {
+    const [before] = await db
+      .select({ stock: productsTable.stock, name: productsTable.name })
+      .from(productsTable)
+      .where(eq(productsTable.id, id))
+      .limit(1);
+
+    if (!before) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(productsTable)
+      .set({ stock })
+      .where(eq(productsTable.id, id))
+      .returning({ stock: productsTable.stock });
+
+    // If restocked (was 0, now > 0) notify users who have this in their wishlist
+    if (before.stock === 0 && stock > 0) {
+      const wishlistRows = await db
+        .select({ userId: wishlistsTable.userId })
+        .from(wishlistsTable)
+        .where(eq(wishlistsTable.productId, id));
+
+      for (const { userId } of wishlistRows) {
+        const prefRows = await db
+          .select({ stockAlerts: notificationPreferencesTable.stockAlerts })
+          .from(notificationPreferencesTable)
+          .where(eq(notificationPreferencesTable.userId, userId))
+          .limit(1);
+        const wantsStock = prefRows.length === 0 || prefRows[0].stockAlerts;
+        if (wantsStock) {
+          await db.insert(notificationsTable).values({
+            userId,
+            type: "wishlist_restock",
+            title: "Back in stock!",
+            body: `"${before.name}" is back in stock. Don't miss out!`,
+            metadata: { productId: id },
+          });
+        }
+      }
+    }
+
+    res.json({ stock: updated.stock });
+  } catch (err: any) {
+    req.log.error({ err }, "Failed to update product stock");
+    res.status(500).json({ error: "Failed to update product stock" });
   }
 });
 

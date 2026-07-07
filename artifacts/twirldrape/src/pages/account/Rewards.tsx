@@ -370,16 +370,26 @@ export function AccountRewardsPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-[#3D1A1A] truncate">{entry.description}</p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(entry.createdAt).toLocaleDateString("en-IN", {
-                            day: "numeric", month: "short", year: "numeric",
-                          })}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          <span className="text-xs text-gray-400">
+                            {new Date(entry.createdAt).toLocaleDateString("en-IN", {
+                              day: "numeric", month: "short", year: "numeric",
+                            })}
+                          </span>
+                          {entry.orderId && (
+                            <a
+                              href={`/orders/${entry.orderId}`}
+                              className="text-[10px] font-medium text-[#7B1C2C] bg-[#7B1C2C]/5 hover:bg-[#7B1C2C]/10 px-1.5 py-0.5 rounded transition-colors"
+                            >
+                              Order #{entry.orderId.slice(0, 8).toUpperCase()}
+                            </a>
+                          )}
                           {entry.type === "bonus" && (
-                            <span className="ml-1.5 text-[10px] font-semibold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-semibold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">
                               Bonus
                             </span>
                           )}
-                        </p>
+                        </div>
                       </div>
                       <span className={`text-sm font-bold shrink-0 ${color}`}>
                         {sign}{Math.abs(entry.points).toLocaleString("en-IN")} pts

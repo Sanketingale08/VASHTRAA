@@ -250,23 +250,20 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             })
             .onConflictDoNothing();
 
-          const [profile] = await tx
-            .select({ totalPoints: userProfilesTable.totalPoints, lifetimePoints: userProfilesTable.lifetimePoints })
-            .from(userProfilesTable)
+          // Atomic SQL increment — no read-then-write race
+          const [updated] = await tx
+            .update(userProfilesTable)
+            .set({
+              totalPoints: sql`${userProfilesTable.totalPoints} + ${earnedPoints}`,
+              lifetimePoints: sql`${userProfilesTable.lifetimePoints} + ${earnedPoints}`,
+              updatedAt: new Date(),
+            })
             .where(eq(userProfilesTable.userId, req.userId))
-            .limit(1);
-
-          const newTotal = (profile?.totalPoints ?? 0) + earnedPoints;
-          const newLifetime = (profile?.lifetimePoints ?? 0) + earnedPoints;
+            .returning({ totalPoints: userProfilesTable.totalPoints });
 
           await tx
             .update(userProfilesTable)
-            .set({
-              totalPoints: newTotal,
-              lifetimePoints: newLifetime,
-              loyaltyTier: computeTier(newTotal),
-              updatedAt: new Date(),
-            })
+            .set({ loyaltyTier: computeTier(updated?.totalPoints ?? 0) })
             .where(eq(userProfilesTable.userId, req.userId));
 
           await tx.insert(rewardPointsLogTable).values({

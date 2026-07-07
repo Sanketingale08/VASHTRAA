@@ -201,16 +201,20 @@ router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): 
         description: `Referral bonus: friend joined`,
       });
 
-      const newTotal = referrer.totalPoints + 200;
-      const newLifetime = referrer.lifetimePoints + 200;
-      await tx
+      // Atomic SQL increment — no read-then-write race
+      const [updatedRef] = await tx
         .update(userProfilesTable)
         .set({
-          totalPoints: newTotal,
-          lifetimePoints: newLifetime,
-          loyaltyTier: computeTier(newTotal),
+          totalPoints: sql`${userProfilesTable.totalPoints} + 200`,
+          lifetimePoints: sql`${userProfilesTable.lifetimePoints} + 200`,
           updatedAt: new Date(),
         })
+        .where(eq(userProfilesTable.userId, referrer.userId))
+        .returning({ totalPoints: userProfilesTable.totalPoints });
+
+      await tx
+        .update(userProfilesTable)
+        .set({ loyaltyTier: computeTier(updatedRef?.totalPoints ?? 0) })
         .where(eq(userProfilesTable.userId, referrer.userId));
     });
 

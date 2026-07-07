@@ -25,6 +25,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "heart", selected: "heart.fill" }} />
         <Label>Wishlist</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="cart">
+        <Icon sf={{ default: "bag", selected: "bag.fill" }} />
+        <Label>Cart</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -99,6 +103,18 @@ function ClassicTabLayout() {
               <SymbolView name="heart" tintColor={color} size={24} />
             ) : (
               <Ionicons name="heart-outline" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: "Cart",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="bag" tintColor={color} size={24} />
+            ) : (
+              <Ionicons name="bag-outline" size={22} color={color} />
             ),
         }}
       />

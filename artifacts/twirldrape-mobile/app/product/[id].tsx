@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useGetProduct } from "@workspace/api-client-react";
+import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -60,11 +61,14 @@ export default function ProductDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { addToCart, isInCart } = useCart();
   const [imgIndex, setImgIndex] = useState(0);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const { data: product, isLoading, error } = useGetProduct(id ?? "");
 
   const inWishlist = product ? isInWishlist(product.id) : false;
+  const inCart = product ? isInCart(product.id) : false;
 
   const handleWishlist = async () => {
     if (!product) return;
@@ -72,6 +76,38 @@ export default function ProductDetailScreen() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     await toggleWishlist(product);
+  };
+
+  const handleAddToCart = async () => {
+    if (!product) return;
+    if (Platform.OS !== "web") {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await addToCart({
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      images: product.images ?? [],
+      vendorName: product.vendorName,
+    });
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2000);
+  };
+
+  const handleBuyNow = () => {
+    if (!product) return;
+    const item = {
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      images: product.images ?? [],
+      vendorName: product.vendorName,
+    };
+    router.push({
+      pathname: "/checkout",
+      params: { buyNow: encodeURIComponent(JSON.stringify(item)) },
+    });
   };
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>): void => {
@@ -197,26 +233,43 @@ export default function ProductDetailScreen() {
     },
     detailsSection: { marginBottom: 20 },
     ctaRow: {
-      paddingHorizontal: 20,
+      paddingHorizontal: 16,
       paddingBottom: Platform.OS === "web" ? 34 : (insets.bottom + 16),
       paddingTop: 12,
       backgroundColor: colors.background,
       borderTopWidth: 1,
       borderTopColor: colors.border + "33",
+      gap: 8,
     },
-    wishlistBtn: {
+    buyNowBtn: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
-      backgroundColor: inWishlist ? colors.muted : colors.primary,
+      backgroundColor: colors.primary,
       borderRadius: colors.radius,
       paddingVertical: 14,
     },
-    wishlistBtnText: {
+    buyNowBtnText: {
       fontFamily: "DMSans_700Bold",
       fontSize: 15,
-      color: inWishlist ? colors.foreground : colors.primaryForeground,
+      color: colors.primaryForeground,
+      letterSpacing: 0.5,
+    },
+    addCartBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      borderRadius: colors.radius,
+      paddingVertical: 13,
+    },
+    addCartBtnText: {
+      fontFamily: "DMSans_700Bold",
+      fontSize: 15,
+      color: colors.primary,
       letterSpacing: 0.5,
     },
     center: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -335,14 +388,22 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       <View style={s.ctaRow}>
-        <Pressable onPress={handleWishlist} style={s.wishlistBtn} testID="add-wishlist-btn">
+        <Pressable onPress={handleBuyNow} style={s.buyNowBtn} testID="buy-now-btn">
+          <Ionicons name="flash-outline" size={18} color={colors.primaryForeground} />
+          <Text style={s.buyNowBtnText}>Buy Now</Text>
+        </Pressable>
+        <Pressable
+          onPress={inCart ? () => router.push("/checkout") : handleAddToCart}
+          style={[s.addCartBtn, addedToCart && { borderColor: "#22A66A" }]}
+          testID="add-cart-btn"
+        >
           <Ionicons
-            name={inWishlist ? "heart" : "heart-outline"}
-            size={20}
-            color={inWishlist ? colors.foreground : colors.primaryForeground}
+            name={addedToCart ? "checkmark-circle-outline" : inCart ? "cart" : "cart-outline"}
+            size={18}
+            color={addedToCart ? "#22A66A" : colors.primary}
           />
-          <Text style={s.wishlistBtnText}>
-            {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
+          <Text style={[s.addCartBtnText, addedToCart && { color: "#22A66A" }]}>
+            {addedToCart ? "Added to Cart!" : inCart ? "Go to Checkout" : "Add to Cart"}
           </Text>
         </Pressable>
       </View>

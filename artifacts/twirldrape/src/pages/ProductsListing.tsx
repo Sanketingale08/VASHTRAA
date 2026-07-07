@@ -1,4 +1,6 @@
-import React, { useState, useCallback, useDeferredValue } from "react";
+import React, { useState, useCallback, useDeferredValue, useEffect, useRef } from "react";
+import { useSearch, useLocation } from "wouter";
+import * as SliderPrimitive from "@radix-ui/react-slider";
 import { Layout } from "@/components/Layout";
 import { useListProducts, useListVendors, useGetProductFacets } from "@workspace/api-client-react";
 import type { ListProductsParams, ListProductsSort, GetProductFacetsParams } from "@workspace/api-client-react";
@@ -46,22 +48,81 @@ const RATING_OPTIONS: { label: string; value: number | undefined }[] = [
   { label: "4.5★ & above", value: 4.5 },
 ];
 
+const PRICE_SLIDER_MAX = 50000;
+const PRICE_SLIDER_STEP = 500;
+
+function formatPrice(n: number) {
+  return `₹${n.toLocaleString("en-IN")}`;
+}
+
 export function ProductsListing({ category, title, subtitle }: ProductsListingProps) {
-  const [search, setSearch] = useState("");
-  const [fabric, setFabric] = useState<string | undefined>();
-  const [color, setColor] = useState<string | undefined>();
-  const [occasion, setOccasion] = useState<string | undefined>();
-  const [vendorId, setVendorId] = useState<string | undefined>();
-  const [minPrice, setMinPrice] = useState<number | undefined>();
-  const [maxPrice, setMaxPrice] = useState<number | undefined>();
-  const [sort, setSort] = useState<ListProductsSort>("rating_desc");
-  const [page, setPage] = useState(1);
+  const searchStr = useSearch();
+  const [pathname, navigate] = useLocation();
+
+  const initParams = new URLSearchParams(searchStr);
+
+  const [search, setSearch] = useState<string>(() => initParams.get("q") ?? "");
+  const [fabric, setFabric] = useState<string | undefined>(() => initParams.get("fabric") || undefined);
+  const [color, setColor] = useState<string | undefined>(() => initParams.get("color") || undefined);
+  const [occasion, setOccasion] = useState<string | undefined>(() => initParams.get("occasion") || undefined);
+  const [vendorId, setVendorId] = useState<string | undefined>(() => initParams.get("vendor") || undefined);
+  const [minPrice, setMinPrice] = useState<number | undefined>(() => {
+    const v = initParams.get("minPrice");
+    return v ? Number(v) : undefined;
+  });
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(() => {
+    const v = initParams.get("maxPrice");
+    return v ? Number(v) : undefined;
+  });
+  const [sort, setSort] = useState<ListProductsSort>(() => {
+    const v = initParams.get("sort") as ListProductsSort | null;
+    return v && SORT_OPTIONS.some((o) => o.value === v) ? v : "rating_desc";
+  });
+  const [page, setPage] = useState<number>(() => {
+    const v = initParams.get("page");
+    return v ? Math.max(1, Number(v)) : 1;
+  });
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [quickChip, setQuickChip] = useState<QuickChip>("all");
-  const [minRating, setMinRating] = useState<number | undefined>();
-  const [hasDiscount, setHasDiscount] = useState(false);
+  const [quickChip, setQuickChip] = useState<QuickChip>(() => {
+    const v = initParams.get("chip") as QuickChip | null;
+    return v && ["bestSeller", "newArrival", "onSale"].includes(v) ? v : "all";
+  });
+  const [minRating, setMinRating] = useState<number | undefined>(() => {
+    const v = initParams.get("minRating");
+    return v ? Number(v) : undefined;
+  });
+  const [hasDiscount, setHasDiscount] = useState<boolean>(() => initParams.get("discount") === "1");
+
+  const [priceRange, setPriceRange] = useState<[number, number]>([
+    minPrice ?? 0,
+    maxPrice ?? PRICE_SLIDER_MAX,
+  ]);
 
   const deferredSearch = useDeferredValue(search);
+
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (fabric) params.set("fabric", fabric);
+    if (color) params.set("color", color);
+    if (occasion) params.set("occasion", occasion);
+    if (vendorId) params.set("vendor", vendorId);
+    if (minPrice !== undefined && minPrice > 0) params.set("minPrice", String(minPrice));
+    if (maxPrice !== undefined && maxPrice < PRICE_SLIDER_MAX) params.set("maxPrice", String(maxPrice));
+    if (sort !== "rating_desc") params.set("sort", sort);
+    if (page > 1) params.set("page", String(page));
+    if (quickChip !== "all") params.set("chip", quickChip);
+    if (minRating !== undefined) params.set("minRating", String(minRating));
+    if (hasDiscount) params.set("discount", "1");
+
+    const qs = params.toString();
+    navigateRef.current(`${pathnameRef.current}${qs ? "?" + qs : ""}`, { replace: true });
+  }, [search, fabric, color, occasion, vendorId, minPrice, maxPrice, sort, page, quickChip, minRating, hasDiscount]);
 
   const params: ListProductsParams = {
     category,
@@ -73,8 +134,8 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
     ...(color && { color }),
     ...(occasion && { occasion }),
     ...(vendorId && { vendorId }),
-    ...(minPrice !== undefined && { minPrice }),
-    ...(maxPrice !== undefined && { maxPrice }),
+    ...(minPrice !== undefined && minPrice > 0 && { minPrice }),
+    ...(maxPrice !== undefined && maxPrice < PRICE_SLIDER_MAX && { maxPrice }),
     ...(quickChip === "bestSeller" && { bestSeller: true }),
     ...(quickChip === "newArrival" && { newArrival: true }),
     ...(quickChip === "onSale" || hasDiscount ? { hasDiscount: true } : {}),
@@ -91,8 +152,8 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
     ...(color && { color }),
     ...(occasion && { occasion }),
     ...(vendorId && { vendorId }),
-    ...(minPrice !== undefined && { minPrice }),
-    ...(maxPrice !== undefined && { maxPrice }),
+    ...(minPrice !== undefined && minPrice > 0 && { minPrice }),
+    ...(maxPrice !== undefined && maxPrice < PRICE_SLIDER_MAX && { maxPrice }),
     ...(quickChip === "bestSeller" && { bestSeller: true }),
     ...(quickChip === "newArrival" && { newArrival: true }),
     ...(quickChip === "onSale" || hasDiscount ? { hasDiscount: true } : {}),
@@ -108,6 +169,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
     setVendorId(undefined);
     setMinPrice(undefined);
     setMaxPrice(undefined);
+    setPriceRange([0, PRICE_SLIDER_MAX]);
     setSearch("");
     setQuickChip("all");
     setMinRating(undefined);
@@ -120,13 +182,24 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
     setPage(1);
   }
 
+  function handlePriceRangeCommit(values: number[]) {
+    const [lo, hi] = values as [number, number];
+    setMinPrice(lo > 0 ? lo : undefined);
+    setMaxPrice(hi < PRICE_SLIDER_MAX ? hi : undefined);
+    setPage(1);
+  }
+
+  const colorLabel = COLORS.find((c) => c.value === color)?.label;
+  const vendorLabel = vendors?.find((v) => v.id === vendorId)?.name;
+  const ratingLabel = RATING_OPTIONS.find((r) => r.value === minRating && r.value !== undefined)?.label;
+
   const activeFilterCount = [
     fabric,
     color,
     occasion,
     vendorId,
-    minPrice,
-    maxPrice,
+    minPrice !== undefined && minPrice > 0 ? minPrice : undefined,
+    maxPrice !== undefined && maxPrice < PRICE_SLIDER_MAX ? maxPrice : undefined,
     search,
     quickChip !== "all" ? quickChip : undefined,
     minRating,
@@ -140,6 +213,10 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
   const chipBase = "shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full border transition-all";
   const chipActive = "bg-[#C9A84C] text-[#7B1C2C] border-[#C9A84C]";
   const chipInactive = "border-[#C9A84C]/30 text-[#3D1A1A]/70 hover:border-[#C9A84C] hover:text-[#3D1A1A]";
+
+  const priceMin = priceRange[0];
+  const priceMax = priceRange[1];
+  const hasPriceFilter = priceMin > 0 || priceMax < PRICE_SLIDER_MAX;
 
   return (
     <Layout>
@@ -158,7 +235,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
 
         <div className="container mx-auto px-4 py-8 max-w-7xl">
 
-          {/* Quick-filter chip bar — horizontally scrollable on mobile */}
+          {/* Quick-filter chip bar */}
           <div className="overflow-x-auto pb-1 mb-6 -mx-4 px-4">
             <div className="flex gap-2 flex-nowrap">
               <button
@@ -189,7 +266,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
           </div>
 
           {/* Search + Sort Bar */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
               <input
@@ -234,6 +311,75 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
               </button>
             </div>
           </div>
+
+          {/* Active Filter Chips */}
+          <AnimatePresence>
+            {hasActiveFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden mb-6"
+              >
+                <div className="flex flex-wrap gap-2 py-1">
+                  {search && (
+                    <FilterChip label={`"${search}"`} onRemove={() => { setSearch(""); setPage(1); }} />
+                  )}
+                  {quickChip === "bestSeller" && (
+                    <FilterChip label="⭐ Best Sellers" onRemove={() => { setQuickChip("all"); setPage(1); }} />
+                  )}
+                  {quickChip === "newArrival" && (
+                    <FilterChip label="✨ New Arrivals" onRemove={() => { setQuickChip("all"); setPage(1); }} />
+                  )}
+                  {quickChip === "onSale" && (
+                    <FilterChip label="🏷️ On Sale" onRemove={() => { setQuickChip("all"); setPage(1); }} />
+                  )}
+                  {color && (
+                    <FilterChip
+                      label={colorLabel ?? color}
+                      color={COLORS.find((c) => c.value === color)?.hex}
+                      onRemove={() => { setColor(undefined); setPage(1); }}
+                    />
+                  )}
+                  {fabric && (
+                    <FilterChip label={fabric} onRemove={() => { setFabric(undefined); setPage(1); }} />
+                  )}
+                  {occasion && (
+                    <FilterChip label={occasion} onRemove={() => { setOccasion(undefined); setPage(1); }} />
+                  )}
+                  {hasPriceFilter && (
+                    <FilterChip
+                      label={`${formatPrice(priceMin)} – ${formatPrice(priceMax)}`}
+                      onRemove={() => {
+                        setMinPrice(undefined);
+                        setMaxPrice(undefined);
+                        setPriceRange([0, PRICE_SLIDER_MAX]);
+                        setPage(1);
+                      }}
+                    />
+                  )}
+                  {ratingLabel && (
+                    <FilterChip label={ratingLabel} onRemove={() => { setMinRating(undefined); setPage(1); }} />
+                  )}
+                  {hasDiscount && (
+                    <FilterChip label="🏷️ Discounted" onRemove={() => { setHasDiscount(false); setPage(1); }} />
+                  )}
+                  {vendorLabel && (
+                    <FilterChip label={vendorLabel} onRemove={() => { setVendorId(undefined); setPage(1); }} />
+                  )}
+                  {activeFilterCount > 1 && (
+                    <button
+                      onClick={resetFilters}
+                      className="text-xs text-red-400 hover:text-red-500 font-medium flex items-center gap-1 px-2 py-1 rounded"
+                    >
+                      <X size={12} /> Clear all
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="flex gap-8">
 
@@ -313,24 +459,29 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                       </label>
                     </div>
 
-                    {/* Price Range */}
+                    {/* Price Range Slider */}
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-3">Price Range</h4>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          placeholder="Min ₹"
-                          value={minPrice ?? ""}
-                          onChange={(e) => { setMinPrice(e.target.value ? Number(e.target.value) : undefined); setPage(1); }}
-                          className="w-full px-3 py-2 border rounded text-xs focus:outline-none focus:border-[#C9A84C] bg-[#FAF6EE] border-[#C9A84C]/30 text-[#3D1A1A]"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Max ₹"
-                          value={maxPrice ?? ""}
-                          onChange={(e) => { setMaxPrice(e.target.value ? Number(e.target.value) : undefined); setPage(1); }}
-                          className="w-full px-3 py-2 border rounded text-xs focus:outline-none focus:border-[#C9A84C] bg-[#FAF6EE] border-[#C9A84C]/30 text-[#3D1A1A]"
-                        />
+                      <h4 className="text-xs font-bold uppercase tracking-wider opacity-60 mb-4">Price Range</h4>
+                      <div className="px-1">
+                        <SliderPrimitive.Root
+                          min={0}
+                          max={PRICE_SLIDER_MAX}
+                          step={PRICE_SLIDER_STEP}
+                          value={priceRange}
+                          onValueChange={(vals) => setPriceRange(vals as [number, number])}
+                          onValueCommit={handlePriceRangeCommit}
+                          className="relative flex w-full touch-none select-none items-center"
+                        >
+                          <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[#C9A84C]/20">
+                            <SliderPrimitive.Range className="absolute h-full bg-[#C9A84C]" />
+                          </SliderPrimitive.Track>
+                          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-[#C9A84C] bg-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C9A84C]" />
+                          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-[#C9A84C] bg-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C9A84C]" />
+                        </SliderPrimitive.Root>
+                      </div>
+                      <div className="flex justify-between mt-3 text-xs text-[#3D1A1A]/70 font-medium">
+                        <span>{formatPrice(priceMin)}</span>
+                        <span>{formatPrice(priceMax)}{priceMax >= PRICE_SLIDER_MAX ? "+" : ""}</span>
                       </div>
                     </div>
 
@@ -361,7 +512,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                       </div>
                       {color && (
                         <p className="text-xs mt-2 opacity-60 capitalize">
-                          {color} selected
+                          {colorLabel} selected
                           {facets?.color[color] !== undefined && (
                             <span className="ml-1">({facets.color[color]})</span>
                           )}
@@ -529,5 +680,37 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
         </div>
       </div>
     </Layout>
+  );
+}
+
+interface FilterChipProps {
+  label: string;
+  color?: string;
+  onRemove: () => void;
+}
+
+function FilterChip({ label, color, onRemove }: FilterChipProps) {
+  return (
+    <motion.span
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#3D1A1A] text-xs font-semibold"
+    >
+      {color && (
+        <span
+          className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
+          style={{ backgroundColor: color }}
+        />
+      )}
+      <span className="capitalize">{label}</span>
+      <button
+        onClick={onRemove}
+        className="ml-0.5 rounded-full hover:bg-[#C9A84C]/30 transition-colors p-0.5"
+        aria-label={`Remove ${label} filter`}
+      >
+        <X size={10} />
+      </button>
+    </motion.span>
   );
 }

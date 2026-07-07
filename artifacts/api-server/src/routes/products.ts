@@ -233,7 +233,15 @@ router.get("/products/:id", async (req, res) => {
   }
 });
 
-router.patch("/products/:id/stock", async (req: any, res: any): Promise<void> => {
+const requireAuth = (req: any, res: any, next: any) => {
+  const auth = getAuth(req);
+  const userId = auth?.sessionClaims?.userId || auth?.userId;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  req.userId = userId;
+  next();
+};
+
+router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   const { stock } = req.body;
 

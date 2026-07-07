@@ -27,6 +27,29 @@ type Order = {
   status: string; createdAt: string;
 };
 
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  confirmed: { bg: "#E8F5EE", text: "#22A66A" },
+  processing: { bg: "#FFF3E0", text: "#E68A00" },
+  shipped: { bg: "#E3F0FF", text: "#1A73E8" },
+  delivered: { bg: "#E8F5EE", text: "#22A66A" },
+  cancelled: { bg: "#FFF0F0", text: "#D93025" },
+};
+
+function statusColor(status: string) {
+  return STATUS_COLORS[status] ?? { bg: "#F5F5F5", text: "#555" };
+}
+
+function statusIcon(status: string): React.ComponentProps<typeof Ionicons>["name"] {
+  switch (status) {
+    case "confirmed": return "checkmark-circle";
+    case "processing": return "time-outline";
+    case "shipped": return "car-outline";
+    case "delivered": return "checkmark-done-circle";
+    case "cancelled": return "close-circle";
+    default: return "ellipse-outline";
+  }
+}
+
 function getDeliveryDate(method: "standard" | "express", from: string) {
   const date = new Date(from);
   const days = method === "express" ? 3 : 7;
@@ -39,8 +62,9 @@ function getDeliveryDate(method: "standard" | "express", from: string) {
   return date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-export default function OrderConfirmationScreen() {
-  const { id: orderId } = useLocalSearchParams<{ id: string }>();
+export default function OrderDetailScreen() {
+  const { id: orderId, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const isFromHistory = from === "history";
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { isSignedIn, isLoaded, getToken } = useAuth();
@@ -64,6 +88,14 @@ export default function OrderConfirmationScreen() {
     });
   }, [isLoaded, isSignedIn, orderId]);
 
+  const handleBack = () => {
+    if (isFromHistory) {
+      router.back();
+    } else {
+      router.replace("/(tabs)");
+    }
+  };
+
   const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {
@@ -82,7 +114,6 @@ export default function OrderConfirmationScreen() {
       width: 80,
       height: 80,
       borderRadius: 40,
-      backgroundColor: "#E8F5EE",
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 16,
@@ -124,7 +155,6 @@ export default function OrderConfirmationScreen() {
     metaVal: { fontFamily: "DMSans_700Bold", fontSize: 12, color: colors.foreground },
     statusBadge: {
       alignSelf: "flex-start",
-      backgroundColor: "#E8F5EE",
       borderRadius: 20,
       paddingHorizontal: 10,
       paddingVertical: 4,
@@ -132,7 +162,7 @@ export default function OrderConfirmationScreen() {
       alignItems: "center",
       gap: 4,
     },
-    statusText: { fontFamily: "DMSans_700Bold", fontSize: 11, color: "#22A66A", textTransform: "capitalize" },
+    statusText: { fontFamily: "DMSans_700Bold", fontSize: 11, textTransform: "capitalize" },
     itemRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
     itemImg: { width: 56, height: 56, borderRadius: colors.radius, backgroundColor: colors.muted },
     itemName: { fontFamily: "DMSans_500Medium", fontSize: 13, color: colors.foreground, flex: 1 },
@@ -171,14 +201,16 @@ export default function OrderConfirmationScreen() {
     secondaryBtnText: { fontFamily: "DMSans_500Medium", fontSize: 14, color: colors.primary },
   });
 
+  const headerTitle = isFromHistory ? "Order Details" : "Order Confirmed!";
+
   if (!isLoaded || loading) {
     return (
       <View style={s.container}>
         <View style={s.header}>
-          <Pressable onPress={() => router.replace("/(tabs)")} style={s.backBtn}>
+          <Pressable onPress={handleBack} style={s.backBtn}>
             <Ionicons name="chevron-back" size={22} color={colors.foreground} />
           </Pressable>
-          <Text style={s.headerTitle}>Order Confirmation</Text>
+          <Text style={s.headerTitle}>{headerTitle}</Text>
         </View>
         <View style={s.center}>
           <ActivityIndicator size="large" color={colors.secondary} />
@@ -191,7 +223,7 @@ export default function OrderConfirmationScreen() {
     return (
       <View style={s.container}>
         <View style={s.header}>
-          <Pressable onPress={() => router.replace("/(tabs)")} style={s.backBtn}>
+          <Pressable onPress={handleBack} style={s.backBtn}>
             <Ionicons name="chevron-back" size={22} color={colors.foreground} />
           </Pressable>
           <Text style={s.headerTitle}>Order Not Found</Text>
@@ -200,8 +232,8 @@ export default function OrderConfirmationScreen() {
           <Ionicons name="alert-circle-outline" size={48} color={colors.mutedForeground} />
           <Text style={[s.successTitle, { fontSize: 22, marginTop: 12 }]}>Order Not Found</Text>
           <Text style={s.successSub}>{error || "This order doesn't exist or belongs to another account."}</Text>
-          <Pressable style={[s.primaryBtn, { width: "100%" }]} onPress={() => router.replace("/(tabs)")}>
-            <Text style={s.primaryBtnText}>Continue Shopping</Text>
+          <Pressable style={[s.primaryBtn, { width: "100%" }]} onPress={handleBack}>
+            <Text style={s.primaryBtnText}>{isFromHistory ? "Back to Orders" : "Continue Shopping"}</Text>
           </Pressable>
         </View>
       </View>
@@ -212,24 +244,29 @@ export default function OrderConfirmationScreen() {
   const deliveryEst = getDeliveryDate(order.deliveryMethod, order.createdAt);
   const payLabel = order.paymentMethod === "upi" ? "UPI" : order.paymentMethod === "card" ? "Credit / Debit Card" : "Cash on Delivery";
   const totalItems = (order.items as OrderItem[]).reduce((s, i) => s + i.quantity, 0);
+  const sc = statusColor(order.status);
 
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Pressable onPress={() => router.replace("/(tabs)")} style={s.backBtn}>
+        <Pressable onPress={handleBack} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={s.headerTitle}>Order Confirmed!</Text>
+        <Text style={s.headerTitle}>{headerTitle}</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={{ paddingTop: 24, paddingBottom: 16, alignItems: "center" }}>
-          <View style={s.successCircle}>
-            <Ionicons name="checkmark-circle" size={44} color="#22A66A" />
+        {!isFromHistory && (
+          <View style={{ paddingTop: 24, paddingBottom: 16, alignItems: "center" }}>
+            <View style={[s.successCircle, { backgroundColor: "#E8F5EE" }]}>
+              <Ionicons name="checkmark-circle" size={44} color="#22A66A" />
+            </View>
+            <Text style={s.successTitle}>Order Confirmed!</Text>
+            <Text style={s.successSub}>Thank you for shopping with TwirlDrape.</Text>
           </View>
-          <Text style={s.successTitle}>Order Confirmed!</Text>
-          <Text style={s.successSub}>Thank you for shopping with TwirlDrape.</Text>
-        </View>
+        )}
+
+        {isFromHistory && <View style={{ height: 16 }} />}
 
         <View style={s.card}>
           <Text style={s.cardLabel}>Order Details</Text>
@@ -244,9 +281,9 @@ export default function OrderConfirmationScreen() {
             </View>
             <View style={s.metaBox}>
               <Text style={s.metaKey}>Status</Text>
-              <View style={s.statusBadge}>
-                <Ionicons name="checkmark-circle" size={11} color="#22A66A" />
-                <Text style={s.statusText}>{order.status}</Text>
+              <View style={[s.statusBadge, { backgroundColor: sc.bg }]}>
+                <Ionicons name={statusIcon(order.status)} size={11} color={sc.text} />
+                <Text style={[s.statusText, { color: sc.text }]}>{order.status}</Text>
               </View>
             </View>
           </View>
@@ -328,9 +365,15 @@ export default function OrderConfirmationScreen() {
       </ScrollView>
 
       <View style={s.ctaArea}>
-        <Pressable style={s.primaryBtn} onPress={() => router.replace("/(tabs)")}>
-          <Text style={s.primaryBtnText}>Continue Shopping</Text>
-        </Pressable>
+        {isFromHistory ? (
+          <Pressable style={s.primaryBtn} onPress={() => router.push("/(tabs)/explore")}>
+            <Text style={s.primaryBtnText}>Browse More Sarees</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={s.primaryBtn} onPress={() => router.replace("/(tabs)")}>
+            <Text style={s.primaryBtnText}>Continue Shopping</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );

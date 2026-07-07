@@ -31,6 +31,7 @@ import { AccountOrdersPage } from "@/pages/account/Orders";
 import { AccountWishlistPage } from "@/pages/account/AccountWishlist";
 import { AccountRewardsPage } from "@/pages/account/Rewards";
 import { AccountNotificationsPage } from "@/pages/account/Notifications";
+import Contact from "@/pages/Contact";
 
 const queryClient = new QueryClient();
 
@@ -194,6 +195,7 @@ function Router() {
       <Route path="/account/rewards" component={AccountRewardsPage} />
       <Route path="/account/notifications" component={AccountNotificationsPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
+      <Route path="/contact" component={Contact} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

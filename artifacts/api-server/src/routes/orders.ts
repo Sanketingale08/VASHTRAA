@@ -383,4 +383,69 @@ router.get("/orders/:orderId", requireAuth, async (req: any, res: any): Promise<
   }
 });
 
+router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  try {
+    try {
+      await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            status: ordersTable.status,
+            items: ordersTable.items,
+          })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.status === "cancelled") {
+          throw Object.assign(new Error("Order is already cancelled"), { status: 400 });
+        }
+
+        const cancellableStatuses = ["confirmed", "processing"];
+        if (!cancellableStatuses.includes(order.status)) {
+          throw Object.assign(
+            new Error(`Cannot cancel an order with status "${order.status}"`),
+            { status: 400 }
+          );
+        }
+
+        await tx
+          .update(ordersTable)
+          .set({ status: "cancelled" })
+          .where(eq(ordersTable.id, orderId));
+
+        const items = order.items as Array<{ productId: string; quantity: number }>;
+        for (const item of items) {
+          await tx
+            .update(productsTable)
+            .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
+            .where(eq(productsTable.id, item.productId));
+        }
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to cancel order");
+    res.status(500).json({ error: "Failed to cancel order" });
+  }
+});
+
 export default router;

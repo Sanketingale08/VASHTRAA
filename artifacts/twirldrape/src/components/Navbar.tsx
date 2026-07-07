@@ -6,6 +6,7 @@ import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-
 import { useUser, useClerk, Show } from "@clerk/react";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -343,6 +344,9 @@ export function Navbar() {
                   )}
                 </Show>
               </div>
+
+              {/* Notifications (signed-in only) */}
+              <NotificationBell isDark={isDark || isDesignerDark} />
 
               {/* Wishlist */}
               <Link

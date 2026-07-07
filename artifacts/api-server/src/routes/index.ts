@@ -10,6 +10,7 @@ import couponsRouter from "./coupons";
 import shippingRouter from "./shipping";
 import accountRouter from "./account";
 import rewardsRouter from "./rewards";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(couponsRouter);
 router.use(shippingRouter);
 router.use(accountRouter);
 router.use(rewardsRouter);
+router.use(notificationsRouter);
 
 export default router;

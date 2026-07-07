@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import {
   ordersTable, cartItemsTable, productsTable, couponsTable,
   couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
+  notificationsTable, notificationPreferencesTable,
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 
@@ -272,6 +273,24 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             type: "earned",
             description: "Points earned on order",
             orderId: order.id,
+          });
+        }
+
+        // Insert "Order confirmed" notification (respects preferences)
+        const prefs = await tx
+          .select({ orderUpdates: notificationPreferencesTable.orderUpdates })
+          .from(notificationPreferencesTable)
+          .where(eq(notificationPreferencesTable.userId, req.userId))
+          .limit(1);
+        const wantsOrderUpdates = prefs.length === 0 || prefs[0].orderUpdates;
+        if (wantsOrderUpdates) {
+          const firstItem = resolvedItems[0];
+          await tx.insert(notificationsTable).values({
+            userId: req.userId,
+            type: "order_confirmed",
+            title: "Order confirmed",
+            body: `Your order for ${firstItem.name}${resolvedItems.length > 1 ? ` and ${resolvedItems.length - 1} more item(s)` : ""} has been confirmed.`,
+            metadata: { orderId: order.id },
           });
         }
 

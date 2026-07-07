@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { userProfilesTable, rewardPointsLogTable } from "@workspace/db";
+import { userProfilesTable, rewardPointsLogTable, ordersTable } from "@workspace/db";
 import { eq, desc, count, sql } from "drizzle-orm";
 
 const router = Router();
@@ -69,7 +69,7 @@ async function getOrCreateProfile(userId: string) {
   return refetched;
 }
 
-router.get("/api/rewards/summary", requireAuth, async (req: any, res: any): Promise<void> => {
+router.get("/rewards/summary", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
     const profile = await getOrCreateProfile(req.userId);
 
@@ -95,7 +95,7 @@ router.get("/api/rewards/summary", requireAuth, async (req: any, res: any): Prom
   }
 });
 
-router.get("/api/rewards/history", requireAuth, async (req: any, res: any): Promise<void> => {
+router.get("/rewards/history", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
     const limit = 20;
@@ -123,7 +123,7 @@ router.get("/api/rewards/history", requireAuth, async (req: any, res: any): Prom
   }
 });
 
-router.post("/api/rewards/referral/apply", requireAuth, async (req: any, res: any): Promise<void> => {
+router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
     const { referralCode } = req.body;
     if (!referralCode || typeof referralCode !== "string") {
@@ -132,6 +132,22 @@ router.post("/api/rewards/referral/apply", requireAuth, async (req: any, res: an
     }
 
     const code = referralCode.trim().toUpperCase();
+
+    // Validate: referee must have placed exactly their first order
+    const orderCountResult = await db
+      .select({ cnt: count() })
+      .from(ordersTable)
+      .where(eq(ordersTable.userId, req.userId));
+
+    const orderCount = Number(orderCountResult[0]?.cnt ?? 0);
+    if (orderCount === 0) {
+      res.status(400).json({ error: "Complete your first order before applying a referral code" });
+      return;
+    }
+    if (orderCount > 1) {
+      res.status(400).json({ error: "Referral codes can only be applied on your first order" });
+      return;
+    }
 
     const referrerRows = await db
       .select()

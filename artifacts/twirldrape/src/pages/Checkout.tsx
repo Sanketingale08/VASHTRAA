@@ -368,6 +368,19 @@ export function CheckoutPage() {
       orderPlacedRef.current = true;
       sessionStorage.removeItem(BUY_NOW_KEY);
       if (!buyNowItems) await clearCart();
+
+      // Apply referral code if stored (best-effort, fire and forget)
+      const storedRef = localStorage.getItem("td_ref_code");
+      if (storedRef) {
+        localStorage.removeItem("td_ref_code");
+        fetch(`${BASE}/api/rewards/referral/apply`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ referralCode: storedRef }),
+        }).catch(() => {});
+      }
+
       setLocation(`/orders/${data.orderId}`);
     } catch (err: any) {
       setPlaceError(err.message || "Failed to place order. Please try again.");

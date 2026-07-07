@@ -137,6 +137,19 @@ function SignUpPage() {
   );
 }
 
+const REFERRAL_STORAGE_KEY = "td_ref_code";
+
+function ReferralCapture() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get("ref");
+    if (refCode && !localStorage.getItem(REFERRAL_STORAGE_KEY)) {
+      localStorage.setItem(REFERRAL_STORAGE_KEY, refCode.trim().toUpperCase());
+    }
+  }, []);
+  return null;
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const qc = useQueryClient();
@@ -215,6 +228,7 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
+        <ReferralCapture />
         <TooltipProvider>
           <WishlistProvider>
             <CartProvider>

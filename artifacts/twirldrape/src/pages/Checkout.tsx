@@ -4,17 +4,15 @@ import { useUser } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check, ChevronRight, Truck, Zap, CreditCard, Smartphone,
-  HandCoins, Tag, X, Loader2, CheckCircle, XCircle,
+  HandCoins, Tag, X, Loader2, CheckCircle, XCircle, Building2, Wallet as WalletIcon,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
 import type { CartItem } from "@/context/CartContext";
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BUY_NOW_KEY = "twirl_buy_now";
-
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
@@ -30,11 +28,40 @@ type Address = {
   name: string; phone: string; line1: string; line2: string;
   city: string; state: string; pincode: string;
 };
-
 type SavedAddress = Address & { id: string; isDefault: boolean };
-
 type DeliveryMethod = "standard" | "express";
-type PaymentMethod = "upi" | "card" | "cod";
+type PaymentMethod = "upi" | "credit_card" | "debit_card" | "net_banking" | "wallet" | "cod";
+
+const PAYMENT_OPTIONS: Array<{
+  id: PaymentMethod;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
+  title: string;
+  sub: string;
+}> = [
+  { id: "upi", Icon: Smartphone, title: "UPI", sub: "Google Pay, PhonePe, Paytm, BHIM" },
+  { id: "credit_card", Icon: CreditCard, title: "Credit Card", sub: "Visa, Mastercard, RuPay, Amex" },
+  { id: "debit_card", Icon: CreditCard, title: "Debit Card", sub: "Visa, Mastercard, RuPay, Maestro" },
+  { id: "net_banking", Icon: Building2, title: "Net Banking", sub: "SBI, HDFC, ICICI, Axis & more" },
+  { id: "wallet", Icon: WalletIcon, title: "Wallet", sub: "Paytm, PhonePe, Amazon Pay, Mobikwik" },
+  { id: "cod", Icon: HandCoins, title: "Cash on Delivery", sub: "Pay ₹50 extra when delivered" },
+];
+
+const BANK_LABELS: Record<string, string> = {
+  sbi: "State Bank of India",
+  hdfc: "HDFC Bank",
+  icici: "ICICI Bank",
+  axis: "Axis Bank",
+  kotak: "Kotak Mahindra Bank",
+  pnb: "Punjab National Bank",
+  other: "Other Bank",
+};
+
+const WALLET_LABELS: Record<string, string> = {
+  paytm: "Paytm",
+  phonepe: "PhonePe",
+  amazon_pay: "Amazon Pay",
+  mobikwik: "Mobikwik",
+};
 
 function getDeliveryDate(method: DeliveryMethod) {
   const date = new Date();
@@ -46,6 +73,28 @@ function getDeliveryDate(method: DeliveryMethod) {
     if (d !== 0 && d !== 6) count++;
   }
   return date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function luhnCheck(num: string): boolean {
+  const d = num.replace(/\D/g, "");
+  if (d.length < 13 || d.length > 19) return false;
+  let sum = 0, alt = false;
+  for (let i = d.length - 1; i >= 0; i--) {
+    let n = parseInt(d[i], 10);
+    if (alt) { n *= 2; if (n > 9) n -= 9; }
+    sum += n;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+function validateExpiry(exp: string): boolean {
+  const m = exp.match(/^(\d{2})\/(\d{2})$/);
+  if (!m) return false;
+  const mo = parseInt(m[1], 10);
+  const yr = parseInt("20" + m[2], 10);
+  if (mo < 1 || mo > 12) return false;
+  return new Date(yr, mo - 1, 1) > new Date();
 }
 
 function Field({
@@ -90,19 +139,30 @@ export function CheckoutPage() {
   });
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("standard");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
+
   const [upiId, setUpiId] = useState("");
+  const [upiError, setUpiError] = useState("");
+
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvv, setCardCvv] = useState("");
   const [cardName, setCardName] = useState("");
+  const [cardErrors, setCardErrors] = useState<{
+    number?: string; expiry?: string; cvv?: string; name?: string;
+  }>({});
+
+  const [bankChoice, setBankChoice] = useState("");
+  const [walletChoice, setWalletChoice] = useState("");
+
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
     code: string; type: "percent" | "flat"; value: number; description: string;
   }>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+
   const [pincodeStatus, setPincodeStatus] = useState<{
-    loading: boolean; available?: boolean; message?: string; zone?: string;
+    loading: boolean; available?: boolean; message?: string;
   } | null>(null);
   const line1Ref = useRef<HTMLInputElement>(null);
 
@@ -113,7 +173,7 @@ export function CheckoutPage() {
       try {
         const res = await fetch(`${BASE}/api/shipping/check?pincode=${address.pincode}`);
         const data = await res.json();
-        setPincodeStatus({ loading: false, available: data.available, message: data.message, zone: data.zone });
+        setPincodeStatus({ loading: false, available: data.available, message: data.message });
       } catch { setPincodeStatus(null); }
     }, 500);
     return () => clearTimeout(t);
@@ -168,16 +228,12 @@ export function CheckoutPage() {
       }
     } catch {}
     return () => {
-      if (!orderPlacedRef.current) {
-        sessionStorage.removeItem(BUY_NOW_KEY);
-      }
+      if (!orderPlacedRef.current) sessionStorage.removeItem(BUY_NOW_KEY);
     };
   }, []);
 
   useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      setLocation("/sign-in");
-    }
+    if (isLoaded && !isSignedIn) setLocation("/sign-in");
   }, [isLoaded, isSignedIn, setLocation]);
 
   useEffect(() => {
@@ -202,8 +258,8 @@ export function CheckoutPage() {
   }, [isLoaded, isSignedIn]);
 
   const orderItems = buyNowItems ?? cartItems;
-
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
+
   let discount = 0;
   if (appliedCoupon) {
     discount = appliedCoupon.type === "percent"
@@ -212,18 +268,42 @@ export function CheckoutPage() {
   }
   const afterDiscount = subtotal - discount;
   const shippingCost = deliveryMethod === "express" ? 499 : (afterDiscount >= 5000 ? 0 : 199);
-  const gst = Math.round(afterDiscount * 0.05);
-  const total = afterDiscount + shippingCost + gst;
+  const gst = Math.round(shippingCost * 0.18);
+  const codFee = paymentMethod === "cod" ? 50 : 0;
+  const total = afterDiscount + shippingCost + gst + codFee;
 
   function validateAddress() {
     return (
       address.name.trim().length >= 2 &&
-      address.phone.trim().length >= 10 &&
+      /^\d{10}$/.test(address.phone.trim()) &&
       address.line1.trim().length >= 3 &&
       address.city.trim().length >= 2 &&
       address.state !== "" &&
       /^\d{6}$/.test(address.pincode)
     );
+  }
+
+  function validatePayment(): boolean {
+    switch (paymentMethod) {
+      case "upi":
+        return /^[\w.\-]+@[\w]+$/.test(upiId.trim());
+      case "credit_card":
+      case "debit_card":
+        return (
+          luhnCheck(cardNumber) &&
+          validateExpiry(cardExpiry) &&
+          cardCvv.length === 3 &&
+          cardName.trim().length >= 2
+        );
+      case "net_banking":
+        return bankChoice !== "";
+      case "wallet":
+        return walletChoice !== "";
+      case "cod":
+        return true;
+      default:
+        return false;
+    }
   }
 
   async function applyCoupon() {
@@ -275,6 +355,7 @@ export function CheckoutPage() {
           discount,
           shipping: shippingCost,
           tax: gst,
+          codFee,
           total,
           isBuyNow: !!buyNowItems,
         }),
@@ -303,10 +384,7 @@ export function CheckoutPage() {
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 px-4">
           <h2 className="font-serif text-2xl text-[#7B1C2C]">Nothing to Checkout</h2>
           <p className="text-gray-500 text-sm">Your cart is empty.</p>
-          <Link
-            href="/"
-            className="bg-[#7B1C2C] text-[#FAF6EE] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
-          >
+          <Link href="/" className="bg-[#7B1C2C] text-[#FAF6EE] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm">
             Continue Shopping
           </Link>
         </div>
@@ -320,15 +398,15 @@ export function CheckoutPage() {
     <Layout>
       <div className="min-h-screen bg-[#FAF6EE] dark:bg-[#1E2329]">
         <div className="container mx-auto px-4 py-8 max-w-5xl">
-          <div className="flex items-center gap-3 mb-8">
-            <h1 className="font-serif text-3xl font-bold text-[#7B1C2C]">Checkout</h1>
+          <div className="flex items-center gap-3 mb-6 sm:mb-8">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#7B1C2C]">Checkout</h1>
             {buyNowItems && (
               <span className="text-xs bg-[#C9A84C] text-[#7B1C2C] font-bold px-2 py-1 rounded uppercase tracking-wider">Buy Now</span>
             )}
           </div>
 
           {/* Step indicator */}
-          <div className="flex items-center mb-8 overflow-x-auto pb-2">
+          <div className="flex items-center mb-6 sm:mb-8 overflow-x-auto pb-1">
             {steps.map((s, i) => {
               const num = i + 1;
               const isDone = step > num;
@@ -337,31 +415,33 @@ export function CheckoutPage() {
                 <React.Fragment key={s}>
                   <button
                     onClick={() => isDone ? setStep(num) : undefined}
-                    className="flex items-center gap-2 shrink-0"
+                    className="flex items-center gap-1.5 sm:gap-2 shrink-0"
                     disabled={!isDone}
                   >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-colors ${
                       isDone ? "bg-green-500 text-white cursor-pointer" :
                       isCurrent ? "bg-[#7B1C2C] text-white" : "bg-gray-200 text-gray-400"
                     }`}>
-                      {isDone ? <Check size={14} /> : num}
+                      {isDone ? <Check size={12} /> : num}
                     </div>
-                    <span className={`text-sm font-semibold hidden sm:block ${
+                    <span className={`text-xs sm:text-sm font-semibold hidden xs:block sm:block ${
                       isCurrent ? "text-[#7B1C2C]" : isDone ? "text-green-600" : "text-gray-400"
                     }`}>{s}</span>
                   </button>
                   {i < steps.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-2 min-w-[16px] transition-colors ${step > num ? "bg-green-400" : "bg-gray-200"}`} />
+                    <div className={`flex-1 h-0.5 mx-1.5 sm:mx-2 min-w-[12px] transition-colors ${step > num ? "bg-green-400" : "bg-gray-200"}`} />
                   )}
                 </React.Fragment>
               );
             })}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+            {/* Main content column */}
+            <div className="lg:col-span-2 min-w-0">
               <AnimatePresence mode="wait">
-                {/* Step 1: Address */}
+
+                {/* ── Step 1: Address ── */}
                 {step === 1 && (
                   <motion.div
                     key="step1"
@@ -369,11 +449,10 @@ export function CheckoutPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -16 }}
                     transition={{ duration: 0.25 }}
-                    className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-6"
+                    className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 sm:p-6"
                   >
                     <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-5">Shipping Address</h2>
 
-                    {/* Saved addresses */}
                     {savedAddresses.length > 0 && !enteringNew && (
                       <div className="mb-5 space-y-3">
                         <div className="flex items-center justify-between mb-2">
@@ -392,7 +471,7 @@ export function CheckoutPage() {
                                 line2: sa.line2 ?? "", city: sa.city, state: sa.state, pincode: sa.pincode,
                               });
                             }}
-                            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                            className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all ${
                               selectedSavedId === sa.id
                                 ? "border-[#7B1C2C] bg-[#7B1C2C]/5"
                                 : "border-[#C9A84C]/20 hover:border-[#C9A84C]/50"
@@ -428,7 +507,6 @@ export function CheckoutPage() {
                       </div>
                     )}
 
-                    {/* New address form */}
                     {(enteringNew || savedAddresses.length === 0) && (
                       <>
                         {savedAddresses.length > 0 && (
@@ -456,20 +534,18 @@ export function CheckoutPage() {
                           <Field label="Full Name *" value={address.name} onChange={v => setAddress(a => ({ ...a, name: v }))} placeholder="Priya Sharma" />
                           <Field label="Phone Number *" value={address.phone} onChange={v => setAddress(a => ({ ...a, phone: v.replace(/\D/g, "").slice(0, 10) }))} placeholder="9876543210" type="tel" />
                           <div className="sm:col-span-2">
-                            <div>
-                              <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">
-                                Address Line 1 *
-                                {GMAPS_KEY && <span className="text-[10px] text-[#C9A84C] ml-1 font-normal">(type to search)</span>}
-                              </label>
-                              <input
-                                ref={line1Ref}
-                                type="text"
-                                value={address.line1}
-                                onChange={e => setAddress(a => ({ ...a, line1: e.target.value }))}
-                                placeholder="House / Flat / Block No., Street"
-                                className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
-                              />
-                            </div>
+                            <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">
+                              Address Line 1 *
+                              {GMAPS_KEY && <span className="text-[10px] text-[#C9A84C] ml-1 font-normal">(type to search)</span>}
+                            </label>
+                            <input
+                              ref={line1Ref}
+                              type="text"
+                              value={address.line1}
+                              onChange={e => setAddress(a => ({ ...a, line1: e.target.value }))}
+                              placeholder="House / Flat / Block No., Street"
+                              className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
+                            />
                           </div>
                           <div className="sm:col-span-2">
                             <Field label="Address Line 2" value={address.line2} onChange={v => setAddress(a => ({ ...a, line2: v }))} placeholder="Area, Landmark (optional)" />
@@ -499,7 +575,7 @@ export function CheckoutPage() {
                             {pincodeStatus && (
                               <div className="flex items-center gap-1.5 mt-1.5">
                                 {pincodeStatus.loading ? (
-                                  <><Loader2 size={12} className="animate-spin text-gray-400" /><span className="text-xs text-gray-400">Checking delivery availability…</span></>
+                                  <><Loader2 size={12} className="animate-spin text-gray-400" /><span className="text-xs text-gray-400">Checking delivery…</span></>
                                 ) : pincodeStatus.available ? (
                                   <><CheckCircle size={12} className="text-green-500" /><span className="text-xs text-green-600 font-medium">{pincodeStatus.message}</span></>
                                 ) : (
@@ -551,7 +627,7 @@ export function CheckoutPage() {
                   </motion.div>
                 )}
 
-                {/* Step 2: Delivery */}
+                {/* ── Step 2: Delivery ── */}
                 {step === 2 && (
                   <motion.div
                     key="step2"
@@ -559,7 +635,7 @@ export function CheckoutPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -16 }}
                     transition={{ duration: 0.25 }}
-                    className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-6"
+                    className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 sm:p-6"
                   >
                     <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-5">Delivery Method</h2>
                     <div className="space-y-3">
@@ -582,7 +658,7 @@ export function CheckoutPage() {
                         <button
                           key={opt.id}
                           onClick={() => setDeliveryMethod(opt.id)}
-                          className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                          className={`w-full flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl border-2 transition-all text-left ${
                             deliveryMethod === opt.id
                               ? "border-[#7B1C2C] bg-[#7B1C2C]/5"
                               : "border-[#C9A84C]/20 hover:border-[#C9A84C]/50"
@@ -591,9 +667,9 @@ export function CheckoutPage() {
                           <div className={`p-2.5 rounded-full shrink-0 ${deliveryMethod === opt.id ? "bg-[#7B1C2C] text-white" : "bg-gray-100 text-gray-500"}`}>
                             <opt.Icon size={18} />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm">{opt.title}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{opt.sub}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">{opt.sub}</p>
                           </div>
                           <span className={`font-bold text-sm shrink-0 ${opt.price === "Free" ? "text-green-600" : ""}`}>{opt.price}</span>
                           {deliveryMethod === opt.id && <Check size={18} className="text-[#7B1C2C] shrink-0" />}
@@ -611,7 +687,7 @@ export function CheckoutPage() {
                   </motion.div>
                 )}
 
-                {/* Step 3: Payment */}
+                {/* ── Step 3: Payment ── */}
                 {step === 3 && (
                   <motion.div
                     key="step3"
@@ -619,19 +695,19 @@ export function CheckoutPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -16 }}
                     transition={{ duration: 0.25 }}
-                    className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-6"
+                    className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 sm:p-6"
                   >
                     <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-5">Payment Method</h2>
                     <div className="space-y-3">
-                      {([
-                        { id: "upi" as const, Icon: Smartphone, title: "UPI", sub: "Google Pay, PhonePe, Paytm, BHIM" },
-                        { id: "card" as const, Icon: CreditCard, title: "Credit / Debit Card", sub: "Visa, Mastercard, RuPay, Amex" },
-                        { id: "cod" as const, Icon: HandCoins, title: "Cash on Delivery", sub: "Pay ₹50 extra when delivered" },
-                      ]).map(opt => (
+                      {PAYMENT_OPTIONS.map(opt => (
                         <div key={opt.id}>
                           <button
-                            onClick={() => setPaymentMethod(opt.id)}
-                            className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                            onClick={() => {
+                              setPaymentMethod(opt.id);
+                              setUpiError("");
+                              setCardErrors({});
+                            }}
+                            className={`w-full flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl border-2 transition-all text-left ${
                               paymentMethod === opt.id
                                 ? "border-[#7B1C2C] bg-[#7B1C2C]/5"
                                 : "border-[#C9A84C]/20 hover:border-[#C9A84C]/50"
@@ -640,61 +716,189 @@ export function CheckoutPage() {
                             <div className={`p-2.5 rounded-full shrink-0 ${paymentMethod === opt.id ? "bg-[#7B1C2C] text-white" : "bg-gray-100 text-gray-500"}`}>
                               <opt.Icon size={18} />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm">{opt.title}</p>
-                              <p className="text-xs text-gray-500">{opt.sub}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{opt.sub}</p>
                             </div>
                             {paymentMethod === opt.id && <Check size={18} className="text-[#7B1C2C] shrink-0" />}
                           </button>
 
+                          {/* UPI input */}
                           {paymentMethod === "upi" && opt.id === "upi" && (
-                            <div className="mt-2 pl-2">
-                              <Field label="UPI ID" value={upiId} onChange={setUpiId} placeholder="name@okaxis" />
+                            <div className="mt-3 px-1">
+                              <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">UPI ID *</label>
+                              <input
+                                value={upiId}
+                                onChange={e => { setUpiId(e.target.value); setUpiError(""); }}
+                                onBlur={() => {
+                                  if (upiId.trim() && !/^[\w.\-]+@[\w]+$/.test(upiId.trim()))
+                                    setUpiError("Enter a valid UPI ID, e.g. name@okaxis");
+                                }}
+                                placeholder="name@okaxis"
+                                className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors ${upiError ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                              />
+                              {upiError && <p className="text-red-500 text-xs mt-1">{upiError}</p>}
                             </div>
                           )}
-                          {paymentMethod === "card" && opt.id === "card" && (
-                            <div className="mt-3 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                          {/* Credit / Debit card fields */}
+                          {(paymentMethod === "credit_card" || paymentMethod === "debit_card") && paymentMethod === opt.id && (
+                            <div className="mt-3 px-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div className="sm:col-span-2">
-                                <Field
-                                  label="Card Number"
-                                  value={cardNumber}
-                                  onChange={v => setCardNumber(v.replace(/\D/g, "").slice(0, 16))}
+                                <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">Card Number *</label>
+                                <input
+                                  value={cardNumber.replace(/(.{4})/g, "$1 ").trim()}
+                                  onChange={e => {
+                                    setCardNumber(e.target.value.replace(/\D/g, "").slice(0, 16));
+                                    setCardErrors(p => ({ ...p, number: undefined }));
+                                  }}
+                                  onBlur={() => {
+                                    if (cardNumber && !luhnCheck(cardNumber))
+                                      setCardErrors(p => ({ ...p, number: "Invalid card number" }));
+                                  }}
                                   placeholder="1234 5678 9012 3456"
+                                  maxLength={19}
+                                  className={`w-full border rounded-lg px-3 py-2.5 text-sm tracking-widest bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 transition-colors ${cardErrors.number ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
                                 />
+                                {cardErrors.number && <p className="text-red-500 text-xs mt-1">{cardErrors.number}</p>}
                               </div>
-                              <Field label="Name on Card" value={cardName} onChange={setCardName} placeholder="Priya Sharma" />
+                              <div>
+                                <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">Name on Card *</label>
+                                <input
+                                  value={cardName}
+                                  onChange={e => { setCardName(e.target.value); setCardErrors(p => ({ ...p, name: undefined })); }}
+                                  onBlur={() => {
+                                    if (cardName && cardName.trim().length < 2)
+                                      setCardErrors(p => ({ ...p, name: "Enter the cardholder name" }));
+                                  }}
+                                  placeholder="Priya Sharma"
+                                  className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 transition-colors ${cardErrors.name ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                />
+                                {cardErrors.name && <p className="text-red-500 text-xs mt-1">{cardErrors.name}</p>}
+                              </div>
                               <div className="grid grid-cols-2 gap-2">
-                                <Field
-                                  label="Expiry (MM/YY)"
-                                  value={cardExpiry}
-                                  onChange={v => setCardExpiry(v.replace(/[^\d/]/g, "").slice(0, 5))}
-                                  placeholder="12/27"
-                                />
-                                <Field
-                                  label="CVV"
-                                  value={cardCvv}
-                                  onChange={v => setCardCvv(v.replace(/\D/g, "").slice(0, 3))}
-                                  placeholder="•••"
-                                  type="password"
-                                />
+                                <div>
+                                  <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">Expiry (MM/YY) *</label>
+                                  <input
+                                    value={cardExpiry}
+                                    onChange={e => {
+                                      let v = e.target.value.replace(/[^\d/]/g, "").slice(0, 5);
+                                      if (v.length === 2 && !v.includes("/") && cardExpiry.length === 1) v = v + "/";
+                                      setCardExpiry(v);
+                                      setCardErrors(p => ({ ...p, expiry: undefined }));
+                                    }}
+                                    onBlur={() => {
+                                      if (cardExpiry && !validateExpiry(cardExpiry))
+                                        setCardErrors(p => ({ ...p, expiry: "Invalid or expired" }));
+                                    }}
+                                    placeholder="12/27"
+                                    maxLength={5}
+                                    className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 transition-colors ${cardErrors.expiry ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                  />
+                                  {cardErrors.expiry && <p className="text-red-500 text-xs mt-1">{cardErrors.expiry}</p>}
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">CVV *</label>
+                                  <input
+                                    value={cardCvv}
+                                    onChange={e => { setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 3)); setCardErrors(p => ({ ...p, cvv: undefined })); }}
+                                    onBlur={() => {
+                                      if (cardCvv && cardCvv.length < 3)
+                                        setCardErrors(p => ({ ...p, cvv: "CVV must be 3 digits" }));
+                                    }}
+                                    placeholder="•••"
+                                    type="password"
+                                    maxLength={3}
+                                    className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 transition-colors ${cardErrors.cvv ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                  />
+                                  {cardErrors.cvv && <p className="text-red-500 text-xs mt-1">{cardErrors.cvv}</p>}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Net Banking bank selector */}
+                          {paymentMethod === "net_banking" && opt.id === "net_banking" && (
+                            <div className="mt-3 px-1">
+                              <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">Select Bank *</label>
+                              <select
+                                value={bankChoice}
+                                onChange={e => setBankChoice(e.target.value)}
+                                className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
+                              >
+                                <option value="">Choose your bank…</option>
+                                <option value="sbi">State Bank of India (SBI)</option>
+                                <option value="hdfc">HDFC Bank</option>
+                                <option value="icici">ICICI Bank</option>
+                                <option value="axis">Axis Bank</option>
+                                <option value="kotak">Kotak Mahindra Bank</option>
+                                <option value="pnb">Punjab National Bank (PNB)</option>
+                                <option value="other">Other Bank</option>
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Wallet options */}
+                          {paymentMethod === "wallet" && opt.id === "wallet" && (
+                            <div className="mt-3 px-1">
+                              <p className="text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-2">Select Wallet *</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {[
+                                  { id: "paytm", label: "Paytm" },
+                                  { id: "phonepe", label: "PhonePe" },
+                                  { id: "amazon_pay", label: "Amazon Pay" },
+                                  { id: "mobikwik", label: "Mobikwik" },
+                                ].map(w => (
+                                  <label
+                                    key={w.id}
+                                    className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${walletChoice === w.id ? "border-[#7B1C2C] bg-[#7B1C2C]/5" : "border-[#C9A84C]/20 hover:border-[#C9A84C]/40"}`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name="wallet"
+                                      value={w.id}
+                                      checked={walletChoice === w.id}
+                                      onChange={() => setWalletChoice(w.id)}
+                                      className="accent-[#7B1C2C]"
+                                    />
+                                    <span className="text-sm font-medium">{w.label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* COD note */}
+                          {paymentMethod === "cod" && opt.id === "cod" && (
+                            <div className="mt-3 px-1">
+                              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                <HandCoins size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                <p className="text-xs text-amber-700">
+                                  <span className="font-semibold">₹50 handling fee</span> will be added to your total for Cash on Delivery. Pay the full amount in cash to the delivery partner.
+                                </p>
                               </div>
                             </div>
                           )}
                         </div>
                       ))}
                     </div>
+
                     <div className="flex gap-3 mt-6">
                       <button onClick={() => setStep(2)} className="flex-1 py-3 border border-[#C9A84C]/40 text-[#7B1C2C] font-bold uppercase tracking-wider text-sm rounded-sm hover:border-[#C9A84C] transition-colors">
                         Back
                       </button>
-                      <button onClick={() => setStep(4)} className="flex-1 bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE] py-3 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors">
+                      <button
+                        onClick={() => setStep(4)}
+                        disabled={!validatePayment()}
+                        className="flex-1 bg-[#7B1C2C] hover:bg-[#6a1826] disabled:opacity-50 disabled:cursor-not-allowed text-[#FAF6EE] py-3 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
+                      >
                         Review Order <ChevronRight size={16} />
                       </button>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Step 4: Review */}
+                {/* ── Step 4: Review ── */}
                 {step === 4 && (
                   <motion.div
                     key="step4"
@@ -705,24 +909,30 @@ export function CheckoutPage() {
                     className="space-y-4"
                   >
                     {/* Items */}
-                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-6">
+                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 sm:p-6">
                       <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-4">Order Items</h2>
                       <div className="space-y-4">
                         {orderItems.map(item => (
                           <div key={item.productId} className="flex gap-3 items-start">
-                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
                               {item.images?.[0] && (
-                                <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                                <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover"
+                                  onError={e => { e.currentTarget.style.display = "none"; }} />
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm leading-snug">{item.name}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">{item.vendorName} · Qty: {item.quantity}</p>
-                              <p className="text-xs text-gray-400">₹{item.price.toLocaleString("en-IN")} each</p>
+                              <p className="font-semibold text-sm leading-snug truncate">{item.name}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{item.vendorName}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">Qty: {item.quantity} × ₹{item.price.toLocaleString("en-IN")}</p>
                             </div>
                             <p className="font-bold text-sm shrink-0">₹{(item.price * item.quantity).toLocaleString("en-IN")}</p>
                           </div>
                         ))}
+                      </div>
+                      {/* Per-item subtotal */}
+                      <div className="border-t border-gray-100 mt-4 pt-3 flex justify-between text-sm font-semibold text-[#3D1A1A]">
+                        <span>Items subtotal</span>
+                        <span>₹{subtotal.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
 
@@ -753,7 +963,7 @@ export function CheckoutPage() {
                           <button
                             onClick={applyCoupon}
                             disabled={couponLoading}
-                            className="px-5 py-2 bg-[#C9A84C] text-[#7B1C2C] font-bold text-sm rounded-lg hover:bg-[#b59539] transition-colors disabled:opacity-60"
+                            className="px-4 sm:px-5 py-2 bg-[#C9A84C] text-[#7B1C2C] font-bold text-sm rounded-lg hover:bg-[#b59539] transition-colors disabled:opacity-60"
                           >
                             {couponLoading ? "..." : "Apply"}
                           </button>
@@ -762,9 +972,49 @@ export function CheckoutPage() {
                       {couponError && <p className="text-red-500 text-xs mt-1.5">{couponError}</p>}
                     </div>
 
-                    {/* Address + Delivery summary */}
+                    {/* Order price breakdown */}
                     <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
-                      <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm text-[#7B1C2C] mb-3">Price Breakdown</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Subtotal ({orderItems.reduce((s, i) => s + i.quantity, 0)} items)</span>
+                          <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                        </div>
+                        {discount > 0 && (
+                          <div className="flex justify-between text-green-600">
+                            <span>Coupon Discount</span>
+                            <span>− ₹{discount.toLocaleString("en-IN")}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Shipping</span>
+                          <span>{shippingCost === 0 ? <span className="text-green-600 font-semibold">Free</span> : `₹${shippingCost}`}</span>
+                        </div>
+                        {codFee > 0 && (
+                          <div className="flex justify-between text-amber-700">
+                            <span>COD Handling Fee</span>
+                            <span>₹{codFee}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">GST (18% on shipping)</span>
+                          <span>₹{gst.toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="border-t border-[#C9A84C]/20 pt-2 flex justify-between font-bold text-[#7B1C2C]">
+                          <span>Total Payable</span>
+                          <span>₹{total.toLocaleString("en-IN")}</span>
+                        </div>
+                      </div>
+                      {discount > 0 && (
+                        <p className="mt-2 text-xs text-green-600 font-semibold text-right">
+                          You save ₹{discount.toLocaleString("en-IN")}!
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Delivery details */}
+                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
+                      <div className="flex items-center justify-between mb-2">
                         <h3 className="font-semibold text-sm text-[#7B1C2C]">Delivery Details</h3>
                         <button onClick={() => setStep(1)} className="text-xs text-[#7B1C2C] font-semibold hover:underline">Edit</button>
                       </div>
@@ -772,11 +1022,35 @@ export function CheckoutPage() {
                       <p className="text-xs text-gray-500 mt-0.5">
                         {[address.line1, address.line2, address.city, address.state, address.pincode].filter(Boolean).join(", ")}
                       </p>
-                      <div className="flex items-center gap-2 mt-3 text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-2 mt-2 text-xs text-gray-600 dark:text-gray-400">
                         {deliveryMethod === "express" ? <Zap size={12} className="text-[#C9A84C]" /> : <Truck size={12} className="text-[#C9A84C]" />}
                         {deliveryMethod === "express" ? "Express" : "Standard"} · Est. {getDeliveryDate(deliveryMethod)}
-                        <span className="ml-auto font-semibold cursor-pointer text-[#7B1C2C] hover:underline" onClick={() => setStep(2)}>Change</span>
+                        <button className="ml-auto font-semibold text-[#7B1C2C] hover:underline" onClick={() => setStep(2)}>Change</button>
                       </div>
+                    </div>
+
+                    {/* Payment method summary */}
+                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-sm text-[#7B1C2C]">Payment Method</h3>
+                        <button onClick={() => setStep(3)} className="text-xs text-[#7B1C2C] font-semibold hover:underline">Change</button>
+                      </div>
+                      <p className="text-sm font-bold">{PAYMENT_OPTIONS.find(o => o.id === paymentMethod)?.title}</p>
+                      {paymentMethod === "upi" && upiId && (
+                        <p className="text-xs text-gray-500 mt-0.5">{upiId}</p>
+                      )}
+                      {(paymentMethod === "credit_card" || paymentMethod === "debit_card") && cardNumber && (
+                        <p className="text-xs text-gray-500 mt-0.5">•••• •••• •••• {cardNumber.slice(-4)}</p>
+                      )}
+                      {paymentMethod === "net_banking" && bankChoice && (
+                        <p className="text-xs text-gray-500 mt-0.5">{BANK_LABELS[bankChoice] || bankChoice}</p>
+                      )}
+                      {paymentMethod === "wallet" && walletChoice && (
+                        <p className="text-xs text-gray-500 mt-0.5">{WALLET_LABELS[walletChoice] || walletChoice}</p>
+                      )}
+                      {paymentMethod === "cod" && (
+                        <p className="text-xs text-amber-600 font-medium mt-0.5">+ ₹50 handling fee included</p>
+                      )}
                     </div>
 
                     {placeError && (
@@ -796,7 +1070,7 @@ export function CheckoutPage() {
                         className="flex-[2] bg-[#7B1C2C] hover:bg-[#6a1826] disabled:opacity-60 text-[#FAF6EE] py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
                       >
                         {placing ? (
-                          <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Placing Order…</>
+                          <><Loader2 size={14} className="animate-spin" /> Placing Order…</>
                         ) : (
                           <><Check size={16} /> Place Order · ₹{total.toLocaleString("en-IN")}</>
                         )}
@@ -804,12 +1078,13 @@ export function CheckoutPage() {
                     </div>
                   </motion.div>
                 )}
+
               </AnimatePresence>
             </div>
 
-            {/* Price sidebar */}
-            <div className="lg:col-span-1">
-              <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-6 sticky top-24">
+            {/* ── Price sidebar ── */}
+            <div className="lg:col-span-1 order-first lg:order-last">
+              <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 sm:p-6 lg:sticky lg:top-24">
                 <h2 className="font-serif text-lg font-bold text-[#7B1C2C] mb-4">Price Details</h2>
                 <div className="space-y-2.5 text-sm mb-4">
                   <div className="flex justify-between">
@@ -826,8 +1101,14 @@ export function CheckoutPage() {
                     <span className="opacity-60">Shipping</span>
                     <span>{shippingCost === 0 ? <span className="text-green-600 font-semibold">Free</span> : `₹${shippingCost}`}</span>
                   </div>
+                  {codFee > 0 && (
+                    <div className="flex justify-between text-amber-700">
+                      <span>COD Handling Fee</span>
+                      <span>₹{codFee}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
-                    <span className="opacity-60">GST (5%)</span>
+                    <span className="opacity-60">GST (18% on shipping)</span>
                     <span>₹{gst.toLocaleString("en-IN")}</span>
                   </div>
                 </div>

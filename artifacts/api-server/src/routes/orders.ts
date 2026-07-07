@@ -57,7 +57,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
       res.status(400).json({ error: "Invalid delivery method" });
       return;
     }
-    if (!["upi", "card", "cod"].includes(paymentMethod)) {
+    if (!["upi", "credit_card", "debit_card", "net_banking", "wallet", "cod"].includes(paymentMethod)) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }
@@ -130,8 +130,9 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
 
         const afterDiscount = subtotal - discount;
         const shipping = computeShipping(deliveryMethod, afterDiscount);
-        const taxAmt = Math.round(afterDiscount * 0.05);
-        const total = afterDiscount + shipping + taxAmt;
+        const taxAmt = Math.round(shipping * 0.18);
+        const codFee = paymentMethod === "cod" ? 50 : 0;
+        const total = afterDiscount + shipping + taxAmt + codFee;
 
         const [order] = await tx
           .insert(ordersTable)

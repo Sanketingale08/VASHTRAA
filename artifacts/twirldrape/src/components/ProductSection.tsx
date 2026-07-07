@@ -20,7 +20,7 @@ export interface ProductSectionProps {
   title: string;
   subtitle?: string;
   viewAllHref?: string;
-  params?: Omit<ListProductsParams, "category">;
+  params?: ListProductsParams;
   tabs?: SectionTab[];
   bg?: string;
   onQuickView?: (product: ProductSummary) => void;
@@ -88,7 +88,7 @@ export function ProductSection({
   const queryParams: ListProductsParams = {
     limit: 8,
     ...params,
-    ...(activeCategory ? { category: activeCategory } : {}),
+    ...(activeCategory ? { category: activeCategory } : params?.category ? {} : {}),
   };
 
   const { data, isLoading } = useListProducts(queryParams);
@@ -224,7 +224,12 @@ export function ProductSection({
               ) : (
                 products.map((p, i) => (
                   <div key={p.id} className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)]">
-                    <ProductCard product={p} index={i} onQuickView={onQuickView} />
+                    <ProductCard
+                      product={p}
+                      index={i}
+                      onQuickView={onQuickView}
+                      flashSaleEndMs={flashSale ? saleEndMs : undefined}
+                    />
                   </div>
                 ))
               )}

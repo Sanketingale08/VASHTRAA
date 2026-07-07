@@ -35,7 +35,7 @@ const RECENTLY_VIEWED_KEY = "twirl_recently_viewed";
 function trackRecentlyViewed(productId: string) {
   try {
     const prev: string[] = JSON.parse(localStorage.getItem(RECENTLY_VIEWED_KEY) ?? "[]");
-    const updated = [productId, ...prev.filter((id) => id !== productId)].slice(0, 8);
+    const updated = [productId, ...prev.filter((id) => id !== productId)].slice(0, 20);
     localStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(updated));
   } catch {}
 }

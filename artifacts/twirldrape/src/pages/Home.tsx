@@ -101,7 +101,7 @@ function PeacockIcon({ size = 40 }: { size?: number }) {
   );
 }
 
-function FeaturedShopsSection({ onQuickView }: { onQuickView: (p: ProductSummary) => void }) {
+function FeaturedShopsSection() {
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [scrollIdx, setScrollIdx] = useState(0);
 
@@ -379,7 +379,7 @@ export default function Home() {
       />
 
       {/* ── 2. FEATURED SHOPS ────────────────────────────── */}
-      <FeaturedShopsSection onQuickView={setQuickViewProduct} />
+      <FeaturedShopsSection />
 
       {/* ── 3. NEW ARRIVALS ──────────────────────────────── */}
       <ProductSection
@@ -451,8 +451,7 @@ export default function Home() {
       <ProductSection
         title="Frequently Bought Together"
         subtitle="Sarees that our customers love to pair and gift together"
-        tabs={PAITHANI_DESIGNER_TABS}
-        params={{ sort: "rating_desc", limit: 8 }}
+        params={{ category: "paithani", sort: "rating_desc", limit: 8 }}
         bg={CREAM}
         viewAllHref="/paithani/shop"
         onQuickView={setQuickViewProduct}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Heart, Star, Eye } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -35,9 +35,29 @@ interface ProductCardProps {
   product: ProductCardProduct;
   index?: number;
   onQuickView?: (product: ProductSummary) => void;
+  flashSaleEndMs?: number;
 }
 
-export function ProductCard({ product, index = 0, onQuickView }: ProductCardProps) {
+function CardCountdown({ endMs }: { endMs: number }) {
+  const [rem, setRem] = useState(() => Math.max(0, endMs - Date.now()));
+  useEffect(() => {
+    const id = setInterval(() => setRem(r => Math.max(0, r - 1000)), 1000);
+    return () => clearInterval(id);
+  }, [endMs]);
+  const h = Math.floor(rem / 3600000);
+  const m = Math.floor((rem % 3600000) / 60000);
+  const s = Math.floor((rem % 60000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (rem === 0) return <span className="text-[10px] font-bold text-white uppercase tracking-wide">Sale Ended</span>;
+  return (
+    <div className="flex items-center gap-1 text-[10px] font-mono font-bold text-white">
+      <span>⏱</span>
+      <span>{pad(h)}:{pad(m)}:{pad(s)}</span>
+    </div>
+  );
+}
+
+export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }: ProductCardProps) {
   const { wishlistedIds, toggle } = useWishlist();
   const { addItem } = useCart();
   const { isSignedIn } = useUser();
@@ -126,6 +146,14 @@ export function ProductCard({ product, index = 0, onQuickView }: ProductCardProp
             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
             onError={(e) => { (e.target as HTMLImageElement).src = "/images/product-1.png"; }}
           />
+
+          {/* Flash Sale Countdown Badge */}
+          {flashSaleEndMs != null && discount > 0 && (
+            <div className="absolute top-0 inset-x-0 z-20 bg-[#3D1A1A]/90 px-3 py-1.5 flex items-center justify-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#C9A84C]">⚡ Sale ends in</span>
+              <CardCountdown endMs={flashSaleEndMs} />
+            </div>
+          )}
 
           {/* Hover Overlay */}
           <div className="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/80 to-transparent flex gap-2">

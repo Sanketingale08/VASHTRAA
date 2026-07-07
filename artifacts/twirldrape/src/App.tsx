@@ -24,6 +24,9 @@ import { CheckoutPage } from "@/pages/Checkout";
 import { OrderConfirmationPage } from "@/pages/OrderConfirmation";
 import { OrderHistoryPage } from "@/pages/OrderHistory";
 import { AddressBookPage } from "@/pages/AddressBook";
+import { AccountOverviewPage } from "@/pages/account/Overview";
+import { AccountProfilePage } from "@/pages/account/Profile";
+import { AccountCouponsPage } from "@/pages/account/Coupons";
 
 const queryClient = new QueryClient();
 
@@ -165,6 +168,9 @@ function Router() {
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/orders" component={OrderHistoryPage} />
       <Route path="/orders/:id" component={OrderConfirmationPage} />
+      <Route path="/account" component={AccountOverviewPage} />
+      <Route path="/account/profile" component={AccountProfilePage} />
+      <Route path="/account/coupons" component={AccountCouponsPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />

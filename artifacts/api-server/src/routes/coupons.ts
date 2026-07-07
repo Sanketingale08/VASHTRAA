@@ -1,7 +1,16 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { couponsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { couponsTable, couponRedemptionsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
+
+const requireAuth = (req: any, res: any, next: any) => {
+  const auth = getAuth(req);
+  const userId = auth?.sessionClaims?.userId || auth?.userId;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  req.userId = userId;
+  next();
+};
 
 const router = Router();
 
@@ -57,4 +66,61 @@ router.get("/coupons/validate", async (req: any, res: any): Promise<void> => {
   }
 });
 
+router.get("/coupons/available", requireAuth, async (req: any, res: any): Promise<void> => {
+  try {
+    const rows = await db
+      .select()
+      .from(couponsTable)
+      .where(eq(couponsTable.active, true));
+
+    const now = new Date();
+    const available = rows.filter(
+      (c) =>
+        (!c.expiresAt || new Date(c.expiresAt) > now) &&
+        (c.maxUses === null || c.usedCount < c.maxUses),
+    );
+
+    res.json({
+      coupons: available.map((c) => ({
+        id: c.id,
+        code: c.code,
+        type: c.type,
+        value: c.value,
+        description: c.description,
+        expiresAt: c.expiresAt,
+        maxUses: c.maxUses,
+        usedCount: c.usedCount,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch available coupons");
+    res.status(500).json({ error: "Failed to fetch coupons" });
+  }
+});
+
+router.get("/coupons/used", requireAuth, async (req: any, res: any): Promise<void> => {
+  try {
+    const rows = await db
+      .select({
+        redemptionId: couponRedemptionsTable.id,
+        couponCode: couponsTable.code,
+        description: couponsTable.description,
+        type: couponsTable.type,
+        value: couponsTable.value,
+        orderId: couponRedemptionsTable.orderId,
+        redeemedAt: couponRedemptionsTable.redeemedAt,
+      })
+      .from(couponRedemptionsTable)
+      .innerJoin(couponsTable, eq(couponRedemptionsTable.couponId, couponsTable.id))
+      .where(eq(couponRedemptionsTable.userId, req.userId))
+      .orderBy(desc(couponRedemptionsTable.redeemedAt));
+
+    res.json({ redemptions: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch used coupons");
+    res.status(500).json({ error: "Failed to fetch used coupons" });
+  }
+});
+
 export default router;
+

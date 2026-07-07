@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, ChevronDown } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk, Show } from "@clerk/react";
@@ -270,13 +270,30 @@ export function Navbar() {
                 <Show when="signed-in">
                   <button
                     className={cn(
-                      "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                      isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                      "flex items-center justify-center w-9 h-9 rounded-full transition-all border-2",
+                      userMenuOpen
+                        ? "border-[#C9A84C]"
+                        : isDark || isDesignerDark
+                        ? "border-white/20 hover:border-white/50"
+                        : "border-[#C9A84C]/30 hover:border-[#C9A84C]",
                     )}
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     title={user?.firstName ?? "Account"}
                   >
-                    <User size={19} />
+                    {user?.imageUrl ? (
+                      <img
+                        src={user.imageUrl}
+                        alt=""
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className={cn(
+                        "text-[11px] font-bold",
+                        isDark || isDesignerDark ? "text-[#FAF6EE]" : "text-[#7B1C2C]",
+                      )}>
+                        {[user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || <User size={15} />}
+                      </span>
+                    )}
                   </button>
                   {userMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-56 bg-white text-gray-800 shadow-2xl border border-gray-100 rounded-xl py-2 z-50">
@@ -288,6 +305,13 @@ export function Navbar() {
                           {user?.primaryEmailAddress?.emailAddress}
                         </p>
                       </div>
+                      <Link
+                        href="/account"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors font-medium"
+                      >
+                        <LayoutDashboard size={14} className="text-[#C9A84C]" /> My Account
+                      </Link>
                       <Link
                         href="/orders"
                         onClick={() => setUserMenuOpen(false)}
@@ -404,6 +428,13 @@ export function Navbar() {
 
               <div className="border-t border-[#C9A84C]/20 mt-3 pt-3 space-y-1">
                 <Show when="signed-in">
+                  <Link
+                    href="/account"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE] font-semibold"
+                  >
+                    <LayoutDashboard size={16} className="text-[#C9A84C]" /> My Account
+                  </Link>
                   <Link
                     href="/orders"
                     onClick={() => setMobileMenuOpen(false)}

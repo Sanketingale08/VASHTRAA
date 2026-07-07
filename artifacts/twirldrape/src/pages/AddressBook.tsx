@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Plus, Edit2, Trash2, Check, Star, X, Loader2, CheckCircle, XCircle, ChevronLeft } from "lucide-react";
-import { Layout } from "@/components/Layout";
+import { MapPin, Plus, Edit2, Trash2, Check, Star, X, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { DashboardLayout } from "@/components/DashboardLayout";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
@@ -418,14 +418,14 @@ export function AddressBookPage() {
 
   if (!isLoaded || loading) {
     return (
-      <Layout>
-        <div className="min-h-[60vh] flex items-center justify-center">
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-24">
           <div className="text-center">
             <div className="animate-spin w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-sm opacity-60">Loading your addresses…</p>
           </div>
         </div>
-      </Layout>
+      </DashboardLayout>
     );
   }
 
@@ -445,19 +445,12 @@ export function AddressBookPage() {
     : emptyForm;
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-[#FAF6EE]">
-        <div className="container mx-auto px-4 py-10 max-w-3xl">
-
-          <div className="flex items-center gap-3 mb-8">
-            <Link href="/orders" className="text-[#7B1C2C] hover:text-[#C9A84C] transition-colors">
-              <ChevronLeft size={20} />
-            </Link>
-            <div>
-              <h1 className="font-serif text-3xl font-bold text-[#7B1C2C]">My Address Book</h1>
-              <p className="text-sm text-gray-500 mt-0.5">{addresses.length} saved address{addresses.length !== 1 ? "es" : ""}</p>
-            </div>
-          </div>
+    <DashboardLayout>
+      <div>
+        <div className="mb-6">
+          <h2 className="font-serif text-xl font-bold text-[#7B1C2C]">My Address Book</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{addresses.length} saved address{addresses.length !== 1 ? "es" : ""}</p>
+        </div>
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-600">
@@ -590,7 +583,6 @@ export function AddressBookPage() {
             )}
           </AnimatePresence>
         </div>
-      </div>
-    </Layout>
+      </DashboardLayout>
   );
 }

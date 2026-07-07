@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check, ChevronRight, Truck, Zap, CreditCard, Smartphone,
-  HandCoins, Tag, X,
+  HandCoins, Tag, X, Loader2, CheckCircle, XCircle,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
 import type { CartItem } from "@/context/CartContext";
+
+const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BUY_NOW_KEY = "twirl_buy_now";
@@ -99,6 +101,61 @@ export function CheckoutPage() {
   }>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [pincodeStatus, setPincodeStatus] = useState<{
+    loading: boolean; available?: boolean; message?: string; zone?: string;
+  } | null>(null);
+  const line1Ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!/^\d{6}$/.test(address.pincode)) { setPincodeStatus(null); return; }
+    setPincodeStatus({ loading: true });
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`${BASE}/api/shipping/check?pincode=${address.pincode}`);
+        const data = await res.json();
+        setPincodeStatus({ loading: false, available: data.available, message: data.message, zone: data.zone });
+      } catch { setPincodeStatus(null); }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [address.pincode]);
+
+  useEffect(() => {
+    if (!GMAPS_KEY || !enteringNew) return;
+    const scriptId = "google-maps-api";
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=places&loading=async`;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+    let ac: any = null;
+    const init = () => {
+      const w = window as any;
+      if (!line1Ref.current || !w.google?.maps?.places) return;
+      ac = new w.google.maps.places.Autocomplete(line1Ref.current, {
+        componentRestrictions: { country: "in" }, fields: ["address_components"], types: ["address"],
+      });
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (!place?.address_components) return;
+        let city = "", state = "", pincode = "";
+        for (const comp of place.address_components) {
+          if (comp.types.includes("locality")) city = comp.long_name;
+          if (comp.types.includes("administrative_area_level_1")) state = comp.long_name;
+          if (comp.types.includes("postal_code")) pincode = comp.long_name;
+        }
+        setAddress(a => ({ ...a, ...(city && { city }), ...(state && { state }), ...(pincode && { pincode }) }));
+      });
+    };
+    const w = window as any;
+    if (w.google?.maps?.places) { init(); }
+    else {
+      const iv = setInterval(() => { if ((window as any).google?.maps?.places) { clearInterval(iv); init(); } }, 300);
+      return () => clearInterval(iv);
+    }
+    return () => { if (ac && (window as any).google?.maps?.event) (window as any).google.maps.event.clearInstanceListeners(ac); };
+  }, [enteringNew]);
 
   useEffect(() => {
     try {
@@ -319,7 +376,12 @@ export function CheckoutPage() {
                     {/* Saved addresses */}
                     {savedAddresses.length > 0 && !enteringNew && (
                       <div className="mb-5 space-y-3">
-                        <p className="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-2">Saved Addresses</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs uppercase tracking-wider font-semibold text-gray-400">Saved Addresses</p>
+                          <Link href="/account/addresses" className="text-xs font-semibold text-[#7B1C2C] hover:text-[#C9A84C] transition-colors">
+                            Manage Addresses →
+                          </Link>
+                        </div>
                         {savedAddresses.map(sa => (
                           <button
                             key={sa.id}
@@ -394,7 +456,20 @@ export function CheckoutPage() {
                           <Field label="Full Name *" value={address.name} onChange={v => setAddress(a => ({ ...a, name: v }))} placeholder="Priya Sharma" />
                           <Field label="Phone Number *" value={address.phone} onChange={v => setAddress(a => ({ ...a, phone: v.replace(/\D/g, "").slice(0, 10) }))} placeholder="9876543210" type="tel" />
                           <div className="sm:col-span-2">
-                            <Field label="Address Line 1 *" value={address.line1} onChange={v => setAddress(a => ({ ...a, line1: v }))} placeholder="House / Flat / Block No., Street" />
+                            <div>
+                              <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">
+                                Address Line 1 *
+                                {GMAPS_KEY && <span className="text-[10px] text-[#C9A84C] ml-1 font-normal">(type to search)</span>}
+                              </label>
+                              <input
+                                ref={line1Ref}
+                                type="text"
+                                value={address.line1}
+                                onChange={e => setAddress(a => ({ ...a, line1: e.target.value }))}
+                                placeholder="House / Flat / Block No., Street"
+                                className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
+                              />
+                            </div>
                           </div>
                           <div className="sm:col-span-2">
                             <Field label="Address Line 2" value={address.line2} onChange={v => setAddress(a => ({ ...a, line2: v }))} placeholder="Area, Landmark (optional)" />
@@ -411,12 +486,28 @@ export function CheckoutPage() {
                               {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </div>
-                          <Field
-                            label="Pincode *"
-                            value={address.pincode}
-                            onChange={v => setAddress(a => ({ ...a, pincode: v.replace(/\D/g, "").slice(0, 6) }))}
-                            placeholder="400001"
-                          />
+                          <div>
+                            <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#FAF6EE] mb-1.5">Pincode *</label>
+                            <input
+                              type="text"
+                              value={address.pincode}
+                              onChange={e => setAddress(a => ({ ...a, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                              placeholder="400001"
+                              maxLength={6}
+                              className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/30 focus:border-[#7B1C2C] transition-colors"
+                            />
+                            {pincodeStatus && (
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                {pincodeStatus.loading ? (
+                                  <><Loader2 size={12} className="animate-spin text-gray-400" /><span className="text-xs text-gray-400">Checking delivery availability…</span></>
+                                ) : pincodeStatus.available ? (
+                                  <><CheckCircle size={12} className="text-green-500" /><span className="text-xs text-green-600 font-medium">{pincodeStatus.message}</span></>
+                                ) : (
+                                  <><XCircle size={12} className="text-red-400" /><span className="text-xs text-red-500">{pincodeStatus.message}</span></>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <label className="flex items-center gap-2.5 mt-4 cursor-pointer group">
                           <input

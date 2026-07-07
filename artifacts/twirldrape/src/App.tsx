@@ -23,6 +23,7 @@ import { CartPage } from "@/pages/Cart";
 import { CheckoutPage } from "@/pages/Checkout";
 import { OrderConfirmationPage } from "@/pages/OrderConfirmation";
 import { OrderHistoryPage } from "@/pages/OrderHistory";
+import { AddressBookPage } from "@/pages/AddressBook";
 
 const queryClient = new QueryClient();
 
@@ -164,6 +165,7 @@ function Router() {
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/orders" component={OrderHistoryPage} />
       <Route path="/orders/:id" component={OrderConfirmationPage} />
+      <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

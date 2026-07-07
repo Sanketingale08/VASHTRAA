@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { ordersTable, cartItemsTable, productsTable } from "@workspace/db";
+import { ordersTable, cartItemsTable, productsTable, couponsTable } from "@workspace/db";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
 const router = Router();
@@ -16,10 +16,18 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 
-const SERVER_COUPONS: Record<string, { type: "percent" | "flat"; value: number }> = {
-  SAVE10: { type: "percent", value: 10 },
-  WELCOME50: { type: "flat", value: 50 },
-};
+async function lookupCoupon(code: string): Promise<{ type: "percent" | "flat"; value: number } | null> {
+  const rows = await db
+    .select()
+    .from(couponsTable)
+    .where(eq(couponsTable.code, code))
+    .limit(1);
+  if (rows.length === 0) return null;
+  const coupon = rows[0];
+  if (!coupon.active) return null;
+  if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) return null;
+  return { type: coupon.type, value: coupon.value };
+}
 
 function computeShipping(deliveryMethod: string, afterDiscount: number): number {
   if (deliveryMethod === "express") return 499;
@@ -111,7 +119,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
 
     let discount = 0;
     const normalizedCoupon = couponCode ? String(couponCode).trim().toUpperCase() : null;
-    const coupon = normalizedCoupon ? SERVER_COUPONS[normalizedCoupon] : null;
+    const coupon = normalizedCoupon ? await lookupCoupon(normalizedCoupon) : null;
     if (coupon) {
       discount = coupon.type === "percent"
         ? Math.round(subtotal * coupon.value / 100)

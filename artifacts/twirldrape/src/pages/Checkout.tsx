@@ -13,10 +13,6 @@ import type { CartItem } from "@/context/CartContext";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BUY_NOW_KEY = "twirl_buy_now";
 
-const COUPONS: Record<string, { type: "percent" | "flat"; value: number; label: string }> = {
-  SAVE10: { type: "percent", value: 10, label: "10% off" },
-  WELCOME50: { type: "flat", value: 50, label: "₹50 off" },
-};
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
@@ -99,9 +95,10 @@ export function CheckoutPage() {
   const [cardName, setCardName] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
-    code: string; type: "percent" | "flat"; value: number; label: string;
+    code: string; type: "percent" | "flat"; value: number; description: string;
   }>(null);
   const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -172,13 +169,28 @@ export function CheckoutPage() {
     );
   }
 
-  function applyCoupon() {
+  async function applyCoupon() {
     const code = couponCode.trim().toUpperCase();
-    const c = COUPONS[code];
-    if (!c) { setCouponError("Invalid coupon code"); return; }
-    setAppliedCoupon({ code, ...c });
+    if (!code) return;
+    setCouponLoading(true);
     setCouponError("");
-    setCouponCode("");
+    try {
+      const res = await fetch(`${BASE}/api/coupons/validate?code=${encodeURIComponent(code)}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setCouponError((err as any).error || "Invalid coupon code");
+        return;
+      }
+      const data = await res.json();
+      setAppliedCoupon({ code: data.code, type: data.type, value: data.value, description: data.description });
+      setCouponCode("");
+    } catch {
+      setCouponError("Could not validate coupon. Please try again.");
+    } finally {
+      setCouponLoading(false);
+    }
   }
 
   async function placeOrder() {
@@ -632,7 +644,7 @@ export function CheckoutPage() {
                         <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                           <Check size={14} className="text-green-500 shrink-0" />
                           <span className="text-sm font-semibold text-green-700 flex-1">
-                            {appliedCoupon.code} — {appliedCoupon.label}
+                            {appliedCoupon.code} — {appliedCoupon.description}
                           </span>
                           <button onClick={() => setAppliedCoupon(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
                             <X size={14} />
@@ -649,9 +661,10 @@ export function CheckoutPage() {
                           />
                           <button
                             onClick={applyCoupon}
-                            className="px-5 py-2 bg-[#C9A84C] text-[#7B1C2C] font-bold text-sm rounded-lg hover:bg-[#b59539] transition-colors"
+                            disabled={couponLoading}
+                            className="px-5 py-2 bg-[#C9A84C] text-[#7B1C2C] font-bold text-sm rounded-lg hover:bg-[#b59539] transition-colors disabled:opacity-60"
                           >
-                            Apply
+                            {couponLoading ? "..." : "Apply"}
                           </button>
                         </div>
                       )}

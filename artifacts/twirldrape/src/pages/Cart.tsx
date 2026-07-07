@@ -10,10 +10,6 @@ import { useListProducts } from "@workspace/api-client-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const COUPONS: Record<string, { type: "percent" | "flat"; value: number; label: string }> = {
-  SAVE10: { type: "percent", value: 10, label: "10% off" },
-  WELCOME50: { type: "flat", value: 50, label: "₹50 off" },
-};
 
 const RECENTLY_VIEWED_KEY = "twirl_recently_viewed";
 
@@ -30,8 +26,9 @@ export function CartPage() {
   const { wishlistedIds, toggle: toggleWishlist } = useWishlist();
   const { isSignedIn } = useUser();
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: "percent" | "flat"; value: number; label: string }>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: "percent" | "flat"; value: number; description: string }>(null);
   const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -61,16 +58,28 @@ export function CartPage() {
   const gst = Math.round(afterDiscount * 0.05);
   const total = afterDiscount + shipping + gst;
 
-  function applyCoupon() {
+  async function applyCoupon() {
     const code = couponCode.trim().toUpperCase();
-    const c = COUPONS[code];
-    if (!c) {
-      setCouponError("Invalid coupon code");
-      return;
-    }
-    setAppliedCoupon({ code, ...c });
+    if (!code) return;
+    setCouponLoading(true);
     setCouponError("");
-    setCouponCode("");
+    try {
+      const res = await fetch(`${basePath}/api/coupons/validate?code=${encodeURIComponent(code)}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setCouponError((err as any).error || "Invalid coupon code");
+        return;
+      }
+      const data = await res.json();
+      setAppliedCoupon({ code: data.code, type: data.type, value: data.value, description: data.description });
+      setCouponCode("");
+    } catch {
+      setCouponError("Could not validate coupon. Please try again.");
+    } finally {
+      setCouponLoading(false);
+    }
   }
 
   function removeCoupon() {
@@ -253,7 +262,7 @@ export function CartPage() {
                     <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
                       <Tag size={14} />
                       <span>{appliedCoupon.code}</span>
-                      <span className="font-normal text-xs">({appliedCoupon.label})</span>
+                      <span className="font-normal text-xs">({appliedCoupon.description})</span>
                     </div>
                     <button onClick={removeCoupon} className="text-green-600 hover:text-green-800">
                       <X size={14} />
@@ -272,13 +281,13 @@ export function CartPage() {
                       />
                       <button
                         onClick={applyCoupon}
-                        className="px-4 py-2 bg-[#C9A84C] text-[#7B1C2C] text-sm font-bold rounded-md hover:bg-[#b59539] transition-colors"
+                        disabled={couponLoading}
+                        className="px-4 py-2 bg-[#C9A84C] text-[#7B1C2C] text-sm font-bold rounded-md hover:bg-[#b59539] transition-colors disabled:opacity-60"
                       >
-                        Apply
+                        {couponLoading ? "..." : "Apply"}
                       </button>
                     </div>
                     {couponError && <p className="text-xs text-red-500">{couponError}</p>}
-                    <p className="text-[10px] text-gray-400">Try: SAVE10 or WELCOME50</p>
                   </div>
                 )}
               </div>

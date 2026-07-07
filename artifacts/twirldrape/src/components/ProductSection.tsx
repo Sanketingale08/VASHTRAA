@@ -120,11 +120,21 @@ export function ProductSection({
     ? new Date(countdown).getTime()
     : Date.now() + 1000 * 60 * 60 * 23 + 1000 * 60 * 47;
 
-  const defaultViewAll = tabs
-    ? (activeCategory === "designer" ? "/designer/shop" : "/paithani/shop")
-    : "/paithani/shop";
+  function buildViewAllHref(): string {
+    if (!tabs) return viewAllHref ?? "/paithani/shop";
+    const cat = activeCategory ?? "paithani";
+    const base = `/${cat}/shop`;
+    const qs = new URLSearchParams();
+    if (queryParams.newArrival) qs.set("newArrival", "true");
+    if (queryParams.bestSeller) qs.set("bestSeller", "true");
+    if (queryParams.hasDiscount) qs.set("hasDiscount", "true");
+    if (queryParams.occasion) qs.set("occasion", queryParams.occasion);
+    if (queryParams.sort && queryParams.sort !== "rating_desc") qs.set("sort", queryParams.sort);
+    const q = qs.toString();
+    return q ? `${base}?${q}` : base;
+  }
 
-  const effectiveViewAll = viewAllHref ?? defaultViewAll;
+  const effectiveViewAll = buildViewAllHref();
 
   return (
     <section className="py-16 md:py-20" style={{ background: bg ?? IVORY }}>

@@ -203,7 +203,7 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
     <section className="py-16 md:py-20 bg-white">
       <div className="container mx-auto px-4">
         <SectionTitle subtitle="Pick up where you left off">
-          Recently Viewed
+          Recently Viewed Products
         </SectionTitle>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {products.slice(0, 8).map((p, i) => (
@@ -216,7 +216,7 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
             className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-3.5 rounded-sm border-2 transition-all hover:bg-[#7B1C2C]/5"
             style={{ borderColor: MAROON, color: MAROON }}
           >
-            Continue Shopping →
+            View All Recently Viewed Products →
           </Link>
         </div>
       </div>
@@ -374,7 +374,6 @@ export default function Home() {
         tabs={PAITHANI_DESIGNER_TABS}
         params={{ sort: "rating_desc", minRating: 4.5, limit: 8 }}
         bg={CREAM}
-        viewAllHref="/paithani/shop"
         onQuickView={setQuickViewProduct}
       />
 
@@ -388,7 +387,6 @@ export default function Home() {
         tabs={PAITHANI_DESIGNER_TABS}
         params={{ newArrival: true, sort: "newest", limit: 8 }}
         bg={IVORY}
-        viewAllHref="/paithani/shop?newArrival=true"
         onQuickView={setQuickViewProduct}
       />
 
@@ -399,18 +397,16 @@ export default function Home() {
         tabs={PAITHANI_DESIGNER_TABS}
         params={{ bestSeller: true, sort: "rating_desc", limit: 8 }}
         bg={CREAM}
-        viewAllHref="/paithani/shop?bestSeller=true"
         onQuickView={setQuickViewProduct}
       />
 
       {/* ── 5. TRENDING PRODUCTS ─────────────────────────── */}
       <ProductSection
-        title="Trending Now"
+        title="Trending Products"
         subtitle="What India's most stylish women are draping this season"
         tabs={PAITHANI_DESIGNER_TABS}
         params={{ sort: "rating_desc", minRating: 4.0, limit: 8 }}
         bg="white"
-        viewAllHref="/paithani/shop?sort=rating_desc"
         onQuickView={setQuickViewProduct}
       />
 
@@ -421,7 +417,6 @@ export default function Home() {
         tabs={PAITHANI_DESIGNER_TABS}
         params={{ occasion: "festival", sort: "rating_desc", limit: 8 }}
         bg="#FFF3E0"
-        viewAllHref="/paithani/shop?occasion=festival"
         onQuickView={setQuickViewProduct}
       />
 
@@ -432,14 +427,13 @@ export default function Home() {
         tabs={PAITHANI_DESIGNER_TABS}
         params={{ hasDiscount: true, sort: "rating_desc", limit: 8 }}
         bg="#3D1A1A"
-        viewAllHref="/paithani/shop?hasDiscount=true"
         onQuickView={setQuickViewProduct}
         flashSale
       />
 
-      {/* ── 8. RECOMMENDED FOR YOU ───────────────────────── */}
+      {/* ── 8. RECOMMENDED PRODUCTS ──────────────────────── */}
       <ProductSection
-        title="Recommended For You"
+        title="Recommended Products"
         subtitle="Curated just for you — sarees we think you'll adore"
         params={{ sort: "rating_desc", minRating: 4.5, limit: 8 }}
         bg={IVORY}

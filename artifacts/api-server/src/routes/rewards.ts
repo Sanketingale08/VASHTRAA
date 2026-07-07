@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { userProfilesTable, rewardPointsLogTable, ordersTable } from "@workspace/db";
+import { userProfilesTable, rewardPointsLogTable, referralsTable, ordersTable } from "@workspace/db";
 import { eq, desc, count, sql } from "drizzle-orm";
 
 const router = Router();
@@ -75,10 +75,8 @@ router.get("/rewards/summary", requireAuth, async (req: any, res: any): Promise<
 
     const referralCountResult = await db
       .select({ cnt: count() })
-      .from(rewardPointsLogTable)
-      .where(
-        sql`${rewardPointsLogTable.userId} = ${req.userId} AND ${rewardPointsLogTable.type} = 'bonus' AND ${rewardPointsLogTable.description} like 'Referral bonus%'`
-      );
+      .from(referralsTable)
+      .where(eq(referralsTable.referrerUserId, profile.userId));
 
     const referralCount = Number(referralCountResult[0]?.cnt ?? 0);
 
@@ -133,7 +131,7 @@ router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): 
 
     const code = referralCode.trim().toUpperCase();
 
-    // Validate: referee must have placed exactly their first order
+    // Server-side check: referee must have placed exactly their first order
     const orderCountResult = await db
       .select({ cnt: count() })
       .from(ordersTable)
@@ -146,6 +144,18 @@ router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): 
     }
     if (orderCount > 1) {
       res.status(400).json({ error: "Referral codes can only be applied on your first order" });
+      return;
+    }
+
+    // Durable idempotency check: one referral per referee (unique constraint on referrals.referred_user_id)
+    const existingReferral = await db
+      .select({ id: referralsTable.id })
+      .from(referralsTable)
+      .where(eq(referralsTable.referredUserId, req.userId))
+      .limit(1);
+
+    if (existingReferral.length > 0) {
+      res.status(409).json({ error: "You have already used a referral code" });
       return;
     }
 
@@ -167,25 +177,28 @@ router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): 
       return;
     }
 
-    const alreadyApplied = await db
-      .select({ id: rewardPointsLogTable.id })
-      .from(rewardPointsLogTable)
-      .where(
-        sql`${rewardPointsLogTable.userId} = ${referrer.userId} AND ${rewardPointsLogTable.type} = 'bonus' AND ${rewardPointsLogTable.description} = ${"Referral bonus: " + req.userId}`
-      )
+    // Fetch the referee's first order for attribution record
+    const [firstOrder] = await db
+      .select({ id: ordersTable.id })
+      .from(ordersTable)
+      .where(eq(ordersTable.userId, req.userId))
+      .orderBy(ordersTable.createdAt)
       .limit(1);
 
-    if (alreadyApplied.length > 0) {
-      res.status(409).json({ error: "This referral has already been applied" });
-      return;
-    }
-
     await db.transaction(async (tx) => {
+      // Write durable referral attribution record (unique constraint prevents duplicates)
+      await tx.insert(referralsTable).values({
+        referrerUserId: referrer.userId,
+        referredUserId: req.userId,
+        firstOrderId: firstOrder?.id ?? null,
+      });
+
+      // Credit 200 bonus points to referrer
       await tx.insert(rewardPointsLogTable).values({
         userId: referrer.userId,
         points: 200,
         type: "bonus",
-        description: `Referral bonus: ${req.userId}`,
+        description: `Referral bonus: friend joined`,
       });
 
       const newTotal = referrer.totalPoints + 200;
@@ -202,7 +215,12 @@ router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): 
     });
 
     res.json({ success: true, message: "Referral applied — 200 bonus points credited to referrer" });
-  } catch (err) {
+  } catch (err: any) {
+    // Unique constraint violation (race condition) — treat as already applied
+    if (err?.code === "23505") {
+      res.status(409).json({ error: "You have already used a referral code" });
+      return;
+    }
     req.log.error({ err }, "Failed to apply referral");
     res.status(500).json({ error: "Failed to apply referral" });
   }

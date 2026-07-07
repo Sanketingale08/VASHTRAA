@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, integer, timestamp, unique } from "drizzle-orm/pg-core";
 
 export const userProfilesTable = pgTable("user_profiles", {
   userId: text("user_id").primaryKey(),
@@ -20,5 +20,14 @@ export const rewardPointsLogTable = pgTable("reward_points_log", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const referralsTable = pgTable("referrals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  referrerUserId: text("referrer_user_id").notNull().references(() => userProfilesTable.userId),
+  referredUserId: text("referred_user_id").notNull().unique(),
+  firstOrderId: uuid("first_order_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type UserProfile = typeof userProfilesTable.$inferSelect;
 export type RewardPointsLog = typeof rewardPointsLogTable.$inferSelect;
+export type Referral = typeof referralsTable.$inferSelect;

@@ -165,7 +165,8 @@ export function Navbar() {
             </div>
 
             {/* ── Action icons (right-anchored) ── */}
-            <div className="flex items-center gap-1 sm:gap-2 ml-auto lg:ml-0 lg:w-44 xl:w-52 justify-end">
+            {/* Order: Search | Notifications | Wishlist | Cart | My Account */}
+            <div className="flex items-center gap-1 sm:gap-2 ml-auto lg:ml-0 lg:w-52 xl:w-60 justify-end">
 
               {/* Search */}
               <div ref={searchContainerRef} className="relative">
@@ -254,7 +255,44 @@ export function Navbar() {
                 )}
               </div>
 
-              {/* User account (hidden on xs) */}
+              {/* Notifications (signed-in only) */}
+              <NotificationBell isDark={isDark || isDesignerDark} />
+
+              {/* Wishlist */}
+              <Link
+                href="/wishlist"
+                className={cn(
+                  "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
+                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                )}
+                aria-label="Wishlist"
+              >
+                <Heart size={19} />
+                {wishlistCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#7B1C2C] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                    {wishlistCount > 9 ? "9+" : wishlistCount}
+                  </span>
+                )}
+              </Link>
+
+              {/* Cart */}
+              <button
+                onClick={openCart}
+                className={cn(
+                  "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
+                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                )}
+                aria-label="Cart"
+              >
+                <ShoppingBag size={19} />
+                {cartCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#7B1C2C] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </span>
+                )}
+              </button>
+
+              {/* My Account — extreme right corner (hidden on xs) */}
               <div ref={userMenuRef} className="relative hidden sm:block">
                 <Show when="signed-out">
                   <Link
@@ -344,43 +382,6 @@ export function Navbar() {
                   )}
                 </Show>
               </div>
-
-              {/* Notifications (signed-in only) */}
-              <NotificationBell isDark={isDark || isDesignerDark} />
-
-              {/* Wishlist */}
-              <Link
-                href="/wishlist"
-                className={cn(
-                  "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
-                )}
-                aria-label="Wishlist"
-              >
-                <Heart size={19} />
-                {wishlistCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#7B1C2C] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
-                    {wishlistCount > 9 ? "9+" : wishlistCount}
-                  </span>
-                )}
-              </Link>
-
-              {/* Cart */}
-              <button
-                onClick={openCart}
-                className={cn(
-                  "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
-                )}
-                aria-label="Cart"
-              >
-                <ShoppingBag size={19} />
-                {cartCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#7B1C2C] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
-                    {cartCount > 9 ? "9+" : cartCount}
-                  </span>
-                )}
-              </button>
 
             </div>
           </div>

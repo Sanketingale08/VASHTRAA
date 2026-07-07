@@ -27,6 +27,8 @@ import { AddressBookPage } from "@/pages/AddressBook";
 import { AccountOverviewPage } from "@/pages/account/Overview";
 import { AccountProfilePage } from "@/pages/account/Profile";
 import { AccountCouponsPage } from "@/pages/account/Coupons";
+import { AccountOrdersPage } from "@/pages/account/Orders";
+import { AccountWishlistPage } from "@/pages/account/AccountWishlist";
 
 const queryClient = new QueryClient();
 
@@ -168,9 +170,12 @@ function Router() {
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/orders" component={OrderHistoryPage} />
       <Route path="/orders/:id" component={OrderConfirmationPage} />
-      <Route path="/account" component={AccountOverviewPage} />
+      <Route path="/account" component={() => <Redirect to="/account/overview" />} />
+      <Route path="/account/overview" component={AccountOverviewPage} />
       <Route path="/account/profile" component={AccountProfilePage} />
       <Route path="/account/coupons" component={AccountCouponsPage} />
+      <Route path="/account/orders" component={AccountOrdersPage} />
+      <Route path="/account/wishlist" component={AccountWishlistPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />

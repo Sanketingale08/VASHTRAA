@@ -28,6 +28,15 @@ type Redemption = {
   redeemedAt: string;
 };
 
+type ExpiredCoupon = {
+  id: string;
+  code: string;
+  type: "percent" | "flat";
+  value: number;
+  description: string;
+  expiresAt: string | null;
+};
+
 function useAvailableCoupons(enabled: boolean) {
   return useQuery<{ coupons: AvailableCoupon[] }>({
     queryKey: ["coupons-available"],
@@ -49,6 +58,17 @@ function useUsedCoupons(enabled: boolean) {
       return res.json();
     },
     enabled,
+  });
+}
+
+function useExpiredCoupons() {
+  return useQuery<{ coupons: ExpiredCoupon[] }>({
+    queryKey: ["coupons-expired"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/coupons/expired`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
   });
 }
 
@@ -182,6 +202,47 @@ function RedemptionCard({ r, delay }: { r: Redemption; delay: number }) {
   );
 }
 
+function ExpiredCouponCard({ coupon, delay }: { coupon: ExpiredCoupon; delay: number }) {
+  const expiresAt = coupon.expiresAt ? new Date(coupon.expiresAt) : null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="bg-white rounded-xl border border-gray-100 p-4 relative overflow-hidden opacity-70"
+    >
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-300 rounded-l-xl" />
+      <div className="pl-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-block font-mono font-bold text-base text-gray-400 tracking-wider bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100 line-through">
+                {coupon.code}
+              </span>
+              <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                {discountLabel(coupon.type, coupon.value)}
+              </span>
+            </div>
+            <p className="text-sm text-gray-400 leading-snug">{coupon.description}</p>
+          </div>
+          <XCircle size={16} className="text-gray-300 shrink-0 mt-1" />
+        </div>
+        {expiresAt && (
+          <div className="mt-2 flex items-center gap-1 text-[11px] text-gray-400">
+            <Clock size={11} />
+            Expired{" "}
+            {expiresAt.toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 const TABS = ["Available", "Used", "Expired"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -191,9 +252,11 @@ export function AccountCouponsPage() {
 
   const { data: availableData, isLoading: availLoading } = useAvailableCoupons(!!isSignedIn);
   const { data: usedData, isLoading: usedLoading } = useUsedCoupons(!!isSignedIn);
+  const { data: expiredData, isLoading: expiredLoading } = useExpiredCoupons();
 
   const coupons = availableData?.coupons ?? [];
   const redemptions = usedData?.redemptions ?? [];
+  const expired = expiredData?.coupons ?? [];
 
   function renderContent() {
     if (activeTab === "Available") {
@@ -257,12 +320,30 @@ export function AccountCouponsPage() {
       );
     }
 
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-        <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center">
-          <XCircle size={28} className="text-gray-200" />
+    if (expiredLoading) {
+      return (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-100 h-20 animate-pulse" />
+          ))}
         </div>
-        <p className="text-gray-400 text-sm">No expired coupons to show.</p>
+      );
+    }
+    if (expired.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+          <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center">
+            <XCircle size={28} className="text-gray-200" />
+          </div>
+          <p className="text-gray-400 text-sm">No expired coupons to show.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {expired.map((c, i) => (
+          <ExpiredCouponCard key={c.id} coupon={c} delay={i * 0.05} />
+        ))}
       </div>
     );
   }
@@ -277,7 +358,6 @@ export function AccountCouponsPage() {
           </p>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 bg-white rounded-xl border border-[#C9A84C]/15 p-1 shadow-sm">
           {TABS.map((tab) => (
             <button
@@ -310,6 +390,17 @@ export function AccountCouponsPage() {
                   }`}
                 >
                   {redemptions.length}
+                </span>
+              )}
+              {tab === "Expired" && expired.length > 0 && !expiredLoading && (
+                <span
+                  className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
+                    activeTab === tab
+                      ? "bg-[#FAF6EE]/20 text-[#FAF6EE]"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {expired.length}
                 </span>
               )}
             </button>

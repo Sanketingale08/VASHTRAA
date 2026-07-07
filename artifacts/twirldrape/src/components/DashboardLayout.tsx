@@ -18,11 +18,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/account", icon: LayoutDashboard, label: "Overview", exact: true },
+  { href: "/account/overview", icon: LayoutDashboard, label: "Overview" },
   { href: "/account/profile", icon: User, label: "Profile" },
-  { href: "/orders", icon: Package, label: "My Orders" },
+  { href: "/account/orders", icon: Package, label: "My Orders" },
   { href: "/account/addresses", icon: MapPin, label: "Addresses" },
-  { href: "/wishlist", icon: Heart, label: "Wishlist" },
+  { href: "/account/wishlist", icon: Heart, label: "Wishlist" },
   { href: "/account/coupons", icon: Tag, label: "Coupons & Offers" },
   { href: "/account/rewards", icon: Gift, label: "Rewards", stub: true },
   { href: "/account/notifications", icon: Bell, label: "Notifications", stub: true },

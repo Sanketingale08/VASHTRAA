@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { motion } from "framer-motion";
-import { Camera, Save, Loader2, CheckCircle, ExternalLink, User } from "lucide-react";
+import { Camera, Save, Loader2, CheckCircle, ExternalLink } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const LANGUAGES = ["English", "Hindi", "Marathi"];
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say"];
@@ -57,7 +59,7 @@ export function AccountProfilePage() {
 
   useEffect(() => {
     if (user) {
-      const meta = (user.unsafeMetadata ?? {}) as Record<string, string>;
+      const meta = (user.publicMetadata ?? {}) as Record<string, string>;
       setForm({
         firstName: user.firstName ?? "",
         lastName: user.lastName ?? "",
@@ -83,17 +85,28 @@ export function AccountProfilePage() {
       await user.update({
         firstName: form.firstName.trim() || undefined,
         lastName: form.lastName.trim() || undefined,
-        unsafeMetadata: {
+      });
+
+      const res = await fetch(`${BASE}/api/account/profile`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           phone: form.phone.trim(),
           dateOfBirth: form.dateOfBirth,
           gender: form.gender,
           language: form.language,
-        },
+        }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to save profile");
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
-      setError(err?.errors?.[0]?.message ?? "Failed to save profile. Please try again.");
+      setError(err?.errors?.[0]?.message ?? err?.message ?? "Failed to save profile. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -123,7 +136,6 @@ export function AccountProfilePage() {
           <p className="text-sm text-gray-500 mt-0.5">Manage your personal information</p>
         </div>
 
-        {/* Avatar */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -134,7 +146,7 @@ export function AccountProfilePage() {
               <img
                 src={user.imageUrl}
                 alt={initials}
-                className="w-18 h-18 w-[72px] h-[72px] rounded-full object-cover border-2 border-[#C9A84C]/30"
+                className="w-[72px] h-[72px] rounded-full object-cover border-2 border-[#C9A84C]/30"
               />
             ) : (
               <div className="w-[72px] h-[72px] rounded-full bg-[#7B1C2C] flex items-center justify-center text-[#FAF6EE] text-xl font-bold font-serif border-2 border-[#C9A84C]/30">
@@ -172,7 +184,6 @@ export function AccountProfilePage() {
           </div>
         </motion.div>
 
-        {/* Form */}
         <motion.form
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -282,7 +293,6 @@ export function AccountProfilePage() {
           </button>
         </motion.form>
 
-        {/* Account security */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

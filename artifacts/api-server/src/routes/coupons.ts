@@ -122,5 +122,33 @@ router.get("/coupons/used", requireAuth, async (req: any, res: any): Promise<voi
   }
 });
 
+router.get("/coupons/expired", async (req: any, res: any): Promise<void> => {
+  try {
+    const now = new Date();
+    const rows = await db
+      .select()
+      .from(couponsTable)
+      .where(eq(couponsTable.active, true));
+
+    const expired = rows.filter(
+      (c) => c.expiresAt && new Date(c.expiresAt) <= now,
+    );
+
+    res.json({
+      coupons: expired.map((c) => ({
+        id: c.id,
+        code: c.code,
+        type: c.type,
+        value: c.value,
+        description: c.description,
+        expiresAt: c.expiresAt,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch expired coupons");
+    res.status(500).json({ error: "Failed to fetch expired coupons" });
+  }
+});
+
 export default router;
 

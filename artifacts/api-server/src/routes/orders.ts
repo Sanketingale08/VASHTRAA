@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { ordersTable, cartItemsTable, productsTable, couponsTable } from "@workspace/db";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -63,97 +63,116 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
     }
 
     const productIds: string[] = clientItems.map((i: any) => i.productId);
-    const dbProducts = await db
-      .select({
-        id: productsTable.id,
-        name: productsTable.name,
-        price: productsTable.price,
-        images: productsTable.images,
-        vendorName: productsTable.vendorName,
-        stock: productsTable.stock,
-      })
-      .from(productsTable)
-      .where(inArray(productsTable.id, productIds));
 
-    if (dbProducts.length !== productIds.length) {
-      res.status(400).json({ error: "One or more products not found" });
-      return;
-    }
-
-    const productMap = new Map(dbProducts.map(p => [p.id, p]));
-
-    const resolvedItems: Array<{
-      productId: string; name: string; price: number; quantity: number;
-      images: unknown; vendorName: string;
-    }> = [];
-    for (const i of clientItems) {
-      const p = productMap.get(i.productId);
-      if (!p) {
-        res.status(400).json({ error: "One or more products not found" });
-        return;
-      }
-      if (p.stock <= 0) {
-        res.status(400).json({ error: `"${p.name}" is currently out of stock` });
-        return;
-      }
-      const requestedQty = parseInt(i.quantity, 10);
-      if (!Number.isInteger(requestedQty) || requestedQty <= 0) {
-        res.status(400).json({ error: `Invalid quantity for "${p.name}"` });
-        return;
-      }
-      if (requestedQty > p.stock) {
-        res.status(400).json({ error: `Only ${p.stock} unit(s) of "${p.name}" available` });
-        return;
-      }
-      resolvedItems.push({
-        productId: p.id,
-        name: p.name,
-        price: p.price,
-        quantity: requestedQty,
-        images: p.images,
-        vendorName: p.vendorName,
-      });
-    }
-
-    const subtotal = resolvedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
-
-    let discount = 0;
     const normalizedCoupon = couponCode ? String(couponCode).trim().toUpperCase() : null;
     const coupon = normalizedCoupon ? await lookupCoupon(normalizedCoupon) : null;
-    if (coupon) {
-      discount = coupon.type === "percent"
-        ? Math.round(subtotal * coupon.value / 100)
-        : Math.min(coupon.value, subtotal);
+
+    let orderId: string;
+    try {
+      orderId = await db.transaction(async (tx) => {
+        const dbProducts = await tx
+          .select({
+            id: productsTable.id,
+            name: productsTable.name,
+            price: productsTable.price,
+            images: productsTable.images,
+            vendorName: productsTable.vendorName,
+            stock: productsTable.stock,
+          })
+          .from(productsTable)
+          .where(inArray(productsTable.id, productIds))
+          .for("update");
+
+        if (dbProducts.length !== productIds.length) {
+          throw Object.assign(new Error("One or more products not found"), { status: 400 });
+        }
+
+        const productMap = new Map(dbProducts.map(p => [p.id, p]));
+
+        const resolvedItems: Array<{
+          productId: string; name: string; price: number; quantity: number;
+          images: unknown; vendorName: string;
+        }> = [];
+
+        for (const i of clientItems) {
+          const p = productMap.get(i.productId);
+          if (!p) {
+            throw Object.assign(new Error("One or more products not found"), { status: 400 });
+          }
+          if (p.stock <= 0) {
+            throw Object.assign(new Error(`"${p.name}" is currently out of stock`), { status: 400 });
+          }
+          const requestedQty = parseInt(i.quantity, 10);
+          if (!Number.isInteger(requestedQty) || requestedQty <= 0) {
+            throw Object.assign(new Error(`Invalid quantity for "${p.name}"`), { status: 400 });
+          }
+          if (requestedQty > p.stock) {
+            throw Object.assign(new Error(`Only ${p.stock} unit(s) of "${p.name}" available`), { status: 400 });
+          }
+          resolvedItems.push({
+            productId: p.id,
+            name: p.name,
+            price: p.price,
+            quantity: requestedQty,
+            images: p.images,
+            vendorName: p.vendorName,
+          });
+        }
+
+        const subtotal = resolvedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+
+        let discount = 0;
+        if (coupon) {
+          discount = coupon.type === "percent"
+            ? Math.round(subtotal * coupon.value / 100)
+            : Math.min(coupon.value, subtotal);
+        }
+
+        const afterDiscount = subtotal - discount;
+        const shipping = computeShipping(deliveryMethod, afterDiscount);
+        const taxAmt = Math.round(afterDiscount * 0.05);
+        const total = afterDiscount + shipping + taxAmt;
+
+        const [order] = await tx
+          .insert(ordersTable)
+          .values({
+            userId: req.userId,
+            items: resolvedItems,
+            address,
+            deliveryMethod,
+            paymentMethod,
+            couponCode: coupon ? normalizedCoupon : null,
+            subtotal,
+            discount,
+            shipping,
+            tax: taxAmt,
+            total,
+            status: "confirmed",
+          })
+          .returning({ id: ordersTable.id });
+
+        for (const item of resolvedItems) {
+          await tx
+            .update(productsTable)
+            .set({ stock: sql`${productsTable.stock} - ${item.quantity}` })
+            .where(eq(productsTable.id, item.productId));
+        }
+
+        if (!isBuyNow) {
+          await tx.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
+        }
+
+        return order.id;
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
     }
 
-    const afterDiscount = subtotal - discount;
-    const shipping = computeShipping(deliveryMethod, afterDiscount);
-    const tax = Math.round(afterDiscount * 0.05);
-    const total = afterDiscount + shipping + tax;
-
-    const [order] = await db
-      .insert(ordersTable)
-      .values({
-        userId: req.userId,
-        items: resolvedItems,
-        address,
-        deliveryMethod,
-        paymentMethod,
-        couponCode: coupon ? normalizedCoupon : null,
-        subtotal,
-        discount,
-        shipping,
-        tax,
-        total,
-        status: "confirmed",
-      })
-      .returning({ id: ordersTable.id });
-
-    if (!isBuyNow) {
-      await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
-    }
-
-    res.json({ orderId: order.id });
+    res.json({ orderId });
   } catch (err) {
     req.log.error({ err }, "Failed to create order");
     res.status(500).json({ error: "Failed to create order" });

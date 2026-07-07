@@ -117,7 +117,7 @@ export function Navbar() {
         isScrolled ? "shadow-lg" : ""
       )}>
         <div className="container mx-auto px-4 lg:px-8">
-          <div className="flex items-center h-16 md:h-[70px] gap-4">
+          <div className="flex items-center h-[76px] md:h-[96px] gap-4">
 
             {/* ── Mobile hamburger ── */}
             <button
@@ -129,11 +129,11 @@ export function Navbar() {
             </button>
 
             {/* ── Logo (left-anchored, fixed width so nav stays centred) ── */}
-            <Link href="/" className="shrink-0 flex items-center group mr-auto lg:mr-0 lg:w-44 xl:w-52">
+            <Link href="/" className="shrink-0 flex items-center group mr-auto lg:mr-0">
               <img
                 src="/images/logo.png"
                 alt="TwirlDrape"
-                className="h-11 md:h-14 w-auto object-contain group-hover:opacity-90 transition-opacity"
+                className="w-[160px] md:w-[200px] lg:w-[220px] h-auto object-contain group-hover:opacity-90 transition-opacity"
               />
             </Link>
 

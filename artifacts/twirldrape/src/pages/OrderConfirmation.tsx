@@ -183,7 +183,12 @@ export function OrderConfirmationPage() {
                   <div key={`${item.productId}-${idx}`} className="flex gap-3 items-start">
                     <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-[#C9A84C]/10">
                       {item.images?.[0] && (
-                        <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                        <img
+                          src={item.images[0]}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">

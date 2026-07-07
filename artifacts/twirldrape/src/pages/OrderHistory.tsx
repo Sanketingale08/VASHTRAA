@@ -168,6 +168,7 @@ export function OrderHistoryPage() {
                                       src={item.images[0]}
                                       alt={item.name}
                                       className="w-full h-full object-cover"
+                                      onError={(e) => { e.currentTarget.style.display = "none"; }}
                                     />
                                   )}
                                 </div>

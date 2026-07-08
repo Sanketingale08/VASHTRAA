@@ -22,6 +22,12 @@ vi.mock("@workspace/db", () => {
     })),
   });
 
+  function makeWhereResult(resolveVal: unknown = undefined, returningRows: unknown[] = []) {
+    return Object.assign(Promise.resolve(resolveVal), {
+      returning: vi.fn(() => Promise.resolve(returningRows)),
+    });
+  }
+
   const txMock = {
     select: vi.fn(() => {
       const rows = state.txSelectQueue[txSelectCallCount++] ?? [];
@@ -33,15 +39,16 @@ vi.mock("@workspace/db", () => {
           state.capturedInsertValues = vals;
         }
         return {
-          returning: vi.fn(() =>
-            Promise.resolve(state.txInsertReturning),
-          ),
+          returning: vi.fn(() => Promise.resolve(state.txInsertReturning)),
+          onConflictDoNothing: vi.fn(() => Promise.resolve()),
         };
       }),
     })),
-    update: vi.fn(() => ({
+    update: vi.fn((_table: unknown) => ({
       set: vi.fn(() => ({
-        where: vi.fn(() => Promise.resolve()),
+        where: vi.fn(() =>
+          makeWhereResult(undefined, [{ totalPoints: 0, loyaltyTier: "silver" }]),
+        ),
       })),
     })),
     delete: vi.fn(() => ({
@@ -67,6 +74,10 @@ vi.mock("@workspace/db", () => {
     ordersTable: { _t: "orders", id: "id", userId: "userId" },
     productsTable: { _t: "products", id: "id", name: "name", price: "price", images: "images", vendorName: "vendorName", stock: "stock" },
     cartItemsTable: { _t: "cartItems", userId: "userId" },
+    userProfilesTable: { _t: "userProfiles", userId: "userId", referralCode: "referralCode", totalPoints: "totalPoints", lifetimePoints: "lifetimePoints", loyaltyTier: "loyaltyTier", updatedAt: "updatedAt" },
+    rewardPointsLogTable: { _t: "rewardPointsLog", userId: "userId", points: "points", type: "type", description: "description", orderId: "orderId" },
+    notificationsTable: { _t: "notifications", userId: "userId", type: "type", title: "title", body: "body", metadata: "metadata", id: "id" },
+    notificationPreferencesTable: { _t: "notificationPreferences", userId: "userId", orderUpdates: "orderUpdates", offerAlerts: "offerAlerts" },
   };
 });
 

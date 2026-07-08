@@ -164,7 +164,6 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             throw Object.assign(new Error("You have already used this coupon"), { status: 400 });
           }
 
-          // Lazy coupon-expiry notification: if coupon expires within 72h, warn once per user+coupon
           if (coupon.expiresAt) {
             const hoursLeft = (coupon.expiresAt.getTime() - Date.now()) / 3600000;
             if (hoursLeft > 0 && hoursLeft <= 72) {
@@ -260,7 +259,6 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
           await tx.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
         }
 
-        // Award loyalty points: 1 point per ₹10 of subtotal
         const earnedPoints = Math.floor(subtotal / 10);
         if (earnedPoints > 0) {
           let refCode = generateReferralCode();
@@ -287,7 +285,6 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             })
             .onConflictDoNothing();
 
-          // Atomic SQL increment — no read-then-write race
           const [updated] = await tx
             .update(userProfilesTable)
             .set({
@@ -312,7 +309,6 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
           });
         }
 
-        // Insert "Order confirmed" notification (respects preferences)
         const prefs = await tx
           .select({ orderUpdates: notificationPreferencesTable.orderUpdates })
           .from(notificationPreferencesTable)
@@ -383,8 +379,88 @@ router.get("/orders/:orderId", requireAuth, async (req: any, res: any): Promise<
   }
 });
 
+// POST /orders/:orderId/cancel
+router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { reason } = req.body;
+
+  if (!reason || !String(reason).trim()) {
+    res.status(400).json({ error: "A cancellation reason is required" });
+    return;
+  }
+
+  try {
+    try {
+      await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            status: ordersTable.status,
+            items: ordersTable.items,
+          })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.status === "cancelled") {
+          throw Object.assign(new Error("Order is already cancelled"), { status: 400 });
+        }
+
+        const cancellableStatuses = ["confirmed", "processing"];
+        if (!cancellableStatuses.includes(order.status)) {
+          throw Object.assign(
+            new Error(`Cannot cancel an order with status "${order.status}". Only confirmed or processing orders can be cancelled.`),
+            { status: 400 }
+          );
+        }
+
+        await tx
+          .update(ordersTable)
+          .set({
+            status: "cancelled",
+            cancelReason: String(reason).trim(),
+            updatedAt: new Date(),
+          })
+          .where(eq(ordersTable.id, orderId));
+
+        const items = order.items as Array<{ productId: string; quantity: number }>;
+        for (const item of items) {
+          await tx
+            .update(productsTable)
+            .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
+            .where(eq(productsTable.id, item.productId));
+        }
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to cancel order");
+    res.status(500).json({ error: "Failed to cancel order" });
+  }
+});
+
+// Keep backward-compat PATCH alias
 router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): Promise<void> => {
   const { orderId } = req.params;
+  const reason = req.body?.reason ?? "Cancelled by customer";
+
   try {
     try {
       await db.transaction(async (tx) => {
@@ -418,7 +494,11 @@ router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any):
 
         await tx
           .update(ordersTable)
-          .set({ status: "cancelled" })
+          .set({
+            status: "cancelled",
+            cancelReason: String(reason).trim(),
+            updatedAt: new Date(),
+          })
           .where(eq(ordersTable.id, orderId));
 
         const items = order.items as Array<{ productId: string; quantity: number }>;
@@ -445,6 +525,161 @@ router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any):
   } catch (err) {
     req.log.error({ err }, "Failed to cancel order");
     res.status(500).json({ error: "Failed to cancel order" });
+  }
+});
+
+// POST /orders/:orderId/return
+router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { reason, itemNotes } = req.body;
+
+  if (!reason || !String(reason).trim()) {
+    res.status(400).json({ error: "A return reason is required" });
+    return;
+  }
+
+  try {
+    try {
+      await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            status: ordersTable.status,
+            deliveredAt: ordersTable.deliveredAt,
+            updatedAt: ordersTable.updatedAt,
+          })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.status !== "delivered") {
+          throw Object.assign(
+            new Error(`Returns are only allowed for delivered orders. Current status: "${order.status}".`),
+            { status: 400 }
+          );
+        }
+
+        // Use deliveredAt if available; fall back to updatedAt (last status change proxy)
+        const deliveryTimestamp = order.deliveredAt
+          ? new Date(order.deliveredAt)
+          : new Date(order.updatedAt);
+
+        const daysSinceDelivery = (Date.now() - deliveryTimestamp.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSinceDelivery > 7) {
+          throw Object.assign(
+            new Error("Return window has closed. Returns are only accepted within 7 days of delivery."),
+            { status: 400 }
+          );
+        }
+
+        // Combine reason + optional item-level notes into returnReason JSON
+        const returnData = {
+          reason: String(reason).trim(),
+          itemNotes: itemNotes && typeof itemNotes === "object" ? itemNotes : undefined,
+        };
+
+        await tx
+          .update(ordersTable)
+          .set({
+            status: "return_requested",
+            returnReason: JSON.stringify(returnData),
+          })
+          .where(eq(ordersTable.id, orderId));
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to request return");
+    res.status(500).json({ error: "Failed to request return" });
+  }
+});
+
+// POST /orders/:orderId/refund
+router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { method } = req.body;
+
+  if (!method || !["original_payment", "store_credit"].includes(method)) {
+    res.status(400).json({ error: "Refund method must be 'original_payment' or 'store_credit'" });
+    return;
+  }
+
+  try {
+    try {
+      await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            status: ordersTable.status,
+            refundStatus: ordersTable.refundStatus,
+          })
+          .from(ordersTable)
+          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        const refundableStatuses = ["cancelled", "return_requested"];
+        if (!refundableStatuses.includes(order.status)) {
+          throw Object.assign(
+            new Error(`Refunds can only be requested for cancelled or return-requested orders. Current status: "${order.status}".`),
+            { status: 400 }
+          );
+        }
+
+        if (order.refundStatus) {
+          throw Object.assign(
+            new Error(`A refund has already been ${order.refundStatus === "pending" ? "requested" : order.refundStatus} for this order.`),
+            { status: 400 }
+          );
+        }
+
+        await tx
+          .update(ordersTable)
+          .set({
+            refundStatus: "pending",
+            refundMethod: method,
+            updatedAt: new Date(),
+          })
+          .where(eq(ordersTable.id, orderId));
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to request refund");
+    res.status(500).json({ error: "Failed to request refund" });
   }
 });
 

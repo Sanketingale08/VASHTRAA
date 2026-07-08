@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { CartProvider } from "@/context/CartContext";
+import { OrdersProvider } from "@/context/OrdersContext";
 import { CartDrawer } from "@/components/CartDrawer";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
@@ -238,9 +239,11 @@ function ClerkProviderWithRoutes() {
         <TooltipProvider>
           <WishlistProvider>
             <CartProvider>
-              <Router />
-              <CartDrawer />
-              <Toaster />
+              <OrdersProvider>
+                <Router />
+                <CartDrawer />
+                <Toaster />
+              </OrdersProvider>
             </CartProvider>
           </WishlistProvider>
         </TooltipProvider>

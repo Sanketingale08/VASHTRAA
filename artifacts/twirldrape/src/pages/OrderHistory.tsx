@@ -4,6 +4,7 @@ import { useUser } from "@clerk/react";
 import { motion } from "framer-motion";
 import { Package, ChevronRight, ShoppingBag } from "lucide-react";
 import { Layout } from "@/components/Layout";
+import { useOrdersContext } from "@/context/OrdersContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -30,11 +31,13 @@ const statusColors: Record<string, string> = {
   shipped: "bg-purple-100 text-purple-700",
   delivered: "bg-teal-100 text-teal-700",
   cancelled: "bg-red-100 text-red-700",
+  return_requested: "bg-orange-100 text-orange-700",
 };
 
 export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?: boolean }) {
   const { isSignedIn, isLoaded } = useUser();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { patches, invalidateAt } = useOrdersContext();
+  const [rawOrders, setRawOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -48,11 +51,16 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
       .then(async r => {
         if (!r.ok) throw new Error("Failed to load orders");
         const data = await r.json();
-        setOrders(data.orders ?? []);
+        setRawOrders(data.orders ?? []);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, invalidateAt]);
+
+  // Merge in any optimistic patches applied from the order detail page
+  const orders = rawOrders.map(o =>
+    patches[o.id] ? { ...o, ...patches[o.id] } : o
+  );
 
   if (!isLoaded || loading) {
     return (
@@ -141,7 +149,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
                             <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full capitalize ${statusClass}`}>
-                              {order.status}
+                              {order.status.replace(/_/g, " ")}
                             </span>
                             <span className="text-xs text-gray-400">
                               {placedAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}

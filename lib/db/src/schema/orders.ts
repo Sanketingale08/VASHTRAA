@@ -14,7 +14,13 @@ export const ordersTable = pgTable("orders", {
   tax: integer("tax").notNull(),
   total: integer("total").notNull(),
   status: text("status").notNull().default("confirmed"),
+  cancelReason: text("cancel_reason"),
+  returnReason: text("return_reason"),
+  refundStatus: text("refund_status"),
+  refundMethod: text("refund_method"),
+  deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export type Order = typeof ordersTable.$inferSelect;

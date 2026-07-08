@@ -130,66 +130,6 @@ export default function Contact() {
     <Layout>
       <div className="bg-[#FAF6EE] min-h-screen">
 
-        {/* ── Hero ──────────────────────────────────────────────────────── */}
-        <div className="relative bg-[#7B1C2C] overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-10"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            }}
-          />
-          <div className="relative z-10 container mx-auto px-4 py-20 md:py-28 text-center">
-            <motion.p
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-[#C9A84C] uppercase tracking-[0.35em] text-xs font-bold mb-4"
-            >
-              Get In Touch
-            </motion.p>
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="font-serif text-4xl md:text-6xl text-[#FAF6EE] font-bold tracking-wide mb-6"
-            >
-              We're Here to Help You
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-[#E8D5B7] text-base md:text-lg max-w-2xl mx-auto leading-relaxed mb-10"
-            >
-              Have questions about our Paithani or Designer Sarees? Need assistance with your order or want to become a seller? Our team is ready to help.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            >
-              <a
-                href="#contact-form"
-                className="inline-flex items-center gap-2 bg-[#C9A84C] text-[#7B1C2C] px-8 py-3.5 text-sm font-bold uppercase tracking-[0.15em] rounded-sm shadow-lg hover:bg-[#FAF6EE] transition-colors duration-300"
-              >
-                <HeadphonesIcon size={16} /> Contact Support
-              </a>
-              <Link
-                href="/account"
-                className="inline-flex items-center gap-2 border-2 border-[#C9A84C]/60 text-[#FAF6EE] px-8 py-3.5 text-sm font-bold uppercase tracking-[0.15em] rounded-sm hover:border-[#C9A84C] hover:bg-[#C9A84C]/10 transition-all duration-300"
-              >
-                <Store size={16} /> Become a Seller
-              </Link>
-            </motion.div>
-            <div className="mt-10 flex items-center justify-center gap-3">
-              <div className="h-px w-16 bg-[#C9A84C]/50" />
-              <div className="w-2 h-2 rounded-full bg-[#C9A84C]" />
-              <div className="h-px w-16 bg-[#C9A84C]/50" />
-            </div>
-          </div>
-        </div>
-
         {/* ── Contact Information Cards ──────────────────────────────── */}
         <section className="container mx-auto px-4 py-16 md:py-20">
           <motion.div

@@ -700,7 +700,7 @@ export default function ProductDetail() {
   ];
 
   const shopPath = product.vendorId
-    ? `${categoryPath}?vendorId=${product.vendorId}`
+    ? `/stores/${product.vendorId}`
     : categoryPath;
 
   return (

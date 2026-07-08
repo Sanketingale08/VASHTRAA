@@ -298,16 +298,29 @@ export function Navbar() {
               {/* My Account — extreme right corner (hidden on xs) */}
               <div ref={userMenuRef} className="relative hidden sm:block">
                 <Show when="signed-out">
-                  <Link
-                    href="/sign-in"
-                    className={cn(
-                      "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                      isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
-                    )}
-                    title="Sign In"
-                  >
-                    <User size={19} />
-                  </Link>
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href="/seller/register"
+                      className={cn(
+                        "hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors border",
+                        isDark || isDesignerDark
+                          ? "border-[#C9A84C]/40 text-[#C9A84C] hover:bg-white/10"
+                          : "border-[#C9A84C]/50 text-[#7B1C2C] hover:bg-[#C9A84C]/10"
+                      )}
+                    >
+                      <Store size={11} /> Sell
+                    </Link>
+                    <Link
+                      href="/sign-in"
+                      className={cn(
+                        "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
+                        isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                      )}
+                      title="Sign In"
+                    >
+                      <User size={19} />
+                    </Link>
+                  </div>
                 </Show>
                 <Show when="signed-in">
                   <button
@@ -360,6 +373,13 @@ export function Navbar() {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
                       >
                         <ClipboardList size={14} className="text-[#C9A84C]" /> My Orders
+                      </Link>
+                      <Link
+                        href="/seller/dashboard"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                      >
+                        <Store size={14} className="text-[#C9A84C]" /> Seller Panel
                       </Link>
                       <Link
                         href="/wishlist"
@@ -471,6 +491,14 @@ export function Navbar() {
                   )}
                 </Link>
                 <Show when="signed-out">
+                  <Link
+                    href="/seller/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors font-semibold"
+                    style={{ color: "#C9A84C" }}
+                  >
+                    <Store size={16} className="text-[#C9A84C]" /> Become a Vendor
+                  </Link>
                   <Link
                     href="/sign-in"
                     onClick={() => setMobileMenuOpen(false)}

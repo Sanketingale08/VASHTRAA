@@ -38,6 +38,8 @@ import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
+import SellerProfile from "@/pages/seller/SellerProfile";
+import VendorStore from "@/pages/VendorStore";
 import { SellerGuard } from "@/components/SellerGuard";
 
 const queryClient = new QueryClient();
@@ -210,6 +212,10 @@ function Router() {
       <Route path="/seller/dashboard" component={() => (
         <SellerGuard><SellerDashboard /></SellerGuard>
       )} />
+      <Route path="/seller/profile" component={() => (
+        <SellerGuard><SellerProfile /></SellerGuard>
+      )} />
+      <Route path="/stores/:vendorId" component={VendorStore} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

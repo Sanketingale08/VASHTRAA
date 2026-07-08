@@ -261,7 +261,7 @@ export default function OrderDetailScreen() {
             <View style={[s.successCircle, { backgroundColor: "#E8F5EE" }]}>
               <Ionicons name="checkmark-circle" size={44} color="#22A66A" />
             </View>
-            <Text style={s.successTitle}>Order Confirmed!</Text>
+            <Text testID="order-confirmed-title" style={s.successTitle}>Order Confirmed!</Text>
             <Text style={s.successSub}>Thank you for shopping with TwirlDrape.</Text>
           </View>
         )}
@@ -273,7 +273,7 @@ export default function OrderDetailScreen() {
           <View style={s.metaRow}>
             <View style={s.metaBox}>
               <Text style={s.metaKey}>Order ID</Text>
-              <Text style={[s.metaVal, { fontFamily: "DMSans_400Regular", fontSize: 10 }]} numberOfLines={1}>{order.id}</Text>
+              <Text testID="order-id-value" style={[s.metaVal, { fontFamily: "DMSans_400Regular", fontSize: 10 }]} numberOfLines={1}>{order.id}</Text>
             </View>
             <View style={s.metaBox}>
               <Text style={s.metaKey}>Placed On</Text>

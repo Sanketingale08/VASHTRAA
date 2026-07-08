@@ -1,0 +1,1 @@
+- [E2E stock-aware product selection](e2e-product-selection.md) — tests must query /api/products and pick in-stock product; never rely on first explore-page card being available

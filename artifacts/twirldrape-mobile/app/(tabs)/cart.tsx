@@ -152,7 +152,7 @@ export default function CartScreen() {
                           <Ionicons name="add" size={14} color={colors.foreground} />
                         </Pressable>
                       </View>
-                      <Pressable onPress={() => removeFromCart(item.productId)} style={s.removeBtn} hitSlop={8}>
+                      <Pressable testID={`cart-remove-btn-${item.productId}`} onPress={() => removeFromCart(item.productId)} style={s.removeBtn} hitSlop={8}>
                         <Ionicons name="trash-outline" size={18} color={colors.destructive} />
                       </Pressable>
                     </View>

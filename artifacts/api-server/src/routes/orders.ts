@@ -76,7 +76,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
       res.status(400).json({ error: "Invalid delivery method" });
       return;
     }
-    if (!["upi", "credit_card", "debit_card", "net_banking", "wallet", "cod"].includes(paymentMethod)) {
+    if (!["upi", "card", "credit_card", "debit_card", "net_banking", "wallet", "cod"].includes(paymentMethod)) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }

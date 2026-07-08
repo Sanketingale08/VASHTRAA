@@ -562,21 +562,21 @@ export default function CheckoutScreen() {
                       </Pressable>
                     )}
                     <Text style={s.label}>Full Name *</Text>
-                    <TextInput style={s.inputBox} value={address.name} onChangeText={(v) => setAddress((a) => ({ ...a, name: v }))} placeholder="Priya Sharma" placeholderTextColor={colors.mutedForeground + "88"} />
+                    <TextInput testID="checkout-name" style={s.inputBox} value={address.name} onChangeText={(v) => setAddress((a) => ({ ...a, name: v }))} onChange={(e: any) => { const v = e?.nativeEvent?.text ?? e?.target?.value ?? ""; if (v) setAddress((a) => ({ ...a, name: v })); }} placeholder="Priya Sharma" placeholderTextColor={colors.mutedForeground + "88"} />
                     <Text style={s.label}>Phone Number *</Text>
-                    <TextInput style={s.inputBox} value={address.phone} onChangeText={(v) => setAddress((a) => ({ ...a, phone: v.replace(/\D/g, "").slice(0, 10) }))} placeholder="9876543210" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="phone-pad" />
+                    <TextInput testID="checkout-phone" style={s.inputBox} value={address.phone} onChangeText={(v) => setAddress((a) => ({ ...a, phone: v.replace(/\D/g, "").slice(0, 10) }))} onChange={(e: any) => { const v = (e?.nativeEvent?.text ?? e?.target?.value ?? "").replace(/\D/g, "").slice(0, 10); if (v) setAddress((a) => ({ ...a, phone: v })); }} placeholder="9876543210" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="phone-pad" />
                     <Text style={s.label}>Address Line 1 *</Text>
-                    <TextInput style={s.inputBox} value={address.line1} onChangeText={(v) => setAddress((a) => ({ ...a, line1: v }))} placeholder="House / Flat / Block No., Street" placeholderTextColor={colors.mutedForeground + "88"} />
+                    <TextInput testID="checkout-line1" style={s.inputBox} value={address.line1} onChangeText={(v) => setAddress((a) => ({ ...a, line1: v }))} onChange={(e: any) => { const v = e?.nativeEvent?.text ?? e?.target?.value ?? ""; if (v) setAddress((a) => ({ ...a, line1: v })); }} placeholder="House / Flat / Block No., Street" placeholderTextColor={colors.mutedForeground + "88"} />
                     <Text style={s.label}>Address Line 2</Text>
-                    <TextInput style={s.inputBox} value={address.line2} onChangeText={(v) => setAddress((a) => ({ ...a, line2: v }))} placeholder="Area, Landmark (optional)" placeholderTextColor={colors.mutedForeground + "88"} />
+                    <TextInput testID="checkout-line2" style={s.inputBox} value={address.line2} onChangeText={(v) => setAddress((a) => ({ ...a, line2: v }))} onChange={(e: any) => { const v = e?.nativeEvent?.text ?? e?.target?.value ?? ""; setAddress((a) => ({ ...a, line2: v })); }} placeholder="Area, Landmark (optional)" placeholderTextColor={colors.mutedForeground + "88"} />
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.label}>City *</Text>
-                        <TextInput style={s.inputBox} value={address.city} onChangeText={(v) => setAddress((a) => ({ ...a, city: v }))} placeholder="Mumbai" placeholderTextColor={colors.mutedForeground + "88"} />
+                        <TextInput testID="checkout-city" style={s.inputBox} value={address.city} onChangeText={(v) => setAddress((a) => ({ ...a, city: v }))} onChange={(e: any) => { const v = e?.nativeEvent?.text ?? e?.target?.value ?? ""; if (v) setAddress((a) => ({ ...a, city: v })); }} placeholder="Mumbai" placeholderTextColor={colors.mutedForeground + "88"} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={s.label}>Pincode *</Text>
-                        <TextInput style={s.inputBox} value={address.pincode} onChangeText={(v) => setAddress((a) => ({ ...a, pincode: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="400001" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" />
+                        <TextInput testID="checkout-pincode" style={s.inputBox} value={address.pincode} onChangeText={(v) => setAddress((a) => ({ ...a, pincode: v.replace(/\D/g, "").slice(0, 6) }))} onChange={(e: any) => { const v = (e?.nativeEvent?.text ?? e?.target?.value ?? "").replace(/\D/g, "").slice(0, 6); if (v) setAddress((a) => ({ ...a, pincode: v })); }} placeholder="400001" placeholderTextColor={colors.mutedForeground + "88"} />
                       </View>
                     </View>
                     <Text style={s.label}>State *</Text>
@@ -585,6 +585,7 @@ export default function CheckoutScreen() {
                         {INDIAN_STATES.map((st) => (
                           <Pressable
                             key={st}
+                            testID={`state-chip-${st.replace(/ /g, "-")}`}
                             onPress={() => setAddress((a) => ({ ...a, state: st }))}
                             style={{
                               paddingHorizontal: 12,
@@ -779,6 +780,7 @@ export default function CheckoutScreen() {
         )}
         {step === 1 && (
           <Pressable
+            testID="checkout-continue-1"
             style={[s.primaryBtn, !validateAddress() && { opacity: 0.5 }]}
             onPress={async () => {
               if (!validateAddress()) return;
@@ -805,17 +807,17 @@ export default function CheckoutScreen() {
           </Pressable>
         )}
         {step === 2 && (
-          <Pressable style={s.primaryBtn} onPress={() => setStep(3)}>
+          <Pressable testID="checkout-continue-2" style={s.primaryBtn} onPress={() => setStep(3)}>
             <Text style={s.primaryBtnText}>Continue to Payment</Text>
           </Pressable>
         )}
         {step === 3 && (
-          <Pressable style={s.primaryBtn} onPress={() => setStep(4)}>
+          <Pressable testID="checkout-continue-3" style={s.primaryBtn} onPress={() => setStep(4)}>
             <Text style={s.primaryBtnText}>Review Order</Text>
           </Pressable>
         )}
         {step === 4 && (
-          <Pressable style={[s.primaryBtn, placing && { opacity: 0.6 }]} onPress={placeOrder} disabled={placing}>
+          <Pressable testID="checkout-place-order" style={[s.primaryBtn, placing && { opacity: 0.6 }]} onPress={placeOrder} disabled={placing}>
             {placing
               ? <ActivityIndicator color={colors.primaryForeground} />
               : <Text style={s.primaryBtnText}>Place Order · ₹{total.toLocaleString("en-IN")}</Text>

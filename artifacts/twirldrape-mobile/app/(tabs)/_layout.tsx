@@ -5,9 +5,10 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, Text, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
@@ -39,6 +40,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
+  const { totalItems } = useCart();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -46,6 +48,23 @@ function ClassicTabLayout() {
   const safeAreaInsets = useSafeAreaInsets();
 
   return (
+    <>
+      {/* Accessible cart count for E2E tests — visually hidden */}
+      <Text
+        testID="cart-badge-count"
+        accessibilityElementsHidden
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+          fontSize: 1,
+          pointerEvents: "none",
+        }}
+      >
+        {String(totalItems)}
+      </Text>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -114,6 +133,7 @@ function ClassicTabLayout() {
         name="cart"
         options={{
           title: "Cart",
+          tabBarBadge: totalItems > 0 ? totalItems : undefined,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="bag" tintColor={color} size={24} />
@@ -135,6 +155,7 @@ function ClassicTabLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }
 

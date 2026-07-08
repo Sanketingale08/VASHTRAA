@@ -62,7 +62,7 @@ function CategoryCard({ card, index }: { card: typeof CATEGORY_CARDS[0]; index: 
       variants={fadeUp}
       whileHover={{ y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="relative group rounded-2xl overflow-hidden min-h-[380px] md:min-h-[440px] flex flex-col justify-end cursor-pointer shadow-lg hover:shadow-2xl transition-shadow duration-500"
+      className="relative group rounded-2xl overflow-hidden min-h-[240px] md:min-h-[280px] flex flex-col justify-end cursor-pointer shadow-lg hover:shadow-2xl transition-shadow duration-500"
       style={{ background: card.bg }}
     >
       <img
@@ -195,32 +195,9 @@ export default function NewArrivals() {
       </section>
 
       {/* ── Category Cards ─────────────────────────────────────────── */}
-      <section className="py-16 md:py-20" style={{ background: IVORY }}>
+      <section className="py-10 md:py-14" style={{ background: IVORY }}>
         <div className="container mx-auto px-4">
-          <motion.div
-            custom={0}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeUp}
-            className="text-center mb-12"
-          >
-            <p className="text-xs font-bold uppercase tracking-[0.3em] mb-3" style={{ color: GOLD }}>
-              Browse by Category
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <span className="flex-1 max-w-[80px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
-              <h2 className="font-serif text-3xl md:text-4xl font-bold" style={{ color: MAROON }}>
-                Choose Your Style
-              </h2>
-              <span className="flex-1 max-w-[80px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
-            </div>
-            <p className="mt-3 text-sm text-gray-500 max-w-md mx-auto">
-              Tap a category to explore the latest arrivals in that collection.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
             {CATEGORY_CARDS.map((card, i) => (
               <CategoryCard key={card.id} card={card} index={i} />
             ))}

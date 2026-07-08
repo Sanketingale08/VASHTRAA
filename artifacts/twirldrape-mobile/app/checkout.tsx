@@ -98,6 +98,7 @@ export default function CheckoutScreen() {
   }>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [couponOrderError, setCouponOrderError] = useState("");
 
   useEffect(() => {
     if (params.buyNow) {
@@ -183,6 +184,7 @@ export default function CheckoutScreen() {
   async function placeOrder() {
     setPlacing(true);
     setPlaceError("");
+    setCouponOrderError("");
     try {
       const token = await getToken();
       const res = await fetch(`${API_BASE}/api/orders`, {
@@ -210,8 +212,18 @@ export default function CheckoutScreen() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error || "Failed to place order");
+        const errData = await res.json().catch(() => ({}));
+        const msg: string = (errData as any).error || "Failed to place order";
+        const isCouponRelated =
+          (errData as any).couponInvalid ||
+          /coupon/i.test(msg) ||
+          /usage limit/i.test(msg) ||
+          /already used/i.test(msg);
+        if (isCouponRelated && appliedCoupon) {
+          setCouponOrderError(msg);
+          return;
+        }
+        throw new Error(msg);
       }
       const data = await res.json();
       if (!buyNowItem) await clearCart();
@@ -732,13 +744,23 @@ export default function CheckoutScreen() {
                 <View style={s.card}>
                   <Text style={[s.label, { marginTop: 0, marginBottom: 10 }]}>Apply Coupon</Text>
                   {appliedCoupon ? (
-                    <View style={s.appliedCoupon}>
-                      <Ionicons name="pricetag" size={16} color="#22A66A" />
-                      <Text style={s.appliedCouponText}>"{appliedCoupon.code}" applied</Text>
-                      <Pressable onPress={() => setAppliedCoupon(null)}>
-                        <Ionicons name="close-circle" size={18} color="#22A66A" />
-                      </Pressable>
-                    </View>
+                    <>
+                      <View style={[s.appliedCoupon, couponOrderError ? { backgroundColor: colors.destructive + "15", borderColor: colors.destructive + "33", borderWidth: 1 } : {}]}>
+                        <Ionicons name={couponOrderError ? "close-circle" : "pricetag"} size={16} color={couponOrderError ? colors.destructive : "#22A66A"} />
+                        <Text style={[s.appliedCouponText, couponOrderError ? { color: colors.destructive } : {}]}>"{appliedCoupon.code}" applied</Text>
+                        <Pressable onPress={() => { setAppliedCoupon(null); setCouponOrderError(""); }}>
+                          <Ionicons name="close-circle" size={18} color={couponOrderError ? colors.destructive : "#22A66A"} />
+                        </Pressable>
+                      </View>
+                      {couponOrderError ? (
+                        <View style={{ backgroundColor: colors.destructive + "10", borderRadius: 8, padding: 10, marginTop: 6 }}>
+                          <Text style={{ fontFamily: "DMSans_400Regular", fontSize: 12, color: colors.destructive, marginBottom: 6 }}>{couponOrderError}</Text>
+                          <Pressable onPress={() => { setAppliedCoupon(null); setCouponOrderError(""); }}>
+                            <Text style={{ fontFamily: "DMSans_700Bold", fontSize: 12, color: colors.destructive, textDecorationLine: "underline" }}>Remove coupon and continue without discount</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </>
                   ) : (
                     <>
                       <View style={s.couponRow}>

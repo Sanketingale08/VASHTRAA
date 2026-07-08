@@ -86,6 +86,11 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
     const normalizedCoupon = couponCode ? String(couponCode).trim().toUpperCase() : null;
     const coupon = normalizedCoupon ? await lookupCoupon(normalizedCoupon) : null;
 
+    if (normalizedCoupon && !coupon) {
+      res.status(400).json({ error: `Coupon "${normalizedCoupon}" is invalid, expired, or no longer active. Please remove it or try a different code.`, couponInvalid: true });
+      return;
+    }
+
     let orderId: string;
     try {
       orderId = await db.transaction(async (tx) => {

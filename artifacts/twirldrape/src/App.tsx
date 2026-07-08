@@ -32,6 +32,7 @@ import { AccountWishlistPage } from "@/pages/account/AccountWishlist";
 import { AccountRewardsPage } from "@/pages/account/Rewards";
 import { AccountNotificationsPage } from "@/pages/account/Notifications";
 import Contact from "@/pages/Contact";
+import NewArrivals from "@/pages/NewArrivals";
 
 const queryClient = new QueryClient();
 
@@ -176,6 +177,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/collections" component={Collections} />
+      <Route path="/new-arrivals" component={NewArrivals} />
       <Route path="/paithani" component={Paithani} />
       <Route path="/paithani/shop" component={PaithaniShop} />
       <Route path="/designer" component={Designer} />

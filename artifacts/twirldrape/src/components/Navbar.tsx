@@ -84,7 +84,7 @@ export function Navbar() {
   const isHome = location === "/";
   // Pages that share the Landing Page's light ivory header:
   // Home, Collections, New Arrivals (/paithani), About Us (#), Contact (#)
-  const isLightHeader = isHome || location.startsWith("/collections") || isPaithani || location.startsWith("/contact");
+  const isLightHeader = isHome || location.startsWith("/collections") || isPaithani || location.startsWith("/contact") || location.startsWith("/new-arrivals");
   const isDark = !isLightHeader && !isDesigner;
   const isDesignerDark = isDesigner;
 
@@ -97,7 +97,7 @@ export function Navbar() {
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/collections", label: "Collections" },
-    { href: "/paithani/shop", label: "New Arrivals" },
+    { href: "/new-arrivals", label: "New Arrivals" },
     { href: "#", label: "About Us" },
     { href: "/contact", label: "Contact" },
   ];

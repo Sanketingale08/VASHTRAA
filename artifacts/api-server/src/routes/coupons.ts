@@ -12,7 +12,213 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 
+const requireAdminKey = (req: any, res: any, next: any) => {
+  const adminKey = process.env.ADMIN_API_KEY;
+  const provided = req.headers["x-admin-key"];
+  if (!adminKey || !provided || provided !== adminKey) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  next();
+};
+
 const router = Router();
+
+// ─── Admin endpoints ──────────────────────────────────────────────────────────
+
+// GET /admin/coupons — list all coupons (admin)
+router.get("/admin/coupons", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const rows = await db
+      .select()
+      .from(couponsTable)
+      .orderBy(desc(couponsTable.createdAt));
+
+    res.json({
+      coupons: rows.map((c) => ({
+        id: c.id,
+        code: c.code,
+        type: c.type,
+        value: c.value,
+        description: c.description,
+        active: c.active,
+        expiresAt: c.expiresAt,
+        maxUses: c.maxUses ?? null,
+        usedCount: c.usedCount,
+        createdAt: c.createdAt,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to list coupons");
+    res.status(500).json({ error: "Failed to list coupons" });
+  }
+});
+
+// POST /admin/coupons — create a new coupon (admin)
+router.post("/admin/coupons", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { code, type, value, description, active, expiresAt, maxUses } = req.body;
+
+  if (!code || typeof code !== "string" || !code.trim()) {
+    res.status(400).json({ error: "code is required" });
+    return;
+  }
+  if (!type || !["percent", "flat"].includes(type)) {
+    res.status(400).json({ error: "type must be 'percent' or 'flat'" });
+    return;
+  }
+  if (typeof value !== "number" || value <= 0) {
+    res.status(400).json({ error: "value must be a positive number" });
+    return;
+  }
+  if (maxUses !== undefined && maxUses !== null) {
+    if (!Number.isInteger(maxUses) || maxUses < 1) {
+      res.status(400).json({ error: "maxUses must be a positive integer" });
+      return;
+    }
+  }
+
+  try {
+    const [created] = await db
+      .insert(couponsTable)
+      .values({
+        code: code.trim().toUpperCase(),
+        type,
+        value,
+        description: description ?? "",
+        active: active !== false,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        maxUses: maxUses ?? null,
+      })
+      .returning();
+
+    res.status(201).json({
+      coupon: {
+        id: created.id,
+        code: created.code,
+        type: created.type,
+        value: created.value,
+        description: created.description,
+        active: created.active,
+        expiresAt: created.expiresAt,
+        maxUses: created.maxUses ?? null,
+        usedCount: created.usedCount,
+        createdAt: created.createdAt,
+      },
+    });
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      res.status(409).json({ error: "A coupon with that code already exists" });
+      return;
+    }
+    req.log.error({ err }, "Failed to create coupon");
+    res.status(500).json({ error: "Failed to create coupon" });
+  }
+});
+
+// PUT /admin/coupons/:id — update an existing coupon (admin)
+router.put("/admin/coupons/:id", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  const { code, type, value, description, active, expiresAt, maxUses } = req.body;
+
+  const existing = await db
+    .select()
+    .from(couponsTable)
+    .where(eq(couponsTable.id, id))
+    .limit(1);
+
+  if (existing.length === 0) {
+    res.status(404).json({ error: "Coupon not found" });
+    return;
+  }
+
+  if (type !== undefined && !["percent", "flat"].includes(type)) {
+    res.status(400).json({ error: "type must be 'percent' or 'flat'" });
+    return;
+  }
+  if (value !== undefined && (typeof value !== "number" || value <= 0)) {
+    res.status(400).json({ error: "value must be a positive number" });
+    return;
+  }
+  if (maxUses !== undefined && maxUses !== null) {
+    if (!Number.isInteger(maxUses) || maxUses < 1) {
+      res.status(400).json({ error: "maxUses must be a positive integer" });
+      return;
+    }
+  }
+
+  const patch: Record<string, any> = {};
+  if (code !== undefined) patch.code = code.trim().toUpperCase();
+  if (type !== undefined) patch.type = type;
+  if (value !== undefined) patch.value = value;
+  if (description !== undefined) patch.description = description;
+  if (active !== undefined) patch.active = active;
+  if (expiresAt !== undefined) patch.expiresAt = expiresAt ? new Date(expiresAt) : null;
+  if (maxUses !== undefined) patch.maxUses = maxUses;
+
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({ error: "No fields provided to update" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(couponsTable)
+      .set(patch)
+      .where(eq(couponsTable.id, id))
+      .returning();
+
+    res.json({
+      coupon: {
+        id: updated.id,
+        code: updated.code,
+        type: updated.type,
+        value: updated.value,
+        description: updated.description,
+        active: updated.active,
+        expiresAt: updated.expiresAt,
+        maxUses: updated.maxUses ?? null,
+        usedCount: updated.usedCount,
+        createdAt: updated.createdAt,
+      },
+    });
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      res.status(409).json({ error: "A coupon with that code already exists" });
+      return;
+    }
+    req.log.error({ err }, "Failed to update coupon");
+    res.status(500).json({ error: "Failed to update coupon" });
+  }
+});
+
+// DELETE /admin/coupons/:id — deactivate a coupon (admin)
+router.delete("/admin/coupons/:id", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    const rows = await db
+      .select({ id: couponsTable.id })
+      .from(couponsTable)
+      .where(eq(couponsTable.id, id))
+      .limit(1);
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Coupon not found" });
+      return;
+    }
+
+    await db
+      .update(couponsTable)
+      .set({ active: false })
+      .where(eq(couponsTable.id, id));
+
+    res.json({ success: true, message: "Coupon deactivated" });
+  } catch (err) {
+    req.log.error({ err }, "Failed to deactivate coupon");
+    res.status(500).json({ error: "Failed to deactivate coupon" });
+  }
+});
+
+// ─── Shopper endpoints ────────────────────────────────────────────────────────
 
 router.get("/coupons/validate", async (req: any, res: any): Promise<void> => {
   const raw = req.query.code;
@@ -151,4 +357,3 @@ router.get("/coupons/expired", async (req: any, res: any): Promise<void> => {
 });
 
 export default router;
-

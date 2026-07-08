@@ -3,6 +3,7 @@ import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 
 const router = Router();
 
@@ -44,37 +45,6 @@ router.get("/vendors", async (req, res) => {
   }
 });
 
-router.get("/vendors/:id", async (req: any, res: any) => {
-  const { id } = req.params;
-  try {
-    const rows = await db
-      .select()
-      .from(vendorsTable)
-      .where(eq(vendorsTable.id, id))
-      .limit(1);
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Vendor not found" });
-    }
-
-    const v = rows[0];
-    res.json({
-      id: v.id,
-      name: v.name,
-      location: v.location,
-      rating: v.rating,
-      sareesCount: v.sareesCount,
-      avatar: v.avatar,
-      bio: v.bio ?? null,
-      tagline: v.tagline ?? null,
-      contactEmail: v.contactEmail ?? null,
-    });
-  } catch (err) {
-    req.log.error({ err }, "Failed to fetch vendor");
-    res.status(500).json({ error: "Failed to fetch vendor" });
-  }
-});
-
 router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
   try {
     const rows = await db
@@ -105,6 +75,37 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
   } catch (err) {
     req.log.error({ err }, "Failed to fetch vendor profile");
     res.status(500).json({ error: "Failed to fetch vendor profile" });
+  }
+});
+
+router.get("/vendors/:id", async (req: any, res: any) => {
+  const { id } = req.params;
+  try {
+    const rows = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id))
+      .limit(1);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Vendor not found" });
+    }
+
+    const v = rows[0];
+    res.json({
+      id: v.id,
+      name: v.name,
+      location: v.location,
+      rating: v.rating,
+      sareesCount: v.sareesCount,
+      avatar: v.avatar,
+      bio: v.bio ?? null,
+      tagline: v.tagline ?? null,
+      contactEmail: v.contactEmail ?? null,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch vendor");
+    res.status(500).json({ error: "Failed to fetch vendor" });
   }
 });
 
@@ -154,7 +155,7 @@ router.post("/vendors", requireAuth, async (req: any, res: any) => {
   }
 });
 
-router.patch("/vendors/:id", requireAuth, async (req: any, res: any) => {
+router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
   const { id } = req.params;
   const { name, location, bio, gstin, contactEmail, tagline, avatar } = req.body;
 

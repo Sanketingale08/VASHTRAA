@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import {
-  Phone, Mail, Clock, Building2, MessageCircle, MessageSquare,
+  Phone, Mail, Clock,
   Instagram, Facebook, Youtube, Twitter, Linkedin,
   Package, RotateCcw, CreditCard, Truck, AlertCircle,
   XCircle, Star, Store, Send, Paperclip, CheckCircle2,
@@ -56,42 +56,6 @@ const CONTACT_CARDS = [
       { icon: <Mail size={14} />, label: "Business", value: "sales@twirldrape.com" },
       { icon: <Mail size={14} />, label: "Vendors", value: "vendors@twirldrape.com" },
     ],
-  },
-  {
-    icon: <Building2 size={24} />,
-    title: "Corporate Office",
-    color: "from-[#7B1C2C]/10 to-[#7B1C2C]/5",
-    border: "border-[#7B1C2C]/20",
-    iconBg: "bg-[#7B1C2C]",
-    items: [
-      { icon: <Building2 size={14} />, label: "Address", value: "12, Silk Weavers Lane, Yerawada, Pune" },
-      { icon: <Store size={14} />, label: "Landmark", value: "Near Aga Khan Palace" },
-      { icon: <Package size={14} />, label: "PIN Code", value: "411 006" },
-    ],
-  },
-  {
-    icon: <MessageCircle size={24} />,
-    title: "Live Chat",
-    color: "from-[#C9A84C]/10 to-[#C9A84C]/5",
-    border: "border-[#C9A84C]/30",
-    iconBg: "bg-[#C9A84C]",
-    items: [
-      { icon: <MessageCircle size={14} />, label: "Chat", value: "Chat with Support" },
-      { icon: <Clock size={14} />, label: "Available", value: "Mon–Fri, 10 AM – 6 PM IST" },
-    ],
-    cta: { label: "Start Chat", href: "#" },
-  },
-  {
-    icon: <MessageSquare size={24} />,
-    title: "WhatsApp Support",
-    color: "from-[#25D366]/10 to-[#25D366]/5",
-    border: "border-[#25D366]/30",
-    iconBg: "bg-[#25D366]",
-    items: [
-      { icon: <Phone size={14} />, label: "Number", value: "+91 91234 56789" },
-      { icon: <Clock size={14} />, label: "Response", value: "Typically within 1 hour" },
-    ],
-    cta: { label: "Quick Chat", href: "https://wa.me/919123456789" },
   },
   {
     icon: <Globe size={24} />,

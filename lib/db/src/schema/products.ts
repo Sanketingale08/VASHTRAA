@@ -26,6 +26,7 @@ export const productsTable = pgTable("products", {
   rating: real("rating").notNull().default(4.5),
   reviewCount: integer("review_count").notNull().default(0),
   stock: integer("stock").notNull().default(10),
+  active: boolean("active").notNull().default(true),
 });
 
 export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true });

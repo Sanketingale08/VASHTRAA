@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { ordersTable, productsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, asc } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 
 const router = Router();
@@ -88,6 +88,43 @@ router.get("/seller/dashboard", requireVendorAuth, async (req: any, res: any) =>
   } catch (err: any) {
     req.log?.error({ err }, "seller/dashboard failed");
     res.status(500).json({ error: "Failed to load dashboard" });
+  }
+});
+
+router.get("/seller/products", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  try {
+    const products = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.vendorId, vendorId))
+      .orderBy(asc(productsTable.name));
+
+    res.json({
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        originalPrice: p.originalPrice ?? null,
+        category: p.category,
+        fabric: p.fabric,
+        color: p.color,
+        occasion: p.occasion,
+        vendorId: p.vendorId ?? null,
+        vendorName: p.vendorName,
+        images: Array.isArray(p.images) ? p.images : [],
+        isBestSeller: p.isBestSeller,
+        isNewArrival: p.isNewArrival,
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+        stock: p.stock,
+        active: p.active,
+      })),
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/products failed");
+    res.status(500).json({ error: "Failed to load products" });
   }
 });
 

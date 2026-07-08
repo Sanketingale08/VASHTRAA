@@ -39,6 +39,9 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
 import SellerProfile from "@/pages/seller/SellerProfile";
+import SellerProducts from "@/pages/seller/SellerProducts";
+import SellerProductNew from "@/pages/seller/SellerProductNew";
+import SellerProductEdit from "@/pages/seller/SellerProductEdit";
 import VendorStore from "@/pages/VendorStore";
 import { SellerGuard } from "@/components/SellerGuard";
 
@@ -214,6 +217,15 @@ function Router() {
       )} />
       <Route path="/seller/profile" component={() => (
         <SellerGuard><SellerProfile /></SellerGuard>
+      )} />
+      <Route path="/seller/products/new" component={() => (
+        <SellerGuard><SellerProductNew /></SellerGuard>
+      )} />
+      <Route path="/seller/products/:id/edit" component={() => (
+        <SellerGuard><SellerProductEdit /></SellerGuard>
+      )} />
+      <Route path="/seller/products" component={() => (
+        <SellerGuard><SellerProducts /></SellerGuard>
       )} />
       <Route path="/stores/:vendorId" component={VendorStore} />
       <Route path="/sign-in/*?" component={SignInPage} />

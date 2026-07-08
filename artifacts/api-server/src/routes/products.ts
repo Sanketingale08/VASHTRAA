@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
+import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 
 const router = Router();
 
@@ -33,6 +34,9 @@ router.get("/products", async (req, res) => {
     const offset = (pageNum - 1) * limitNum;
 
     const conditions = [];
+
+    // Customer-facing: only show active products
+    conditions.push(eq(productsTable.active, true));
 
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
@@ -322,6 +326,87 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
   }
 });
 
+router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+  const { name, description, category, fabric, color, occasion, price, originalPrice, stock, images, isBestSeller, isNewArrival } = req.body;
+
+  if (!name || !String(name).trim()) { res.status(400).json({ error: "Name is required" }); return; }
+  if (!price || isNaN(Number(price)) || Number(price) <= 0) { res.status(400).json({ error: "Valid price is required" }); return; }
+  if (!category) { res.status(400).json({ error: "Category is required" }); return; }
+
+  try {
+    const [product] = await db
+      .insert(productsTable)
+      .values({
+        name: String(name).trim(),
+        description: description ? String(description).trim() : "",
+        category: category as any,
+        fabric: (fabric ?? "silk") as any,
+        color: (color ?? "red") as any,
+        occasion: (occasion ?? "festival") as any,
+        price: parseInt(price),
+        originalPrice: originalPrice ? parseInt(originalPrice) : null,
+        stock: stock != null ? parseInt(stock) : 10,
+        images: Array.isArray(images) ? images.filter(Boolean) : [],
+        isBestSeller: Boolean(isBestSeller),
+        isNewArrival: Boolean(isNewArrival),
+        vendorId: req.vendorId,
+        vendorName: req.vendor.name,
+        active: true,
+      })
+      .returning();
+
+    res.status(201).json(normalizeProduct(product));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create product");
+    res.status(500).json({ error: "Failed to create product" });
+  }
+});
+
+router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  const { name, description, category, fabric, color, occasion, price, originalPrice, stock, images, isBestSeller, isNewArrival } = req.body;
+
+  try {
+    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
+    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+
+    const updates: Record<string, any> = {};
+    if (name !== undefined) updates.name = String(name).trim();
+    if (description !== undefined) updates.description = String(description).trim();
+    if (category !== undefined) updates.category = category;
+    if (fabric !== undefined) updates.fabric = fabric;
+    if (color !== undefined) updates.color = color;
+    if (occasion !== undefined) updates.occasion = occasion;
+    if (price !== undefined) updates.price = parseInt(price);
+    if (originalPrice !== undefined) updates.originalPrice = originalPrice ? parseInt(originalPrice) : null;
+    if (stock !== undefined) updates.stock = parseInt(stock);
+    if (images !== undefined) updates.images = Array.isArray(images) ? images.filter(Boolean) : [];
+    if (isBestSeller !== undefined) updates.isBestSeller = Boolean(isBestSeller);
+    if (isNewArrival !== undefined) updates.isNewArrival = Boolean(isNewArrival);
+
+    const [updated] = await db.update(productsTable).set(updates).where(eq(productsTable.id, id)).returning();
+    res.json(normalizeProduct(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to update product");
+    res.status(500).json({ error: "Failed to update product" });
+  }
+});
+
+router.delete("/products/:id", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
+    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+    await db.update(productsTable).set({ active: false }).where(eq(productsTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to deactivate product");
+    res.status(500).json({ error: "Failed to deactivate product" });
+  }
+});
+
 function normalizeProduct(p: typeof productsTable.$inferSelect) {
   return {
     id: p.id,
@@ -341,6 +426,7 @@ function normalizeProduct(p: typeof productsTable.$inferSelect) {
     rating: p.rating,
     reviewCount: p.reviewCount,
     stock: p.stock,
+    active: p.active,
   };
 }
 

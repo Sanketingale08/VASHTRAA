@@ -260,4 +260,37 @@ describe("POST /api/orders coupon handling", () => {
     expect((state.capturedInsertValues as any).discount).toBe(0);
     expect((state.capturedInsertValues as any).couponCode).toBeNull();
   });
+
+  it("rejects the order with 400 when coupon has reached its maxUses limit", async () => {
+    state.dbSelectRows = [{ ...VALID_COUPON, maxUses: 5, usedCount: 5 }];
+    state.txSelectQueue = [
+      [PRODUCT],
+      [{ usedCount: 5, maxUses: 5 }],
+    ];
+
+    const res = await request(app)
+      .post("/api/orders")
+      .send({ ...VALID_ORDER_BODY, couponCode: "SAVE10" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/usage limit/i);
+    expect(state.capturedInsertValues).toBeNull();
+  });
+
+  it("rejects the order with 400 when the same user tries to redeem the same coupon twice", async () => {
+    state.dbSelectRows = [VALID_COUPON];
+    state.txSelectQueue = [
+      [PRODUCT],
+      [{ usedCount: 1, maxUses: null }],
+      [{ id: "existing-redemption-uuid" }],
+    ];
+
+    const res = await request(app)
+      .post("/api/orders")
+      .send({ ...VALID_ORDER_BODY, couponCode: "SAVE10" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/already used/i);
+    expect(state.capturedInsertValues).toBeNull();
+  });
 });

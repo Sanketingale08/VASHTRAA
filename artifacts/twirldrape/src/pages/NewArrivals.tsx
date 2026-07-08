@@ -115,32 +115,14 @@ function SkeletonCard() {
 export default function NewArrivals() {
   const [quickViewProduct, setQuickViewProduct] = useState<ProductSummary | null>(null);
 
-  const { data: paithaniData, isLoading: paithaniLoading } = useListProducts({
+  const { data, isLoading } = useListProducts({
     newArrival: true,
-    category: "paithani",
     sort: "newest",
-    limit: 4,
+    limit: 12,
   });
 
-  const { data: designerData, isLoading: designerLoading } = useListProducts({
-    newArrival: true,
-    category: "designer",
-    sort: "newest",
-    limit: 4,
-  });
-
-  const paithaniProducts = paithaniData?.products ?? [];
-  const designerProducts = designerData?.products ?? [];
-
-  const allProducts: ProductSummary[] = [];
-  const maxLen = Math.max(paithaniProducts.length, designerProducts.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (paithaniProducts[i]) allProducts.push(paithaniProducts[i]);
-    if (designerProducts[i]) allProducts.push(designerProducts[i]);
-  }
-
-  const totalCount = (paithaniData?.total ?? 0) + (designerData?.total ?? 0);
-  const isLoading = paithaniLoading || designerLoading;
+  const allProducts = data?.products ?? [];
+  const totalCount = data?.total ?? 0;
 
   return (
     <Layout>

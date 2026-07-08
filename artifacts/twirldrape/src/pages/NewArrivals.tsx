@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
@@ -126,68 +126,6 @@ export default function NewArrivals() {
 
   return (
     <Layout>
-      {/* ── Hero ──────────────────────────────────────────────────── */}
-      <section
-        className="relative overflow-hidden py-20 md:py-28"
-        style={{ background: MAROON }}
-      >
-        <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-10 pointer-events-none" style={{ background: GOLD }} />
-        <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full opacity-10 pointer-events-none" style={{ background: GOLD }} />
-
-        <div className="relative z-10 container mx-auto px-4 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold uppercase tracking-[0.25em] mb-6"
-            style={{ color: GOLD, borderColor: GOLD + "55", background: GOLD + "15" }}
-          >
-            <Sparkles size={12} /> Just Landed This Season
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 leading-tight"
-          >
-            New Arrivals
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-white/65 text-base md:text-lg max-w-xl mx-auto mb-8"
-          >
-            Fresh weaves and contemporary designs from India's finest artisans —
-            explore what's new across Paithani and Designer collections.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-wrap items-center justify-center gap-4"
-          >
-            <Link
-              href="/paithani/shop?newArrival=true"
-              className="inline-flex items-center gap-2 px-7 py-3.5 font-bold text-sm uppercase tracking-widest rounded-sm transition-colors duration-300 hover:bg-[#b8943d]"
-              style={{ background: GOLD, color: MAROON }}
-            >
-              New Paithani →
-            </Link>
-            <Link
-              href="/designer/shop?newArrival=true"
-              className="inline-flex items-center gap-2 px-7 py-3.5 font-bold text-sm uppercase tracking-widest border-2 rounded-sm transition-colors duration-300 hover:bg-white/10"
-              style={{ borderColor: GOLD, color: GOLD }}
-            >
-              New Designer →
-            </Link>
-          </motion.div>
-        </div>
-      </section>
-
       {/* ── Category Cards ─────────────────────────────────────────── */}
       <section className="py-10 md:py-14" style={{ background: IVORY }}>
         <div className="container mx-auto px-4">

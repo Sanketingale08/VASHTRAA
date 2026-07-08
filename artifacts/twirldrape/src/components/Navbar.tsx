@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk, Show } from "@clerk/react";
@@ -449,6 +449,13 @@ export function Navbar() {
                     className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
                   >
                     <ClipboardList size={16} className="text-[#C9A84C]" /> My Orders
+                  </Link>
+                  <Link
+                    href="/seller/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                  >
+                    <Store size={16} className="text-[#C9A84C]" /> Seller Panel
                   </Link>
                 </Show>
                 <Link

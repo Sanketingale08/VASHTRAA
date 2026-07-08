@@ -71,6 +71,13 @@
       "when": 1752019200000,
       "tag": "0009_add_status_history",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1752100000000,
+      "tag": "0010_add_vendor_status",
+      "breakpoints": true
     }
   ]
 }

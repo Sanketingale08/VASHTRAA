@@ -34,6 +34,10 @@ import { AccountRewardsPage } from "@/pages/account/Rewards";
 import { AccountNotificationsPage } from "@/pages/account/Notifications";
 import Contact from "@/pages/Contact";
 import NewArrivals from "@/pages/NewArrivals";
+import AdminLogin from "@/pages/AdminLogin";
+import SellerRegister from "@/pages/SellerRegister";
+import SellerDashboard from "@/pages/seller/SellerDashboard";
+import { SellerGuard } from "@/components/SellerGuard";
 
 const queryClient = new QueryClient();
 
@@ -199,6 +203,11 @@ function Router() {
       <Route path="/account/notifications" component={AccountNotificationsPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/contact" component={Contact} />
+      <Route path="/admin/login" component={AdminLogin} />
+      <Route path="/seller/register" component={SellerRegister} />
+      <Route path="/seller/dashboard" component={() => (
+        <SellerGuard><SellerDashboard /></SellerGuard>
+      )} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

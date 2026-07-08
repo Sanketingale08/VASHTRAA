@@ -2,6 +2,8 @@ import { pgTable, text, integer, real, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export const VENDOR_STATUSES = ["pending", "approved", "suspended"] as const;
+
 export const vendorsTable = pgTable("vendors", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -11,6 +13,10 @@ export const vendorsTable = pgTable("vendors", {
   avatar: text("avatar").notNull().default("/images/artisan-1.png"),
   bio: text("bio"),
   ownerId: text("owner_id"),
+  status: text("status").$type<typeof VENDOR_STATUSES[number]>().notNull().default("approved"),
+  gstin: text("gstin"),
+  contactEmail: text("contact_email"),
+  tagline: text("tagline"),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

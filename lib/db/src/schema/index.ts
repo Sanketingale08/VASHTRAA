@@ -7,3 +7,4 @@ export * from "./saved_addresses";
 export * from "./coupons";
 export * from "./rewards";
 export * from "./notifications";
+export * from "./support";

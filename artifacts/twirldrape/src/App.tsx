@@ -32,6 +32,7 @@ import { AccountOrdersPage } from "@/pages/account/Orders";
 import { AccountWishlistPage } from "@/pages/account/AccountWishlist";
 import { AccountRewardsPage } from "@/pages/account/Rewards";
 import { AccountNotificationsPage } from "@/pages/account/Notifications";
+import { AccountSupportPage } from "@/pages/account/Support";
 import Contact from "@/pages/Contact";
 import NewArrivals from "@/pages/NewArrivals";
 import AdminLogin from "@/pages/AdminLogin";
@@ -207,6 +208,7 @@ function Router() {
       <Route path="/account/wishlist" component={AccountWishlistPage} />
       <Route path="/account/rewards" component={AccountRewardsPage} />
       <Route path="/account/notifications" component={AccountNotificationsPage} />
+      <Route path="/account/support" component={AccountSupportPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/contact" component={Contact} />
       <Route path="/admin/login" component={AdminLogin} />

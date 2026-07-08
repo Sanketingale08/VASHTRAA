@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation, Redirect } from "wouter";
 import { useUser } from "@clerk/react";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
 import {
@@ -17,6 +18,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 const navItems = [
   { href: "/account/overview", icon: LayoutDashboard, label: "Overview" },
   { href: "/account/profile", icon: User, label: "Profile" },
@@ -26,7 +29,7 @@ const navItems = [
   { href: "/account/coupons", icon: Tag, label: "Coupons & Offers" },
   { href: "/account/rewards", icon: Gift, label: "Rewards" },
   { href: "/account/notifications", icon: Bell, label: "Notifications" },
-  { href: "/account/support", icon: HelpCircle, label: "Support", stub: true },
+  { href: "/account/support", icon: HelpCircle, label: "Support" },
 ];
 
 const mobileTabItems = navItems.slice(0, 5);
@@ -38,6 +41,18 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [location] = useLocation();
   const { isSignedIn, isLoaded, user } = useUser();
+
+  const { data: openCountData } = useQuery<{ count: number }>({
+    queryKey: ["support-open-count"],
+    queryFn: async () => {
+      const r = await fetch(`${basePath}/api/support/tickets/open-count`, { credentials: "include" });
+      if (!r.ok) return { count: 0 };
+      return r.json();
+    },
+    enabled: isSignedIn === true,
+    staleTime: 60_000,
+  });
+  const openTicketCount = openCountData?.count ?? 0;
 
   if (isLoaded && !isSignedIn) {
     return <Redirect to="/sign-in" />;
@@ -68,18 +83,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Desktop sidebar */}
             <aside className="hidden lg:block w-60 xl:w-64 shrink-0 sticky top-[104px] self-start">
               <nav className="bg-white rounded-xl border border-[#C9A84C]/20 overflow-hidden shadow-sm">
-                {navItems.map(({ href, icon: Icon, label, exact, stub }) => {
+                {navItems.map(({ href, icon: Icon, label, exact }) => {
                   const active = isActive(href, exact);
+                  const isSupport = href === "/account/support";
                   return (
                     <Link
                       key={href}
-                      href={stub ? "#" : href}
+                      href={href}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm transition-colors relative group",
                         active
                           ? "bg-[#7B1C2C]/5 text-[#7B1C2C] font-semibold"
-                          : stub
-                          ? "text-gray-300 cursor-default pointer-events-none"
                           : "text-gray-600 hover:bg-[#FAF6EE] hover:text-[#7B1C2C]",
                         active &&
                           "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-[#7B1C2C] before:rounded-r-full",
@@ -90,18 +104,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         className={
                           active
                             ? "text-[#7B1C2C]"
-                            : stub
-                            ? "text-gray-300"
                             : "text-[#C9A84C] group-hover:text-[#7B1C2C] transition-colors"
                         }
                       />
                       <span className="flex-1 truncate">{label}</span>
-                      {stub && (
-                        <span className="text-[9px] text-gray-300 uppercase tracking-widest font-semibold">
-                          Soon
+                      {isSupport && openTicketCount > 0 && (
+                        <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-[#7B1C2C] text-white font-bold shrink-0">
+                          {openTicketCount > 9 ? "9+" : openTicketCount}
                         </span>
                       )}
-                      {active && !stub && (
+                      {active && (
                         <ChevronRight size={13} className="text-[#7B1C2C]/40 shrink-0" />
                       )}
                     </Link>
@@ -113,23 +125,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Tablet icon strip */}
             <aside className="hidden md:block lg:hidden w-14 shrink-0 sticky top-[104px] self-start">
               <nav className="bg-white rounded-xl border border-[#C9A84C]/20 overflow-hidden shadow-sm py-1">
-                {navItems.map(({ href, icon: Icon, label, exact, stub }) => {
+                {navItems.map(({ href, icon: Icon, label, exact }) => {
                   const active = isActive(href, exact);
+                  const isSupport = href === "/account/support";
                   return (
                     <Link
                       key={href}
-                      href={stub ? "#" : href}
+                      href={href}
                       title={label}
                       className={cn(
-                        "flex items-center justify-center w-full py-3.5 transition-colors",
+                        "flex items-center justify-center w-full py-3.5 transition-colors relative",
                         active
                           ? "text-[#7B1C2C] bg-[#7B1C2C]/5"
-                          : stub
-                          ? "text-gray-200 cursor-default pointer-events-none"
                           : "text-gray-400 hover:text-[#7B1C2C] hover:bg-[#FAF6EE]",
                       )}
                     >
                       <Icon size={18} />
+                      {isSupport && openTicketCount > 0 && (
+                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#7B1C2C]" />
+                      )}
                     </Link>
                   );
                 })}

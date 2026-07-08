@@ -12,6 +12,7 @@ import accountRouter from "./account";
 import rewardsRouter from "./rewards";
 import notificationsRouter from "./notifications";
 import sellerRouter from "./seller";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(accountRouter);
 router.use(rewardsRouter);
 router.use(notificationsRouter);
 router.use(sellerRouter);
+router.use(supportRouter);
 
 export default router;

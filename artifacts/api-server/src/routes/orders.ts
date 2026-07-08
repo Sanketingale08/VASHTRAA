@@ -215,6 +215,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
         const codFee = paymentMethod === "cod" ? 50 : 0;
         const total = afterDiscount + shipping + taxAmt + codFee;
 
+        const nowIso = new Date().toISOString();
         const [order] = await tx
           .insert(ordersTable)
           .values({
@@ -230,6 +231,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             tax: taxAmt,
             total,
             status: "confirmed",
+            statusHistory: [{ status: "confirmed", timestamp: nowIso, note: "Order placed" }],
           })
           .returning({ id: ordersTable.id });
 
@@ -379,6 +381,90 @@ router.get("/orders/:orderId", requireAuth, async (req: any, res: any): Promise<
   }
 });
 
+const requireAdminKey = (req: any, res: any, next: any) => {
+  const adminKey = process.env.ADMIN_API_KEY;
+  const provided = req.headers["x-admin-key"];
+  if (!adminKey || !provided || provided !== adminKey) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  next();
+};
+
+// POST /orders/:orderId/status — admin only: advance order status
+router.post("/orders/:orderId/status", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { status, note } = req.body;
+
+  const validStatuses = ["confirmed", "processing", "dispatched", "out_for_delivery", "delivered"];
+  if (!status || !validStatuses.includes(status)) {
+    res.status(400).json({ error: `Status must be one of: ${validStatuses.join(", ")}` });
+    return;
+  }
+
+  try {
+    try {
+      await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            status: ordersTable.status,
+            statusHistory: ordersTable.statusHistory,
+          })
+          .from(ordersTable)
+          .where(eq(ordersTable.id, orderId))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.status === "cancelled") {
+          throw Object.assign(new Error("Cannot update status of a cancelled order"), { status: 400 });
+        }
+
+        const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        const newEntry: { status: string; timestamp: string; note?: string } = {
+          status,
+          timestamp: new Date().toISOString(),
+        };
+        if (note) newEntry.note = String(note).trim();
+        history.push(newEntry);
+
+        const updates: Record<string, any> = {
+          status,
+          statusHistory: history,
+          updatedAt: new Date(),
+        };
+
+        if (status === "delivered") {
+          updates.deliveredAt = new Date();
+        }
+
+        await tx
+          .update(ordersTable)
+          .set(updates)
+          .where(eq(ordersTable.id, orderId));
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to update order status");
+    res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
 // POST /orders/:orderId/cancel
 router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): Promise<void> => {
   const { orderId } = req.params;
@@ -397,6 +483,7 @@ router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): 
             id: ordersTable.id,
             userId: ordersTable.userId,
             status: ordersTable.status,
+            statusHistory: ordersTable.statusHistory,
             items: ordersTable.items,
           })
           .from(ordersTable)
@@ -420,10 +507,16 @@ router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): 
           );
         }
 
+        const existingHistory = Array.isArray(order.statusHistory)
+          ? ((order as any).statusHistory as any[])
+          : [];
+        existingHistory.push({ status: "cancelled", timestamp: new Date().toISOString(), note: String(reason).trim() });
+
         await tx
           .update(ordersTable)
           .set({
             status: "cancelled",
+            statusHistory: existingHistory,
             cancelReason: String(reason).trim(),
             updatedAt: new Date(),
           })
@@ -469,6 +562,7 @@ router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any):
             id: ordersTable.id,
             userId: ordersTable.userId,
             status: ordersTable.status,
+            statusHistory: ordersTable.statusHistory,
             items: ordersTable.items,
           })
           .from(ordersTable)
@@ -492,10 +586,14 @@ router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any):
           );
         }
 
+        const existingHistory = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        existingHistory.push({ status: "cancelled", timestamp: new Date().toISOString(), note: String(reason).trim() });
+
         await tx
           .update(ordersTable)
           .set({
             status: "cancelled",
+            statusHistory: existingHistory,
             cancelReason: String(reason).trim(),
             updatedAt: new Date(),
           })

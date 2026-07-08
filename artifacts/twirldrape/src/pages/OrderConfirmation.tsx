@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Truck, Zap, MapPin, CreditCard, Smartphone,
   HandCoins, Package, XCircle, RotateCcw, RefreshCw, AlertCircle,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Download,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useOrdersContext } from "@/context/OrdersContext";
+import { OrderTrackingTimeline, type StatusHistoryEntry } from "@/components/OrderTrackingTimeline";
+import { generateInvoice } from "@/utils/generateInvoice";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -40,6 +42,7 @@ type Order = {
   tax: number;
   total: number;
   status: string;
+  statusHistory: StatusHistoryEntry[];
   cancelReason: string | null;
   returnReason: string | null;
   refundStatus: string | null;
@@ -770,6 +773,19 @@ export function OrderConfirmationPage() {
               )}
             </motion.div>
 
+            {/* Tracking Timeline */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.14 }}
+            >
+              <OrderTrackingTimeline
+                statusHistory={order.statusHistory ?? []}
+                currentStatus={order.status}
+                createdAt={order.createdAt}
+              />
+            </motion.div>
+
             {/* Items */}
             <motion.div
               initial={{ opacity: 0, y: 16 }}
@@ -777,9 +793,32 @@ export function OrderConfirmationPage() {
               transition={{ delay: 0.15 }}
               className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
             >
-              <h2 className="font-serif text-lg font-bold text-[#7B1C2C] mb-4">
-                Items Ordered ({(order.items as OrderItem[]).reduce((s, i) => s + i.quantity, 0)})
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-serif text-lg font-bold text-[#7B1C2C]">
+                  Items Ordered ({(order.items as OrderItem[]).reduce((s, i) => s + i.quantity, 0)})
+                </h2>
+                <button
+                  onClick={() => generateInvoice({
+                    id: order.id,
+                    createdAt: order.createdAt,
+                    items: order.items as OrderItem[],
+                    address: order.address as OrderAddress,
+                    paymentMethod: order.paymentMethod,
+                    deliveryMethod: order.deliveryMethod,
+                    subtotal: order.subtotal,
+                    discount: order.discount,
+                    shipping: order.shipping,
+                    tax: order.tax,
+                    total: order.total,
+                    couponCode: order.couponCode,
+                    status: order.status,
+                  })}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#C9A84C]/40 text-[#7B1C2C] hover:bg-[#C9A84C]/10 rounded-lg transition-colors"
+                >
+                  <Download size={13} />
+                  Download Invoice
+                </button>
+              </div>
               <div className="space-y-4">
                 {(order.items as OrderItem[]).map((item, idx) => (
                   <div key={`${item.productId}-${idx}`} className="flex gap-3 items-start">

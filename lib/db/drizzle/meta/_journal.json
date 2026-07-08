@@ -64,6 +64,13 @@
       "when": 1783442000000,
       "tag": "0008_order_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1752019200000,
+      "tag": "0009_add_status_history",
+      "breakpoints": true
     }
   ]
 }

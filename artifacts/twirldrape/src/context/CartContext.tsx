@@ -20,6 +20,7 @@ interface CartContextType {
   removeItem: (productId: string) => Promise<void>;
   updateQuantity: (productId: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
+  refreshStock: () => Promise<void>;
   totalItems: number;
   isDrawerOpen: boolean;
   openDrawer: () => void;
@@ -32,6 +33,7 @@ const CartContext = createContext<CartContextType>({
   removeItem: async () => {},
   updateQuantity: async () => {},
   clearCart: async () => {},
+  refreshStock: async () => {},
   totalItems: 0,
   isDrawerOpen: false,
   openDrawer: () => {},
@@ -209,6 +211,36 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSignedIn]);
 
+  const refreshStock = useCallback(async () => {
+    setItems((current) => {
+      if (current.length === 0) return current;
+      const ids = current.map((i) => i.productId).join(",");
+      apiFetch(`/api/products?ids=${encodeURIComponent(ids)}&limit=100`)
+        .then((data) => {
+          const products: any[] = data.products ?? [];
+          const stockById = new Map(products.map((p) => [p.id, p.stock ?? 0]));
+          setItems((prev) => {
+            let changed = false;
+            const next = prev.map((item) => {
+              const liveStock = stockById.get(item.productId);
+              if (liveStock === undefined || liveStock === item.stock) return item;
+              changed = true;
+              return {
+                ...item,
+                stock: liveStock,
+                quantity: liveStock === 0 ? item.quantity : Math.min(item.quantity, liveStock),
+              };
+            });
+            if (!changed) return prev;
+            saveLocalCart(next);
+            return next;
+          });
+        })
+        .catch(() => {});
+      return current;
+    });
+  }, []);
+
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
@@ -218,6 +250,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeItem,
       updateQuantity,
       clearCart,
+      refreshStock,
       totalItems,
       isDrawerOpen,
       openDrawer: () => setIsDrawerOpen(true),

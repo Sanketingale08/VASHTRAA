@@ -7,7 +7,7 @@ import { useCart } from "@/context/CartContext";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function CartDrawer() {
-  const { items, isDrawerOpen, closeDrawer, removeItem, updateQuantity, totalItems } = useCart();
+  const { items, isDrawerOpen, closeDrawer, removeItem, updateQuantity, totalItems, refreshStock } = useCart();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -18,6 +18,12 @@ export function CartDrawer() {
     }
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isDrawerOpen, closeDrawer]);
+
+  useEffect(() => {
+    if (isDrawerOpen) {
+      refreshStock();
+    }
+  }, [isDrawerOpen, refreshStock]);
 
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const shipping = subtotal >= 5000 ? 0 : 199;

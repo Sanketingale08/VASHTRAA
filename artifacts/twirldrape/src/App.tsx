@@ -43,6 +43,10 @@ import SellerProfile from "@/pages/seller/SellerProfile";
 import SellerProducts from "@/pages/seller/SellerProducts";
 import SellerProductNew from "@/pages/seller/SellerProductNew";
 import SellerProductEdit from "@/pages/seller/SellerProductEdit";
+import SellerOrders from "@/pages/seller/SellerOrders";
+import SellerOrderDetail from "@/pages/seller/SellerOrderDetail";
+import SellerAnalytics from "@/pages/seller/SellerAnalytics";
+import SellerLogin from "@/pages/seller/SellerLogin";
 import VendorStore from "@/pages/VendorStore";
 import { SellerGuard } from "@/components/SellerGuard";
 
@@ -213,6 +217,7 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
       <Route path="/seller/dashboard" component={() => (
         <SellerGuard><SellerDashboard /></SellerGuard>
@@ -228,6 +233,15 @@ function Router() {
       )} />
       <Route path="/seller/products" component={() => (
         <SellerGuard><SellerProducts /></SellerGuard>
+      )} />
+      <Route path="/seller/orders/:id" component={() => (
+        <SellerGuard><SellerOrderDetail /></SellerGuard>
+      )} />
+      <Route path="/seller/orders" component={() => (
+        <SellerGuard><SellerOrders /></SellerGuard>
+      )} />
+      <Route path="/seller/analytics" component={() => (
+        <SellerGuard><SellerAnalytics /></SellerGuard>
       )} />
       <Route path="/stores/:vendorId" component={VendorStore} />
       <Route path="/sign-in/*?" component={SignInPage} />

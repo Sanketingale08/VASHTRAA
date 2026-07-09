@@ -23,6 +23,7 @@ const NAV_LINKS = [
   { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/seller/products", label: "My Products", icon: Package },
   { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
+  { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },
   { href: "/seller/payouts", label: "Payouts", icon: CreditCard, stub: true },
   { href: "/seller/help", label: "Help", icon: HelpCircle, stub: true },

@@ -102,7 +102,7 @@ export function SellerGuard({ children }: SellerGuardProps) {
   useEffect(() => {
     if (loading) return;
     if (status === "unauthenticated") {
-      setLocation("/admin/login");
+      setLocation("/seller/login");
     }
   }, [status, loading]);
 

@@ -14,6 +14,7 @@ function validate(data: ProductFormData): Partial<Record<keyof ProductFormData, 
   if (!data.price.trim() || isNaN(Number(data.price)) || Number(data.price) <= 0) errs.price = "Enter a valid price";
   if (data.originalPrice.trim() && (isNaN(Number(data.originalPrice)) || Number(data.originalPrice) <= 0)) errs.originalPrice = "Enter a valid original price";
   if (data.stock.trim() && (isNaN(Number(data.stock)) || Number(data.stock) < 0)) errs.stock = "Enter a valid stock quantity";
+  if (data.lowStockThreshold.trim() && (isNaN(Number(data.lowStockThreshold)) || Number(data.lowStockThreshold) < 0)) errs.lowStockThreshold = "Enter a valid threshold";
   return errs;
 }
 
@@ -53,13 +54,32 @@ export default function SellerProductNew() {
         name: form.name.trim(),
         description: form.description.trim(),
         category: form.category,
+        subcategory: form.subcategory.trim() || null,
+        brand: form.brand.trim() || null,
+        designPattern: form.designPattern.trim() || null,
         fabric: form.fabric,
         color: form.color,
         occasion: form.occasion,
         price: parseInt(form.price),
         originalPrice: form.originalPrice.trim() ? parseInt(form.originalPrice) : null,
         stock: form.stock.trim() ? parseInt(form.stock) : 10,
+        lowStockThreshold: form.lowStockThreshold.trim() ? parseInt(form.lowStockThreshold) : 5,
         images: form.images.filter(Boolean),
+        videos: form.videos.filter(Boolean),
+        variants: form.variants
+          .filter((v) => v.size.trim() || v.color.trim())
+          .map((v) => ({
+            size: v.size.trim(),
+            color: v.color.trim(),
+            stock: v.stock.trim() ? parseInt(v.stock) : 0,
+            price: v.price.trim() ? parseInt(v.price) : null,
+            sku: v.sku.trim() || null,
+          })),
+        specifications: form.specifications
+          .filter((s) => s.key.trim() && s.value.trim())
+          .map((s) => ({ key: s.key.trim(), value: s.value.trim() })),
+        deliveryInfo: form.deliveryInfo.trim(),
+        returnPolicy: form.returnPolicy.trim(),
         isBestSeller: form.isBestSeller,
         isNewArrival: form.isNewArrival,
       };

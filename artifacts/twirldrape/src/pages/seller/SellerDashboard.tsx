@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Package, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard } from "lucide-react";
+import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -22,6 +22,7 @@ const fadeUp = {
 const NAV_LINKS = [
   { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/seller/products", label: "My Products", icon: Package, group: "/seller/products" },
+  { href: "/seller/inventory", label: "Inventory", icon: PackageCheck, group: "/seller/inventory" },
   { href: "/seller/orders", label: "Orders", icon: ShoppingBag, group: "/seller/orders" },
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },

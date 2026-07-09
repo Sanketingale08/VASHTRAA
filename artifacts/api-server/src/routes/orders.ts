@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
+import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
 
@@ -102,6 +103,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             price: productsTable.price,
             images: productsTable.images,
             vendorName: productsTable.vendorName,
+            vendorId: productsTable.vendorId,
             stock: productsTable.stock,
           })
           .from(productsTable)
@@ -246,6 +248,19 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             .update(productsTable)
             .set({ stock: sql`${productsTable.stock} - ${item.quantity}` })
             .where(eq(productsTable.id, item.productId));
+
+          const originalProduct = productMap.get(item.productId);
+          await recordStockChange({
+            tx,
+            productId: item.productId,
+            vendorId: originalProduct?.vendorId ?? null,
+            previousStock: originalProduct?.stock ?? 0,
+            newStock: (originalProduct?.stock ?? 0) - item.quantity,
+            source: "order",
+            reason: "Order placed",
+            actorId: req.userId,
+            orderId: order.id,
+          });
         }
 
         if (coupon) {
@@ -455,10 +470,27 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
 
           const items = order.items as Array<{ productId: string; quantity: number }>;
           for (const item of items) {
+            const [beforeCancel] = await tx
+              .select({ stock: productsTable.stock, vendorId: productsTable.vendorId })
+              .from(productsTable)
+              .where(eq(productsTable.id, item.productId))
+              .limit(1);
+
             await tx
               .update(productsTable)
               .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
               .where(eq(productsTable.id, item.productId));
+
+            await recordStockChange({
+              tx,
+              productId: item.productId,
+              vendorId: beforeCancel?.vendorId ?? null,
+              previousStock: beforeCancel?.stock ?? 0,
+              newStock: (beforeCancel?.stock ?? 0) + item.quantity,
+              source: "cancel",
+              reason: cancelNote,
+              orderId: order.id,
+            });
           }
         }
 

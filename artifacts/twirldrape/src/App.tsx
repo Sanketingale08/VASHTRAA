@@ -45,6 +45,7 @@ import SellerProfile from "@/pages/seller/SellerProfile";
 import SellerProducts from "@/pages/seller/SellerProducts";
 import SellerProductNew from "@/pages/seller/SellerProductNew";
 import SellerProductEdit from "@/pages/seller/SellerProductEdit";
+import SellerInventory from "@/pages/seller/SellerInventory";
 import SellerOrders from "@/pages/seller/SellerOrders";
 import SellerOrderDetail from "@/pages/seller/SellerOrderDetail";
 import SellerAnalytics from "@/pages/seller/SellerAnalytics";
@@ -237,6 +238,9 @@ function Router() {
       )} />
       <Route path="/seller/products" component={() => (
         <SellerGuard><SellerProducts /></SellerGuard>
+      )} />
+      <Route path="/seller/inventory" component={() => (
+        <SellerGuard><SellerInventory /></SellerGuard>
       )} />
       <Route path="/seller/orders/:id" component={() => (
         <SellerGuard><SellerOrderDetail /></SellerGuard>

@@ -5,6 +5,7 @@ import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notifi
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
 
@@ -320,6 +321,16 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
       .where(eq(productsTable.id, id))
       .returning({ stock: productsTable.stock });
 
+    await recordStockChange({
+      productId: id,
+      vendorId: before.vendorId,
+      previousStock: before.stock,
+      newStock: stock,
+      source: "manual",
+      reason: "Manual stock update",
+      actorId: req.userId,
+    });
+
     // If restocked (was 0, now > 0) notify users who have this in their wishlist
     await notifyWishlistRestock(id, before.name, before.stock, stock);
 
@@ -330,8 +341,33 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
   }
 });
 
+function sanitizeVariants(variants: any): any[] {
+  if (!Array.isArray(variants)) return [];
+  return variants
+    .filter((v) => v && (v.size || v.color))
+    .map((v) => ({
+      size: v.size ? String(v.size).trim() : undefined,
+      color: v.color ? String(v.color).trim() : undefined,
+      stock: v.stock != null && v.stock !== "" ? parseInt(v.stock) : undefined,
+      price: v.price != null && v.price !== "" ? parseInt(v.price) : undefined,
+      sku: v.sku ? String(v.sku).trim() : undefined,
+    }));
+}
+
+function sanitizeSpecifications(specs: any): any[] {
+  if (!Array.isArray(specs)) return [];
+  return specs
+    .filter((s) => s && s.key && String(s.key).trim())
+    .map((s) => ({ key: String(s.key).trim(), value: s.value ? String(s.value).trim() : "" }));
+}
+
 router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<void> => {
-  const { name, description, category, fabric, color, occasion, price, originalPrice, stock, images, isBestSeller, isNewArrival } = req.body;
+  const {
+    name, description, category, subcategory, brand, designPattern,
+    fabric, color, occasion, price, originalPrice, stock, lowStockThreshold,
+    images, videos, variants, specifications, deliveryInfo, returnPolicy,
+    isBestSeller, isNewArrival,
+  } = req.body;
 
   if (!name || !String(name).trim()) { res.status(400).json({ error: "Name is required" }); return; }
   if (!price || isNaN(Number(price)) || Number(price) <= 0) { res.status(400).json({ error: "Valid price is required" }); return; }
@@ -344,13 +380,22 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
         name: String(name).trim(),
         description: description ? String(description).trim() : "",
         category: category as any,
+        subcategory: subcategory ? String(subcategory).trim() : null,
+        brand: brand ? String(brand).trim() : null,
+        designPattern: designPattern ? String(designPattern).trim() : null,
         fabric: (fabric ?? "silk") as any,
         color: (color ?? "red") as any,
         occasion: (occasion ?? "festival") as any,
         price: parseInt(price),
         originalPrice: originalPrice ? parseInt(originalPrice) : null,
         stock: stock != null ? parseInt(stock) : 10,
+        lowStockThreshold: lowStockThreshold != null ? parseInt(lowStockThreshold) : 5,
         images: Array.isArray(images) ? images.filter(Boolean) : [],
+        videos: Array.isArray(videos) ? videos.filter(Boolean) : [],
+        variants: sanitizeVariants(variants),
+        specifications: sanitizeSpecifications(specifications),
+        deliveryInfo: deliveryInfo ? String(deliveryInfo).trim() : "",
+        returnPolicy: returnPolicy ? String(returnPolicy).trim() : "",
         isBestSeller: Boolean(isBestSeller),
         isNewArrival: Boolean(isNewArrival),
         vendorId: req.vendorId,
@@ -368,7 +413,12 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
 
 router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
-  const { name, description, category, fabric, color, occasion, price, originalPrice, stock, images, isBestSeller, isNewArrival } = req.body;
+  const {
+    name, description, category, subcategory, brand, designPattern,
+    fabric, color, occasion, price, originalPrice, stock, lowStockThreshold,
+    images, videos, variants, specifications, deliveryInfo, returnPolicy,
+    isBestSeller, isNewArrival,
+  } = req.body;
 
   try {
     const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
@@ -379,19 +429,37 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
     if (name !== undefined) updates.name = String(name).trim();
     if (description !== undefined) updates.description = String(description).trim();
     if (category !== undefined) updates.category = category;
+    if (subcategory !== undefined) updates.subcategory = subcategory ? String(subcategory).trim() : null;
+    if (brand !== undefined) updates.brand = brand ? String(brand).trim() : null;
+    if (designPattern !== undefined) updates.designPattern = designPattern ? String(designPattern).trim() : null;
     if (fabric !== undefined) updates.fabric = fabric;
     if (color !== undefined) updates.color = color;
     if (occasion !== undefined) updates.occasion = occasion;
     if (price !== undefined) updates.price = parseInt(price);
     if (originalPrice !== undefined) updates.originalPrice = originalPrice ? parseInt(originalPrice) : null;
     if (stock !== undefined) updates.stock = parseInt(stock);
+    if (lowStockThreshold !== undefined) updates.lowStockThreshold = parseInt(lowStockThreshold);
     if (images !== undefined) updates.images = Array.isArray(images) ? images.filter(Boolean) : [];
+    if (videos !== undefined) updates.videos = Array.isArray(videos) ? videos.filter(Boolean) : [];
+    if (variants !== undefined) updates.variants = sanitizeVariants(variants);
+    if (specifications !== undefined) updates.specifications = sanitizeSpecifications(specifications);
+    if (deliveryInfo !== undefined) updates.deliveryInfo = String(deliveryInfo).trim();
+    if (returnPolicy !== undefined) updates.returnPolicy = String(returnPolicy).trim();
     if (isBestSeller !== undefined) updates.isBestSeller = Boolean(isBestSeller);
     if (isNewArrival !== undefined) updates.isNewArrival = Boolean(isNewArrival);
 
     const [updated] = await db.update(productsTable).set(updates).where(eq(productsTable.id, id)).returning();
 
     if (updates.stock !== undefined) {
+      await recordStockChange({
+        productId: id,
+        vendorId: existing.vendorId,
+        previousStock: existing.stock,
+        newStock: updated.stock,
+        source: "manual",
+        reason: "Manual stock update via product edit",
+        actorId: req.userId,
+      });
       await notifyWishlistRestock(id, updated.name ?? existing.name, existing.stock, updated.stock);
     }
 
@@ -416,6 +484,78 @@ router.delete("/products/:id", requireVendorAuth, async (req: any, res: any): Pr
   }
 });
 
+router.patch("/products/:id/activate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
+    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+    const [updated] = await db.update(productsTable).set({ active: true }).where(eq(productsTable.id, id)).returning();
+    res.json(normalizeProduct(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to activate product");
+    res.status(500).json({ error: "Failed to activate product" });
+  }
+});
+
+router.patch("/products/:id/deactivate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
+    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+    const [updated] = await db.update(productsTable).set({ active: false }).where(eq(productsTable.id, id)).returning();
+    res.json(normalizeProduct(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to deactivate product");
+    res.status(500).json({ error: "Failed to deactivate product" });
+  }
+});
+
+router.post("/products/:id/duplicate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const [existing] = await db.select().from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
+    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+
+    const [copy] = await db
+      .insert(productsTable)
+      .values({
+        name: `${existing.name} (Copy)`,
+        description: existing.description,
+        category: existing.category,
+        subcategory: existing.subcategory,
+        brand: existing.brand,
+        designPattern: existing.designPattern,
+        fabric: existing.fabric,
+        color: existing.color,
+        occasion: existing.occasion,
+        price: existing.price,
+        originalPrice: existing.originalPrice,
+        stock: 0,
+        lowStockThreshold: existing.lowStockThreshold,
+        images: existing.images,
+        videos: existing.videos,
+        variants: existing.variants,
+        specifications: existing.specifications,
+        deliveryInfo: existing.deliveryInfo,
+        returnPolicy: existing.returnPolicy,
+        isBestSeller: false,
+        isNewArrival: existing.isNewArrival,
+        vendorId: req.vendorId,
+        vendorName: req.vendor.name,
+        active: false,
+      })
+      .returning();
+
+    res.status(201).json(normalizeProduct(copy));
+  } catch (err) {
+    req.log.error({ err }, "Failed to duplicate product");
+    res.status(500).json({ error: "Failed to duplicate product" });
+  }
+});
+
 function normalizeProduct(p: typeof productsTable.$inferSelect) {
   return {
     id: p.id,
@@ -424,17 +564,26 @@ function normalizeProduct(p: typeof productsTable.$inferSelect) {
     price: p.price,
     originalPrice: p.originalPrice ?? null,
     category: p.category,
+    subcategory: p.subcategory ?? null,
+    brand: p.brand ?? null,
+    designPattern: p.designPattern ?? null,
     fabric: p.fabric,
     color: p.color,
     occasion: p.occasion,
     vendorId: p.vendorId ?? null,
     vendorName: p.vendorName,
     images: Array.isArray(p.images) ? p.images : [],
+    videos: Array.isArray(p.videos) ? p.videos : [],
+    variants: Array.isArray(p.variants) ? p.variants : [],
+    specifications: Array.isArray(p.specifications) ? p.specifications : [],
+    deliveryInfo: p.deliveryInfo ?? "",
+    returnPolicy: p.returnPolicy ?? "",
     isBestSeller: p.isBestSeller,
     isNewArrival: p.isNewArrival,
     rating: p.rating,
     reviewCount: p.reviewCount,
     stock: p.stock,
+    lowStockThreshold: p.lowStockThreshold,
     active: p.active,
   };
 }

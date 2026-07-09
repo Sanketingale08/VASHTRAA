@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, Info, Tag, DollarSign, Package, Sparkles } from "lucide-react";
+import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X } from "lucide-react";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -11,17 +11,39 @@ export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue
 export const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"] as const;
 export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"] as const;
 
+export interface ProductVariantForm {
+  size: string;
+  color: string;
+  stock: string;
+  price: string;
+  sku: string;
+}
+
+export interface ProductSpecForm {
+  key: string;
+  value: string;
+}
+
 export interface ProductFormData {
   name: string;
   description: string;
   category: string;
+  subcategory: string;
+  brand: string;
+  designPattern: string;
   fabric: string;
   color: string;
   occasion: string;
   price: string;
   originalPrice: string;
   stock: string;
+  lowStockThreshold: string;
   images: string[];
+  videos: string[];
+  variants: ProductVariantForm[];
+  specifications: ProductSpecForm[];
+  deliveryInfo: string;
+  returnPolicy: string;
   isBestSeller: boolean;
   isNewArrival: boolean;
 }
@@ -31,13 +53,22 @@ export function emptyFormData(): ProductFormData {
     name: "",
     description: "",
     category: "paithani",
+    subcategory: "",
+    brand: "",
+    designPattern: "",
     fabric: "silk",
     color: "red",
     occasion: "festival",
     price: "",
     originalPrice: "",
     stock: "10",
+    lowStockThreshold: "5",
     images: ["", "", "", ""],
+    videos: [""],
+    variants: [],
+    specifications: [],
+    deliveryInfo: "",
+    returnPolicy: "",
     isBestSeller: false,
     isNewArrival: false,
   };
@@ -95,6 +126,40 @@ export default function ProductForm({
     };
   }
 
+  function updateVideo(idx: number, value: string) {
+    const videos = [...data.videos];
+    videos[idx] = value;
+    onChange("videos", videos);
+  }
+  function addVideo() {
+    onChange("videos", [...data.videos, ""]);
+  }
+  function removeVideo(idx: number) {
+    onChange("videos", data.videos.filter((_, i) => i !== idx));
+  }
+
+  function updateVariant(idx: number, field: keyof ProductVariantForm, value: string) {
+    const variants = data.variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v));
+    onChange("variants", variants);
+  }
+  function addVariant() {
+    onChange("variants", [...data.variants, { size: "", color: "", stock: "", price: "", sku: "" }]);
+  }
+  function removeVariant(idx: number) {
+    onChange("variants", data.variants.filter((_, i) => i !== idx));
+  }
+
+  function updateSpec(idx: number, field: keyof ProductSpecForm, value: string) {
+    const specs = data.specifications.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
+    onChange("specifications", specs);
+  }
+  function addSpec() {
+    onChange("specifications", [...data.specifications, { key: "", value: "" }]);
+  }
+  function removeSpec(idx: number) {
+    onChange("specifications", data.specifications.filter((_, i) => i !== idx));
+  }
+
   function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
     return (
       <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "#E2D9CC", background: "#FDFBF8" }}>
@@ -131,6 +196,14 @@ export default function ProductForm({
             maxLength={1000}
           />
         </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Brand" error={errors.brand} hint="Optional">
+            <input className={inputClass} style={inputStyle} value={data.brand} onChange={input("brand")} placeholder="e.g. TwirlDrape Signature" />
+          </Field>
+          <Field label="Design Pattern" error={errors.designPattern} hint="Optional">
+            <input className={inputClass} style={inputStyle} value={data.designPattern} onChange={input("designPattern")} placeholder="e.g. Peacock motif, zari border" />
+          </Field>
+        </div>
       </Section>
 
       <Section icon={Tag} title="Classification">
@@ -141,6 +214,9 @@ export default function ProductForm({
                 <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
               ))}
             </select>
+          </Field>
+          <Field label="Subcategory" error={errors.subcategory} hint="Optional">
+            <input className={inputClass} style={inputStyle} value={data.subcategory} onChange={input("subcategory")} placeholder="e.g. Bridal Paithani" />
           </Field>
           <Field label="Fabric" required error={errors.fabric}>
             <select className={selectClass} style={inputStyle} value={data.fabric} onChange={input("fabric")}>
@@ -200,7 +276,7 @@ export default function ProductForm({
       </Section>
 
       <Section icon={Package} title="Inventory">
-        <div className="max-w-[180px]">
+        <div className="grid grid-cols-2 gap-4 max-w-md">
           <Field label="Stock Quantity" required error={errors.stock}>
             <input
               className={inputClass}
@@ -210,6 +286,17 @@ export default function ProductForm({
               value={data.stock}
               onChange={input("stock")}
               placeholder="10"
+            />
+          </Field>
+          <Field label="Low Stock Threshold" error={errors.lowStockThreshold} hint="Alert below this level">
+            <input
+              className={inputClass}
+              style={inputStyle}
+              type="number"
+              min="0"
+              value={data.lowStockThreshold}
+              onChange={input("lowStockThreshold")}
+              placeholder="5"
             />
           </Field>
         </div>
@@ -237,6 +324,92 @@ export default function ProductForm({
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section icon={Video} title="Product Videos">
+        <p className="text-xs text-gray-400 -mt-2">Optional. Enter direct video URLs (.mp4, YouTube link, etc).</p>
+        <div className="space-y-2.5">
+          {data.videos.map((url, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <input
+                className={inputClass + " flex-1"}
+                style={inputStyle}
+                value={url}
+                onChange={(e) => updateVideo(idx, e.target.value)}
+                placeholder="Video URL"
+              />
+              <button type="button" onClick={() => removeVideo(idx)} className="p-2 rounded-lg hover:bg-red-50 shrink-0">
+                <X size={14} className="text-red-400" />
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={addVideo} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: MAROON }}>
+            <Plus size={13} /> Add video
+          </button>
+        </div>
+      </Section>
+
+      <Section icon={Layers} title="Variants">
+        <p className="text-xs text-gray-400 -mt-2">Optional. Add size/color combinations with per-variant stock and price.</p>
+        <div className="space-y-3">
+          {data.variants.map((v, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 rounded-lg" style={{ background: CREAM }}>
+              <input className={inputClass + " col-span-3"} style={inputStyle} value={v.size} onChange={(e) => updateVariant(idx, "size", e.target.value)} placeholder="Size" />
+              <input className={inputClass + " col-span-3"} style={inputStyle} value={v.color} onChange={(e) => updateVariant(idx, "color", e.target.value)} placeholder="Color" />
+              <input className={inputClass + " col-span-2"} style={inputStyle} type="number" value={v.stock} onChange={(e) => updateVariant(idx, "stock", e.target.value)} placeholder="Stock" />
+              <input className={inputClass + " col-span-2"} style={inputStyle} type="number" value={v.price} onChange={(e) => updateVariant(idx, "price", e.target.value)} placeholder="Price" />
+              <button type="button" onClick={() => removeVariant(idx)} className="col-span-2 p-2 rounded-lg hover:bg-red-50 flex justify-center">
+                <X size={14} className="text-red-400" />
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={addVariant} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: MAROON }}>
+            <Plus size={13} /> Add variant
+          </button>
+        </div>
+      </Section>
+
+      <Section icon={ListChecks} title="Specifications">
+        <p className="text-xs text-gray-400 -mt-2">Optional. Key-value details like weave, blouse included, wash care.</p>
+        <div className="space-y-2.5">
+          {data.specifications.map((s, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <input className={inputClass + " flex-1"} style={inputStyle} value={s.key} onChange={(e) => updateSpec(idx, "key", e.target.value)} placeholder="Attribute (e.g. Weave)" />
+              <input className={inputClass + " flex-1"} style={inputStyle} value={s.value} onChange={(e) => updateSpec(idx, "value", e.target.value)} placeholder="Value (e.g. Handwoven)" />
+              <button type="button" onClick={() => removeSpec(idx)} className="p-2 rounded-lg hover:bg-red-50 shrink-0">
+                <X size={14} className="text-red-400" />
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={addSpec} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: MAROON }}>
+            <Plus size={13} /> Add specification
+          </button>
+        </div>
+      </Section>
+
+      <Section icon={Truck} title="Delivery & Returns">
+        <Field label="Delivery Information" error={errors.deliveryInfo}>
+          <textarea
+            className={inputClass + " resize-none"}
+            style={inputStyle}
+            rows={2}
+            value={data.deliveryInfo}
+            onChange={input("deliveryInfo")}
+            placeholder="e.g. Ships within 2-3 business days"
+            maxLength={500}
+          />
+        </Field>
+        <Field label="Return Policy" error={errors.returnPolicy}>
+          <textarea
+            className={inputClass + " resize-none"}
+            style={inputStyle}
+            rows={2}
+            value={data.returnPolicy}
+            onChange={input("returnPolicy")}
+            placeholder="e.g. 7-day easy returns"
+            maxLength={500}
+          />
+        </Field>
       </Section>
 
       <Section icon={Sparkles} title="Badges">

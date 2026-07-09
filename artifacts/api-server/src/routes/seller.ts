@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, productsTable } from "@workspace/db";
-import { eq, desc, asc, inArray } from "drizzle-orm";
+import { ordersTable, productsTable, stockHistoryTable, CATEGORIES, FABRICS, OCCASIONS, COLORS } from "@workspace/db";
+import { eq, desc, asc, inArray, and } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
+import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
 
@@ -109,23 +110,329 @@ router.get("/seller/products", requireVendorAuth, async (req: any, res: any) => 
         price: p.price,
         originalPrice: p.originalPrice ?? null,
         category: p.category,
+        subcategory: p.subcategory ?? null,
+        brand: p.brand ?? null,
+        designPattern: p.designPattern ?? null,
         fabric: p.fabric,
         color: p.color,
         occasion: p.occasion,
         vendorId: p.vendorId ?? null,
         vendorName: p.vendorName,
         images: Array.isArray(p.images) ? p.images : [],
+        videos: Array.isArray(p.videos) ? p.videos : [],
+        variants: Array.isArray(p.variants) ? p.variants : [],
+        specifications: Array.isArray(p.specifications) ? p.specifications : [],
+        deliveryInfo: p.deliveryInfo ?? "",
+        returnPolicy: p.returnPolicy ?? "",
         isBestSeller: p.isBestSeller,
         isNewArrival: p.isNewArrival,
         rating: p.rating,
         reviewCount: p.reviewCount,
         stock: p.stock,
+        lowStockThreshold: p.lowStockThreshold,
         active: p.active,
       })),
     });
   } catch (err: any) {
     req.log?.error({ err }, "seller/products failed");
     res.status(500).json({ error: "Failed to load products" });
+  }
+});
+
+router.get("/seller/inventory", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  try {
+    const products = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.vendorId, vendorId))
+      .orderBy(asc(productsTable.name));
+
+    const items = products.map((p) => {
+      const isOutOfStock = p.stock <= 0;
+      const isLowStock = !isOutOfStock && p.stock <= p.lowStockThreshold;
+      return {
+        id: p.id,
+        name: p.name,
+        images: Array.isArray(p.images) ? p.images : [],
+        stock: p.stock,
+        lowStockThreshold: p.lowStockThreshold,
+        price: p.price,
+        active: p.active,
+        variants: Array.isArray(p.variants) ? p.variants : [],
+        isLowStock,
+        isOutOfStock,
+      };
+    });
+
+    res.json({
+      items,
+      summary: {
+        totalProducts: items.length,
+        lowStockCount: items.filter((i) => i.isLowStock).length,
+        outOfStockCount: items.filter((i) => i.isOutOfStock).length,
+        stockValue: products.reduce((sum, p) => sum + p.price * p.stock, 0),
+      },
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/inventory failed");
+    res.status(500).json({ error: "Failed to load inventory" });
+  }
+});
+
+router.get("/seller/inventory/history/:productId", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const { productId } = req.params;
+  try {
+    const [product] = await db
+      .select({ id: productsTable.id, vendorId: productsTable.vendorId, name: productsTable.name })
+      .from(productsTable)
+      .where(eq(productsTable.id, productId))
+      .limit(1);
+
+    if (!product) return res.status(404).json({ error: "Product not found" });
+    if (product.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden: you do not own this product" });
+
+    const history = await db
+      .select()
+      .from(stockHistoryTable)
+      .where(eq(stockHistoryTable.productId, productId))
+      .orderBy(desc(stockHistoryTable.createdAt))
+      .limit(200);
+
+    res.json({ productId, productName: product.name, history });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/inventory/history failed");
+    res.status(500).json({ error: "Failed to load stock history" });
+  }
+});
+
+router.get("/seller/inventory/report", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  try {
+    const products = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.vendorId, vendorId));
+
+    const productIds = products.map((p) => p.id);
+    const history = productIds.length > 0
+      ? await db.select().from(stockHistoryTable).where(inArray(stockHistoryTable.productId, productIds))
+      : [];
+
+    const movementMap = new Map<string, number>();
+    for (const h of history) {
+      movementMap.set(h.productId, (movementMap.get(h.productId) ?? 0) + Math.abs(h.delta));
+    }
+
+    const topMovers = [...movementMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([productId, movement]) => {
+        const p = products.find((pr) => pr.id === productId);
+        return { productId, name: p?.name ?? "Unknown", movement, currentStock: p?.stock ?? 0 };
+      });
+
+    res.json({
+      stockValue: products.reduce((sum, p) => sum + p.price * p.stock, 0),
+      lowStockCount: products.filter((p) => p.stock > 0 && p.stock <= p.lowStockThreshold).length,
+      outOfStockCount: products.filter((p) => p.stock <= 0).length,
+      totalProducts: products.length,
+      topMovers,
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/inventory/report failed");
+    res.status(500).json({ error: "Failed to generate inventory report" });
+  }
+});
+
+router.post("/seller/inventory/bulk-stock", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const { updates } = req.body;
+
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return res.status(400).json({ error: "updates must be a non-empty array of { productId, stock }" });
+  }
+
+  try {
+    const productIds = updates.map((u: any) => u.productId).filter(Boolean);
+    const existing = await db
+      .select({ id: productsTable.id, vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name })
+      .from(productsTable)
+      .where(inArray(productsTable.id, productIds));
+
+    const existingMap = new Map(existing.map((p) => [p.id, p]));
+    const results: any[] = [];
+
+    for (const u of updates) {
+      const p = existingMap.get(u.productId);
+      if (!p) { results.push({ productId: u.productId, success: false, error: "Product not found" }); continue; }
+      if (p.vendorId !== vendorId) { results.push({ productId: u.productId, success: false, error: "Forbidden" }); continue; }
+      const newStock = parseInt(u.stock);
+      if (!Number.isInteger(newStock) || newStock < 0) { results.push({ productId: u.productId, success: false, error: "Invalid stock value" }); continue; }
+
+      await db.update(productsTable).set({ stock: newStock }).where(eq(productsTable.id, u.productId));
+      await recordStockChange({
+        productId: u.productId,
+        vendorId,
+        previousStock: p.stock,
+        newStock,
+        source: "bulk",
+        reason: "Bulk stock update",
+        actorId: req.userId,
+      });
+      results.push({ productId: u.productId, success: true, previousStock: p.stock, newStock });
+    }
+
+    res.json({ results });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/inventory/bulk-stock failed");
+    res.status(500).json({ error: "Failed to bulk update stock" });
+  }
+});
+
+router.post("/seller/inventory/bulk-price", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const { updates } = req.body;
+
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return res.status(400).json({ error: "updates must be a non-empty array of { productId, price }" });
+  }
+
+  try {
+    const productIds = updates.map((u: any) => u.productId).filter(Boolean);
+    const existing = await db
+      .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+      .from(productsTable)
+      .where(inArray(productsTable.id, productIds));
+
+    const existingMap = new Map(existing.map((p) => [p.id, p]));
+    const results: any[] = [];
+
+    for (const u of updates) {
+      const p = existingMap.get(u.productId);
+      if (!p) { results.push({ productId: u.productId, success: false, error: "Product not found" }); continue; }
+      if (p.vendorId !== vendorId) { results.push({ productId: u.productId, success: false, error: "Forbidden" }); continue; }
+      const newPrice = parseInt(u.price);
+      if (!Number.isInteger(newPrice) || newPrice <= 0) { results.push({ productId: u.productId, success: false, error: "Invalid price value" }); continue; }
+
+      const updateSet: Record<string, any> = { price: newPrice };
+      if (u.originalPrice !== undefined) {
+        updateSet.originalPrice = u.originalPrice ? parseInt(u.originalPrice) : null;
+      }
+      await db.update(productsTable).set(updateSet).where(eq(productsTable.id, u.productId));
+      results.push({ productId: u.productId, success: true, newPrice });
+    }
+
+    res.json({ results });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/inventory/bulk-price failed");
+    res.status(500).json({ error: "Failed to bulk update price" });
+  }
+});
+
+function parseCsv(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return [];
+  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => { row[h] = cells[idx] ?? ""; });
+    rows.push(row);
+  }
+  return rows;
+}
+
+router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, res: any) => {
+  const { csv } = req.body;
+  if (!csv || typeof csv !== "string" || !csv.trim()) {
+    return res.status(400).json({ error: "csv text content is required" });
+  }
+
+  try {
+    const rows = parseCsv(csv);
+    if (rows.length === 0) {
+      return res.status(400).json({ error: "CSV has no data rows" });
+    }
+    if (rows.length > 500) {
+      return res.status(400).json({ error: "Maximum 500 rows per upload" });
+    }
+
+    const results: Array<{ row: number; success: boolean; error?: string; productId?: string; name?: string }> = [];
+    const toInsert: any[] = [];
+
+    rows.forEach((row, idx) => {
+      const rowNum = idx + 2; // account for header row
+      const name = row.name?.trim();
+      const price = parseInt(row.price);
+      const category = row.category?.trim();
+      const stock = row.stock ? parseInt(row.stock) : 10;
+
+      if (!name) { results.push({ row: rowNum, success: false, error: "Missing name" }); return; }
+      if (!category || !(CATEGORIES as readonly string[]).includes(category)) {
+        results.push({ row: rowNum, success: false, error: `Invalid category (must be one of: ${CATEGORIES.join(", ")})` });
+        return;
+      }
+      if (!price || isNaN(price) || price <= 0) { results.push({ row: rowNum, success: false, error: "Invalid price" }); return; }
+      if (row.fabric && !(FABRICS as readonly string[]).includes(row.fabric.trim())) {
+        results.push({ row: rowNum, success: false, error: `Invalid fabric (must be one of: ${FABRICS.join(", ")})` });
+        return;
+      }
+      if (row.color && !(COLORS as readonly string[]).includes(row.color.trim())) {
+        results.push({ row: rowNum, success: false, error: `Invalid color (must be one of: ${COLORS.join(", ")})` });
+        return;
+      }
+      if (row.occasion && !(OCCASIONS as readonly string[]).includes(row.occasion.trim())) {
+        results.push({ row: rowNum, success: false, error: `Invalid occasion (must be one of: ${OCCASIONS.join(", ")})` });
+        return;
+      }
+      if (!Number.isInteger(stock) || stock < 0) { results.push({ row: rowNum, success: false, error: "Invalid stock" }); return; }
+
+      toInsert.push({
+        _rowNum: rowNum,
+        name,
+        description: row.description?.trim() ?? "",
+        category,
+        subcategory: row.subcategory?.trim() || null,
+        brand: row.brand?.trim() || null,
+        designPattern: row.designPattern?.trim() || null,
+        fabric: row.fabric?.trim() || "silk",
+        color: row.color?.trim() || "red",
+        occasion: row.occasion?.trim() || "festival",
+        price,
+        originalPrice: row.originalPrice ? parseInt(row.originalPrice) : null,
+        stock,
+        images: row.images ? row.images.split("|").map((s: string) => s.trim()).filter(Boolean) : [],
+        vendorId: req.vendorId,
+        vendorName: req.vendor.name,
+        active: true,
+      });
+    });
+
+    for (const item of toInsert) {
+      const { _rowNum, ...values } = item;
+      try {
+        const [product] = await db.insert(productsTable).values(values).returning({ id: productsTable.id, name: productsTable.name });
+        results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
+      } catch (insertErr: any) {
+        results.push({ row: _rowNum, success: false, error: "Failed to save row" });
+      }
+    }
+
+    results.sort((a, b) => a.row - b.row);
+    res.json({
+      results,
+      summary: {
+        total: rows.length,
+        succeeded: results.filter((r) => r.success).length,
+        failed: results.filter((r) => !r.success).length,
+      },
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/products/bulk-upload failed");
+    res.status(500).json({ error: "Failed to process bulk upload" });
   }
 });
 

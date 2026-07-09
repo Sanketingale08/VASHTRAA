@@ -13,6 +13,7 @@ function validate(data: ProductFormData): Partial<Record<keyof ProductFormData, 
   if (!data.price.trim() || isNaN(Number(data.price)) || Number(data.price) <= 0) errs.price = "Enter a valid price";
   if (data.originalPrice.trim() && (isNaN(Number(data.originalPrice)) || Number(data.originalPrice) <= 0)) errs.originalPrice = "Enter a valid original price";
   if (data.stock.trim() && (isNaN(Number(data.stock)) || Number(data.stock) < 0)) errs.stock = "Enter a valid stock quantity";
+  if (data.lowStockThreshold.trim() && (isNaN(Number(data.lowStockThreshold)) || Number(data.lowStockThreshold) < 0)) errs.lowStockThreshold = "Enter a valid threshold";
   return errs;
 }
 
@@ -37,17 +38,39 @@ export default function SellerProductEdit() {
         const p = await res.json();
         const images = Array.isArray(p.images) ? p.images : [];
         const paddedImages = [...images, "", "", "", ""].slice(0, 4);
+        const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : [""];
+        const variants = Array.isArray(p.variants)
+          ? p.variants.map((v: any) => ({
+              size: v.size ?? "",
+              color: v.color ?? "",
+              stock: v.stock != null ? String(v.stock) : "",
+              price: v.price != null ? String(v.price) : "",
+              sku: v.sku ?? "",
+            }))
+          : [];
+        const specifications = Array.isArray(p.specifications)
+          ? p.specifications.map((s: any) => ({ key: s.key ?? "", value: s.value ?? "" }))
+          : [];
         setForm({
           name: p.name ?? "",
           description: p.description ?? "",
           category: p.category ?? "paithani",
+          subcategory: p.subcategory ?? "",
+          brand: p.brand ?? "",
+          designPattern: p.designPattern ?? "",
           fabric: p.fabric ?? "silk",
           color: p.color ?? "red",
           occasion: p.occasion ?? "festival",
           price: p.price != null ? String(p.price) : "",
           originalPrice: p.originalPrice != null ? String(p.originalPrice) : "",
           stock: p.stock != null ? String(p.stock) : "0",
+          lowStockThreshold: p.lowStockThreshold != null ? String(p.lowStockThreshold) : "5",
           images: paddedImages,
+          videos,
+          variants,
+          specifications,
+          deliveryInfo: p.deliveryInfo ?? "",
+          returnPolicy: p.returnPolicy ?? "",
           isBestSeller: p.isBestSeller ?? false,
           isNewArrival: p.isNewArrival ?? false,
         });
@@ -86,13 +109,32 @@ export default function SellerProductEdit() {
         name: form.name.trim(),
         description: form.description.trim(),
         category: form.category,
+        subcategory: form.subcategory.trim() || null,
+        brand: form.brand.trim() || null,
+        designPattern: form.designPattern.trim() || null,
         fabric: form.fabric,
         color: form.color,
         occasion: form.occasion,
         price: parseInt(form.price),
         originalPrice: form.originalPrice.trim() ? parseInt(form.originalPrice) : null,
         stock: form.stock.trim() ? parseInt(form.stock) : 0,
+        lowStockThreshold: form.lowStockThreshold.trim() ? parseInt(form.lowStockThreshold) : 5,
         images: form.images.filter(Boolean),
+        videos: form.videos.filter(Boolean),
+        variants: form.variants
+          .filter((v) => v.size.trim() || v.color.trim())
+          .map((v) => ({
+            size: v.size.trim(),
+            color: v.color.trim(),
+            stock: v.stock.trim() ? parseInt(v.stock) : 0,
+            price: v.price.trim() ? parseInt(v.price) : null,
+            sku: v.sku.trim() || null,
+          })),
+        specifications: form.specifications
+          .filter((s) => s.key.trim() && s.value.trim())
+          .map((s) => ({ key: s.key.trim(), value: s.value.trim() })),
+        deliveryInfo: form.deliveryInfo.trim(),
+        returnPolicy: form.returnPolicy.trim(),
         isBestSeller: form.isBestSeller,
         isNewArrival: form.isNewArrival,
       };

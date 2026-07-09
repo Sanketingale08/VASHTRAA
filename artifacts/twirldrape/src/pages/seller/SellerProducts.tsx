@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, AlertTriangle, PackageX, ToggleLeft, ToggleRight, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, PackageX, ToggleLeft, ToggleRight, Check, X, Copy, Search, Upload, Loader2 } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
+import { CATEGORIES } from "./SellerProductForm";
 import { getApiUrl } from "@/lib/api";
 
 const MAROON = "#1E6B5A";
@@ -20,6 +21,7 @@ interface Product {
   price: number;
   originalPrice: number | null;
   stock: number;
+  lowStockThreshold: number;
   images: string[];
   isBestSeller: boolean;
   isNewArrival: boolean;
@@ -27,6 +29,8 @@ interface Product {
   reviewCount: number;
   active: boolean;
 }
+
+type SortKey = "name" | "price" | "stock";
 
 function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
   useEffect(() => {
@@ -88,6 +92,95 @@ function DeleteModal({ product, onConfirm, onCancel, loading }: {
   );
 }
 
+function BulkUploadModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
+  const [csv, setCsv] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [results, setResults] = useState<any[] | null>(null);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCsv(String(reader.result ?? ""));
+    reader.readAsText(file);
+  }
+
+  async function handleUpload() {
+    if (!csv.trim()) { setError("Paste or upload CSV content first"); return; }
+    setUploading(true);
+    setError("");
+    try {
+      const res = await fetch(getApiUrl("/api/seller/products/bulk-upload"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ csv }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setResults(data.results ?? []);
+      if (data.summary?.succeeded > 0) onDone(`${data.summary.succeeded} product(s) uploaded`);
+    } catch (err: any) {
+      setError(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Bulk Upload Products</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          CSV columns: name, price, category (paithani/designer), fabric, color, occasion, stock, description, subcategory, brand, designPattern, originalPrice, images (pipe-separated URLs). First row must be a header.
+        </p>
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="mb-3 text-sm" />
+        <textarea
+          className="w-full h-40 px-3 py-2.5 rounded-lg border text-xs font-mono outline-none resize-none"
+          style={{ borderColor: "#D6C9BA" }}
+          value={csv}
+          onChange={(e) => setCsv(e.target.value)}
+          placeholder="name,price,category,fabric,color,occasion,stock&#10;Peacock Paithani,15000,paithani,silk,red,festival,10"
+        />
+        {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+        {results && (
+          <div className="mt-4 max-h-48 overflow-y-auto space-y-1">
+            {results.map((r) => (
+              <div key={r.row} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded" style={{ background: r.success ? "#DCFCE7" : "#FEE2E2" }}>
+                {r.success ? <Check size={12} className="text-green-600" /> : <X size={12} className="text-red-600" />}
+                <span className="font-medium">Row {r.row}:</span>
+                <span className="truncate">{r.success ? (r.name || "Uploaded") : r.error}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-3 mt-5">
+          <button
+            onClick={handleUpload}
+            disabled={uploading}
+            className="px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
+            style={{ background: MAROON, color: IVORY }}
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-lg text-sm font-medium border" style={{ borderColor: "#D6C9BA", color: "#6b5b4e" }}>
+            Close
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function StockCell({ product, onUpdate }: { product: Product; onUpdate: (id: string, stock: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(product.stock));
@@ -135,14 +228,16 @@ function StockCell({ product, onUpdate }: { product: Product; onUpdate: (id: str
     );
   }
 
+  const isLow = product.stock > 0 && product.stock <= product.lowStockThreshold;
+
   return (
     <button
       onClick={() => { setValue(String(product.stock)); setEditing(true); }}
       className="text-sm font-medium hover:underline text-left min-w-[3rem]"
-      style={{ color: product.stock === 0 ? "#dc2626" : "#374151" }}
+      style={{ color: product.stock === 0 ? "#dc2626" : isLow ? "#b45309" : "#374151" }}
       title="Click to edit stock"
     >
-      {saving ? "…" : product.stock === 0 ? "0 (out)" : product.stock}
+      {saving ? "…" : product.stock === 0 ? "0 (out)" : isLow ? `${product.stock} (low)` : product.stock}
     </button>
   );
 }
@@ -155,6 +250,15 @@ export default function SellerProducts() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "hidden">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const PAGE_SIZE = 10;
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
     setToast({ message, type });
@@ -184,18 +288,34 @@ export default function SellerProducts() {
   }
 
   async function handleToggleActive(product: Product) {
+    const endpoint = product.active ? "deactivate" : "activate";
     try {
-      const res = await fetch(getApiUrl(`/api/products/${product.id}`), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch(getApiUrl(`/api/products/${product.id}/${endpoint}`), {
+        method: "PATCH",
         credentials: "include",
-        body: JSON.stringify({ active: !product.active }),
       });
       if (!res.ok) throw new Error();
       setProducts((prev) => prev.map((p) => p.id === product.id ? { ...p, active: !p.active } : p));
       showToast(product.active ? "Product hidden from shop" : "Product is now live", "success");
     } catch {
       showToast("Failed to update status", "error");
+    }
+  }
+
+  async function handleDuplicate(product: Product) {
+    setDuplicatingId(product.id);
+    try {
+      const res = await fetch(getApiUrl(`/api/products/${product.id}/duplicate`), {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error();
+      showToast("Product duplicated as draft", "success");
+      fetchProducts();
+    } catch {
+      showToast("Failed to duplicate product", "error");
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
@@ -218,27 +338,94 @@ export default function SellerProducts() {
     }
   }
 
+  const filtered = useMemo(() => {
+    let list = products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
+    if (categoryFilter !== "all") list = list.filter((p) => p.category === categoryFilter);
+    if (statusFilter !== "all") list = list.filter((p) => statusFilter === "active" ? p.active : !p.active);
+    list = [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "name") cmp = a.name.localeCompare(b.name);
+      else if (sortKey === "price") cmp = a.price - b.price;
+      else if (sortKey === "stock") cmp = a.stock - b.stock;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [products, search, categoryFilter, statusFilter, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [search, categoryFilter, statusFilter]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
   const skeletonRows = Array.from({ length: 5 });
 
   return (
     <SellerLayout title="My Products">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>My Products</h1>
             <p className="text-sm mt-0.5" style={{ color: "#7a5f4e" }}>
-              {loading ? "Loading…" : `${products.length} product${products.length !== 1 ? "s" : ""}`}
+              {loading ? "Loading…" : `${filtered.length} of ${products.length} product${products.length !== 1 ? "s" : ""}`}
             </p>
           </div>
-          <Link href="/seller/products/new">
+          <div className="flex items-center gap-2">
             <button
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-90"
-              style={{ background: MAROON, color: IVORY }}
+              onClick={() => setShowBulkUpload(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors"
+              style={{ borderColor: "#D6C9BA", color: MAROON }}
             >
-              <Plus size={16} />
-              Add Product
+              <Upload size={15} /> Bulk Upload
             </button>
-          </Link>
+            <Link href="/seller/products/new">
+              <button
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-90"
+                style={{ background: MAROON, color: IVORY }}
+              >
+                <Plus size={16} />
+                Add Product
+              </button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 mb-5 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: "#D6C9BA" }}
+            />
+          </div>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg border text-sm outline-none cursor-pointer"
+            style={{ borderColor: "#D6C9BA" }}
+          >
+            <option value="all">All Categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="px-3 py-2 rounded-lg border text-sm outline-none cursor-pointer"
+            style={{ borderColor: "#D6C9BA" }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="hidden">Hidden</option>
+          </select>
         </div>
 
         {error && (
@@ -250,10 +437,16 @@ export default function SellerProducts() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: CREAM, borderBottom: "1px solid #E2D9CC" }}>
-                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Product</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide cursor-pointer" style={{ color: "#7a5f4e" }} onClick={() => toggleSort("name")}>
+                    Product {sortKey === "name" && (sortDir === "asc" ? "↑" : "↓")}
+                  </th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Category</th>
-                  <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Price</th>
-                  <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Stock</th>
+                  <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide cursor-pointer" style={{ color: "#7a5f4e" }} onClick={() => toggleSort("price")}>
+                    Price {sortKey === "price" && (sortDir === "asc" ? "↑" : "↓")}
+                  </th>
+                  <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide cursor-pointer" style={{ color: "#7a5f4e" }} onClick={() => toggleSort("stock")}>
+                    Stock {sortKey === "stock" && (sortDir === "asc" ? "↑" : "↓")}
+                  </th>
                   <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Status</th>
                   <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Actions</th>
                 </tr>
@@ -269,19 +462,21 @@ export default function SellerProducts() {
                       ))}
                     </tr>
                   ))
-                  : products.length === 0
+                  : pageItems.length === 0
                     ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-16 text-center">
                           <PackageX size={36} className="mx-auto mb-3 opacity-30" />
-                          <p className="text-sm text-gray-400">No products yet.</p>
-                          <Link href="/seller/products/new">
-                            <button className="mt-3 text-xs font-semibold underline" style={{ color: MAROON }}>Add your first product</button>
-                          </Link>
+                          <p className="text-sm text-gray-400">{products.length === 0 ? "No products yet." : "No products match your filters."}</p>
+                          {products.length === 0 && (
+                            <Link href="/seller/products/new">
+                              <button className="mt-3 text-xs font-semibold underline" style={{ color: MAROON }}>Add your first product</button>
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     )
-                    : products.map((product) => (
+                    : pageItems.map((product) => (
                       <motion.tr
                         key={product.id}
                         layout
@@ -342,6 +537,18 @@ export default function SellerProducts() {
                               </button>
                             </Link>
                             <button
+                              onClick={() => handleDuplicate(product)}
+                              disabled={duplicatingId === product.id}
+                              className="p-1.5 rounded-lg hover:bg-[#E6F0EA] transition-colors"
+                              title="Duplicate"
+                            >
+                              {duplicatingId === product.id ? (
+                                <Loader2 size={14} className="animate-spin" style={{ color: MAROON }} />
+                              ) : (
+                                <Copy size={14} style={{ color: MAROON }} />
+                              )}
+                            </button>
+                            <button
                               onClick={() => setDeleteTarget(product)}
                               className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
                               title="Deactivate"
@@ -357,6 +564,28 @@ export default function SellerProducts() {
             </table>
           </div>
         </div>
+
+        {!loading && filtered.length > PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-2 mt-5">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 rounded-lg border text-xs font-semibold disabled:opacity-40"
+              style={{ borderColor: "#D6C9BA", color: MAROON }}
+            >
+              Previous
+            </button>
+            <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 rounded-lg border text-xs font-semibold disabled:opacity-40"
+              style={{ borderColor: "#D6C9BA", color: MAROON }}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -366,6 +595,12 @@ export default function SellerProducts() {
             onConfirm={handleDelete}
             onCancel={() => setDeleteTarget(null)}
             loading={deleteLoading}
+          />
+        )}
+        {showBulkUpload && (
+          <BulkUploadModal
+            onClose={() => setShowBulkUpload(false)}
+            onDone={(msg) => { showToast(msg, "success"); fetchProducts(); }}
           />
         )}
         {toast && (

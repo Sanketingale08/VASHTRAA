@@ -326,7 +326,7 @@ export default function SellerRegister() {
 
           <p className="text-center text-xs text-gray-400 mt-6">
             Already an approved vendor?{" "}
-            <a href={`${basePath}/admin/login`} className="font-semibold" style={{ color: MAROON }}>
+            <a href={`${basePath}/seller/login`} className="font-semibold" style={{ color: MAROON }}>
               Sign in to your seller panel →
             </a>
           </p>

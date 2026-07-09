@@ -31,7 +31,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!adminKey) {
-      setLocation("/admin/login");
+      setLocation("/seller/login");
       return;
     }
     fetch(`${basePath}/api/admin/vendors`, {
@@ -41,7 +41,7 @@ export default function AdminDashboard() {
       .then((r) => {
         if (r.status === 403) {
           sessionStorage.removeItem("td_admin_key");
-          setLocation("/admin/login");
+          setLocation("/seller/login");
           return null;
         }
         return r.json();

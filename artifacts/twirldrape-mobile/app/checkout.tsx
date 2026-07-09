@@ -85,6 +85,9 @@ export default function CheckoutScreen() {
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
   const [enteringNew, setEnteringNew] = useState(false);
   const [saveAddress, setSaveAddress] = useState(false);
+  const [addressesLoading, setAddressesLoading] = useState(true);
+  const [addressesError, setAddressesError] = useState(false);
+  const [addressesLoaded, setAddressesLoaded] = useState(false);
 
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("standard");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
@@ -111,28 +114,42 @@ export default function CheckoutScreen() {
     }
   }, [params.buyNow]);
 
-  useEffect(() => {
+  const fetchAddresses = React.useCallback(() => {
     if (!isLoaded || !isSignedIn) return;
-    getToken().then((token) => {
-      if (!token) return;
-      fetch(`${API_BASE}/api/addresses`, {
-        headers: { Authorization: `Bearer ${token}` },
+    setAddressesLoading(true);
+    setAddressesError(false);
+    getToken()
+      .then((token) => {
+        if (!token) throw new Error("No auth token");
+        return fetch(`${API_BASE}/api/addresses`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       })
-        .then((r) => r.ok ? r.json() : { addresses: [] })
-        .then((data) => {
-          const addrs = data.addresses ?? [];
-          setSavedAddresses(addrs);
-          const def = addrs.find((a: any) => a.isDefault) ?? addrs[0];
-          if (def) {
-            setSelectedSavedId(def.id);
-            setAddress({ name: def.name, phone: def.phone, line1: def.line1, line2: def.line2 ?? "", city: def.city, state: def.state, pincode: def.pincode });
-          } else {
-            setEnteringNew(true);
-          }
-        })
-        .catch(() => setEnteringNew(true));
-    });
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to fetch addresses");
+        return r.json();
+      })
+      .then((data) => {
+        const addrs = data.addresses ?? [];
+        setSavedAddresses(addrs);
+        const def = addrs.find((a: any) => a.isDefault) ?? addrs[0];
+        if (def) {
+          setSelectedSavedId(def.id);
+          setAddress({ name: def.name, phone: def.phone, line1: def.line1, line2: def.line2 ?? "", city: def.city, state: def.state, pincode: def.pincode });
+        } else {
+          setEnteringNew(true);
+        }
+        setAddressesLoaded(true);
+      })
+      .catch(() => {
+        setAddressesError(true);
+      })
+      .finally(() => setAddressesLoading(false));
   }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    fetchAddresses();
+  }, [fetchAddresses]);
 
   const orderItems = buyNowItem ? [buyNowItem] : cartItems;
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -527,7 +544,43 @@ export default function CheckoutScreen() {
               <>
                 <Text style={s.sectionTitle}>Shipping Address</Text>
 
-                {savedAddresses.length > 0 && !enteringNew && (
+                {addressesLoading && (
+                  <View style={[s.card, { alignItems: "center", paddingVertical: 24 }]}>
+                    <ActivityIndicator size="small" color={colors.secondary} />
+                    <Text style={{ fontFamily: "DMSans_400Regular", fontSize: 13, color: colors.mutedForeground, marginTop: 10 }}>
+                      Loading your saved addresses…
+                    </Text>
+                  </View>
+                )}
+
+                {!addressesLoading && addressesError && (
+                  <View style={[s.card, { alignItems: "center", paddingVertical: 20 }]}>
+                    <Ionicons name="cloud-offline-outline" size={28} color={colors.destructive} />
+                    <Text style={{ fontFamily: "DMSans_500Medium", fontSize: 13, color: colors.foreground, marginTop: 10, textAlign: "center" }}>
+                      Couldn't load your saved addresses.
+                    </Text>
+                    <Text style={{ fontFamily: "DMSans_400Regular", fontSize: 12, color: colors.mutedForeground, marginTop: 2, textAlign: "center" }}>
+                      Check your connection and try again.
+                    </Text>
+                    <Pressable
+                      testID="retry-load-addresses"
+                      onPress={fetchAddresses}
+                      style={[s.secondaryBtn, { marginTop: 14, marginBottom: 0, paddingHorizontal: 24, alignSelf: "center" }]}
+                    >
+                      <Text style={s.secondaryBtnText}>Retry</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setAddressesError(false); setEnteringNew(true); }}
+                      style={{ marginTop: 12 }}
+                    >
+                      <Text style={{ fontFamily: "DMSans_500Medium", fontSize: 12, color: colors.secondary, textDecorationLine: "underline" }}>
+                        Enter address manually instead
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {!addressesLoading && !addressesError && savedAddresses.length > 0 && !enteringNew && (
                   <>
                     <Text style={s.label}>Saved Addresses</Text>
                     {savedAddresses.map((sa: any) => (
@@ -567,7 +620,7 @@ export default function CheckoutScreen() {
                   </>
                 )}
 
-                {(enteringNew || savedAddresses.length === 0) && (
+                {!addressesLoading && !addressesError && (enteringNew || savedAddresses.length === 0) && (
                   <>
                     {savedAddresses.length > 0 && (
                       <Pressable onPress={() => setEnteringNew(false)} style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>

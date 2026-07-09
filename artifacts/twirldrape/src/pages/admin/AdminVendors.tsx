@@ -213,7 +213,7 @@ function VendorsContent() {
                       {v.revenue > 0 ? fmt(v.revenue) : "—"}
                     </td>
                     <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
                         <Star size={11} fill="currentColor" /> {v.rating.toFixed(1)}
                       </span>
                     </td>

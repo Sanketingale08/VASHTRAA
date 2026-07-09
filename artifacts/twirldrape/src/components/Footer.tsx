@@ -4,7 +4,7 @@ import { Instagram, Facebook, Youtube, Twitter, MapPin, Phone, Mail } from "luci
 
 export function Footer() {
   return (
-    <footer className="bg-[#1a1a1a] text-[#FAF6EE] pt-16 pb-8 border-t-[4px] border-[#C9A84C]">
+    <footer className="bg-[#1a1a1a] text-[#F3F8F5] pt-16 pb-8 border-t-[4px] border-[#C9A84C]">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
           
@@ -22,16 +22,16 @@ export function Footer() {
               Where Indian royalty meets modern commerce. A premium marketplace for authentic Paithani and designer sarees from trusted artisan vendors across India.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors">
+              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Instagram size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors">
+              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Facebook size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors">
+              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Youtube size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors">
+              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Twitter size={18} />
               </a>
             </div>

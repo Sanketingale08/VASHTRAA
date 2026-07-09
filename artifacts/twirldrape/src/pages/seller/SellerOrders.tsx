@@ -5,9 +5,9 @@ import { Search, ChevronRight, Package } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const CREAM = "#F5EDE0";
+const CREAM = "#E6F0EA";
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
@@ -172,7 +172,7 @@ export default function SellerOrders() {
                     const c = statusColors(order.status);
                     return (
                       <motion.tr key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                        className="border-b last:border-b-0 hover:bg-[#FAF6EE]/60 transition-colors" style={{ borderColor: "#F3F4F6" }}>
+                        className="border-b last:border-b-0 hover:bg-[#F3F8F5]/60 transition-colors" style={{ borderColor: "#F3F4F6" }}>
                         <td className="px-4 py-3.5 font-mono text-xs text-gray-500">
                           #{order.id.slice(0, 8).toUpperCase()}
                         </td>

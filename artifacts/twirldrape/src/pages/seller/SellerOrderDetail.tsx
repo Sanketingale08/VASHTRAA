@@ -6,10 +6,10 @@ import { SellerLayout } from "./SellerDashboard";
 import { OrderTrackingTimeline } from "@/components/OrderTrackingTimeline";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 function statusColors(status: string) {
   switch (status) {

@@ -400,7 +400,7 @@ function StarBar({
       <div
         className={cn(
           "flex-1 h-2 rounded-full overflow-hidden",
-          isDesigner ? "bg-[#3A3E45]" : "bg-[#E8D5B7]"
+          isDesigner ? "bg-[#3A3E45]" : "bg-[#C8D8D0]"
         )}
       >
         <motion.div
@@ -437,7 +437,7 @@ function ReviewsSection({
 
   const sectionBg = isDesigner ? "bg-[#2A2E35]" : "bg-white";
   const borderColor = "border-[#C9A84C]/20";
-  const cardBg = isDesigner ? "bg-[#1E2329]" : "bg-[#FAF6EE]";
+  const cardBg = isDesigner ? "bg-[#1E2329]" : "bg-[#F3F8F5]";
 
   return (
     <section className="mb-16">
@@ -448,7 +448,7 @@ function ReviewsSection({
         <h2
           className={cn(
             "font-serif text-2xl md:text-3xl font-bold",
-            isDesigner ? "text-[#F5EDE0]" : "text-[#7B1C2C]"
+            isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
           )}
         >
           Ratings & Reviews
@@ -467,7 +467,7 @@ function ReviewsSection({
             <p
               className={cn(
                 "text-6xl font-bold font-serif mb-2",
-                isDesigner ? "text-[#C9A84C]" : "text-[#7B1C2C]"
+                isDesigner ? "text-[#C9A84C]" : "text-[#1E6B5A]"
               )}
             >
               {roundedRating}
@@ -517,7 +517,7 @@ function ReviewsSection({
             )}
           >
             <div className="flex items-start gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-[#7B1C2C] text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-10 h-10 rounded-full bg-[#1E6B5A] text-white flex items-center justify-center font-bold text-sm shrink-0">
                 {review.initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -603,8 +603,8 @@ export default function ProductDetail() {
   const similar = similarData?.products.filter((p) => p.id !== id).slice(0, 4) ?? [];
 
   const themeClasses = isDesigner
-    ? "bg-[#1E2329] text-[#F5EDE0]"
-    : "bg-[#FAF6EE] text-[#3D1A1A]";
+    ? "bg-[#1E2329] text-[#E6F0EA]"
+    : "bg-[#F3F8F5] text-[#3D1A1A]";
 
   const handleLightboxNav = useCallback(
     (dir: 1 | -1) => {
@@ -654,7 +654,7 @@ export default function ProductDetail() {
             </p>
             <Link
               href="/"
-              className="bg-[#C9A84C] text-[#7B1C2C] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
+              className="bg-[#C9A84C] text-[#1E6B5A] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
             >
               Back to Home
             </Link>
@@ -733,7 +733,7 @@ export default function ProductDetail() {
                     className={cn(
                       "px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-all",
                       galleryTab === "photos"
-                        ? "bg-[#C9A84C] text-[#7B1C2C]"
+                        ? "bg-[#C9A84C] text-[#1E6B5A]"
                         : "opacity-50 hover:opacity-80"
                     )}
                   >
@@ -745,7 +745,7 @@ export default function ProductDetail() {
                       className={cn(
                         "flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-all",
                         galleryTab === "video"
-                          ? "bg-[#C9A84C] text-[#7B1C2C]"
+                          ? "bg-[#C9A84C] text-[#1E6B5A]"
                           : "opacity-50 hover:opacity-80"
                       )}
                     >
@@ -768,12 +768,12 @@ export default function ProductDetail() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                       />
                       {product.isBestSeller && (
-                        <span className="absolute top-4 left-4 bg-[#C9A84C] text-[#7B1C2C] text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
+                        <span className="absolute top-4 left-4 bg-[#C9A84C] text-[#1E6B5A] text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
                           Best Seller
                         </span>
                       )}
                       {!product.isBestSeller && product.isNewArrival && (
-                        <span className="absolute top-4 left-4 bg-[#7B1C2C] text-white text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
+                        <span className="absolute top-4 left-4 bg-[#1E6B5A] text-white text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
                           New Arrival
                         </span>
                       )}
@@ -831,7 +831,7 @@ export default function ProductDetail() {
                 <h1
                   className={cn(
                     "font-serif text-3xl md:text-4xl font-bold leading-tight mb-3",
-                    isDesigner ? "text-[#F5EDE0]" : "text-[#7B1C2C]"
+                    isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
                   )}
                 >
                   {product.name}
@@ -882,7 +882,7 @@ export default function ProductDetail() {
                   <span
                     className={cn(
                       "text-4xl font-bold",
-                      isDesigner ? "text-[#C9A84C]" : "text-[#7B1C2C]"
+                      isDesigner ? "text-[#C9A84C]" : "text-[#1E6B5A]"
                     )}
                   >
                     ₹{product.price.toLocaleString("en-IN")}
@@ -918,7 +918,7 @@ export default function ProductDetail() {
                               "border-b last:border-0",
                               isDesigner
                                 ? i % 2 === 0 ? "bg-[#1E2329] border-[#C9A84C]/10" : "bg-[#2A2E35] border-[#C9A84C]/10"
-                                : i % 2 === 0 ? "bg-white border-[#C9A84C]/10" : "bg-[#FAF6EE] border-[#C9A84C]/10"
+                                : i % 2 === 0 ? "bg-white border-[#C9A84C]/10" : "bg-[#F3F8F5] border-[#C9A84C]/10"
                             )}
                           >
                             <td className="px-4 py-2.5 opacity-50 font-medium w-40 whitespace-nowrap">{row.label}</td>
@@ -977,7 +977,7 @@ export default function ProductDetail() {
                         ? "bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                         : addedToCart
                         ? "bg-green-600 text-white"
-                        : "bg-[#C9A84C] text-[#7B1C2C] hover:bg-[#b59539]"
+                        : "bg-[#C9A84C] text-[#1E6B5A] hover:bg-[#b59539]"
                     )}
                   >
                     <ShoppingBag size={18} />
@@ -988,7 +988,7 @@ export default function ProductDetail() {
                     className={cn(
                       "flex items-center justify-center gap-2 px-6 py-4 border font-bold uppercase tracking-wider text-sm rounded-sm transition-all",
                       isWishlisted
-                        ? "bg-[#7B1C2C] border-[#7B1C2C] text-white"
+                        ? "bg-[#1E6B5A] border-[#1E6B5A] text-white"
                         : "border-[#C9A84C]/40 hover:border-[#C9A84C] hover:text-[#C9A84C]"
                     )}
                   >
@@ -1025,7 +1025,7 @@ export default function ProductDetail() {
                     "w-full flex items-center justify-center gap-2 py-4 border-2 font-bold uppercase tracking-wider text-sm rounded-sm transition-all mb-6 disabled:opacity-50 disabled:cursor-not-allowed",
                     isDesigner
                       ? "border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10"
-                      : "border-[#7B1C2C] text-[#7B1C2C] hover:bg-[#7B1C2C]/5"
+                      : "border-[#1E6B5A] text-[#1E6B5A] hover:bg-[#1E6B5A]/5"
                   )}
                 >
                   <Package size={18} />
@@ -1055,7 +1055,7 @@ export default function ProductDetail() {
                     <h2
                       className={cn(
                         "font-serif text-2xl md:text-3xl font-bold",
-                        isDesigner ? "text-[#F5EDE0]" : "text-[#7B1C2C]"
+                        isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
                       )}
                     >
                       Similar Products
@@ -1081,7 +1081,7 @@ export default function ProductDetail() {
                     <h2
                       className={cn(
                         "font-serif text-2xl md:text-3xl font-bold",
-                        isDesigner ? "text-[#F5EDE0]" : "text-[#7B1C2C]"
+                        isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
                       )}
                     >
                       You May Also Like

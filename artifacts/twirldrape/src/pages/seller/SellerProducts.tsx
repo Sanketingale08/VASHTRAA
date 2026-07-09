@@ -6,10 +6,10 @@ import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 interface Product {
   id: string;
@@ -335,7 +335,7 @@ export default function SellerProducts() {
                           <div className="flex items-center justify-center gap-2">
                             <Link href={`/seller/products/${product.id}/edit`}>
                               <button
-                                className="p-1.5 rounded-lg hover:bg-[#F5EDE0] transition-colors"
+                                className="p-1.5 rounded-lg hover:bg-[#E6F0EA] transition-colors"
                                 title="Edit"
                               >
                                 <Pencil size={14} style={{ color: MAROON }} />

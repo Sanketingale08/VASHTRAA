@@ -16,7 +16,7 @@ export function SectionHeading({ title, subtitle, centered = true }: SectionHead
       )}
       <div className={`flex items-center gap-4 ${centered ? "justify-center" : ""}`}>
         {centered && <div className="h-px w-12 md:w-24 bg-gradient-to-r from-transparent to-[#C9A84C]"></div>}
-        <h2 className="font-serif text-3xl md:text-4xl text-[#7B1C2C] dark:text-[#FAF6EE] font-bold">
+        <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] dark:text-[#F3F8F5] font-bold">
           {title}
         </h2>
         {centered && <div className="h-px w-12 md:w-24 bg-gradient-to-l from-transparent to-[#C9A84C]"></div>}

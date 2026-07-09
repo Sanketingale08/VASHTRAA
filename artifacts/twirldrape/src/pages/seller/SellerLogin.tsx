@@ -5,9 +5,9 @@ import { motion } from "framer-motion";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
+const IVORY = "#F3F8F5";
 
 export default function SellerLogin() {
   const { isSignedIn } = useUser();

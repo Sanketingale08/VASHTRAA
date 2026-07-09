@@ -68,14 +68,14 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
     if (dashboardMode) return null;
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 text-center px-4">
-        <Heart size={48} className="text-[#7B1C2C] opacity-30" />
-        <h1 className="font-serif text-3xl text-[#7B1C2C]">Your Wishlist</h1>
+        <Heart size={48} className="text-[#1E6B5A] opacity-30" />
+        <h1 className="font-serif text-3xl text-[#1E6B5A]">Your Wishlist</h1>
         <p className="text-[#7a5f4e] max-w-sm">
           Sign in to save your favorite sarees and access them from any device.
         </p>
         <Link
           href="/sign-in"
-          className="inline-flex items-center gap-2 bg-[#7B1C2C] text-[#FAF6EE] px-6 py-3 rounded font-semibold hover:bg-[#5e1421] transition-colors"
+          className="inline-flex items-center gap-2 bg-[#1E6B5A] text-[#F3F8F5] px-6 py-3 rounded font-semibold hover:bg-[#5e1421] transition-colors"
         >
           <LogIn size={18} /> Sign In
         </Link>
@@ -113,8 +113,8 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
   return (
     <div className="container mx-auto px-4 lg:px-8 py-10">
       <div className="flex items-center gap-3 mb-8">
-        <Heart size={28} className="fill-[#7B1C2C] text-[#7B1C2C]" />
-        <h1 className="font-serif text-3xl md:text-4xl text-[#7B1C2C]">My Wishlist</h1>
+        <Heart size={28} className="fill-[#1E6B5A] text-[#1E6B5A]" />
+        <h1 className="font-serif text-3xl md:text-4xl text-[#1E6B5A]">My Wishlist</h1>
         {items.length > 0 && (
           <span className="ml-auto text-sm text-[#7a5f4e]">
             {items.length} {items.length === 1 ? "item" : "items"} saved
@@ -136,7 +136,7 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
 
       {!isLoading && !isError && items.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-6 py-20 text-center">
-          <Heart size={48} className="text-[#7B1C2C] opacity-20" />
+          <Heart size={48} className="text-[#1E6B5A] opacity-20" />
           <p className="text-[#7a5f4e] text-lg">Your wishlist is empty.</p>
           <p className="text-[#7a5f4e] text-sm max-w-sm">
             Browse our collection and tap the heart icon on any saree to save it here.
@@ -144,13 +144,13 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
           <div className="flex gap-4">
             <Link
               href="/paithani/shop"
-              className="bg-[#7B1C2C] text-[#FAF6EE] px-5 py-2.5 rounded font-semibold hover:bg-[#5e1421] transition-colors text-sm"
+              className="bg-[#1E6B5A] text-[#F3F8F5] px-5 py-2.5 rounded font-semibold hover:bg-[#5e1421] transition-colors text-sm"
             >
               Shop Paithani
             </Link>
             <Link
               href="/designer/shop"
-              className="bg-[#1E2329] text-[#FAF6EE] px-5 py-2.5 rounded font-semibold hover:bg-[#2d3540] transition-colors text-sm"
+              className="bg-[#1E2329] text-[#F3F8F5] px-5 py-2.5 rounded font-semibold hover:bg-[#2d3540] transition-colors text-sm"
             >
               Shop Designer
             </Link>
@@ -166,7 +166,7 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
               <button
                 onClick={() => handleMoveToCart(item)}
                 disabled={movingToCart === item.id}
-                className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#7B1C2C] text-[#7B1C2C] text-sm font-semibold rounded hover:bg-[#7B1C2C] hover:text-[#FAF6EE] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#1E6B5A] text-[#1E6B5A] text-sm font-semibold rounded hover:bg-[#1E6B5A] hover:text-[#F3F8F5] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {movingToCart === item.id ? (
                   <Loader2 size={14} className="animate-spin" />
@@ -184,7 +184,7 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
         <section className="mt-16">
           <div className="flex items-center gap-3 mb-6">
             <Clock size={18} className="text-[#C9A84C]" />
-            <h2 className="font-serif text-2xl font-bold text-[#7B1C2C]">
+            <h2 className="font-serif text-2xl font-bold text-[#1E6B5A]">
               Recently Viewed
             </h2>
           </div>
@@ -201,10 +201,10 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
                   </div>
                   <div className="p-3">
                     <p className="text-xs text-gray-500 mb-0.5">{product.vendorName}</p>
-                    <p className="text-sm font-serif font-semibold text-[#7B1C2C] line-clamp-2">
+                    <p className="text-sm font-serif font-semibold text-[#1E6B5A] line-clamp-2">
                       {product.name}
                     </p>
-                    <p className="text-sm font-bold text-[#7B1C2C] mt-1">
+                    <p className="text-sm font-bold text-[#1E6B5A] mt-1">
                       ₹{product.price?.toLocaleString("en-IN")}
                     </p>
                   </div>

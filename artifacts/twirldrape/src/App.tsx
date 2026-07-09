@@ -82,12 +82,12 @@ const clerkAppearance = {
     logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
   },
   variables: {
-    colorPrimary: "#7B1C2C",
+    colorPrimary: "#1E6B5A",
     colorForeground: "#3D1A1A",
     colorMutedForeground: "#7a5f4e",
     colorDanger: "#c0392b",
-    colorBackground: "#FAF6EE",
-    colorInput: "#F5EDE0",
+    colorBackground: "#F3F8F5",
+    colorInput: "#E6F0EA",
     colorInputForeground: "#3D1A1A",
     colorNeutral: "#C9A84C",
     fontFamily: "'DM Sans', sans-serif",
@@ -95,28 +95,28 @@ const clerkAppearance = {
   },
   elements: {
     rootBox: "w-full flex justify-center",
-    cardBox: "bg-[#FAF6EE] rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl border border-[#C9A84C]/30",
+    cardBox: "bg-[#F3F8F5] rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl border border-[#C9A84C]/30",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "text-[#7B1C2C] font-serif text-2xl",
+    headerTitle: "text-[#1E6B5A] font-serif text-2xl",
     headerSubtitle: "text-[#7a5f4e]",
     socialButtonsBlockButtonText: "text-[#3D1A1A]",
     formFieldLabel: "text-[#3D1A1A] font-medium",
-    footerActionLink: "text-[#7B1C2C] font-semibold hover:text-[#C9A84C]",
+    footerActionLink: "text-[#1E6B5A] font-semibold hover:text-[#C9A84C]",
     footerActionText: "text-[#7a5f4e]",
     dividerText: "text-[#7a5f4e]",
-    identityPreviewEditButton: "text-[#7B1C2C]",
+    identityPreviewEditButton: "text-[#1E6B5A]",
     formFieldSuccessText: "text-green-700",
     alertText: "text-[#3D1A1A]",
     logoBox: "flex justify-center py-2",
     logoImage: "h-10",
     socialButtonsBlockButton: "border border-[#C9A84C]/40 hover:border-[#C9A84C] bg-white",
-    formButtonPrimary: "bg-[#7B1C2C] hover:bg-[#5e1421] text-[#FAF6EE]",
-    formFieldInput: "bg-[#F5EDE0] border-[#C9A84C]/40 text-[#3D1A1A]",
-    footerAction: "bg-[#F5EDE0] border-t border-[#C9A84C]/20",
+    formButtonPrimary: "bg-[#1E6B5A] hover:bg-[#5e1421] text-[#F3F8F5]",
+    formFieldInput: "bg-[#E6F0EA] border-[#C9A84C]/40 text-[#3D1A1A]",
+    footerAction: "bg-[#E6F0EA] border-t border-[#C9A84C]/20",
     dividerLine: "bg-[#C9A84C]/30",
-    alert: "bg-[#F5EDE0] border border-[#C9A84C]/30",
-    otpCodeFieldInput: "bg-[#F5EDE0] border-[#C9A84C]/40 text-[#3D1A1A]",
+    alert: "bg-[#E6F0EA] border border-[#C9A84C]/30",
+    otpCodeFieldInput: "bg-[#E6F0EA] border-[#C9A84C]/40 text-[#3D1A1A]",
     formFieldRow: "",
     main: "",
   },
@@ -124,7 +124,7 @@ const clerkAppearance = {
 
 function SignInPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#FAF6EE] px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-[#F3F8F5] px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <p className="text-sm tracking-[0.2em] uppercase text-[#7a5f4e]">Welcome back</p>
@@ -142,7 +142,7 @@ function SignInPage() {
 
 function SignUpPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#FAF6EE] px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-[#F3F8F5] px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <p className="text-sm tracking-[0.2em] uppercase text-[#7a5f4e]">Join TwirlDrape</p>

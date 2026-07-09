@@ -78,10 +78,10 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 px-4">
         <ShoppingBag size={48} className="text-gray-300" />
-        <h2 className="font-serif text-2xl text-[#7B1C2C]">Sign in to view your orders</h2>
+        <h2 className="font-serif text-2xl text-[#1E6B5A]">Sign in to view your orders</h2>
         <Link
           href="/sign-in"
-          className="bg-[#7B1C2C] text-[#FAF6EE] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
+          className="bg-[#1E6B5A] text-[#F3F8F5] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
         >
           Sign In
         </Link>
@@ -99,14 +99,14 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF6EE] dark:bg-[#1E2329]">
+    <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#1E2329]">
       <div className="container mx-auto px-4 py-10 max-w-3xl">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <h1 className="font-serif text-3xl font-bold text-[#7B1C2C] mb-1">My Orders</h1>
+          <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] mb-1">My Orders</h1>
           <p className="text-sm text-gray-500 mb-8">
             {orders.length === 0 ? "You haven't placed any orders yet." : `${orders.length} order${orders.length !== 1 ? "s" : ""} placed`}
           </p>
@@ -123,7 +123,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
             <p className="text-gray-400 text-sm">No orders yet. Start shopping to see them here!</p>
             <Link
               href="/"
-              className="bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
+              className="bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
             >
               Browse Collection
             </Link>
@@ -189,7 +189,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                         </div>
 
                         <div className="flex flex-col items-end gap-2 shrink-0">
-                          <p className="font-bold text-[#7B1C2C] text-base">₹{order.total.toLocaleString("en-IN")}</p>
+                          <p className="font-bold text-[#1E6B5A] text-base">₹{order.total.toLocaleString("en-IN")}</p>
                           <ChevronRight size={16} className="text-gray-300 group-hover:text-[#C9A84C] transition-colors mt-auto" />
                         </div>
                       </div>

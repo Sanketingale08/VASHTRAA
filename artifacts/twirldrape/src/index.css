@@ -41,11 +41,11 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
 
-  --color-twirl-maroon: #7B1C2C;
+  --color-twirl-maroon: #1E6B5A;
   --color-twirl-gold: #C9A84C;
-  --color-twirl-ivory: #FAF6EE;
-  --color-twirl-cream: #F5EDE0;
-  --color-twirl-beige: #E8D5B7;
+  --color-twirl-ivory: #F3F8F5;
+  --color-twirl-cream: #E6F0EA;
+  --color-twirl-beige: #C8D8D0;
 
   --font-sans: 'DM Sans', sans-serif;
   --font-serif: 'Cormorant Garamond', serif;
@@ -57,35 +57,35 @@
 }
 
 :root {
-  --background: 44 48% 95%; /* ivory FAF6EE */
-  --foreground: 348 63% 30%; /* maroon text 7B1C2C */
+  --background: 144 27% 96%; /* cool ivory F3F8F5 */
+  --foreground: 348 63% 30%; /* maroon text — keep unchanged */
   
-  --card: 40 46% 92%; /* cream F5EDE0 */
+  --card: 145 25% 92%; /* sage cream E6F0EA */
   --card-foreground: 348 63% 30%;
   --card-border: 44 44% 60%; /* gold C9A84C */
   
-  --popover: 44 48% 95%;
+  --popover: 144 27% 96%;
   --popover-foreground: 348 63% 30%;
   --popover-border: 44 44% 60%;
   
-  --primary: 348 63% 30%; /* maroon */
-  --primary-foreground: 44 48% 95%; /* ivory */
+  --primary: 167 56% 27%; /* deep emerald 1E6B5A */
+  --primary-foreground: 144 27% 96%; /* cool ivory */
   
   --secondary: 44 44% 60%; /* gold */
-  --secondary-foreground: 44 48% 95%;
+  --secondary-foreground: 144 27% 96%;
   
-  --muted: 36 53% 81%; /* warm beige E8D5B7 */
-  --muted-foreground: 348 30% 40%;
+  --muted: 151 17% 82%; /* sage muted C8D8D0 */
+  --muted-foreground: 167 30% 35%;
   
   --accent: 44 44% 60%; /* gold */
-  --accent-foreground: 44 48% 95%;
+  --accent-foreground: 144 27% 96%;
   
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
   --border: 44 44% 60%;
-  --input: 36 53% 81%;
-  --ring: 44 44% 60%;
+  --input: 151 17% 82%;
+  --ring: 167 56% 27%;
 
   --radius: 0.5rem;
 }

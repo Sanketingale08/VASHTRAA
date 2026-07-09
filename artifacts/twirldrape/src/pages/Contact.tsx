@@ -37,9 +37,9 @@ const CONTACT_CARDS = [
   {
     icon: <HeadphonesIcon size={24} />,
     title: "Customer Support",
-    color: "from-[#7B1C2C]/10 to-[#7B1C2C]/5",
-    border: "border-[#7B1C2C]/20",
-    iconBg: "bg-[#7B1C2C]",
+    color: "from-[#1E6B5A]/10 to-[#1E6B5A]/5",
+    border: "border-[#1E6B5A]/20",
+    iconBg: "bg-[#1E6B5A]",
     items: [
       { icon: <Phone size={14} />, label: "Phone", value: "+91 98765 43210" },
       { icon: <Mail size={14} />, label: "Email", value: "support@twirldrape.com" },
@@ -60,9 +60,9 @@ const CONTACT_CARDS = [
   {
     icon: <Globe size={24} />,
     title: "Social Media",
-    color: "from-[#7B1C2C]/10 to-[#C9A84C]/5",
+    color: "from-[#1E6B5A]/10 to-[#C9A84C]/5",
     border: "border-[#C9A84C]/20",
-    iconBg: "bg-gradient-to-br from-[#7B1C2C] to-[#C9A84C]",
+    iconBg: "bg-gradient-to-br from-[#1E6B5A] to-[#C9A84C]",
     items: [],
     social: [
       { icon: <Instagram size={18} />, label: "Instagram", href: "#", color: "hover:text-[#E1306C]" },
@@ -128,7 +128,7 @@ export default function Contact() {
 
   return (
     <Layout>
-      <div className="bg-[#FAF6EE] min-h-screen">
+      <div className="bg-[#F3F8F5] min-h-screen">
 
         {/* ── Contact Information Cards ──────────────────────────────── */}
         <section className="container mx-auto px-4 py-16 md:py-20">
@@ -141,7 +141,7 @@ export default function Contact() {
             className="text-center mb-12"
           >
             <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Reach Us</p>
-            <h2 className="font-serif text-3xl md:text-4xl text-[#7B1C2C] font-bold">Contact Information</h2>
+            <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold">Contact Information</h2>
           </motion.div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -201,7 +201,7 @@ export default function Contact() {
                     href={card.cta.href}
                     target={card.cta.href.startsWith("http") ? "_blank" : undefined}
                     rel="noopener noreferrer"
-                    className="mt-4 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#7B1C2C] hover:text-[#C9A84C] transition-colors border-b border-[#7B1C2C]/30 hover:border-[#C9A84C] pb-0.5"
+                    className="mt-4 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E6B5A] hover:text-[#C9A84C] transition-colors border-b border-[#1E6B5A]/30 hover:border-[#C9A84C] pb-0.5"
                   >
                     {card.cta.label} →
                   </a>
@@ -212,7 +212,7 @@ export default function Contact() {
         </section>
 
         {/* ── Quick Support ──────────────────────────────────────────── */}
-        <section className="bg-[#F5EDE0] py-16 md:py-20">
+        <section className="bg-[#E6F0EA] py-16 md:py-20">
           <div className="container mx-auto px-4">
             <motion.div
               custom={0}
@@ -223,7 +223,7 @@ export default function Contact() {
               className="text-center mb-12"
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Quick Help</p>
-              <h2 className="font-serif text-3xl md:text-4xl text-[#7B1C2C] font-bold">Customer Support</h2>
+              <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold">Customer Support</h2>
               <p className="mt-3 text-[#7a5f4e] text-sm max-w-md mx-auto">Find quick answers to the most common questions.</p>
             </motion.div>
 
@@ -241,10 +241,10 @@ export default function Contact() {
                     href={item.href}
                     className="group flex flex-col items-center gap-3 p-5 bg-white rounded-2xl border border-[#C9A84C]/20 hover:border-[#C9A84C]/60 hover:shadow-md transition-all duration-300 text-center"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-[#7B1C2C]/8 group-hover:bg-[#7B1C2C] flex items-center justify-center text-[#7B1C2C] group-hover:text-white transition-all duration-300">
+                    <div className="w-12 h-12 rounded-xl bg-[#1E6B5A]/8 group-hover:bg-[#1E6B5A] flex items-center justify-center text-[#1E6B5A] group-hover:text-white transition-all duration-300">
                       {item.icon}
                     </div>
-                    <p className="text-sm font-semibold text-[#3D1515] group-hover:text-[#7B1C2C] transition-colors leading-tight">
+                    <p className="text-sm font-semibold text-[#3D1515] group-hover:text-[#1E6B5A] transition-colors leading-tight">
                       {item.label}
                     </p>
                   </Link>
@@ -266,7 +266,7 @@ export default function Contact() {
               className="text-center mb-12"
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Write to Us</p>
-              <h2 className="font-serif text-3xl md:text-4xl text-[#7B1C2C] font-bold">Send a Message</h2>
+              <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold">Send a Message</h2>
               <p className="mt-3 text-[#7a5f4e] text-sm max-w-md mx-auto">
                 Fill in the form and our team will get back to you within 24 hours on business days.
               </p>
@@ -282,13 +282,13 @@ export default function Contact() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
                   <CheckCircle2 size={32} className="text-green-600" />
                 </div>
-                <h3 className="font-serif text-2xl text-[#7B1C2C] font-bold mb-3">Message Sent!</h3>
+                <h3 className="font-serif text-2xl text-[#1E6B5A] font-bold mb-3">Message Sent!</h3>
                 <p className="text-[#7a5f4e] mb-6 max-w-sm mx-auto">
                   Thank you for reaching out. Our support team will respond within 24 hours.
                 </p>
                 <button
                   onClick={() => { setSubmitted(false); setFormData({ name: "", email: "", mobile: "", subject: "", category: "", message: "" }); setAttachment(null); }}
-                  className="inline-flex items-center gap-2 bg-[#7B1C2C] text-white px-6 py-3 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+                  className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-6 py-3 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
                 >
                   Send Another Message
                 </button>
@@ -307,7 +307,7 @@ export default function Contact() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#3D1515] mb-2">
-                      Full Name <span className="text-[#7B1C2C]">*</span>
+                      Full Name <span className="text-[#1E6B5A]">*</span>
                     </label>
                     <input
                       type="text"
@@ -315,7 +315,7 @@ export default function Contact() {
                       onChange={(e) => handleChange("name", e.target.value)}
                       placeholder="Priya Sharma"
                       className={cn(
-                        "w-full px-4 py-3 rounded-lg border bg-[#FAF6EE] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
+                        "w-full px-4 py-3 rounded-lg border bg-[#F3F8F5] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
                         errors.name ? "border-red-400" : "border-[#C9A84C]/30"
                       )}
                     />
@@ -323,7 +323,7 @@ export default function Contact() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#3D1515] mb-2">
-                      Email Address <span className="text-[#7B1C2C]">*</span>
+                      Email Address <span className="text-[#1E6B5A]">*</span>
                     </label>
                     <input
                       type="email"
@@ -331,7 +331,7 @@ export default function Contact() {
                       onChange={(e) => handleChange("email", e.target.value)}
                       placeholder="priya@example.com"
                       className={cn(
-                        "w-full px-4 py-3 rounded-lg border bg-[#FAF6EE] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
+                        "w-full px-4 py-3 rounded-lg border bg-[#F3F8F5] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
                         errors.email ? "border-red-400" : "border-[#C9A84C]/30"
                       )}
                     />
@@ -343,7 +343,7 @@ export default function Contact() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#3D1515] mb-2">
-                      Mobile Number <span className="text-[#7B1C2C]">*</span>
+                      Mobile Number <span className="text-[#1E6B5A]">*</span>
                     </label>
                     <input
                       type="tel"
@@ -351,7 +351,7 @@ export default function Contact() {
                       onChange={(e) => handleChange("mobile", e.target.value)}
                       placeholder="+91 98765 43210"
                       className={cn(
-                        "w-full px-4 py-3 rounded-lg border bg-[#FAF6EE] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
+                        "w-full px-4 py-3 rounded-lg border bg-[#F3F8F5] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
                         errors.mobile ? "border-red-400" : "border-[#C9A84C]/30"
                       )}
                     />
@@ -359,7 +359,7 @@ export default function Contact() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#3D1515] mb-2">
-                      Subject <span className="text-[#7B1C2C]">*</span>
+                      Subject <span className="text-[#1E6B5A]">*</span>
                     </label>
                     <input
                       type="text"
@@ -367,7 +367,7 @@ export default function Contact() {
                       onChange={(e) => handleChange("subject", e.target.value)}
                       placeholder="Briefly describe your query"
                       className={cn(
-                        "w-full px-4 py-3 rounded-lg border bg-[#FAF6EE] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
+                        "w-full px-4 py-3 rounded-lg border bg-[#F3F8F5] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition",
                         errors.subject ? "border-red-400" : "border-[#C9A84C]/30"
                       )}
                     />
@@ -378,14 +378,14 @@ export default function Contact() {
                 {/* Category */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#3D1515] mb-2">
-                    Category <span className="text-[#7B1C2C]">*</span>
+                    Category <span className="text-[#1E6B5A]">*</span>
                   </label>
                   <div className="relative">
                     <select
                       value={formData.category}
                       onChange={(e) => handleChange("category", e.target.value)}
                       className={cn(
-                        "w-full appearance-none px-4 py-3 pr-10 rounded-lg border bg-[#FAF6EE] text-sm text-[#3D1515] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition cursor-pointer",
+                        "w-full appearance-none px-4 py-3 pr-10 rounded-lg border bg-[#F3F8F5] text-sm text-[#3D1515] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition cursor-pointer",
                         errors.category ? "border-red-400" : "border-[#C9A84C]/30",
                         !formData.category && "text-[#b5a08a]"
                       )}
@@ -403,7 +403,7 @@ export default function Contact() {
                 {/* Message */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#3D1515] mb-2">
-                    Message <span className="text-[#7B1C2C]">*</span>
+                    Message <span className="text-[#1E6B5A]">*</span>
                   </label>
                   <textarea
                     value={formData.message}
@@ -411,7 +411,7 @@ export default function Contact() {
                     rows={5}
                     placeholder="Describe your query in detail…"
                     className={cn(
-                      "w-full px-4 py-3 rounded-lg border bg-[#FAF6EE] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition resize-none",
+                      "w-full px-4 py-3 rounded-lg border bg-[#F3F8F5] text-sm text-[#3D1515] placeholder-[#b5a08a] outline-none focus:border-[#C9A84C] focus:ring-2 focus:ring-[#C9A84C]/20 transition resize-none",
                       errors.message ? "border-red-400" : "border-[#C9A84C]/30"
                     )}
                   />
@@ -433,7 +433,7 @@ export default function Contact() {
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-[#C9A84C]/50 rounded-lg text-sm text-[#7a5f4e] hover:border-[#C9A84C] hover:text-[#7B1C2C] transition-colors bg-[#FAF6EE]"
+                    className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-[#C9A84C]/50 rounded-lg text-sm text-[#7a5f4e] hover:border-[#C9A84C] hover:text-[#1E6B5A] transition-colors bg-[#F3F8F5]"
                   >
                     <Paperclip size={15} className="text-[#C9A84C]" />
                     {attachment ? attachment.name : "Attach a file (image, PDF, doc)"}
@@ -455,7 +455,7 @@ export default function Contact() {
                     type="submit"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#C9A84C] text-[#7B1C2C] px-10 py-4 text-sm font-bold uppercase tracking-[0.15em] rounded-sm shadow-md hover:bg-[#b8943d] transition-colors duration-300"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#C9A84C] text-[#1E6B5A] px-10 py-4 text-sm font-bold uppercase tracking-[0.15em] rounded-sm shadow-md hover:bg-[#b8943d] transition-colors duration-300"
                   >
                     <Send size={16} /> Submit Message
                   </motion.button>
@@ -466,7 +466,7 @@ export default function Contact() {
         </section>
 
         {/* ── Bulk Orders ───────────────────────────────────────────── */}
-        <section className="bg-[#7B1C2C] py-16 md:py-24 relative overflow-hidden">
+        <section className="bg-[#1E6B5A] py-16 md:py-24 relative overflow-hidden">
           <div
             className="absolute inset-0 opacity-8"
             style={{
@@ -483,10 +483,10 @@ export default function Contact() {
               className="text-center mb-12"
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">For Businesses</p>
-              <h2 className="font-serif text-3xl md:text-4xl text-[#FAF6EE] font-bold mb-4">
+              <h2 className="font-serif text-3xl md:text-4xl text-[#F3F8F5] font-bold mb-4">
                 Bulk Order & Corporate Orders
               </h2>
-              <p className="text-[#E8D5B7] text-sm max-w-xl mx-auto">
+              <p className="text-[#C8D8D0] text-sm max-w-xl mx-auto">
                 Suitable for boutiques, wedding planners, and retailers. Get wholesale pricing on authentic sarees for any occasion or business need.
               </p>
             </motion.div>
@@ -503,8 +503,8 @@ export default function Contact() {
                   className="bg-white/10 hover:bg-white/15 border border-[#C9A84C]/30 hover:border-[#C9A84C]/60 rounded-2xl p-5 text-center transition-all duration-300 group cursor-pointer"
                 >
                   <div className="text-3xl mb-3">{item.icon}</div>
-                  <h3 className="font-semibold text-[#FAF6EE] text-sm mb-2 leading-tight">{item.title}</h3>
-                  <p className="text-[#E8D5B7]/70 text-xs leading-relaxed">{item.desc}</p>
+                  <h3 className="font-semibold text-[#F3F8F5] text-sm mb-2 leading-tight">{item.title}</h3>
+                  <p className="text-[#C8D8D0]/70 text-xs leading-relaxed">{item.desc}</p>
                 </motion.div>
               ))}
             </div>
@@ -519,11 +519,11 @@ export default function Contact() {
             >
               <a
                 href="#contact-form"
-                className="inline-flex items-center gap-2 bg-[#C9A84C] text-[#7B1C2C] px-10 py-4 text-sm font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:bg-[#FAF6EE] transition-colors duration-300"
+                className="inline-flex items-center gap-2 bg-[#C9A84C] text-[#1E6B5A] px-10 py-4 text-sm font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:bg-[#F3F8F5] transition-colors duration-300"
               >
                 <ShoppingBag size={16} /> Request Bulk Quote
               </a>
-              <p className="text-[#E8D5B7]/60 text-xs mt-4">
+              <p className="text-[#C8D8D0]/60 text-xs mt-4">
                 Our business team will contact you within 48 hours with a custom quote.
               </p>
             </motion.div>

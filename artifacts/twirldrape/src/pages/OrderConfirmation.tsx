@@ -165,7 +165,7 @@ function ActionForm({
                   value={r}
                   checked={reason === r}
                   onChange={() => setReason(r)}
-                  className="accent-[#7B1C2C]"
+                  className="accent-[#1E6B5A]"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300">{r}</span>
               </label>
@@ -264,7 +264,7 @@ function RefundForm({
                 value={opt.value}
                 checked={method === opt.value}
                 onChange={() => setMethod(opt.value)}
-                className="mt-0.5 accent-[#7B1C2C]"
+                className="mt-0.5 accent-[#1E6B5A]"
               />
               <div>
                 <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{opt.label}</p>
@@ -284,7 +284,7 @@ function RefundForm({
           <button
             onClick={handle}
             disabled={submitting}
-            className="flex-1 py-2 text-sm font-bold text-white bg-[#7B1C2C] hover:bg-[#6a1826] rounded-lg transition-colors disabled:opacity-50"
+            className="flex-1 py-2 text-sm font-bold text-white bg-[#1E6B5A] hover:bg-[#6a1826] rounded-lg transition-colors disabled:opacity-50"
           >
             {submitting ? "Please wait…" : "Submit Refund Request"}
           </button>
@@ -360,7 +360,7 @@ function ReturnForm({
                 value={r}
                 checked={reason === r}
                 onChange={() => setReason(r)}
-                className="accent-[#7B1C2C]"
+                className="accent-[#1E6B5A]"
               />
               <span className="text-sm text-gray-700 dark:text-gray-300">{r}</span>
             </label>
@@ -516,7 +516,7 @@ function OrderActions({
       transition={{ delay: 0.28 }}
       className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
     >
-      <h2 className="font-serif text-lg font-bold text-[#7B1C2C] mb-1">Order Actions</h2>
+      <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-1">Order Actions</h2>
 
       {/* Refund status banner */}
       {order.refundStatus && (
@@ -669,9 +669,9 @@ export function OrderConfirmationPage() {
       <Layout>
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 px-4">
           <Package size={48} className="text-gray-300" />
-          <h2 className="font-serif text-2xl text-[#7B1C2C]">Order Not Found</h2>
+          <h2 className="font-serif text-2xl text-[#1E6B5A]">Order Not Found</h2>
           <p className="text-gray-500 text-sm">{error || "This order doesn't exist or belongs to another account."}</p>
-          <Link href="/" className="bg-[#7B1C2C] text-[#FAF6EE] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm">
+          <Link href="/" className="bg-[#1E6B5A] text-[#F3F8F5] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm">
             Continue Shopping
           </Link>
         </div>
@@ -688,7 +688,7 @@ export function OrderConfirmationPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#FAF6EE] dark:bg-[#1E2329]">
+      <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#1E2329]">
         <div className="container mx-auto px-4 py-8 max-w-3xl">
 
           {/* Success / status header */}
@@ -706,7 +706,7 @@ export function OrderConfirmationPage() {
                 : <CheckCircle2 size={40} className="text-green-500" />
               }
             </div>
-            <h1 className="font-serif text-3xl font-bold text-[#7B1C2C] mb-2">
+            <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] mb-2">
               {order.status === "cancelled"
                 ? "Order Cancelled"
                 : order.status === "return_requested"
@@ -739,7 +739,7 @@ export function OrderConfirmationPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Order ID</p>
-                  <p className="font-mono font-bold text-xs text-[#7B1C2C] break-all">{order.id}</p>
+                  <p className="font-mono font-bold text-xs text-[#1E6B5A] break-all">{order.id}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Placed On</p>
@@ -794,7 +794,7 @@ export function OrderConfirmationPage() {
               className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
             >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-serif text-lg font-bold text-[#7B1C2C]">
+                <h2 className="font-serif text-lg font-bold text-[#1E6B5A]">
                   Items Ordered ({(order.items as OrderItem[]).reduce((s, i) => s + i.quantity, 0)})
                 </h2>
                 <button
@@ -813,7 +813,7 @@ export function OrderConfirmationPage() {
                     couponCode: order.couponCode,
                     status: order.status,
                   })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#C9A84C]/40 text-[#7B1C2C] hover:bg-[#C9A84C]/10 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#C9A84C]/10 rounded-lg transition-colors"
                 >
                   <Download size={13} />
                   Download Invoice
@@ -850,7 +850,7 @@ export function OrderConfirmationPage() {
               transition={{ delay: 0.2 }}
               className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
             >
-              <h2 className="font-serif text-lg font-bold text-[#7B1C2C] mb-4">Price Breakdown</h2>
+              <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-4">Price Breakdown</h2>
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between"><span className="opacity-60">Subtotal</span><span>₹{order.subtotal.toLocaleString("en-IN")}</span></div>
                 {order.discount > 0 && (
@@ -864,7 +864,7 @@ export function OrderConfirmationPage() {
                   <span>{order.shipping === 0 ? <span className="text-green-600 font-semibold">Free</span> : `₹${order.shipping}`}</span>
                 </div>
                 <div className="flex justify-between"><span className="opacity-60">GST (5%)</span><span>₹{order.tax.toLocaleString("en-IN")}</span></div>
-                <div className="border-t border-[#C9A84C]/20 pt-2.5 flex justify-between font-bold text-[#7B1C2C] text-base">
+                <div className="border-t border-[#C9A84C]/20 pt-2.5 flex justify-between font-bold text-[#1E6B5A] text-base">
                   <span>Total Paid</span>
                   <span>₹{order.total.toLocaleString("en-IN")}</span>
                 </div>
@@ -896,7 +896,7 @@ export function OrderConfirmationPage() {
                 </div>
                 <p className="text-sm font-bold capitalize">{order.deliveryMethod === "express" ? "⚡ Express (3 days)" : "🚚 Standard (7 days)"}</p>
                 <p className="text-xs text-gray-500 mt-1">Est. delivery by</p>
-                <p className="text-xs font-semibold text-[#7B1C2C] mt-0.5">{deliveryEst}</p>
+                <p className="text-xs font-semibold text-[#1E6B5A] mt-0.5">{deliveryEst}</p>
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#C9A84C]/10">
                   <PayIcon size={14} className="text-[#C9A84C]" />
                   <div>
@@ -919,18 +919,18 @@ export function OrderConfirmationPage() {
             >
               <Link
                 href="/"
-                className="inline-block bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE] px-10 py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
+                className="inline-block bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] px-10 py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
               >
                 Continue Shopping
               </Link>
               <Link
                 href="/orders"
-                className="text-sm text-[#7B1C2C] hover:underline font-medium"
+                className="text-sm text-[#1E6B5A] hover:underline font-medium"
               >
                 View all orders
               </Link>
               <p className="mt-1 text-xs text-gray-400">
-                Questions? <a href="mailto:support@twirldrape.com" className="text-[#7B1C2C] hover:underline">Contact support</a>
+                Questions? <a href="mailto:support@twirldrape.com" className="text-[#1E6B5A] hover:underline">Contact support</a>
               </p>
             </motion.div>
           </div>

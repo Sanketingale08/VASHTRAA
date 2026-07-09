@@ -32,7 +32,7 @@ function typeIcon(type: string, size = 16) {
     case "order_shipped":    return <Truck size={size} className="text-blue-500" />;
     case "order_delivered":  return <CheckCircle size={size} className="text-green-600" />;
     case "order_cancelled":  return <XCircle size={size} className="text-red-500" />;
-    case "coupon_expiry":    return <Tag size={size} className="text-amber-500" />;
+    case "coupon_expiry":    return <Tag size={size} className="text-emerald-600" />;
     case "wishlist_restock": return <Heart size={size} className="text-rose-500" />;
     default:                 return <Bell size={size} className="text-gray-400" />;
   }
@@ -179,12 +179,12 @@ export function AccountNotificationsPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-0.5">Notifications</h2>
+          <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-0.5">Notifications</h2>
           <p className="text-sm text-gray-500">Stay up to date with your orders, offers, and stock alerts.</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-[#F5EDE0] rounded-xl w-fit">
+        <div className="flex gap-1 p-1 bg-[#E6F0EA] rounded-xl w-fit">
           {TYPE_FILTERS.map(({ key, label }) => (
             <button
               key={key}
@@ -192,8 +192,8 @@ export function AccountNotificationsPage() {
               className={cn(
                 "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all",
                 activeTab === key
-                  ? "bg-white text-[#7B1C2C] shadow-sm"
-                  : "text-gray-500 hover:text-[#7B1C2C]"
+                  ? "bg-white text-[#1E6B5A] shadow-sm"
+                  : "text-gray-500 hover:text-[#1E6B5A]"
               )}
             >
               {label}
@@ -206,13 +206,13 @@ export function AccountNotificationsPage() {
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between bg-[#7B1C2C]/5 border border-[#7B1C2C]/10 rounded-xl px-4 py-3"
+            className="flex items-center justify-between bg-[#1E6B5A]/5 border border-[#1E6B5A]/10 rounded-xl px-4 py-3"
           >
-            <p className="text-sm text-[#7B1C2C]">You have unread notifications</p>
+            <p className="text-sm text-[#1E6B5A]">You have unread notifications</p>
             <button
               onClick={() => markAllRead.mutate()}
               disabled={markAllRead.isPending}
-              className="flex items-center gap-1.5 text-sm font-semibold text-[#7B1C2C] hover:text-[#C9A84C] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 text-sm font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors disabled:opacity-50"
             >
               <CheckCheck size={15} />
               Mark all as read
@@ -241,7 +241,7 @@ export function AccountNotificationsPage() {
           ) : (
             Object.entries(grouped).map(([dateLabel, items]) => (
               <div key={dateLabel}>
-                <div className="px-4 py-2 bg-[#FAF6EE] border-b border-[#C9A84C]/10">
+                <div className="px-4 py-2 bg-[#F3F8F5] border-b border-[#C9A84C]/10">
                   <p className="text-[10px] font-bold text-[#7a5f4e] uppercase tracking-widest">{dateLabel}</p>
                 </div>
                 {items.map((n) => (
@@ -249,8 +249,8 @@ export function AccountNotificationsPage() {
                     key={n.id}
                     className={cn(
                       "flex items-start gap-3 px-4 py-4 border-b border-gray-50 last:border-0 group transition-colors",
-                      !n.read && "bg-[#FAF6EE]/50",
-                      n.read ? "hover:bg-gray-50/60" : "hover:bg-[#FAF6EE]/80"
+                      !n.read && "bg-[#F3F8F5]/50",
+                      n.read ? "hover:bg-gray-50/60" : "hover:bg-[#F3F8F5]/80"
                     )}
                   >
                     <div className={cn(
@@ -271,7 +271,7 @@ export function AccountNotificationsPage() {
                         <button
                           onClick={() => markRead.mutate(n.id)}
                           title="Mark as read"
-                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#7B1C2C] hover:bg-[#7B1C2C]/5 transition-colors"
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
                         >
                           <CheckCircle size={14} />
                         </button>
@@ -285,7 +285,7 @@ export function AccountNotificationsPage() {
                       </button>
                     </div>
                     {!n.read && (
-                      <span className="mt-2 w-2 h-2 rounded-full bg-[#7B1C2C] shrink-0" />
+                      <span className="mt-2 w-2 h-2 rounded-full bg-[#1E6B5A] shrink-0" />
                     )}
                   </div>
                 ))}
@@ -300,7 +300,7 @@ export function AccountNotificationsPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 text-sm font-medium text-[#7B1C2C] border border-[#C9A84C]/30 rounded-lg hover:bg-[#FAF6EE] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-lg hover:bg-[#F3F8F5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Previous
             </button>
@@ -308,7 +308,7 @@ export function AccountNotificationsPage() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-4 py-2 text-sm font-medium text-[#7B1C2C] border border-[#C9A84C]/30 rounded-lg hover:bg-[#FAF6EE] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-lg hover:bg-[#F3F8F5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Next
             </button>
@@ -317,8 +317,8 @@ export function AccountNotificationsPage() {
 
         {/* Notification Preferences */}
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden shadow-sm">
-          <div className="px-4 py-3 border-b border-[#C9A84C]/10 bg-[#FAF6EE]">
-            <h3 className="text-sm font-bold text-[#7B1C2C]">Notification Preferences</h3>
+          <div className="px-4 py-3 border-b border-[#C9A84C]/10 bg-[#F3F8F5]">
+            <h3 className="text-sm font-bold text-[#1E6B5A]">Notification Preferences</h3>
             <p className="text-xs text-gray-400 mt-0.5">Choose which notifications you'd like to receive in-app.</p>
           </div>
           {prefsLoading ? (
@@ -354,7 +354,7 @@ export function AccountNotificationsPage() {
                     disabled={updatePrefs.isPending}
                     className={cn(
                       "relative w-10 h-6 rounded-full transition-colors focus:outline-none disabled:opacity-50",
-                      (prefs?.[key] ?? true) ? "bg-[#7B1C2C]" : "bg-gray-200"
+                      (prefs?.[key] ?? true) ? "bg-[#1E6B5A]" : "bg-gray-200"
                     )}
                   >
                     <span

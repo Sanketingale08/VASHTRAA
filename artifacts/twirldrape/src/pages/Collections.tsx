@@ -6,15 +6,15 @@ import { Link } from "wouter";
 export default function Collections() {
   return (
     <Layout>
-      <div className="bg-[#FAF6EE] min-h-screen">
+      <div className="bg-[#F3F8F5] min-h-screen">
         {/* Page Header */}
-        <div className="bg-[#7B1C2C] py-16 md:py-24 text-center relative overflow-hidden">
+        <div className="bg-[#1E6B5A] py-16 md:py-24 text-center relative overflow-hidden">
           <div className="absolute inset-0 opacity-10"
             style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
           />
           <div className="relative z-10">
             <p className="text-[#C9A84C] uppercase tracking-[0.35em] text-xs font-bold mb-4">Curated for You</p>
-            <h1 className="font-serif text-4xl md:text-6xl text-[#FAF6EE] font-bold tracking-wide">
+            <h1 className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold tracking-wide">
               Our Exclusive Collections
             </h1>
             <div className="mt-6 flex items-center justify-center gap-3">
@@ -43,7 +43,7 @@ export default function Collections() {
                   alt="Authentic Paithani Sarees"
                   className="w-full h-full object-cover transition-transform duration-[1.2s] group-hover:scale-110"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#4A0E18]/95 via-[#7B1C2C]/60 to-[#7B1C2C]/20 group-hover:from-[#4A0E18]/98 group-hover:via-[#7B1C2C]/70 transition-all duration-700" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#4A0E18]/95 via-[#1E6B5A]/60 to-[#1E6B5A]/20 group-hover:from-[#4A0E18]/98 group-hover:via-[#1E6B5A]/70 transition-all duration-700" />
               </div>
 
               {/* Gold border glow on hover */}
@@ -51,7 +51,7 @@ export default function Collections() {
 
               {/* Top badge */}
               <div className="absolute top-6 left-6 z-10">
-                <span className="bg-[#C9A84C] text-[#7B1C2C] text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-sm shadow-lg">
+                <span className="bg-[#C9A84C] text-[#1E6B5A] text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-sm shadow-lg">
                   Heritage Collection
                 </span>
               </div>
@@ -63,10 +63,10 @@ export default function Collections() {
                     <div className="h-px w-8 bg-[#C9A84C]" />
                     <p className="text-[#C9A84C] text-xs font-bold uppercase tracking-[0.25em]">Paithani</p>
                   </div>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-[#FAF6EE] font-bold leading-tight mb-3">
+                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-[#F3F8F5] font-bold leading-tight mb-3">
                     Authentic Paithani<br />Sarees
                   </h2>
-                  <p className="text-[#E8D5B7] text-base md:text-lg leading-relaxed mb-8">
+                  <p className="text-[#C8D8D0] text-base md:text-lg leading-relaxed mb-8">
                     Handwoven Heritage. Timeless Artistry.
                   </p>
                 </div>
@@ -74,7 +74,7 @@ export default function Collections() {
                   <motion.button
                     whileHover={{ scale: 1.04 }}
                     whileTap={{ scale: 0.97 }}
-                    className="inline-flex items-center gap-3 bg-[#C9A84C] text-[#7B1C2C] px-8 py-4 text-sm font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:bg-[#FAF6EE] transition-colors duration-300"
+                    className="inline-flex items-center gap-3 bg-[#C9A84C] text-[#1E6B5A] px-8 py-4 text-sm font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:bg-[#F3F8F5] transition-colors duration-300"
                   >
                     Explore Now
                     <span className="text-lg leading-none">→</span>
@@ -117,10 +117,10 @@ export default function Collections() {
                     <div className="h-px w-8 bg-[#C9A84C]" />
                     <p className="text-[#C9A84C] text-xs font-bold uppercase tracking-[0.25em]">Designer</p>
                   </div>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-[#FAF6EE] font-bold leading-tight mb-3">
+                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-[#F3F8F5] font-bold leading-tight mb-3">
                     Premium Designer<br />Sarees
                   </h2>
-                  <p className="text-[#E8D5B7] text-base md:text-lg leading-relaxed mb-8">
+                  <p className="text-[#C8D8D0] text-base md:text-lg leading-relaxed mb-8">
                     Contemporary Designs for Every Occasion.
                   </p>
                 </div>
@@ -128,7 +128,7 @@ export default function Collections() {
                   <motion.button
                     whileHover={{ scale: 1.04 }}
                     whileTap={{ scale: 0.97 }}
-                    className="inline-flex items-center gap-3 bg-[#C9A84C] text-[#1A1A2E] px-8 py-4 text-sm font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:bg-[#FAF6EE] transition-colors duration-300"
+                    className="inline-flex items-center gap-3 bg-[#C9A84C] text-[#1A1A2E] px-8 py-4 text-sm font-bold uppercase tracking-[0.2em] rounded-sm shadow-xl hover:bg-[#F3F8F5] transition-colors duration-300"
                   >
                     Explore Now
                     <span className="text-lg leading-none">→</span>

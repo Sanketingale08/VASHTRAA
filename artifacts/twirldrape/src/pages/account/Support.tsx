@@ -83,7 +83,7 @@ const FAQ_ITEMS = [
 function statusColor(status: TicketStatus) {
   switch (status) {
     case "Open":        return "bg-blue-50 text-blue-700 border-blue-200";
-    case "In Progress": return "bg-amber-50 text-amber-700 border-amber-200";
+    case "In Progress": return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "Resolved":    return "bg-green-50 text-green-700 border-green-200";
     case "Closed":      return "bg-gray-100 text-gray-500 border-gray-200";
   }
@@ -241,7 +241,7 @@ export function AccountSupportPage() {
           <p className="text-gray-400 text-sm">No tickets yet.</p>
           <button
             onClick={() => { setRightPanel("new"); setMobileView("new"); }}
-            className="mt-2 text-sm text-[#7B1C2C] font-semibold hover:underline"
+            className="mt-2 text-sm text-[#1E6B5A] font-semibold hover:underline"
           >
             Raise your first ticket →
           </button>
@@ -256,14 +256,14 @@ export function AccountSupportPage() {
               className={cn(
                 "w-full text-left rounded-xl p-3.5 border transition-all group",
                 isSelected
-                  ? "bg-[#7B1C2C]/5 border-[#7B1C2C]/30"
+                  ? "bg-[#1E6B5A]/5 border-[#1E6B5A]/30"
                   : "bg-white border-[#C9A84C]/20 hover:border-[#C9A84C]/50 hover:shadow-sm"
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <p className={cn(
                   "font-semibold text-sm line-clamp-1",
-                  isSelected ? "text-[#7B1C2C]" : "text-[#3D1A1A] group-hover:text-[#7B1C2C] transition-colors"
+                  isSelected ? "text-[#1E6B5A]" : "text-[#3D1A1A] group-hover:text-[#1E6B5A] transition-colors"
                 )}>
                   {ticket.subject}
                 </p>
@@ -292,7 +292,7 @@ export function AccountSupportPage() {
   const NewTicketPanel = (
     <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <Plus size={16} className="text-[#7B1C2C]" />
+        <Plus size={16} className="text-[#1E6B5A]" />
         <h3 className="font-serif font-bold text-[#3D1A1A]">Raise a Support Ticket</h3>
       </div>
       <form onSubmit={handleSubmitTicket} className="space-y-4">
@@ -305,7 +305,7 @@ export function AccountSupportPage() {
             value={form.subject}
             onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
             placeholder="Brief description of your issue"
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#7B1C2C]/50 bg-[#FAF6EE] text-[#3D1A1A] placeholder:text-gray-400"
+            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
           />
         </div>
         <div>
@@ -315,7 +315,7 @@ export function AccountSupportPage() {
           <select
             value={form.category}
             onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as Category }))}
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#7B1C2C]/50 bg-[#FAF6EE] text-[#3D1A1A]"
+            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A]"
           >
             <option value="">Select a category</option>
             {CATEGORIES.map((c) => (
@@ -332,7 +332,7 @@ export function AccountSupportPage() {
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             placeholder="Please describe your issue in detail. Include order numbers if applicable."
             rows={5}
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#7B1C2C]/50 bg-[#FAF6EE] text-[#3D1A1A] placeholder:text-gray-400 resize-none"
+            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400 resize-none"
           />
         </div>
         <p className="text-xs text-gray-400 italic">
@@ -346,7 +346,7 @@ export function AccountSupportPage() {
         <button
           type="submit"
           disabled={createTicket.isPending}
-          className="w-full py-2.5 bg-[#7B1C2C] text-white text-sm font-semibold rounded-lg hover:bg-[#5e1421] disabled:opacity-50 transition-colors"
+          className="w-full py-2.5 bg-[#1E6B5A] text-white text-sm font-semibold rounded-lg hover:bg-[#5e1421] disabled:opacity-50 transition-colors"
         >
           {createTicket.isPending ? "Submitting…" : "Submit Ticket"}
         </button>
@@ -363,7 +363,7 @@ export function AccountSupportPage() {
           value={faqSearch}
           onChange={(e) => { setFaqSearch(e.target.value); setOpenFaq(null); }}
           placeholder="Search frequently asked questions…"
-          className="w-full pl-9 pr-4 py-2.5 border border-[#C9A84C]/30 rounded-xl text-sm focus:outline-none focus:border-[#7B1C2C]/40 bg-white text-[#3D1A1A] placeholder:text-gray-400 shadow-sm"
+          className="w-full pl-9 pr-4 py-2.5 border border-[#C9A84C]/30 rounded-xl text-sm focus:outline-none focus:border-[#1E6B5A]/40 bg-white text-[#3D1A1A] placeholder:text-gray-400 shadow-sm"
         />
       </div>
       {filteredFaq.length === 0 ? (
@@ -401,11 +401,11 @@ export function AccountSupportPage() {
           </div>
         ))
       )}
-      <div className="bg-[#FAF6EE] border border-[#C9A84C]/20 rounded-xl p-4 text-center">
+      <div className="bg-[#F3F8F5] border border-[#C9A84C]/20 rounded-xl p-4 text-center">
         <p className="text-sm text-gray-500">Can't find what you're looking for?</p>
         <button
           onClick={() => { setRightPanel("new"); setMobileView("new"); }}
-          className="mt-1 text-sm font-semibold text-[#7B1C2C] hover:underline"
+          className="mt-1 text-sm font-semibold text-[#1E6B5A] hover:underline"
         >
           Raise a support ticket →
         </button>
@@ -444,8 +444,8 @@ export function AccountSupportPage() {
                 <div className={cn(
                   "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
                   msg.isStaff
-                    ? "bg-[#FAF6EE] border border-[#C9A84C]/20 text-[#3D1A1A] rounded-tl-sm"
-                    : "bg-[#7B1C2C] text-white rounded-tr-sm"
+                    ? "bg-[#F3F8F5] border border-[#C9A84C]/20 text-[#3D1A1A] rounded-tl-sm"
+                    : "bg-[#1E6B5A] text-white rounded-tr-sm"
                 )}>
                   {msg.isStaff && (
                     <p className="text-[10px] font-semibold text-[#C9A84C] uppercase tracking-wide mb-1">
@@ -468,7 +468,7 @@ export function AccountSupportPage() {
                 onChange={(e) => setReplyBody(e.target.value)}
                 placeholder="Write a reply…"
                 rows={2}
-                className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#7B1C2C]/40 bg-[#FAF6EE] text-[#3D1A1A] placeholder:text-gray-400"
+                className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B5A]/40 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -479,7 +479,7 @@ export function AccountSupportPage() {
               <button
                 type="submit"
                 disabled={!replyBody.trim() || addReply.isPending}
-                className="self-end px-3 py-2 bg-[#7B1C2C] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
+                className="self-end px-3 py-2 bg-[#1E6B5A] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
               >
                 <Send size={15} />
               </button>
@@ -504,13 +504,13 @@ export function AccountSupportPage() {
       <div className="flex justify-center gap-3 mt-4">
         <button
           onClick={() => setRightPanel("new")}
-          className="px-4 py-2 bg-[#7B1C2C] text-white text-sm font-semibold rounded-lg hover:bg-[#5e1421] transition-colors"
+          className="px-4 py-2 bg-[#1E6B5A] text-white text-sm font-semibold rounded-lg hover:bg-[#5e1421] transition-colors"
         >
           New Ticket
         </button>
         <button
           onClick={() => { setFaqSearch(""); setRightPanel("faq"); }}
-          className="px-4 py-2 border border-[#C9A84C]/40 text-[#7B1C2C] text-sm font-semibold rounded-lg hover:bg-[#FAF6EE] transition-colors"
+          className="px-4 py-2 border border-[#C9A84C]/40 text-[#1E6B5A] text-sm font-semibold rounded-lg hover:bg-[#F3F8F5] transition-colors"
         >
           View FAQ
         </button>
@@ -532,10 +532,10 @@ export function AccountSupportPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HelpCircle size={20} className="text-[#7B1C2C]" />
-            <h2 className="font-serif text-xl font-bold text-[#7B1C2C]">Support Center</h2>
+            <HelpCircle size={20} className="text-[#1E6B5A]" />
+            <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Support Center</h2>
             {openCount > 0 && (
-              <span className="text-[10px] bg-[#7B1C2C] text-white font-bold px-1.5 py-0.5 rounded-full">
+              <span className="text-[10px] bg-[#1E6B5A] text-white font-bold px-1.5 py-0.5 rounded-full">
                 {openCount} open
               </span>
             )}
@@ -547,8 +547,8 @@ export function AccountSupportPage() {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors",
                 rightPanel === "new"
-                  ? "bg-[#7B1C2C] text-white border-[#7B1C2C]"
-                  : "border-[#C9A84C]/40 text-[#7B1C2C] hover:bg-[#FAF6EE]"
+                  ? "bg-[#1E6B5A] text-white border-[#1E6B5A]"
+                  : "border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#F3F8F5]"
               )}
             >
               <Plus size={14} /> New Ticket
@@ -558,8 +558,8 @@ export function AccountSupportPage() {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors",
                 rightPanel === "faq"
-                  ? "bg-[#7B1C2C] text-white border-[#7B1C2C]"
-                  : "border-[#C9A84C]/40 text-[#7B1C2C] hover:bg-[#FAF6EE]"
+                  ? "bg-[#1E6B5A] text-white border-[#1E6B5A]"
+                  : "border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#F3F8F5]"
               )}
             >
               <HelpCircle size={14} /> FAQ
@@ -606,13 +606,13 @@ export function AccountSupportPage() {
                   className={cn(
                     "flex-1 py-2 px-2 rounded-lg text-sm font-medium transition-colors",
                     mobileView === key
-                      ? "bg-[#7B1C2C] text-white"
-                      : "text-gray-500 hover:text-[#7B1C2C]"
+                      ? "bg-[#1E6B5A] text-white"
+                      : "text-gray-500 hover:text-[#1E6B5A]"
                   )}
                 >
                   {label}
                   {key === "list" && openCount > 0 && (
-                    <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-white text-[#7B1C2C] font-bold">
+                    <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-white text-[#1E6B5A] font-bold">
                       {openCount}
                     </span>
                   )}
@@ -636,7 +636,7 @@ export function AccountSupportPage() {
                 <div className="space-y-3">
                   <button
                     onClick={() => setMobileView("list")}
-                    className="flex items-center gap-1.5 text-sm text-[#7B1C2C] font-medium hover:underline"
+                    className="flex items-center gap-1.5 text-sm text-[#1E6B5A] font-medium hover:underline"
                   >
                     <ChevronLeft size={15} /> Back to My Tickets
                   </button>

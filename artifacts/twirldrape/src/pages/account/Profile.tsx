@@ -36,7 +36,7 @@ function Field({
 }
 
 const inputCls =
-  "w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#7B1C2C]/20 focus:border-[#7B1C2C] transition-colors bg-white";
+  "w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white";
 
 export function AccountProfilePage() {
   const { user, isLoaded } = useUser();
@@ -132,7 +132,7 @@ export function AccountProfilePage() {
     <DashboardLayout>
       <div className="space-y-6 max-w-xl">
         <div>
-          <h2 className="font-serif text-xl font-bold text-[#7B1C2C]">Profile</h2>
+          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Profile</h2>
           <p className="text-sm text-gray-500 mt-0.5">Manage your personal information</p>
         </div>
 
@@ -149,7 +149,7 @@ export function AccountProfilePage() {
                 className="w-[72px] h-[72px] rounded-full object-cover border-2 border-[#C9A84C]/30"
               />
             ) : (
-              <div className="w-[72px] h-[72px] rounded-full bg-[#7B1C2C] flex items-center justify-center text-[#FAF6EE] text-xl font-bold font-serif border-2 border-[#C9A84C]/30">
+              <div className="w-[72px] h-[72px] rounded-full bg-[#1E6B5A] flex items-center justify-center text-[#F3F8F5] text-xl font-bold font-serif border-2 border-[#C9A84C]/30">
                 {initials}
               </div>
             )}
@@ -160,9 +160,9 @@ export function AccountProfilePage() {
               title="Change profile photo"
             >
               {avatarUploading ? (
-                <Loader2 size={13} className="animate-spin text-[#7B1C2C]" />
+                <Loader2 size={13} className="animate-spin text-[#1E6B5A]" />
               ) : (
-                <Camera size={13} className="text-[#7B1C2C]" />
+                <Camera size={13} className="text-[#1E6B5A]" />
               )}
             </button>
             <input
@@ -191,7 +191,7 @@ export function AccountProfilePage() {
           onSubmit={handleSave}
           className="bg-white rounded-xl border border-[#C9A84C]/15 p-5 shadow-sm space-y-4"
         >
-          <h3 className="text-sm font-bold text-[#7B1C2C] uppercase tracking-wider">
+          <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">
             Personal Details
           </h3>
 
@@ -279,7 +279,7 @@ export function AccountProfilePage() {
           <button
             type="submit"
             disabled={saving || !isLoaded}
-            className="w-full bg-[#7B1C2C] hover:bg-[#6a1826] disabled:opacity-60 text-[#FAF6EE] py-3 font-bold uppercase tracking-wider text-sm rounded-lg flex items-center justify-center gap-2 transition-colors"
+            className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-3 font-bold uppercase tracking-wider text-sm rounded-lg flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? (
               <>
@@ -299,7 +299,7 @@ export function AccountProfilePage() {
           transition={{ delay: 0.12 }}
           className="bg-white rounded-xl border border-[#C9A84C]/15 p-5 shadow-sm"
         >
-          <h3 className="text-sm font-bold text-[#7B1C2C] uppercase tracking-wider mb-2">
+          <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider mb-2">
             Account Security
           </h3>
           <p className="text-xs text-gray-500 mb-4">
@@ -307,7 +307,7 @@ export function AccountProfilePage() {
           </p>
           <button
             onClick={() => openUserProfile()}
-            className="flex items-center gap-2 text-sm font-semibold text-[#7B1C2C] hover:text-[#C9A84C] transition-colors"
+            className="flex items-center gap-2 text-sm font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
           >
             <ExternalLink size={14} /> Manage account security
           </button>

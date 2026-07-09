@@ -85,7 +85,7 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1.5 text-xs font-bold text-[#7B1C2C] hover:text-[#C9A84C] transition-colors"
+      className="flex items-center gap-1.5 text-xs font-bold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
       title="Copy code"
     >
       {copied ? (
@@ -120,12 +120,12 @@ function AvailableCouponCard({ coupon, delay }: { coupon: AvailableCoupon; delay
       transition={{ delay }}
       className="bg-white rounded-xl border border-[#C9A84C]/25 p-4 relative overflow-hidden group hover:border-[#C9A84C]/50 hover:shadow-md transition-all"
     >
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#7B1C2C] rounded-l-xl" />
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#1E6B5A] rounded-l-xl" />
       <div className="pl-2">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="inline-block font-mono font-bold text-base text-[#7B1C2C] tracking-wider bg-[#7B1C2C]/5 px-2.5 py-1 rounded-md border border-[#7B1C2C]/10">
+              <span className="inline-block font-mono font-bold text-base text-[#1E6B5A] tracking-wider bg-[#1E6B5A]/5 px-2.5 py-1 rounded-md border border-[#1E6B5A]/10">
                 {coupon.code}
               </span>
               <span className="text-xs font-bold text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full">
@@ -179,12 +179,12 @@ function RedemptionCard({ r, delay }: { r: Redemption; delay: number }) {
       transition={{ delay }}
       className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4"
     >
-      <div className="w-10 h-10 rounded-lg bg-[#7B1C2C]/5 flex items-center justify-center shrink-0">
-        <History size={16} className="text-[#7B1C2C]" />
+      <div className="w-10 h-10 rounded-lg bg-[#1E6B5A]/5 flex items-center justify-center shrink-0">
+        <History size={16} className="text-[#1E6B5A]" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="font-mono font-bold text-sm text-[#7B1C2C]">{r.couponCode}</span>
+          <span className="font-mono font-bold text-sm text-[#1E6B5A]">{r.couponCode}</span>
           <span className="text-xs text-gray-500">· {discountLabel(r.type, r.value)}</span>
         </div>
         <p className="text-xs text-gray-500 line-clamp-1">{r.description}</p>
@@ -272,8 +272,8 @@ export function AccountCouponsPage() {
       if (coupons.length === 0) {
         return (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-            <div className="w-14 h-14 rounded-full bg-[#7B1C2C]/5 flex items-center justify-center">
-              <Ticket size={28} className="text-[#7B1C2C]/30" />
+            <div className="w-14 h-14 rounded-full bg-[#1E6B5A]/5 flex items-center justify-center">
+              <Ticket size={28} className="text-[#1E6B5A]/30" />
             </div>
             <p className="text-gray-400 text-sm">No coupons available right now.</p>
             <p className="text-gray-400 text-xs max-w-xs">
@@ -352,7 +352,7 @@ export function AccountCouponsPage() {
     <DashboardLayout>
       <div className="space-y-5">
         <div>
-          <h2 className="font-serif text-xl font-bold text-[#7B1C2C]">Coupons & Offers</h2>
+          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Coupons & Offers</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             Your exclusive discounts and coupon history
           </p>
@@ -365,8 +365,8 @@ export function AccountCouponsPage() {
               onClick={() => setActiveTab(tab)}
               className={`flex-1 text-sm font-semibold py-2 rounded-lg transition-all ${
                 activeTab === tab
-                  ? "bg-[#7B1C2C] text-[#FAF6EE] shadow-sm"
-                  : "text-gray-500 hover:text-[#7B1C2C]"
+                  ? "bg-[#1E6B5A] text-[#F3F8F5] shadow-sm"
+                  : "text-gray-500 hover:text-[#1E6B5A]"
               }`}
             >
               {tab}
@@ -374,8 +374,8 @@ export function AccountCouponsPage() {
                 <span
                   className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
                     activeTab === tab
-                      ? "bg-[#FAF6EE]/20 text-[#FAF6EE]"
-                      : "bg-[#7B1C2C]/10 text-[#7B1C2C]"
+                      ? "bg-[#F3F8F5]/20 text-[#F3F8F5]"
+                      : "bg-[#1E6B5A]/10 text-[#1E6B5A]"
                   }`}
                 >
                   {coupons.length}
@@ -385,7 +385,7 @@ export function AccountCouponsPage() {
                 <span
                   className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
                     activeTab === tab
-                      ? "bg-[#FAF6EE]/20 text-[#FAF6EE]"
+                      ? "bg-[#F3F8F5]/20 text-[#F3F8F5]"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >
@@ -396,7 +396,7 @@ export function AccountCouponsPage() {
                 <span
                   className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
                     activeTab === tab
-                      ? "bg-[#FAF6EE]/20 text-[#FAF6EE]"
+                      ? "bg-[#F3F8F5]/20 text-[#F3F8F5]"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >

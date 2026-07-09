@@ -99,7 +99,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3) }}
-        className="group relative bg-[#F5EDE0] dark:bg-[#2A2E35] rounded-lg overflow-hidden border border-[#C9A84C]/10 hover:border-[#C9A84C] transition-all duration-300 hover:shadow-[0_0_15px_rgba(201,168,76,0.3)] cursor-pointer"
+        className="group relative bg-[#E6F0EA] dark:bg-[#2A2E35] rounded-lg overflow-hidden border border-[#C9A84C]/10 hover:border-[#C9A84C] transition-all duration-300 hover:shadow-[0_0_15px_rgba(201,168,76,0.3)] cursor-pointer"
         data-testid={`card-product-${product.id}`}
       >
         {/* Badges */}
@@ -110,12 +110,12 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
             </span>
           )}
           {product.stock !== 0 && product.isBestSeller && (
-            <span className="bg-[#C9A84C] text-[#7B1C2C] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+            <span className="bg-[#C9A84C] text-[#1E6B5A] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
               Best Seller
             </span>
           )}
           {product.stock !== 0 && product.isNewArrival && (
-            <span className="bg-[#7B1C2C] text-[#FAF6EE] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+            <span className="bg-[#1E6B5A] text-[#F3F8F5] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
               New Arrival
             </span>
           )}
@@ -137,7 +137,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
             className={cn(
               "transition-colors",
               isWishlisted
-                ? "fill-[#7B1C2C] text-[#7B1C2C]"
+                ? "fill-[#1E6B5A] text-[#1E6B5A]"
                 : "text-gray-600 dark:text-gray-300",
             )}
           />
@@ -184,7 +184,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
                 "flex-1 font-semibold py-2 text-xs transition-colors rounded",
                 (product.stock ?? 1) === 0
                   ? "bg-gray-500 text-white cursor-not-allowed opacity-80"
-                  : "bg-[#C9A84C] hover:bg-[#b59539] text-[#7B1C2C]"
+                  : "bg-[#C9A84C] hover:bg-[#b59539] text-[#1E6B5A]"
               )}
             >
               {(product.stock ?? 1) === 0 ? "Sold Out" : "Add to Cart"}
@@ -204,7 +204,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         {/* Content */}
         <div className="p-4">
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{vendorLabel}</p>
-          <h3 className="font-serif text-base leading-tight mb-2 line-clamp-2 min-h-[2.6rem] text-[#7B1C2C] dark:text-[#FAF6EE]">
+          <h3 className="font-serif text-base leading-tight mb-2 line-clamp-2 min-h-[2.6rem] text-[#1E6B5A] dark:text-[#F3F8F5]">
             {product.name}
           </h3>
 
@@ -217,7 +217,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
           </div>
 
           <div className="flex items-end gap-2 flex-wrap">
-            <span className="font-bold text-base text-[#7B1C2C] dark:text-[#C9A84C]">
+            <span className="font-bold text-base text-[#1E6B5A] dark:text-[#C9A84C]">
               ₹{product.price.toLocaleString("en-IN")}
             </span>
             {product.originalPrice && (

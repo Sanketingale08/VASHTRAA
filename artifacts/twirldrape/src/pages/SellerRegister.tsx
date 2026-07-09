@@ -6,10 +6,10 @@ import { getApiUrl } from "@/lib/api";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 interface FormData {
   name: string;
@@ -145,7 +145,7 @@ export default function SellerRegister() {
           <p className="text-sm text-gray-500 leading-relaxed mb-6 max-w-sm mx-auto">
             Your vendor application is under review. Our team will verify your details and get back to you within 2–3 business days.
           </p>
-          <div className="bg-[#FAF6EE] rounded-xl p-4 mb-6 text-left space-y-2">
+          <div className="bg-[#F3F8F5] rounded-xl p-4 mb-6 text-left space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">What happens next</p>
             <div className="flex items-start gap-2 text-sm text-gray-600">
               <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5" style={{ background: MAROON }}>1</span>

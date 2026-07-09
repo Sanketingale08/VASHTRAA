@@ -43,17 +43,17 @@ export function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md bg-[#FAF6EE] dark:bg-[#1E2329] shadow-2xl z-50 flex flex-col"
+            className="fixed right-0 top-0 h-full w-full max-w-md bg-[#F3F8F5] dark:bg-[#1E2329] shadow-2xl z-50 flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#C9A84C]/20">
               <div className="flex items-center gap-3">
-                <ShoppingBag size={20} className="text-[#7B1C2C]" />
-                <h2 className="font-serif text-xl font-bold text-[#7B1C2C] dark:text-[#FAF6EE]">
+                <ShoppingBag size={20} className="text-[#1E6B5A]" />
+                <h2 className="font-serif text-xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
                   Your Cart
                 </h2>
                 {totalItems > 0 && (
-                  <span className="bg-[#C9A84C] text-[#7B1C2C] text-xs font-bold px-2 py-0.5 rounded-full">
+                  <span className="bg-[#C9A84C] text-[#1E6B5A] text-xs font-bold px-2 py-0.5 rounded-full">
                     {totalItems}
                   </span>
                 )}
@@ -62,7 +62,7 @@ export function CartDrawer() {
                 onClick={closeDrawer}
                 className="p-2 hover:bg-[#C9A84C]/10 rounded-full transition-colors"
               >
-                <X size={20} className="text-[#7B1C2C] dark:text-[#FAF6EE]" />
+                <X size={20} className="text-[#1E6B5A] dark:text-[#F3F8F5]" />
               </button>
             </div>
 
@@ -71,7 +71,7 @@ export function CartDrawer() {
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
                   <ShoppingBag size={48} className="text-[#C9A84C]/40" />
-                  <p className="text-[#7B1C2C]/60 dark:text-[#FAF6EE]/60 font-serif text-lg">
+                  <p className="text-[#1E6B5A]/60 dark:text-[#F3F8F5]/60 font-serif text-lg">
                     Your cart is empty
                   </p>
                   <p className="text-sm text-gray-500">
@@ -79,7 +79,7 @@ export function CartDrawer() {
                   </p>
                   <button
                     onClick={closeDrawer}
-                    className="mt-2 px-6 py-2 bg-[#7B1C2C] text-[#FAF6EE] text-sm font-semibold rounded-sm hover:bg-[#6a1826] transition-colors"
+                    className="mt-2 px-6 py-2 bg-[#1E6B5A] text-[#F3F8F5] text-sm font-semibold rounded-sm hover:bg-[#6a1826] transition-colors"
                   >
                     Continue Shopping
                   </button>
@@ -113,12 +113,12 @@ export function CartDrawer() {
                         href={`/products/${item.productId}`}
                         onClick={closeDrawer}
                       >
-                        <p className="text-sm font-serif font-semibold text-[#7B1C2C] dark:text-[#FAF6EE] line-clamp-2 leading-snug hover:text-[#C9A84C] transition-colors">
+                        <p className="text-sm font-serif font-semibold text-[#1E6B5A] dark:text-[#F3F8F5] line-clamp-2 leading-snug hover:text-[#C9A84C] transition-colors">
                           {item.name}
                         </p>
                       </Link>
                       <p className="text-xs text-gray-500 mt-0.5">{item.vendorName}</p>
-                      <p className="text-sm font-bold text-[#7B1C2C] dark:text-[#C9A84C] mt-1">
+                      <p className="text-sm font-bold text-[#1E6B5A] dark:text-[#C9A84C] mt-1">
                         ₹{(item.price * item.quantity).toLocaleString("en-IN")}
                       </p>
                       <div className="flex items-center justify-between mt-2">
@@ -172,7 +172,7 @@ export function CartDrawer() {
                     <span>GST (5%)</span>
                     <span>₹{gst.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between font-bold text-base text-[#7B1C2C] dark:text-[#FAF6EE] pt-2 border-t border-[#C9A84C]/20">
+                  <div className="flex justify-between font-bold text-base text-[#1E6B5A] dark:text-[#F3F8F5] pt-2 border-t border-[#C9A84C]/20">
                     <span>Total</span>
                     <span>₹{total.toLocaleString("en-IN")}</span>
                   </div>
@@ -183,13 +183,13 @@ export function CartDrawer() {
                   </p>
                 )}
                 <Link href="/cart" onClick={closeDrawer}>
-                  <button className="w-full bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE] py-3 font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 rounded-sm transition-colors">
+                  <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-3 font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 rounded-sm transition-colors">
                     View Cart & Checkout <ArrowRight size={16} />
                   </button>
                 </Link>
                 <button
                   onClick={closeDrawer}
-                  className="w-full py-2 text-sm text-[#7B1C2C] dark:text-[#C9A84C] hover:underline transition-colors"
+                  className="w-full py-2 text-sm text-[#1E6B5A] dark:text-[#C9A84C] hover:underline transition-colors"
                 >
                   Continue Shopping
                 </button>

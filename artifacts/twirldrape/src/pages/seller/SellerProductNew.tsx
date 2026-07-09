@@ -6,7 +6,7 @@ import { useSellerContext } from "@/components/SellerGuard";
 import ProductForm, { emptyFormData, ProductFormData } from "./SellerProductForm";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 
 function validate(data: ProductFormData): Partial<Record<keyof ProductFormData, string>> {
   const errs: Partial<Record<keyof ProductFormData, string>> = {};
@@ -91,7 +91,7 @@ export default function SellerProductNew() {
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => setLocation("/seller/products")}
-            className="p-2 rounded-lg hover:bg-[#F5EDE0] transition-colors"
+            className="p-2 rounded-lg hover:bg-[#E6F0EA] transition-colors"
           >
             <ArrowLeft size={18} style={{ color: MAROON }} />
           </button>

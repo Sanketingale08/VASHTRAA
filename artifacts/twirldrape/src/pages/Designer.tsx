@@ -51,7 +51,7 @@ export default function Designer() {
       <HeroSlider slides={slides} />
       <StatsBar />
 
-      <div className="bg-[#FAF6EE] texture-overlay py-16 md:py-24">
+      <div className="bg-[#F3F8F5] texture-overlay py-16 md:py-24">
         <div className="container mx-auto px-4 space-y-24">
 
           {/* 1. Bollywood Fashion Sarees */}
@@ -66,7 +66,7 @@ export default function Designer() {
               ))}
             </div>
             <div className="mt-8 text-center md:hidden">
-              <Link href="/designer/shop" className="inline-block bg-[#7B1C2C] text-[#FAF6EE] border border-[#C9A84C]/50 px-8 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors">
+              <Link href="/designer/shop" className="inline-block bg-[#1E6B5A] text-[#F3F8F5] border border-[#C9A84C]/50 px-8 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 Browse All Designer Sarees
               </Link>
             </div>
@@ -102,13 +102,13 @@ export default function Designer() {
           <section className="relative z-10">
             <div className="relative rounded-2xl overflow-hidden h-[400px] mb-12 flex items-center group">
               <img src="/images/hero-designer-2.png" alt="Cocktail Sarees" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#7B1C2C]/90 to-[#7B1C2C]/40" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#1E6B5A]/90 to-[#1E6B5A]/40" />
               <div className="relative z-10 px-8 md:px-16 max-w-2xl">
                 <p className="text-[#C9A84C] uppercase tracking-[0.2em] font-bold text-sm mb-4">Evening Chic</p>
-                <h2 className="font-serif text-4xl md:text-5xl text-[#FAF6EE] font-bold mb-4 leading-tight">Cocktail Sarees</h2>
-                <p className="text-[#E8D5B7] mb-8 leading-relaxed text-lg">Sequin, net, and embellished masterpieces crafted for your most glamorous evenings.</p>
+                <h2 className="font-serif text-4xl md:text-5xl text-[#F3F8F5] font-bold mb-4 leading-tight">Cocktail Sarees</h2>
+                <p className="text-[#C8D8D0] mb-8 leading-relaxed text-lg">Sequin, net, and embellished masterpieces crafted for your most glamorous evenings.</p>
                 <Link href="/designer/shop">
-                  <button className="bg-[#C9A84C] text-[#7B1C2C] px-8 py-4 font-bold uppercase tracking-wider text-sm hover:bg-white transition-colors rounded-sm shadow-xl shadow-black/20">
+                  <button className="bg-[#C9A84C] text-[#1E6B5A] px-8 py-4 font-bold uppercase tracking-wider text-sm hover:bg-white transition-colors rounded-sm shadow-xl shadow-black/20">
                     View Cocktail Edit
                   </button>
                 </Link>
@@ -150,7 +150,7 @@ export default function Designer() {
           </section>
 
           {/* 7. Designer Spotlight — styled like Paithani Artisan Stories */}
-          <section className="relative z-10 bg-[#F5EDE0] py-16 px-4 md:px-8 rounded-xl border border-[#C9A84C]/20">
+          <section className="relative z-10 bg-[#E6F0EA] py-16 px-4 md:px-8 rounded-xl border border-[#C9A84C]/20">
             <SectionHeading title="Designer Spotlight" subtitle="Masters of Modern Drape" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[1, 2, 3].map((item, i) => (
@@ -169,10 +169,10 @@ export default function Designer() {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                   </div>
-                  <h3 className="font-serif text-2xl text-[#7B1C2C] font-bold mb-1 tracking-wide">Manish Creations</h3>
+                  <h3 className="font-serif text-2xl text-[#1E6B5A] font-bold mb-1 tracking-wide">Manish Creations</h3>
                   <p className="text-xs text-[#C9A84C] font-bold uppercase tracking-[0.2em] mb-6">Mumbai, Maharashtra</p>
                   <p className="text-gray-600 italic text-sm leading-relaxed mb-8">Known for intricate sequin work, modern silhouettes, and unparalleled craftsmanship.</p>
-                  <a href="#" className="text-[#7B1C2C] text-sm font-bold uppercase tracking-wider hover:text-[#C9A84C] transition-colors inline-flex items-center gap-2">
+                  <a href="#" className="text-[#1E6B5A] text-sm font-bold uppercase tracking-wider hover:text-[#C9A84C] transition-colors inline-flex items-center gap-2">
                     View Collection <span className="text-lg">→</span>
                   </a>
                 </motion.div>
@@ -194,9 +194,9 @@ export default function Designer() {
                   className="relative group aspect-[3/4] overflow-hidden rounded-lg cursor-pointer border border-[#C9A84C]/20 shadow-sm"
                 >
                   <img src={look.image} alt={look.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1.5s]" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#7B1C2C]/90 via-[#7B1C2C]/20 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1E6B5A]/90 via-[#1E6B5A]/20 to-transparent" />
                   <div className="absolute bottom-0 left-0 w-full p-6 text-center">
-                    <h3 className="font-serif text-xl md:text-2xl text-[#FAF6EE] font-bold tracking-wide drop-shadow-md">{look.name}</h3>
+                    <h3 className="font-serif text-xl md:text-2xl text-[#F3F8F5] font-bold tracking-wide drop-shadow-md">{look.name}</h3>
                     <span className="inline-block mt-3 text-[#C9A84C] text-xs font-bold uppercase tracking-[0.2em] border-b border-[#C9A84C] pb-1 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 duration-500">Shop Look →</span>
                   </div>
                 </motion.div>
@@ -222,13 +222,13 @@ export default function Designer() {
                     alt={vendor.name}
                     className="w-20 h-20 rounded-full mx-auto mb-5 object-cover ring-2 ring-[#C9A84C]/50 ring-offset-4 ring-offset-white"
                   />
-                  <h3 className="font-serif text-xl text-[#7B1C2C] font-bold tracking-wide">{vendor.name}</h3>
+                  <h3 className="font-serif text-xl text-[#1E6B5A] font-bold tracking-wide">{vendor.name}</h3>
                   <p className="text-sm text-[#C9A84C] mb-3">{vendor.location}</p>
                   <div className="flex justify-center items-center gap-1 text-[#C9A84C] mb-5">
                     <Star size={14} className="fill-current" />
                     <span className="text-xs font-medium text-[#3D1515]">{vendor.rating}</span>
                   </div>
-                  <button className="text-xs font-bold text-[#FAF6EE] bg-[#7B1C2C] hover:bg-[#C9A84C] hover:text-[#7B1C2C] px-4 py-2 rounded uppercase tracking-widest w-full transition-colors">
+                  <button className="text-xs font-bold text-[#F3F8F5] bg-[#1E6B5A] hover:bg-[#C9A84C] hover:text-[#1E6B5A] px-4 py-2 rounded uppercase tracking-widest w-full transition-colors">
                     Visit Store
                   </button>
                 </motion.div>
@@ -247,16 +247,16 @@ export default function Designer() {
                     alt="Limited Edition"
                     className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#7B1C2C]/95 via-[#7B1C2C]/40 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1E6B5A]/95 via-[#1E6B5A]/40 to-transparent" />
                   <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-12">
                     <p className="text-[#C9A84C] text-xs font-bold uppercase tracking-[0.3em] mb-3">Only 10 Pieces Left</p>
-                    <h3 className="font-serif text-3xl md:text-4xl text-[#FAF6EE] font-bold mb-4 drop-shadow-lg">
+                    <h3 className="font-serif text-3xl md:text-4xl text-[#F3F8F5] font-bold mb-4 drop-shadow-lg">
                       The Met Gala Collection {item}
                     </h3>
-                    <p className="text-[#E8D5B7] text-sm md:text-base max-w-md mb-8">
+                    <p className="text-[#C8D8D0] text-sm md:text-base max-w-md mb-8">
                       An exclusive collaboration piece featuring hand-embroidered crystals and premium silk organza.
                     </p>
-                    <button className="self-start bg-[#C9A84C] text-[#7B1C2C] px-8 py-3 text-xs font-bold uppercase tracking-[0.2em] hover:bg-white transition-colors rounded-sm shadow-xl">
+                    <button className="self-start bg-[#C9A84C] text-[#1E6B5A] px-8 py-3 text-xs font-bold uppercase tracking-[0.2em] hover:bg-white transition-colors rounded-sm shadow-xl">
                       Shop Exclusive
                     </button>
                   </div>
@@ -268,7 +268,7 @@ export default function Designer() {
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.98 }}
-                  className="inline-flex items-center gap-3 bg-[#7B1C2C] text-[#FAF6EE] border border-[#C9A84C]/50 px-10 py-4 text-sm font-bold uppercase tracking-widest hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors duration-300 rounded-sm shadow-lg"
+                  className="inline-flex items-center gap-3 bg-[#1E6B5A] text-[#F3F8F5] border border-[#C9A84C]/50 px-10 py-4 text-sm font-bold uppercase tracking-widest hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors duration-300 rounded-sm shadow-lg"
                 >
                   Shop All Designer Sarees
                   <span className="text-base">→</span>

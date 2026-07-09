@@ -18,7 +18,7 @@ export function StatsBar() {
           {stats.map((stat, i) => (
             <div key={i} className="flex flex-col items-center justify-center">
               {stat.icon}
-              <span className="text-xs md:text-sm font-medium text-[#7B1C2C] dark:text-[#F5EDE0] tracking-wide">
+              <span className="text-xs md:text-sm font-medium text-[#1E6B5A] dark:text-[#E6F0EA] tracking-wide">
                 {stat.text}
               </span>
             </div>

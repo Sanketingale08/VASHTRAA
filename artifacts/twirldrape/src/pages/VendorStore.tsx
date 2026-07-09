@@ -5,9 +5,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { motion } from "framer-motion";
 import { MapPin, Star, Package, Mail, ExternalLink } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
+const IVORY = "#F3F8F5";
 
 interface VendorData {
   id: string;
@@ -117,7 +117,7 @@ export default function VendorStore() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5 }}
-              className="w-28 h-28 rounded-2xl border-4 border-[#C9A84C]/50 overflow-hidden bg-[#FAF6EE]/10 shrink-0 flex items-center justify-center"
+              className="w-28 h-28 rounded-2xl border-4 border-[#C9A84C]/50 overflow-hidden bg-[#F3F8F5]/10 shrink-0 flex items-center justify-center"
             >
               <img
                 src={vendor.avatar || "/images/artisan-1.png"}
@@ -136,9 +136,9 @@ export default function VendorStore() {
               <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#C9A84C] mb-2">Official Store</p>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold text-white mb-2">{vendor.name}</h1>
               {vendor.tagline && (
-                <p className="text-[#FAF6EE]/70 text-sm mb-4 max-w-lg">{vendor.tagline}</p>
+                <p className="text-[#F3F8F5]/70 text-sm mb-4 max-w-lg">{vendor.tagline}</p>
               )}
-              <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start text-sm text-[#FAF6EE]/60">
+              <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start text-sm text-[#F3F8F5]/60">
                 <span className="flex items-center gap-1.5">
                   <MapPin size={13} style={{ color: GOLD }} />
                   {vendor.location}
@@ -154,7 +154,7 @@ export default function VendorStore() {
                 {vendor.contactEmail && (
                   <a
                     href={`mailto:${vendor.contactEmail}`}
-                    className="flex items-center gap-1.5 hover:text-[#FAF6EE] transition-colors"
+                    className="flex items-center gap-1.5 hover:text-[#F3F8F5] transition-colors"
                   >
                     <Mail size={13} style={{ color: GOLD }} />
                     Contact

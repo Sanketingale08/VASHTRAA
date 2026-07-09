@@ -1,10 +1,10 @@
 import React from "react";
 import { Image, Info, Tag, DollarSign, Package, Sparkles } from "lucide-react";
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const CREAM = "#F5EDE0";
-const IVORY = "#FAF6EE";
+const CREAM = "#E6F0EA";
+const IVORY = "#F3F8F5";
 
 export const CATEGORIES = ["paithani", "designer"] as const;
 export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"] as const;
@@ -63,7 +63,7 @@ function Field({ label, required, error, children, hint }: FieldProps) {
   );
 }
 
-const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2 focus:ring-[#7B1C2C]/20";
+const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2 focus:ring-[#1E6B5A]/20";
 const inputStyle = { borderColor: "#D6C9BA", background: IVORY };
 
 const selectClass = inputClass + " appearance-none cursor-pointer";

@@ -78,14 +78,14 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
 
     return (
       <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
-        <h2 className="font-serif text-lg font-bold text-[#7B1C2C] mb-4">Order Timeline</h2>
+        <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-4">Order Timeline</h2>
         <div className="relative pl-8">
           {[...completedBeforeCancel.map(s => ({ key: s.key, label: s.label, ts: historyMap.get(s.key)!, cancelled: false })),
             { key: "cancelled", label: "Order Cancelled", ts: cancelledEntry ?? null, cancelled: true }
           ].map((step, i, arr) => (
             <div key={step.key} className="relative pb-6 last:pb-0">
               {i < arr.length - 1 && (
-                <div className={`absolute left-[-16px] top-4 w-0.5 h-full ${step.cancelled ? "bg-red-200" : "bg-gradient-to-b from-[#7B1C2C] to-[#C9A84C]"}`} />
+                <div className={`absolute left-[-16px] top-4 w-0.5 h-full ${step.cancelled ? "bg-red-200" : "bg-gradient-to-b from-[#1E6B5A] to-[#C9A84C]"}`} />
               )}
               <div className="absolute left-[-20px] top-0">
                 {step.cancelled ? (
@@ -93,13 +93,13 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                     <XCircle size={13} className="text-white" />
                   </div>
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-[#7B1C2C] flex items-center justify-center shadow-sm">
+                  <div className="w-5 h-5 rounded-full bg-[#1E6B5A] flex items-center justify-center shadow-sm">
                     <CheckCircle2 size={13} className="text-[#C9A84C]" />
                   </div>
                 )}
               </div>
               <div className="ml-1">
-                <p className={`font-semibold text-sm leading-tight ${step.cancelled ? "text-red-600 dark:text-red-400" : "text-[#7B1C2C]"}`}>
+                <p className={`font-semibold text-sm leading-tight ${step.cancelled ? "text-red-600 dark:text-red-400" : "text-[#1E6B5A]"}`}>
                   {step.label}
                 </p>
                 {step.ts && (
@@ -117,7 +117,7 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
 
   return (
     <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
-      <h2 className="font-serif text-lg font-bold text-[#7B1C2C] mb-4">Order Tracking</h2>
+      <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-4">Order Tracking</h2>
       <div className="relative pl-8">
         {NORMAL_STAGES.map((stage, idx) => {
           const isCompleted = idx < currentIdx;
@@ -132,7 +132,7 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                 <div
                   className={`absolute left-[-16px] top-4 w-0.5 h-full ${
                     isCompleted || isCurrent
-                      ? "bg-gradient-to-b from-[#7B1C2C] to-[#C9A84C]"
+                      ? "bg-gradient-to-b from-[#1E6B5A] to-[#C9A84C]"
                       : "bg-gray-200 dark:bg-gray-700"
                   }`}
                 />
@@ -140,12 +140,12 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
 
               <div className="absolute left-[-20px] top-0">
                 {isCompleted ? (
-                  <div className="w-5 h-5 rounded-full bg-[#7B1C2C] flex items-center justify-center shadow-sm">
+                  <div className="w-5 h-5 rounded-full bg-[#1E6B5A] flex items-center justify-center shadow-sm">
                     <CheckCircle2 size={13} className="text-[#C9A84C]" />
                   </div>
                 ) : isCurrent ? (
                   <div className="w-5 h-5 rounded-full bg-[#C9A84C] flex items-center justify-center shadow-md ring-2 ring-[#C9A84C]/30">
-                    <Clock size={11} className="text-[#7B1C2C]" />
+                    <Clock size={11} className="text-[#1E6B5A]" />
                   </div>
                 ) : (
                   <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
@@ -158,7 +158,7 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                 <p
                   className={`font-semibold text-sm leading-tight ${
                     isCompleted
-                      ? "text-[#7B1C2C]"
+                      ? "text-[#1E6B5A]"
                       : isCurrent
                       ? "text-[#C9A84C]"
                       : "text-gray-400 dark:text-gray-600"

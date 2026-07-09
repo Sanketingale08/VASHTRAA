@@ -37,7 +37,7 @@ export function FlashSaleTimer() {
   const formatNumber = (num: number) => num.toString().padStart(2, '0');
 
   return (
-    <div className="flex gap-2 items-center justify-center text-[#7B1C2C]">
+    <div className="flex gap-2 items-center justify-center text-[#1E6B5A]">
       <motion.div 
         key={timeLeft.hours}
         initial={{ y: -5, opacity: 0.5 }}

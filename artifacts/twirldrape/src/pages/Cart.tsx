@@ -117,18 +117,18 @@ export function CartPage() {
             className="text-center"
           >
             <ShoppingBag size={72} className="text-[#C9A84C]/30 mx-auto mb-4" />
-            <h1 className="font-serif text-3xl font-bold text-[#7B1C2C] dark:text-[#FAF6EE] mb-2">
+            <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5] mb-2">
               Your cart is empty
             </h1>
             <p className="text-gray-500 mb-8">Discover our exquisite saree collection</p>
             <div className="flex gap-4 justify-center flex-wrap">
               <Link href="/paithani/shop">
-                <button className="px-8 py-3 bg-[#7B1C2C] text-[#FAF6EE] font-semibold rounded-sm hover:bg-[#6a1826] transition-colors">
+                <button className="px-8 py-3 bg-[#1E6B5A] text-[#F3F8F5] font-semibold rounded-sm hover:bg-[#6a1826] transition-colors">
                   Shop Paithani
                 </button>
               </Link>
               <Link href="/designer/shop">
-                <button className="px-8 py-3 border-2 border-[#C9A84C] text-[#7B1C2C] dark:text-[#C9A84C] font-semibold rounded-sm hover:bg-[#C9A84C]/10 transition-colors">
+                <button className="px-8 py-3 border-2 border-[#C9A84C] text-[#1E6B5A] dark:text-[#C9A84C] font-semibold rounded-sm hover:bg-[#C9A84C]/10 transition-colors">
                   Shop Designer
                 </button>
               </Link>
@@ -147,7 +147,7 @@ export function CartPage() {
 
   return (
     <Layout>
-    <div className="min-h-screen bg-[#FAF6EE] dark:bg-[#111418] pt-6 pb-20">
+    <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#111418] pt-6 pb-20">
       <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -155,7 +155,7 @@ export function CartPage() {
           className="mb-8"
         >
           <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-1">Shopping</p>
-          <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#7B1C2C] dark:text-[#FAF6EE]">
+          <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
             Your Cart
           </h1>
           <p className="text-gray-500 text-sm mt-1">{items.length} item{items.length !== 1 ? "s" : ""}</p>
@@ -181,7 +181,7 @@ export function CartPage() {
                 </Link>
                 <div className="flex-1 min-w-0">
                   <Link href={`/products/${item.productId}`}>
-                    <h3 className="font-serif text-base md:text-lg font-semibold text-[#7B1C2C] dark:text-[#FAF6EE] hover:text-[#C9A84C] transition-colors line-clamp-2">
+                    <h3 className="font-serif text-base md:text-lg font-semibold text-[#1E6B5A] dark:text-[#F3F8F5] hover:text-[#C9A84C] transition-colors line-clamp-2">
                       {item.name}
                     </h3>
                   </Link>
@@ -206,7 +206,7 @@ export function CartPage() {
                         <Plus size={14} />
                       </button>
                     </div>
-                    <p className="font-bold text-[#7B1C2C] dark:text-[#C9A84C]">
+                    <p className="font-bold text-[#1E6B5A] dark:text-[#C9A84C]">
                       ₹{(item.price * item.quantity).toLocaleString("en-IN")}
                     </p>
                     {item.quantity > 1 && (
@@ -219,7 +219,7 @@ export function CartPage() {
                   <div className="flex items-center gap-3 mt-3">
                     <button
                       onClick={() => moveToWishlist(item.productId)}
-                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#7B1C2C] dark:hover:text-[#C9A84C] transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#1E6B5A] dark:hover:text-[#C9A84C] transition-colors"
                     >
                       <Heart size={13} /> Save for Later
                     </button>
@@ -251,7 +251,7 @@ export function CartPage() {
               transition={{ delay: 0.1 }}
               className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C9A84C]/10 p-6 sticky top-24 space-y-5"
             >
-              <h2 className="font-serif text-xl font-bold text-[#7B1C2C] dark:text-[#FAF6EE]">
+              <h2 className="font-serif text-xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
                 Order Summary
               </h2>
 
@@ -277,12 +277,12 @@ export function CartPage() {
                         onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
                         onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
                         placeholder="Coupon code"
-                        className="flex-1 border border-[#C9A84C]/30 rounded-md px-3 py-2 text-sm bg-transparent text-[#7B1C2C] dark:text-[#FAF6EE] placeholder-gray-400 focus:outline-none focus:border-[#C9A84C]"
+                        className="flex-1 border border-[#C9A84C]/30 rounded-md px-3 py-2 text-sm bg-transparent text-[#1E6B5A] dark:text-[#F3F8F5] placeholder-gray-400 focus:outline-none focus:border-[#C9A84C]"
                       />
                       <button
                         onClick={applyCoupon}
                         disabled={couponLoading}
-                        className="px-4 py-2 bg-[#C9A84C] text-[#7B1C2C] text-sm font-bold rounded-md hover:bg-[#b59539] transition-colors disabled:opacity-60"
+                        className="px-4 py-2 bg-[#C9A84C] text-[#1E6B5A] text-sm font-bold rounded-md hover:bg-[#b59539] transition-colors disabled:opacity-60"
                       >
                         {couponLoading ? "..." : "Apply"}
                       </button>
@@ -314,31 +314,31 @@ export function CartPage() {
                   <span>GST (5%)</span>
                   <span>₹{gst.toLocaleString("en-IN")}</span>
                 </div>
-                <div className="flex justify-between font-bold text-lg text-[#7B1C2C] dark:text-[#FAF6EE] pt-3 border-t border-[#C9A84C]/20">
+                <div className="flex justify-between font-bold text-lg text-[#1E6B5A] dark:text-[#F3F8F5] pt-3 border-t border-[#C9A84C]/20">
                   <span>Total</span>
                   <span>₹{total.toLocaleString("en-IN")}</span>
                 </div>
               </div>
 
               {afterDiscount > 0 && afterDiscount < 5000 && (
-                <p className="text-xs text-center text-gray-500 bg-[#FAF6EE] dark:bg-[#2A2E35] rounded px-3 py-2">
+                <p className="text-xs text-center text-gray-500 bg-[#F3F8F5] dark:bg-[#2A2E35] rounded px-3 py-2">
                   Add ₹{(5000 - afterDiscount).toLocaleString("en-IN")} more for free shipping
                 </p>
               )}
 
-              <div className="text-xs text-center text-gray-500 bg-[#FAF6EE] dark:bg-[#2A2E35] rounded px-3 py-2">
+              <div className="text-xs text-center text-gray-500 bg-[#F3F8F5] dark:bg-[#2A2E35] rounded px-3 py-2">
                 📦 Estimated delivery: <span className="font-semibold">{getDeliveryDate()}</span>
               </div>
 
               <Link href="/checkout">
-                <button className="w-full bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
+                <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
                   Proceed to Checkout
                 </button>
               </Link>
 
               <button
                 onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.href = `${basePath}/`; }}
-                className="w-full py-2.5 border border-[#C9A84C]/40 text-[#7B1C2C] dark:text-[#C9A84C] hover:border-[#C9A84C] text-sm font-semibold rounded-sm transition-colors"
+                className="w-full py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] dark:text-[#C9A84C] hover:border-[#C9A84C] text-sm font-semibold rounded-sm transition-colors"
               >
                 Continue Shopping
               </button>
@@ -367,7 +367,7 @@ function RecentlyViewedSection({ products }: { products: any[] }) {
     <section className="mt-16">
       <div className="flex items-center gap-3 mb-6">
         <Clock size={18} className="text-[#C9A84C]" />
-        <h2 className="font-serif text-2xl font-bold text-[#7B1C2C] dark:text-[#FAF6EE]">
+        <h2 className="font-serif text-2xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
           Recently Viewed
         </h2>
       </div>
@@ -384,10 +384,10 @@ function RecentlyViewedSection({ products }: { products: any[] }) {
               </div>
               <div className="p-3">
                 <p className="text-xs text-gray-500 mb-0.5">{product.vendorName}</p>
-                <p className="text-sm font-serif font-semibold text-[#7B1C2C] dark:text-[#FAF6EE] line-clamp-2">
+                <p className="text-sm font-serif font-semibold text-[#1E6B5A] dark:text-[#F3F8F5] line-clamp-2">
                   {product.name}
                 </p>
-                <p className="text-sm font-bold text-[#7B1C2C] dark:text-[#C9A84C] mt-1">
+                <p className="text-sm font-bold text-[#1E6B5A] dark:text-[#C9A84C] mt-1">
                   ₹{product.price?.toLocaleString("en-IN")}
                 </p>
               </div>

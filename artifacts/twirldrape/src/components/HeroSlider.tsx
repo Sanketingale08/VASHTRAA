@@ -65,7 +65,7 @@ export function HeroSlider({ slides }: HeroSliderProps) {
                   <h1 className="font-serif text-4xl md:text-6xl lg:text-7xl text-white font-bold mb-8 leading-tight">
                     {slide.title}
                   </h1>
-                  <button className="bg-transparent border border-[#C9A84C] text-white hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors duration-300 px-8 py-3 tracking-wider uppercase text-sm font-semibold">
+                  <button className="bg-transparent border border-[#C9A84C] text-white hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors duration-300 px-8 py-3 tracking-wider uppercase text-sm font-semibold">
                     {slide.cta}
                   </button>
                 </motion.div>
@@ -77,13 +77,13 @@ export function HeroSlider({ slides }: HeroSliderProps) {
 
       {/* Navigation */}
       <button 
-        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white backdrop-blur bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#C9A84C] hover:text-[#7B1C2C] hover:border-[#C9A84C]"
+        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white backdrop-blur bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#C9A84C] hover:text-[#1E6B5A] hover:border-[#C9A84C]"
         onClick={scrollPrev}
       >
         <ChevronLeft size={24} />
       </button>
       <button 
-        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white backdrop-blur bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#C9A84C] hover:text-[#7B1C2C] hover:border-[#C9A84C]"
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white backdrop-blur bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#C9A84C] hover:text-[#1E6B5A] hover:border-[#C9A84C]"
         onClick={scrollNext}
       >
         <ChevronRight size={24} />

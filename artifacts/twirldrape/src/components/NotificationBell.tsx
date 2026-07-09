@@ -24,7 +24,7 @@ function typeIcon(type: string) {
     case "order_shipped":    return <Truck size={14} className="text-blue-500" />;
     case "order_delivered":  return <CheckCircle size={14} className="text-green-600" />;
     case "order_cancelled":  return <XCircle size={14} className="text-red-500" />;
-    case "coupon_expiry":    return <Tag size={14} className="text-amber-500" />;
+    case "coupon_expiry":    return <Tag size={14} className="text-emerald-600" />;
     case "wishlist_restock": return <Heart size={14} className="text-rose-500" />;
     default:                 return <Bell size={14} className="text-gray-400" />;
   }
@@ -119,7 +119,7 @@ export function NotificationBell({ isDark }: Props) {
         onClick={() => setOpen((o) => !o)}
         className={cn(
           "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-          isDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+          isDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
         )}
         aria-label="Notifications"
       >
@@ -142,13 +142,13 @@ export function NotificationBell({ isDark }: Props) {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <h3 className="text-sm font-bold text-[#7B1C2C]">Notifications</h3>
+              <h3 className="text-sm font-bold text-[#1E6B5A]">Notifications</h3>
               <div className="flex items-center gap-2">
                 {unread > 0 && (
                   <button
                     onClick={() => markAllRead.mutate()}
                     disabled={markAllRead.isPending}
-                    className="text-[10px] font-semibold text-[#7B1C2C] hover:text-[#C9A84C] transition-colors disabled:opacity-50"
+                    className="text-[10px] font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors disabled:opacity-50"
                   >
                     Mark all read
                   </button>
@@ -188,12 +188,12 @@ export function NotificationBell({ isDark }: Props) {
                     }}
                     className={cn(
                       "w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0",
-                      !n.read && "bg-[#FAF6EE]/60"
+                      !n.read && "bg-[#F3F8F5]/60"
                     )}
                   >
                     <div className={cn(
                       "w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                      n.read ? "bg-gray-100" : "bg-[#FAF6EE]"
+                      n.read ? "bg-gray-100" : "bg-[#F3F8F5]"
                     )}>
                       {typeIcon(n.type)}
                     </div>
@@ -205,7 +205,7 @@ export function NotificationBell({ isDark }: Props) {
                       <p className="text-[10px] text-gray-300 mt-1">{relativeTime(n.createdAt)}</p>
                     </div>
                     {!n.read && (
-                      <span className="mt-2 w-2 h-2 rounded-full bg-[#7B1C2C] shrink-0" />
+                      <span className="mt-2 w-2 h-2 rounded-full bg-[#1E6B5A] shrink-0" />
                     )}
                   </button>
                 ))
@@ -217,7 +217,7 @@ export function NotificationBell({ isDark }: Props) {
               <Link
                 href="/account/notifications"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#7B1C2C] hover:text-[#C9A84C] transition-colors"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
               >
                 View all notifications <ArrowRight size={12} />
               </Link>

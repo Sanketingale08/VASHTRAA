@@ -195,7 +195,7 @@ function VendorDetailContent() {
                   </div>
                 )}
                 <div className="flex items-center gap-2.5">
-                  <Star size={13} className="shrink-0 text-amber-500" fill="currentColor" />
+                  <Star size={13} className="shrink-0 text-emerald-600" fill="currentColor" />
                   <span className="text-xs text-gray-600">{vendor.rating.toFixed(1)} rating</span>
                 </div>
               </div>

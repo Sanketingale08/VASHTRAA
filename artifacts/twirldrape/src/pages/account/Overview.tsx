@@ -105,9 +105,9 @@ function StatCard({
       <div className="flex items-center justify-between">
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: accent ? `${accent}15` : "#7B1C2C15" }}
+          style={{ backgroundColor: accent ? `${accent}15` : "#1E6B5A15" }}
         >
-          <Icon size={17} style={{ color: accent ?? "#7B1C2C" }} />
+          <Icon size={17} style={{ color: accent ?? "#1E6B5A" }} />
         </div>
         {href && (
           <ArrowRight
@@ -166,7 +166,7 @@ export function AccountOverviewPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-0.5">
+          <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-0.5">
             Welcome back, {firstName}!
           </h2>
           <p className="text-sm text-gray-500">Here's a snapshot of your TwirlDrape account.</p>
@@ -212,7 +212,7 @@ export function AccountOverviewPage() {
             label="Total Spent"
             value={loading ? "—" : `₹${totalSpent.toLocaleString("en-IN")}`}
             loading={ordersLoading}
-            accent="#7B1C2C"
+            accent="#1E6B5A"
             delay={0.16}
           />
           <StatCard
@@ -231,7 +231,7 @@ export function AccountOverviewPage() {
             value={loading ? "—" : couponCount}
             href="/account/coupons"
             loading={couponsLoading}
-            accent="#7B1C2C"
+            accent="#1E6B5A"
             delay={0.24}
           />
           <StatCard
@@ -260,7 +260,7 @@ export function AccountOverviewPage() {
           transition={{ delay: 0.4, duration: 0.25 }}
           className="bg-white rounded-xl border border-[#C9A84C]/15 p-5 shadow-sm"
         >
-          <h3 className="text-sm font-bold text-[#7B1C2C] uppercase tracking-wider mb-4">
+          <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider mb-4">
             Quick Links
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -275,7 +275,7 @@ export function AccountOverviewPage() {
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#7B1C2C] transition-colors py-1.5 group"
+                className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1.5 group"
               >
                 <ArrowRight
                   size={13}

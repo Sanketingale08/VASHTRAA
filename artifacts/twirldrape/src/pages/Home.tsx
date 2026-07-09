@@ -24,9 +24,9 @@ import type { ProductSummary, VendorSummary } from "@workspace/api-client-react"
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const GOLD = "#C9A84C";
-const MAROON = "#7B1C2C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const MAROON = "#1E6B5A";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 const PAITHANI_DESIGNER_TABS = [
   { label: "Paithani", category: "paithani" as const },
@@ -44,7 +44,7 @@ function SectionTitle({
     <div className="text-center mb-10 md:mb-14">
       <div className="flex items-center justify-center gap-4 mb-3">
         <span className="flex-1 max-w-[80px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
-        <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#7B1C2C]">
+        <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#1E6B5A]">
           {children}
         </h2>
         <span className="flex-1 max-w-[80px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
@@ -81,9 +81,9 @@ const testimonials = [
 function PeacockIcon({ size = 40 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="24" cy="36" rx="5" ry="7" fill="#7B1C2C" />
-      <path d="M24 29 Q22 22 23 17" stroke="#7B1C2C" strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="23" cy="14.5" r="3.5" fill="#7B1C2C" />
+      <ellipse cx="24" cy="36" rx="5" ry="7" fill="#1E6B5A" />
+      <path d="M24 29 Q22 22 23 17" stroke="#1E6B5A" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="23" cy="14.5" r="3.5" fill="#1E6B5A" />
       <path d="M21 12 Q18 8 20 6" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
       <path d="M23 11 Q22 7 23 5" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
       <path d="M25 12 Q27 8 26 6" stroke="#C9A84C" strokeWidth="1.3" strokeLinecap="round" />
@@ -123,7 +123,7 @@ function FeaturedShopsSection() {
           <div>
             <div className="flex items-center gap-4 mb-2">
               <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
-              <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#7B1C2C]">
+              <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#1E6B5A]">
                 Featured Shops
               </h2>
               <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
@@ -213,7 +213,7 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
         <div className="mt-8 text-center">
           <Link
             href="/paithani/shop"
-            className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-3.5 rounded-sm border-2 transition-all hover:bg-[#7B1C2C]/5"
+            className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-3.5 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
             style={{ borderColor: MAROON, color: MAROON }}
           >
             View All Recently Viewed Products →
@@ -260,7 +260,7 @@ export default function Home() {
                 <Link href="/paithani" className="inline-flex items-center justify-center gap-2 px-7 py-3.5 font-bold text-sm uppercase tracking-widest rounded-sm transition-opacity hover:opacity-90" style={{ background: MAROON, color: IVORY }}>
                   Explore Paithani Sarees →
                 </Link>
-                <Link href="/designer" className="inline-flex items-center justify-center gap-2 px-7 py-3.5 font-bold text-sm uppercase tracking-widest border-2 rounded-sm transition-all hover:bg-[#7B1C2C]/5" style={{ borderColor: MAROON, color: MAROON }}>
+                <Link href="/designer" className="inline-flex items-center justify-center gap-2 px-7 py-3.5 font-bold text-sm uppercase tracking-widest border-2 rounded-sm transition-all hover:bg-[#1E6B5A]/5" style={{ borderColor: MAROON, color: MAROON }}>
                   Explore Designer Sarees →
                 </Link>
               </div>
@@ -271,7 +271,7 @@ export default function Home() {
                 <div className="rounded-2xl overflow-hidden shadow-2xl border-4" style={{ borderColor: GOLD + "55" }}>
                   <img src="/images/home-paithani.png" alt="Elegant Paithani saree" className="w-full object-cover" style={{ maxHeight: "520px", objectPosition: "top center" }} />
                 </div>
-                <div className="absolute -bottom-5 -left-5 bg-[#FAF6EE] rounded-xl p-4 shadow-xl border flex items-center gap-3" style={{ borderColor: GOLD + "44" }}>
+                <div className="absolute -bottom-5 -left-5 bg-[#F3F8F5] rounded-xl p-4 shadow-xl border flex items-center gap-3" style={{ borderColor: GOLD + "44" }}>
                   <PeacockIcon size={40} />
                   <div>
                     <p className="font-serif text-lg font-bold tracking-wider" style={{ color: MAROON }}>TWIRLDRAPE</p>

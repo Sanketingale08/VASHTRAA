@@ -19,7 +19,7 @@ const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"];
 const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"];
 const COLORS = [
   { value: "red", label: "Red", hex: "#c0392b" },
-  { value: "maroon", label: "Maroon", hex: "#7B1C2C" },
+  { value: "maroon", label: "Maroon", hex: "#1E6B5A" },
   { value: "blue", label: "Blue", hex: "#2980b9" },
   { value: "green", label: "Green", hex: "#27ae60" },
   { value: "yellow", label: "Yellow", hex: "#f1c40f" },
@@ -211,7 +211,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
   const totalPages = data?.totalPages ?? 1;
 
   const chipBase = "shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full border transition-all";
-  const chipActive = "bg-[#C9A84C] text-[#7B1C2C] border-[#C9A84C]";
+  const chipActive = "bg-[#C9A84C] text-[#1E6B5A] border-[#C9A84C]";
   const chipInactive = "border-[#C9A84C]/30 text-[#3D1A1A]/70 hover:border-[#C9A84C] hover:text-[#3D1A1A]";
 
   const priceMin = priceRange[0];
@@ -220,13 +220,13 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#FAF6EE] text-[#3D1A1A]">
+      <div className="min-h-screen bg-[#F3F8F5] text-[#3D1A1A]">
 
         {/* Page Header */}
-        <div className="py-12 border-b border-[#C9A84C]/20 bg-[#F5EDE0]">
+        <div className="py-12 border-b border-[#C9A84C]/20 bg-[#E6F0EA]">
           <div className="container mx-auto px-4 text-center">
             <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-3">{subtitle}</p>
-            <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#7B1C2C]">
+            <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#1E6B5A]">
               {title}
             </h1>
             <div className="w-16 h-0.5 bg-[#C9A84C] mx-auto mt-6" />
@@ -274,7 +274,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder={`Search ${category} sarees…`}
-                className="w-full pl-9 pr-4 py-3 border rounded-sm text-sm focus:outline-none focus:border-[#C9A84C] transition-colors bg-[#FAF6EE] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
+                className="w-full pl-9 pr-4 py-3 border rounded-sm text-sm focus:outline-none focus:border-[#C9A84C] transition-colors bg-[#F3F8F5] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
               />
             </div>
 
@@ -283,7 +283,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                 <select
                   value={sort}
                   onChange={(e) => { setSort(e.target.value as ListProductsSort); setPage(1); }}
-                  className="appearance-none pl-4 pr-9 py-3 border rounded-sm text-sm font-medium focus:outline-none focus:border-[#C9A84C] cursor-pointer transition-colors bg-[#FAF6EE] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
+                  className="appearance-none pl-4 pr-9 py-3 border rounded-sm text-sm font-medium focus:outline-none focus:border-[#C9A84C] cursor-pointer transition-colors bg-[#F3F8F5] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
                 >
                   {SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -297,14 +297,14 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                 className={cn(
                   "flex items-center gap-2 px-4 py-3 border rounded-sm text-sm font-semibold transition-all",
                   hasActiveFilters
-                    ? "bg-[#C9A84C] text-[#7B1C2C] border-[#C9A84C]"
+                    ? "bg-[#C9A84C] text-[#1E6B5A] border-[#C9A84C]"
                     : "border-[#C9A84C]/30 text-[#3D1A1A] hover:border-[#C9A84C]"
                 )}
               >
                 <SlidersHorizontal size={16} />
                 Filters
                 {hasActiveFilters && (
-                  <span className="bg-[#7B1C2C] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  <span className="bg-[#1E6B5A] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
                     {activeFilterCount}
                   </span>
                 )}
@@ -614,7 +614,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
               {isLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="rounded-lg aspect-[3/4] animate-pulse bg-[#F5EDE0]" />
+                    <div key={i} className="rounded-lg aspect-[3/4] animate-pulse bg-[#E6F0EA]" />
                   ))}
                 </div>
               ) : products.length === 0 ? (
@@ -624,7 +624,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                   <p className="opacity-60 mb-6 text-sm">Try adjusting your filters or search term</p>
                   <button
                     onClick={resetFilters}
-                    className="bg-[#7B1C2C] text-[#FAF6EE] border border-[#C9A84C]/50 px-6 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C9A84C] hover:text-[#7B1C2C] transition-colors"
+                    className="bg-[#1E6B5A] text-[#F3F8F5] border border-[#C9A84C]/50 px-6 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors"
                   >
                     Clear Filters
                   </button>
@@ -657,7 +657,7 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
                         className={cn(
                           "w-10 h-10 border rounded text-sm font-medium transition-colors",
                           page === pg
-                            ? "bg-[#C9A84C] text-[#7B1C2C] border-[#C9A84C]"
+                            ? "bg-[#C9A84C] text-[#1E6B5A] border-[#C9A84C]"
                             : "border-[#C9A84C]/30 text-[#3D1A1A] hover:border-[#C9A84C]"
                         )}
                       >

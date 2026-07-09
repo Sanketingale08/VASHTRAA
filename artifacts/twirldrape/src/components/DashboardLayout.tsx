@@ -65,10 +65,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#FAF6EE]">
+      <div className="min-h-screen bg-[#F3F8F5]">
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 lg:py-8">
           <div className="mb-5 lg:mb-7">
-            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#7B1C2C]">My Account</h1>
+            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#1E6B5A]">My Account</h1>
             {user && (
               <p className="text-sm text-[#7a5f4e] mt-0.5">
                 {[user.firstName, user.lastName].filter(Boolean).join(" ")}
@@ -93,28 +93,28 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm transition-colors relative group",
                         active
-                          ? "bg-[#7B1C2C]/5 text-[#7B1C2C] font-semibold"
-                          : "text-gray-600 hover:bg-[#FAF6EE] hover:text-[#7B1C2C]",
+                          ? "bg-[#1E6B5A]/5 text-[#1E6B5A] font-semibold"
+                          : "text-gray-600 hover:bg-[#F3F8F5] hover:text-[#1E6B5A]",
                         active &&
-                          "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-[#7B1C2C] before:rounded-r-full",
+                          "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-[#1E6B5A] before:rounded-r-full",
                       )}
                     >
                       <Icon
                         size={15}
                         className={
                           active
-                            ? "text-[#7B1C2C]"
-                            : "text-[#C9A84C] group-hover:text-[#7B1C2C] transition-colors"
+                            ? "text-[#1E6B5A]"
+                            : "text-[#C9A84C] group-hover:text-[#1E6B5A] transition-colors"
                         }
                       />
                       <span className="flex-1 truncate">{label}</span>
                       {isSupport && openTicketCount > 0 && (
-                        <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-[#7B1C2C] text-white font-bold shrink-0">
+                        <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-[#1E6B5A] text-white font-bold shrink-0">
                           {openTicketCount > 9 ? "9+" : openTicketCount}
                         </span>
                       )}
                       {active && (
-                        <ChevronRight size={13} className="text-[#7B1C2C]/40 shrink-0" />
+                        <ChevronRight size={13} className="text-[#1E6B5A]/40 shrink-0" />
                       )}
                     </Link>
                   );
@@ -136,13 +136,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       className={cn(
                         "flex items-center justify-center w-full py-3.5 transition-colors relative",
                         active
-                          ? "text-[#7B1C2C] bg-[#7B1C2C]/5"
-                          : "text-gray-400 hover:text-[#7B1C2C] hover:bg-[#FAF6EE]",
+                          ? "text-[#1E6B5A] bg-[#1E6B5A]/5"
+                          : "text-gray-400 hover:text-[#1E6B5A] hover:bg-[#F3F8F5]",
                       )}
                     >
                       <Icon size={18} />
                       {isSupport && openTicketCount > 0 && (
-                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#7B1C2C]" />
+                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#1E6B5A]" />
                       )}
                     </Link>
                   );
@@ -175,7 +175,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   href={href}
                   className={cn(
                     "flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors",
-                    active ? "text-[#7B1C2C]" : "text-gray-400",
+                    active ? "text-[#1E6B5A]" : "text-gray-400",
                   )}
                 >
                   <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />

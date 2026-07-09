@@ -4,9 +4,9 @@ import { Save, Camera, AlertCircle, CheckCircle } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
-const MAROON = "#7B1C2C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const MAROON = "#1E6B5A";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 interface FormState {
   name: string;
@@ -114,7 +114,7 @@ export default function SellerProfile() {
           <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
             <h3 className="font-serif font-bold text-base mb-4" style={{ color: MAROON }}>Shop Avatar</h3>
             <div className="flex items-center gap-5">
-              <div className="w-20 h-20 rounded-2xl border-2 border-[#C9A84C]/30 overflow-hidden bg-[#F5EDE0] shrink-0 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-2xl border-2 border-[#C9A84C]/30 overflow-hidden bg-[#E6F0EA] shrink-0 flex items-center justify-center">
                 {form.avatar ? (
                   <img
                     src={form.avatar}

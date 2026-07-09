@@ -8,10 +8,10 @@ import { TrendingUp, ShoppingBag, MapPin, Package } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const CREAM = "#F5EDE0";
-const IVORY = "#FAF6EE";
+const CREAM = "#E6F0EA";
+const IVORY = "#F3F8F5";
 
 const PERIOD_OPTIONS = [
   { label: "7 days", value: 7 },

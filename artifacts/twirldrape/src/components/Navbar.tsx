@@ -89,10 +89,10 @@ export function Navbar() {
   const isDesignerDark = isDesigner;
 
   const navBg = isDesignerDark
-    ? "bg-[#1E2329]/97 text-[#F5EDE0] border-[#C9A84C]/20"
+    ? "bg-[#1E2329]/97 text-[#E6F0EA] border-[#C9A84C]/20"
     : isDark
-      ? "bg-[#7B1C2C]/97 text-[#FAF6EE] border-[#C9A84C]/20"
-      : "bg-[#FAF6EE]/98 text-[#3D1515] border-[#C9A84C]/30";
+      ? "bg-[#1E6B5A]/97 text-[#F3F8F5] border-[#C9A84C]/20"
+      : "bg-[#F3F8F5]/98 text-[#3D1515] border-[#C9A84C]/30";
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -155,8 +155,8 @@ export function Navbar() {
                       active
                         ? "text-[#C9A84C]"
                         : isDark || isDesignerDark
-                          ? "text-[#FAF6EE]/80 hover:text-[#C9A84C]"
-                          : "text-[#3D1515]/75 hover:text-[#7B1C2C]",
+                          ? "text-[#F3F8F5]/80 hover:text-[#C9A84C]"
+                          : "text-[#3D1515]/75 hover:text-[#1E6B5A]",
                       "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C9A84C] after:rounded-full after:transition-opacity",
                       active ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-40"
                     )}
@@ -176,7 +176,7 @@ export function Navbar() {
                 <button
                   className={cn(
                     "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                    isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                    isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
                   )}
                   onClick={() => setSearchOpen(!searchOpen)}
                   aria-label="Search"
@@ -227,7 +227,7 @@ export function Navbar() {
                             ))}
                             <button
                               onClick={handleSearchSubmit as any}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-[#7B1C2C] bg-[#FAF6EE] hover:bg-[#F5EDE0] transition-colors border-t border-gray-100"
+                              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-[#1E6B5A] bg-[#F3F8F5] hover:bg-[#E6F0EA] transition-colors border-t border-gray-100"
                             >
                               View all results for "{debouncedQuery}" <ArrowRight size={12} />
                             </button>
@@ -242,13 +242,13 @@ export function Navbar() {
                       <div className="p-4">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Quick Links</p>
                         <div className="space-y-2">
-                          <Link href="/paithani/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#7B1C2C] transition-colors py-1">
+                          <Link href="/paithani/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1">
                             <ArrowRight size={12} className="text-[#C9A84C]" /> All Paithani Sarees
                           </Link>
-                          <Link href="/designer/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#7B1C2C] transition-colors py-1">
+                          <Link href="/designer/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1">
                             <ArrowRight size={12} className="text-[#C9A84C]" /> All Designer Sarees
                           </Link>
-                          <Link href="/collections" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#7B1C2C] transition-colors py-1">
+                          <Link href="/collections" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1">
                             <ArrowRight size={12} className="text-[#C9A84C]" /> Collections
                           </Link>
                         </div>
@@ -266,13 +266,13 @@ export function Navbar() {
                 href="/wishlist"
                 className={cn(
                   "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
                 )}
                 aria-label="Wishlist"
               >
                 <Heart size={19} />
                 {wishlistCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#7B1C2C] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#1E6B5A] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
                     {wishlistCount > 9 ? "9+" : wishlistCount}
                   </span>
                 )}
@@ -283,13 +283,13 @@ export function Navbar() {
                 onClick={openCart}
                 className={cn(
                   "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
                 )}
                 aria-label="Cart"
               >
                 <ShoppingBag size={19} />
                 {cartCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#7B1C2C] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#1E6B5A] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
                     {cartCount > 9 ? "9+" : cartCount}
                   </span>
                 )}
@@ -305,7 +305,7 @@ export function Navbar() {
                         "hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors border",
                         isDark || isDesignerDark
                           ? "border-[#C9A84C]/40 text-[#C9A84C] hover:bg-white/10"
-                          : "border-[#C9A84C]/50 text-[#7B1C2C] hover:bg-[#C9A84C]/10"
+                          : "border-[#C9A84C]/50 text-[#1E6B5A] hover:bg-[#C9A84C]/10"
                       )}
                     >
                       <Store size={11} /> Sell
@@ -314,7 +314,7 @@ export function Navbar() {
                       href="/sign-in"
                       className={cn(
                         "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                        isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#7B1C2C]/10"
+                        isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
                       )}
                       title="Sign In"
                     >
@@ -344,7 +344,7 @@ export function Navbar() {
                     ) : (
                       <span className={cn(
                         "text-[11px] font-bold",
-                        isDark || isDesignerDark ? "text-[#FAF6EE]" : "text-[#7B1C2C]",
+                        isDark || isDesignerDark ? "text-[#F3F8F5]" : "text-[#1E6B5A]",
                       )}>
                         {[user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || <User size={15} />}
                       </span>
@@ -353,7 +353,7 @@ export function Navbar() {
                   {userMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-56 bg-white text-gray-800 shadow-2xl border border-gray-100 rounded-xl py-2 z-50">
                       <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-[#7B1C2C] truncate">
+                        <p className="text-sm font-semibold text-[#1E6B5A] truncate">
                           {user?.firstName} {user?.lastName}
                         </p>
                         <p className="text-xs text-gray-400 truncate mt-0.5">
@@ -363,32 +363,32 @@ export function Navbar() {
                       <Link
                         href="/account"
                         onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors font-medium"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors font-medium"
                       >
                         <LayoutDashboard size={14} className="text-[#C9A84C]" /> My Account
                       </Link>
                       <Link
                         href="/orders"
                         onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
                       >
                         <ClipboardList size={14} className="text-[#C9A84C]" /> My Orders
                       </Link>
                       <Link
                         href="/seller/dashboard"
                         onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
                       >
                         <Store size={14} className="text-[#C9A84C]" /> Seller Panel
                       </Link>
                       <Link
                         href="/wishlist"
                         onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
                       >
                         <Heart size={14} className="text-[#C9A84C]" /> My Wishlist
                         {wishlistCount > 0 && (
-                          <span className="ml-auto text-[10px] bg-[#7B1C2C] text-white rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                          <span className="ml-auto text-[10px] bg-[#1E6B5A] text-white rounded-full w-5 h-5 flex items-center justify-center font-bold">
                             {wishlistCount}
                           </span>
                         )}
@@ -396,7 +396,7 @@ export function Navbar() {
                       <div className="border-t border-gray-100 mt-1 pt-1">
                         <button
                           onClick={() => { setUserMenuOpen(false); signOut({ redirectUrl: basePath || "/" }); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#FAF6EE] hover:text-[#7B1C2C] transition-colors"
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
                         >
                           <LogOut size={14} className="text-[#C9A84C]" /> Sign Out
                         </button>
@@ -421,7 +421,7 @@ export function Navbar() {
           />
 
           {/* Drawer panel */}
-          <div className="relative w-72 max-w-[85vw] h-full bg-[#7B1C2C] text-[#FAF6EE] flex flex-col shadow-2xl">
+          <div className="relative w-72 max-w-[85vw] h-full bg-[#1E6B5A] text-[#F3F8F5] flex flex-col shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#C9A84C]/20">
               <img src="/images/logo.png" alt="TwirlDrape" className="h-10 w-auto object-contain brightness-0 invert" />
@@ -446,7 +446,7 @@ export function Navbar() {
                       "flex items-center px-3 py-3 rounded-lg text-sm font-semibold uppercase tracking-widest transition-colors",
                       active
                         ? "bg-[#C9A84C]/20 text-[#C9A84C]"
-                        : "hover:bg-white/10 text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                        : "hover:bg-white/10 text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
                     )}
                   >
                     {label}
@@ -459,21 +459,21 @@ export function Navbar() {
                   <Link
                     href="/account"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE] font-semibold"
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5] font-semibold"
                   >
                     <LayoutDashboard size={16} className="text-[#C9A84C]" /> My Account
                   </Link>
                   <Link
                     href="/orders"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
                   >
                     <ClipboardList size={16} className="text-[#C9A84C]" /> My Orders
                   </Link>
                   <Link
                     href="/seller/dashboard"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
                   >
                     <Store size={16} className="text-[#C9A84C]" /> Seller Panel
                   </Link>
@@ -481,11 +481,11 @@ export function Navbar() {
                 <Link
                   href="/wishlist"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
                 >
                   <Heart size={16} className="text-[#C9A84C]" /> My Wishlist
                   {wishlistCount > 0 && (
-                    <span className="ml-auto text-[10px] bg-[#C9A84C] text-[#7B1C2C] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    <span className="ml-auto text-[10px] bg-[#C9A84C] text-[#1E6B5A] font-bold rounded-full w-5 h-5 flex items-center justify-center">
                       {wishlistCount}
                     </span>
                   )}
@@ -502,7 +502,7 @@ export function Navbar() {
                   <Link
                     href="/sign-in"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
                   >
                     <LogIn size={16} className="text-[#C9A84C]" /> Sign In
                   </Link>
@@ -510,7 +510,7 @@ export function Navbar() {
                 <Show when="signed-in">
                   <button
                     onClick={() => { setMobileMenuOpen(false); signOut({ redirectUrl: basePath || "/" }); }}
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#FAF6EE]/80 hover:text-[#FAF6EE]"
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
                   >
                     <LogOut size={16} className="text-[#C9A84C]" /> Sign Out
                   </button>

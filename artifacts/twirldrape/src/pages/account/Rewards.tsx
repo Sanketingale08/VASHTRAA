@@ -51,9 +51,9 @@ const TIER_CONFIG = {
   gold: {
     label: "Gold",
     color: "#C9A84C",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    border: "border-amber-200",
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    border: "border-emerald-200",
     icon: Zap,
     next: "platinum" as const,
     nextThreshold: 5000,
@@ -66,9 +66,9 @@ const TIER_CONFIG = {
   },
   platinum: {
     label: "Platinum",
-    color: "#7B1C2C",
-    bg: "bg-rose-50",
-    text: "text-[#7B1C2C]",
+    color: "#1E6B5A",
+    bg: "bg-emerald-50",
+    text: "text-[#1E6B5A]",
     border: "border-[#C9A84C]/40",
     icon: Crown,
     next: null,
@@ -190,7 +190,7 @@ export function AccountRewardsPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="font-serif text-xl font-bold text-[#7B1C2C] mb-0.5">Rewards & Loyalty</h2>
+          <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-0.5">Rewards & Loyalty</h2>
           <p className="text-sm text-gray-500">Earn points with every purchase and unlock exclusive benefits.</p>
         </div>
 
@@ -243,7 +243,7 @@ export function AccountRewardsPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-[#7B1C2C] font-semibold mt-3">
+                  <p className="text-xs text-[#1E6B5A] font-semibold mt-3">
                     You've reached the highest tier!
                   </p>
                 )}
@@ -273,7 +273,7 @@ export function AccountRewardsPage() {
         >
           <div className="flex items-center gap-2 mb-3">
             <Gift size={16} className="text-[#C9A84C]" />
-            <h3 className="text-sm font-bold text-[#7B1C2C] uppercase tracking-wider">Refer & Earn</h3>
+            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">Refer & Earn</h3>
           </div>
           <p className="text-xs text-gray-500 mb-4">
             Share your referral code. When a friend signs up and places their first order, you earn <strong>200 bonus points</strong>.
@@ -283,8 +283,8 @@ export function AccountRewardsPage() {
             <SkeletonBlock className="h-12 w-full" />
           ) : (
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-              <div className="flex-1 flex items-center gap-2 bg-[#FAF6EE] border border-[#C9A84C]/30 rounded-xl px-4 py-3">
-                <span className="font-mono text-lg font-bold text-[#7B1C2C] tracking-[0.2em] flex-1 text-center sm:text-left">
+              <div className="flex-1 flex items-center gap-2 bg-[#F3F8F5] border border-[#C9A84C]/30 rounded-xl px-4 py-3">
+                <span className="font-mono text-lg font-bold text-[#1E6B5A] tracking-[0.2em] flex-1 text-center sm:text-left">
                   {summary?.referralCode}
                 </span>
                 <button
@@ -330,7 +330,7 @@ export function AccountRewardsPage() {
           className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
         >
           <div className="px-5 py-4 border-b border-gray-50">
-            <h3 className="text-sm font-bold text-[#7B1C2C] uppercase tracking-wider">Points History</h3>
+            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">Points History</h3>
           </div>
 
           {historyLoading ? (
@@ -379,13 +379,13 @@ export function AccountRewardsPage() {
                           {entry.orderId && (
                             <a
                               href={`/orders/${entry.orderId}`}
-                              className="text-[10px] font-medium text-[#7B1C2C] bg-[#7B1C2C]/5 hover:bg-[#7B1C2C]/10 px-1.5 py-0.5 rounded transition-colors"
+                              className="text-[10px] font-medium text-[#1E6B5A] bg-[#1E6B5A]/5 hover:bg-[#1E6B5A]/10 px-1.5 py-0.5 rounded transition-colors"
                             >
                               Order #{entry.orderId.slice(0, 8).toUpperCase()}
                             </a>
                           )}
                           {entry.type === "bonus" && (
-                            <span className="text-[10px] font-semibold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">
                               Bonus
                             </span>
                           )}
@@ -408,14 +408,14 @@ export function AccountRewardsPage() {
                     <button
                       disabled={historyPage <= 1}
                       onClick={() => setHistoryPage(p => p - 1)}
-                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#7B1C2C] hover:border-[#C9A84C]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#1E6B5A] hover:border-[#C9A84C]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronLeft size={14} />
                     </button>
                     <button
                       disabled={historyPage >= historyData.pages}
                       onClick={() => setHistoryPage(p => p + 1)}
-                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#7B1C2C] hover:border-[#C9A84C]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#1E6B5A] hover:border-[#C9A84C]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronRight size={14} />
                     </button>

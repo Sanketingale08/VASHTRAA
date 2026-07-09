@@ -6,10 +6,10 @@ import { useSellerContext } from "@/components/SellerGuard";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const MAROON = "#7B1C2C";
+const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -232,8 +232,8 @@ export default function SellerDashboard() {
       value: data ? `₹${data.monthlyRevenue.toLocaleString("en-IN")}` : "—",
       sub: "current month",
       icon: IndianRupee,
-      color: "from-[#7B1C2C]/10 to-[#7B1C2C]/5",
-      border: "border-[#7B1C2C]/20",
+      color: "from-[#1E6B5A]/10 to-[#1E6B5A]/5",
+      border: "border-[#1E6B5A]/20",
       iconBg: MAROON,
     },
     {
@@ -250,7 +250,7 @@ export default function SellerDashboard() {
       value: data ? String(data.activeListings) : "—",
       sub: "in stock",
       icon: Package,
-      color: "from-[#7B1C2C]/10 to-[#C9A84C]/5",
+      color: "from-[#1E6B5A]/10 to-[#C9A84C]/5",
       border: "border-[#C9A84C]/20",
       iconBg: MAROON,
     },
@@ -259,7 +259,7 @@ export default function SellerDashboard() {
       value: data ? data.avgRating.toFixed(1) : "—",
       sub: "average",
       icon: Star,
-      color: "from-[#C9A84C]/10 to-[#7B1C2C]/5",
+      color: "from-[#C9A84C]/10 to-[#1E6B5A]/5",
       border: "border-[#C9A84C]/20",
       iconBg: GOLD,
     },

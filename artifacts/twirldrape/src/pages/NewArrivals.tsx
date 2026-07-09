@@ -10,9 +10,9 @@ import type { ProductSummary } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 
 const GOLD = "#C9A84C";
-const MAROON = "#7B1C2C";
-const IVORY = "#FAF6EE";
-const CREAM = "#F5EDE0";
+const MAROON = "#1E6B5A";
+const IVORY = "#F3F8F5";
+const CREAM = "#E6F0EA";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -101,7 +101,7 @@ function CategoryCard({ card, index }: { card: typeof CATEGORY_CARDS[0]; index: 
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl overflow-hidden bg-[#F5EDE0] animate-pulse">
+    <div className="rounded-xl overflow-hidden bg-[#E6F0EA] animate-pulse">
       <div className="aspect-[3/4] bg-gray-200" />
       <div className="p-4 space-y-2">
         <div className="h-3 bg-gray-200 rounded w-3/4" />
@@ -218,14 +218,14 @@ export default function NewArrivals() {
             >
               <Link
                 href="/paithani/shop?newArrival=true"
-                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#7B1C2C]/5"
+                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
                 style={{ borderColor: MAROON, color: MAROON }}
               >
                 View All New Paithani →
               </Link>
               <Link
                 href="/designer/shop?newArrival=true"
-                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#7B1C2C]/5"
+                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
                 style={{ borderColor: MAROON, color: MAROON }}
               >
                 View All New Designer →

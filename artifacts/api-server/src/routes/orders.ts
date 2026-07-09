@@ -7,6 +7,7 @@ import {
   notificationsTable, notificationPreferencesTable,
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { isValidPaymentMethod } from "@workspace/api-zod";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 
@@ -78,7 +79,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
       res.status(400).json({ error: "Invalid delivery method" });
       return;
     }
-    if (!["upi", "card", "credit_card", "debit_card", "net_banking", "wallet", "cod"].includes(paymentMethod)) {
+    if (!isValidPaymentMethod(paymentMethod)) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
     }

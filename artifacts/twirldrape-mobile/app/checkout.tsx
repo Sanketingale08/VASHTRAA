@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import type { PaymentMethod as SharedPaymentMethod } from "@workspace/api-zod";
+
 import { useCart, CartItem } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -36,7 +38,7 @@ type Address = {
 };
 
 type DeliveryMethod = "standard" | "express";
-type PaymentMethod = "upi" | "card" | "cod";
+type PaymentMethod = Extract<SharedPaymentMethod, "upi" | "card" | "cod">;
 
 function getDeliveryDate(method: DeliveryMethod) {
   const date = new Date();

@@ -1,0 +1,35 @@
+#134 - Seller Panel: Dashboard & Store Profile
+What & Why
+Build the core Seller Panel shell — the layout, navigation, and two foundational sections every vendor needs immediately after approval: a business dashboard showing real-time performance metrics, and a store profile editor where vendors manage their public-facing shop page. This gives vendors a home base before product and order management are layered on.
+
+Done looks like
+Visiting /seller/dashboard (when authenticated as an approved vendor) shows a sidebar-based Seller Panel layout with brand-consistent maroon/gold/ivory styling.
+The sidebar links: Dashboard, My Products, Orders, Store Profile, Payouts (stub), Help.
+Dashboard shows live metric cards: Total Revenue (this month), Total Orders, Active Listings, Average Rating.
+Dashboard includes a Recent Orders mini-table (last 5 orders containing the vendor's products) and a top-selling products list (top 3 by units sold).
+Store Profile page (/seller/profile) lets vendors edit: shop name, tagline, bio, location, GSTIN, contact email, and upload a shop avatar/banner image. Changes save via PATCH /api/vendors/:id and reflect immediately on the public store page.
+The public store page (/stores/:vendorId) shows the vendor's banner, logo, bio, ratings, and a grid of their active products — visible to all shoppers.
+Unauthorized users hitting any /seller/* route are redirected to /admin/login.
+Out of scope
+Product listing and management UI (next task).
+Order management UI (subsequent task).
+Real payout/banking integration.
+Steps
+Seller Panel layout — Create a SellerLayout component with a fixed sidebar, topbar showing the vendor's shop name, and a main content area. Wrap all /seller/* routes with <SellerGuard> and <SellerLayout>.
+Vendor context — Add a useVendor hook that fetches GET /api/vendors/me and provides vendor data (id, name, status, stats) to all seller panel pages.
+Dashboard metrics API — Add GET /api/seller/dashboard (vendor-auth protected) that returns: monthly revenue sum, order count, active product count, average rating, last-5 orders, top-3 products by quantity sold.
+Dashboard page — Build the /seller/dashboard page using the metrics endpoint; include metric cards, recent orders table, and top products list with framer-motion card animations.
+Store Profile page — Build /seller/profile with a form pre-filled from GET /api/vendors/me; on submit, call PATCH /api/vendors/:id; support avatar image upload (stored as a URL for now).
+PATCH /api/vendors/:id endpoint — Add or update this route (vendor-auth, owner-only) to accept name, tagline, bio, location, gstin, contactEmail, avatar fields.
+Public store page — Build /stores/:vendorId (no auth required) that fetches GET /api/vendors/:id and GET /api/products?vendorId=:id and renders the vendor's storefront with their product grid using the existing ProductCard component.
+Navbar "Visit Store" link — On the public product detail page, make the vendor name clickable and link to /stores/:vendorId.
+Relevant files
+artifacts/twirldrape/src/App.tsx
+artifacts/twirldrape/src/components/Layout.tsx
+artifacts/twirldrape/src/components/Navbar.tsx
+artifacts/twirldrape/src/components/ProductCard.tsx
+artifacts/api-server/src/routes/vendors.ts
+artifacts/api-server/src/index.ts
+lib/db/src/schema/vendors.ts
+lib/db/src/schema/products.ts
+lib/db/src/schema/orders.ts

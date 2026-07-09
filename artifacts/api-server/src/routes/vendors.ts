@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { vendorsTable, productsTable, ordersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router = Router();
 
@@ -109,6 +110,8 @@ router.get("/vendors/:id", async (req: any, res: any) => {
   }
 });
 
+const objectStorage = new ObjectStorageService();
+
 async function handleSellerRegistration(req: any, res: any) {
   const {
     name, location, bio, gstin, contactEmail, tagline,
@@ -118,14 +121,25 @@ async function handleSellerRegistration(req: any, res: any) {
     termsAccepted,
   } = req.body;
 
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ error: "Shop name is required" });
-  }
-  if (!location || !String(location).trim()) {
-    return res.status(400).json({ error: "Location is required" });
-  }
-  if (!termsAccepted) {
-    return res.status(400).json({ error: "You must accept the terms and conditions" });
+  const missingFields: string[] = [];
+  if (!name || !String(name).trim()) missingFields.push("Shop name");
+  if (!location || !String(location).trim()) missingFields.push("Location");
+  if (!mobile || !String(mobile).trim()) missingFields.push("Mobile number");
+  if (!panNumber || !String(panNumber).trim()) missingFields.push("PAN number");
+  if (!panCardUrl || !String(panCardUrl).trim()) missingFields.push("PAN card document");
+  if (!bankHolder || !String(bankHolder).trim()) missingFields.push("Bank account holder name");
+  if (!bankName || !String(bankName).trim()) missingFields.push("Bank name");
+  if (!bankAccount || !String(bankAccount).trim()) missingFields.push("Bank account number");
+  if (!bankIfsc || !String(bankIfsc).trim()) missingFields.push("IFSC code");
+  if (!shopCity || !String(shopCity).trim()) missingFields.push("Shop city");
+  if (!shopState || !String(shopState).trim()) missingFields.push("Shop state");
+  if (!shopPincode || !String(shopPincode).trim()) missingFields.push("Shop pincode");
+  if (!termsAccepted) missingFields.push("Terms acceptance");
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      error: `Missing required fields: ${missingFields.join(", ")}`,
+    });
   }
 
   try {
@@ -150,21 +164,32 @@ async function handleSellerRegistration(req: any, res: any) {
         tagline: tagline ? String(tagline).trim() : null,
         ownerId: req.userId,
         status: "pending",
-        mobile: mobile ? String(mobile).trim() : null,
-        panNumber: panNumber ? String(panNumber).trim().toUpperCase() : null,
-        panCardUrl: panCardUrl ? String(panCardUrl).trim() : null,
+        mobile: String(mobile).trim(),
+        panNumber: String(panNumber).trim().toUpperCase(),
+        panCardUrl: String(panCardUrl).trim(),
         gstCertUrl: gstCertUrl ? String(gstCertUrl).trim() : null,
-        bankHolder: bankHolder ? String(bankHolder).trim() : null,
-        bankName: bankName ? String(bankName).trim() : null,
-        bankAccount: bankAccount ? String(bankAccount).trim() : null,
-        bankIfsc: bankIfsc ? String(bankIfsc).trim().toUpperCase() : null,
+        bankHolder: String(bankHolder).trim(),
+        bankName: String(bankName).trim(),
+        bankAccount: String(bankAccount).trim(),
+        bankIfsc: String(bankIfsc).trim().toUpperCase(),
         shopStreet: shopStreet ? String(shopStreet).trim() : null,
-        shopCity: shopCity ? String(shopCity).trim() : null,
-        shopState: shopState ? String(shopState).trim() : null,
-        shopPincode: shopPincode ? String(shopPincode).trim() : null,
-        termsAcceptedAt: termsAccepted ? new Date() : null,
+        shopCity: String(shopCity).trim(),
+        shopState: String(shopState).trim(),
+        shopPincode: String(shopPincode).trim(),
+        termsAcceptedAt: new Date(),
       })
       .returning();
+
+    const ownerAcl = { owner: req.userId, visibility: "private" as const };
+    const aclPromises: Promise<any>[] = [
+      objectStorage.trySetObjectEntityAclPolicy(vendor.panCardUrl!, ownerAcl).catch(() => {}),
+    ];
+    if (vendor.gstCertUrl) {
+      aclPromises.push(
+        objectStorage.trySetObjectEntityAclPolicy(vendor.gstCertUrl, ownerAcl).catch(() => {})
+      );
+    }
+    await Promise.all(aclPromises);
 
     res.status(201).json({
       id: vendor.id,

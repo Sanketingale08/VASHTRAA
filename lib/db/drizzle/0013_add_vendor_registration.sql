@@ -1,6 +1,7 @@
 ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "mobile" text;
 ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "pan_number" text;
 ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "pan_card_url" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "gst_cert_url" text;
 ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_holder" text;
 ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_name" text;
 ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_account" text;

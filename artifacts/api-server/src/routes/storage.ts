@@ -107,9 +107,20 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     const userId = (auth as any)?.sessionClaims?.userId || auth?.userId;
     const isAdmin = adminKey && providedAdminKey && providedAdminKey === adminKey;
 
-    if (!isAdmin && !userId) {
-      res.status(401).json({ error: "Unauthorized — sign in to access this file" });
-      return;
+    if (!isAdmin) {
+      if (!userId) {
+        res.status(401).json({ error: "Unauthorized — sign in to access this file" });
+        return;
+      }
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        userId,
+        objectFile,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        res.status(403).json({ error: "Forbidden — you do not own this file" });
+        return;
+      }
     }
 
     const response = await objectStorageService.downloadObject(objectFile);

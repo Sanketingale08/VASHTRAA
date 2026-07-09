@@ -7,6 +7,7 @@ import {
   notificationsTable, notificationPreferencesTable,
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { insertOrderStatusNotification } from "../lib/orderNotifications";
 
 const router = Router();
 
@@ -395,12 +396,12 @@ const requireAdminKey = (req: any, res: any, next: any) => {
   next();
 };
 
-// POST /orders/:orderId/status — admin only: advance order status
-router.post("/orders/:orderId/status", requireAdminKey, async (req: any, res: any): Promise<void> => {
+// POST and PATCH /orders/:orderId/status — admin only: advance order status
+async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
   const { orderId } = req.params;
   const { status, note } = req.body;
 
-  const validStatuses = ["confirmed", "processing", "dispatched", "out_for_delivery", "delivered"];
+  const validStatuses = ["confirmed", "processing", "dispatched", "out_for_delivery", "delivered", "cancelled"];
   if (!status || !validStatuses.includes(status)) {
     res.status(400).json({ error: `Status must be one of: ${validStatuses.join(", ")}` });
     return;
@@ -412,8 +413,10 @@ router.post("/orders/:orderId/status", requireAdminKey, async (req: any, res: an
         const [order] = await tx
           .select({
             id: ordersTable.id,
+            userId: ordersTable.userId,
             status: ordersTable.status,
             statusHistory: ordersTable.statusHistory,
+            items: ordersTable.items,
           })
           .from(ordersTable)
           .where(eq(ordersTable.id, orderId))
@@ -446,10 +449,41 @@ router.post("/orders/:orderId/status", requireAdminKey, async (req: any, res: an
           updates.deliveredAt = new Date();
         }
 
+        if (status === "cancelled") {
+          const cancelNote = note ? String(note).trim() : "Cancelled by admin";
+          updates.cancelReason = cancelNote;
+
+          const items = order.items as Array<{ productId: string; quantity: number }>;
+          for (const item of items) {
+            await tx
+              .update(productsTable)
+              .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
+              .where(eq(productsTable.id, item.productId));
+          }
+        }
+
         await tx
           .update(ordersTable)
           .set(updates)
           .where(eq(ordersTable.id, orderId));
+
+        const notifType =
+          status === "dispatched" ? "order_shipped" as const :
+          status === "delivered" ? "order_delivered" as const :
+          status === "cancelled" ? "order_cancelled" as const :
+          null;
+
+        if (notifType) {
+          const orderItems = order.items as Array<{ name: string }>;
+          await insertOrderStatusNotification({
+            tx,
+            userId: order.userId,
+            type: notifType,
+            orderId: order.id,
+            itemName: orderItems?.[0]?.name ?? "your order",
+            extraItemCount: orderItems.length > 1 ? orderItems.length - 1 : 0,
+          });
+        }
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {
@@ -468,7 +502,10 @@ router.post("/orders/:orderId/status", requireAdminKey, async (req: any, res: an
     req.log.error({ err }, "Failed to update order status");
     res.status(500).json({ error: "Failed to update order status" });
   }
-});
+}
+
+router.post("/orders/:orderId/status", requireAdminKey, handleUpdateOrderStatus);
+router.patch("/orders/:orderId/status", requireAdminKey, handleUpdateOrderStatus);
 
 // POST /orders/:orderId/cancel
 router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): Promise<void> => {
@@ -527,13 +564,22 @@ router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): 
           })
           .where(eq(ordersTable.id, orderId));
 
-        const items = order.items as Array<{ productId: string; quantity: number }>;
+        const items = order.items as Array<{ productId: string; quantity: number; name: string }>;
         for (const item of items) {
           await tx
             .update(productsTable)
             .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
             .where(eq(productsTable.id, item.productId));
         }
+
+        await insertOrderStatusNotification({
+          tx,
+          userId: req.userId,
+          type: "order_cancelled",
+          orderId: order.id,
+          itemName: items?.[0]?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
+        });
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {
@@ -604,13 +650,22 @@ router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any):
           })
           .where(eq(ordersTable.id, orderId));
 
-        const items = order.items as Array<{ productId: string; quantity: number }>;
+        const items = order.items as Array<{ productId: string; quantity: number; name: string }>;
         for (const item of items) {
           await tx
             .update(productsTable)
             .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
             .where(eq(productsTable.id, item.productId));
         }
+
+        await insertOrderStatusNotification({
+          tx,
+          userId: req.userId,
+          type: "order_cancelled",
+          orderId: order.id,
+          itemName: items?.[0]?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
+        });
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {

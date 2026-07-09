@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { ordersTable, productsTable } from "@workspace/db";
 import { eq, desc, asc, inArray } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { insertOrderStatusNotification } from "../lib/orderNotifications";
 
 const router = Router();
 
@@ -331,6 +332,17 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
       .update(ordersTable)
       .set({ status: newStatus, statusHistory: history, updatedAt: new Date() })
       .where(eq(ordersTable.id, orderId));
+
+    if (allDispatched) {
+      const allItems = items as Array<{ name: string }>;
+      await insertOrderStatusNotification({
+        userId: order.userId,
+        type: "order_shipped",
+        orderId: order.id,
+        itemName: allItems?.[0]?.name ?? "your order",
+        extraItemCount: allItems.length > 1 ? allItems.length - 1 : 0,
+      });
+    }
 
     res.json({ success: true, allDispatched });
   } catch (err: any) {

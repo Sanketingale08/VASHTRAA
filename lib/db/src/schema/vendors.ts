@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, uuid, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -17,6 +17,7 @@ export const vendorsTable = pgTable("vendors", {
   gstin: text("gstin"),
   contactEmail: text("contact_email"),
   tagline: text("tagline"),
+  kycVerified: boolean("kyc_verified").notNull().default(false),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

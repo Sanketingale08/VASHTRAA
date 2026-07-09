@@ -20,6 +20,8 @@ interface Vendor {
   rating: number;
   sareesCount: number;
   revenue: number;
+  totalOrders: number;
+  kycVerified: boolean;
 }
 
 function fmt(n: number) {
@@ -172,6 +174,7 @@ function VendorsContent() {
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Location</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">GSTIN</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Products</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Orders</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Revenue</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Rating</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
@@ -202,6 +205,9 @@ function VendorsContent() {
                     </td>
                     <td className="px-4 py-3.5 text-right text-xs text-gray-600 hidden md:table-cell">
                       {v.sareesCount}
+                    </td>
+                    <td className="px-4 py-3.5 text-right text-xs text-gray-600 hidden lg:table-cell">
+                      {v.totalOrders > 0 ? v.totalOrders.toLocaleString("en-IN") : "—"}
                     </td>
                     <td className="px-4 py-3.5 text-right text-xs font-semibold hidden lg:table-cell" style={{ color: NAVY }}>
                       {v.revenue > 0 ? fmt(v.revenue) : "—"}

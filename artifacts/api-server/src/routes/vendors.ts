@@ -208,19 +208,48 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
 router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
   try {
     const vendors = await db.select().from(vendorsTable).orderBy(vendorsTable.name);
-    res.json({ vendors: vendors.map((v) => ({
-      id: v.id,
-      name: v.name,
-      location: v.location,
-      rating: v.rating,
-      sareesCount: v.sareesCount,
-      avatar: v.avatar,
-      bio: v.bio ?? null,
-      ownerId: v.ownerId ?? null,
-      status: v.status,
-      gstin: v.gstin ?? null,
-      contactEmail: v.contactEmail ?? null,
-    })) });
+
+    const allProducts = await db.select({ id: productsTable.id, vendorId: productsTable.vendorId }).from(productsTable);
+    const productToVendor = new Map(allProducts.filter(p => p.vendorId).map(p => [p.id, p.vendorId as string]));
+    const allOrders = await db.select({ items: ordersTable.items, status: ordersTable.status }).from(ordersTable);
+
+    const vendorRevenue: Record<string, number> = {};
+    const vendorOrders: Record<string, number> = {};
+    for (const order of allOrders) {
+      const items = order.items as Array<{ productId: string; price: number; quantity: number }>;
+      if (!Array.isArray(items)) continue;
+      const touched = new Set<string>();
+      for (const item of items) {
+        const vendorId = productToVendor.get(item.productId);
+        if (!vendorId) continue;
+        touched.add(vendorId);
+        if (!["cancelled", "returned"].includes(order.status)) {
+          vendorRevenue[vendorId] = (vendorRevenue[vendorId] ?? 0) + item.price * (item.quantity ?? 1);
+        }
+      }
+      for (const vendorId of touched) {
+        vendorOrders[vendorId] = (vendorOrders[vendorId] ?? 0) + 1;
+      }
+    }
+
+    res.json({
+      vendors: vendors.map((v) => ({
+        id: v.id,
+        name: v.name,
+        location: v.location,
+        rating: v.rating,
+        sareesCount: v.sareesCount,
+        avatar: v.avatar,
+        bio: v.bio ?? null,
+        ownerId: v.ownerId ?? null,
+        status: v.status,
+        gstin: v.gstin ?? null,
+        contactEmail: v.contactEmail ?? null,
+        kycVerified: v.kycVerified,
+        revenue: vendorRevenue[v.id] ?? 0,
+        totalOrders: vendorOrders[v.id] ?? 0,
+      })),
+    });
   } catch (err) {
     req.log.error({ err }, "Failed to list admin vendors");
     res.status(500).json({ error: "Failed to fetch vendors" });
@@ -318,10 +347,13 @@ router.post("/admin/vendors/:id/deactivate", requireAdminKey, async (req: any, r
 router.post("/admin/vendors/:id/verify-kyc", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   try {
-    const rows = await db.select({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status })
-      .from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
-    if (rows.length === 0) return res.status(404).json({ error: "Vendor not found" });
-    res.json({ vendor: rows[0], kycVerified: true });
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({ kycVerified: true })
+      .where(eq(vendorsTable.id, id))
+      .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status, kycVerified: vendorsTable.kycVerified });
+    if (!updated) return res.status(404).json({ error: "Vendor not found" });
+    res.json({ vendor: updated, kycVerified: true });
   } catch (err) {
     req.log.error({ err }, "Failed to verify KYC");
     res.status(500).json({ error: "Failed to verify KYC" });
@@ -354,7 +386,7 @@ async function computeVendorRevenue(): Promise<Record<string, number>> {
   return vendorRevenue;
 }
 
-router.get("/admin/vendors/:id/detail", requireAdminKey, async (req: any, res: any) => {
+router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   try {
     const rows = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
@@ -404,6 +436,7 @@ router.get("/admin/vendors/:id/detail", requireAdminKey, async (req: any, res: a
       gstin: vendor.gstin ?? null,
       status: vendor.status,
       ownerId: vendor.ownerId ?? null,
+      kycVerified: vendor.kycVerified,
       totalProducts: vendorProducts.length,
       activeProducts: vendorProducts.filter(p => p.active).length,
       totalRevenue,
@@ -451,6 +484,17 @@ router.get("/admin/stats", requireAdminKey, async (req: any, res: any) => {
       .orderBy(sql`date(${ordersTable.createdAt})`);
 
     const totalRevNum = Number(orderStats.totalRevenue);
+    const approvedVendors = Number(vendorStats.approvedVendors);
+
+    const [prevPeriodStats] = await db.select({
+      prevRevenue: sql<number>`coalesce(sum(${ordersTable.total}), 0)::bigint`,
+    }).from(ordersTable)
+      .where(sql`${ordersTable.createdAt} >= now() - interval '60 days' AND ${ordersTable.createdAt} < now() - interval '30 days'`);
+
+    const prevRevNum = Number(prevPeriodStats.prevRevenue);
+    const growthPct = prevRevNum > 0
+      ? Math.round(((totalRevNum - prevRevNum) / prevRevNum) * 100)
+      : totalRevNum > 0 ? 100 : 0;
 
     res.json({
       totalOrders: Number(orderStats.totalOrders),
@@ -464,8 +508,10 @@ router.get("/admin/stats", requireAdminKey, async (req: any, res: any) => {
       refundedRevenue: Number(orderStats.refundedRevenue),
       totalProducts: Number(productStats.totalProducts),
       totalVendors: Number(vendorStats.totalVendors),
-      approvedVendors: Number(vendorStats.approvedVendors),
+      approvedVendors,
+      activeVendors: approvedVendors,
       pendingVendors: Number(vendorStats.pendingVendors),
+      growthPct,
       dailyRevenue: dailyRevenue.map(r => ({
         date: r.date,
         revenue: Number(r.revenue),

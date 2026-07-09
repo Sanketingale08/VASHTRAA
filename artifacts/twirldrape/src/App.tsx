@@ -35,7 +35,7 @@ import { AccountNotificationsPage } from "@/pages/account/Notifications";
 import { AccountSupportPage } from "@/pages/account/Support";
 import Contact from "@/pages/Contact";
 import NewArrivals from "@/pages/NewArrivals";
-import AdminLogin from "@/pages/AdminLogin";
+import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminVendors from "@/pages/admin/AdminVendors";
 import AdminVendorDetail from "@/pages/admin/AdminVendorDetail";

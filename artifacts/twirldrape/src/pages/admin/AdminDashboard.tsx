@@ -26,7 +26,9 @@ interface Stats {
   totalProducts: number;
   totalVendors: number;
   approvedVendors: number;
+  activeVendors: number;
   pendingVendors: number;
+  growthPct: number;
   dailyRevenue: { date: string; revenue: number; orders: number }[];
 }
 
@@ -121,15 +123,16 @@ function DashboardContent() {
               iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" sub="Active catalogue" />
             <MetricCard label="Customers" value={stats.totalCustomers.toLocaleString("en-IN")} icon={Users}
               iconBg="rgba(139,92,246,0.1)" iconColor="#8B5CF6" sub="Unique buyers" />
-            <MetricCard label="Total Vendors" value={stats.totalVendors} icon={Store}
-              iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} sub={`${stats.approvedVendors} approved`} />
+            <MetricCard label="Active Vendors" value={stats.activeVendors} icon={Store}
+              iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} sub={`${stats.totalVendors} total`} />
             <MetricCard label="Pending Approval" value={stats.pendingVendors} icon={Clock}
               iconBg="rgba(245,158,11,0.1)" iconColor="#D97706" sub="Awaiting review" />
-            <MetricCard label="Delivered" value={stats.deliveredOrders} icon={CheckCircle}
-              iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" />
-            <MetricCard label="Cancelled + Returned" value={stats.cancelledOrders + stats.returnedOrders}
-              icon={XCircle} iconBg="rgba(239,68,68,0.1)" iconColor="#EF4444"
-              sub={`${stats.returnedOrders} returned`} />
+            <MetricCard label="Shipped" value={stats.dispatchedOrders} icon={CheckCircle}
+              iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" sub="Dispatched orders" />
+            <MetricCard label="Revenue Growth" value={`${stats.growthPct > 0 ? "+" : ""}${stats.growthPct}%`}
+              icon={TrendingUp} iconBg={stats.growthPct >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)"}
+              iconColor={stats.growthPct >= 0 ? "#10B981" : "#EF4444"}
+              sub="vs prior 30 days" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

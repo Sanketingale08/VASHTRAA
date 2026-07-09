@@ -26,6 +26,7 @@ interface VendorDetail {
   gstin: string | null;
   status: string;
   ownerId: string | null;
+  kycVerified: boolean;
   totalProducts: number;
   activeProducts: number;
   totalRevenue: number;
@@ -86,7 +87,7 @@ function VendorDetailContent() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetch(`${basePath}/api/admin/vendors/${id}/detail`, {
+    fetch(`${basePath}/api/admin/vendors/${id}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })

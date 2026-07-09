@@ -1,8 +1,13 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { couponsTable, couponRedemptionsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import {
+  couponsTable,
+  couponRedemptionsTable,
+  notificationsTable,
+  notificationPreferencesTable,
+} from "@workspace/db";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 const requireAuth = (req: any, res: any, next: any) => {
   const auth = getAuth(req);
@@ -22,6 +27,46 @@ const requireAdminKey = (req: any, res: any, next: any) => {
 };
 
 const router = Router();
+
+async function maybeNotifyCouponExpiry(
+  userId: string,
+  coupon: { id: string; code: string; expiresAt: Date | null }
+): Promise<void> {
+  if (!coupon.expiresAt) return;
+
+  const hoursLeft = (new Date(coupon.expiresAt).getTime() - Date.now()) / 3600000;
+  if (hoursLeft <= 0 || hoursLeft > 72) return;
+
+  const offerPrefs = await db
+    .select({ offerAlerts: notificationPreferencesTable.offerAlerts })
+    .from(notificationPreferencesTable)
+    .where(eq(notificationPreferencesTable.userId, userId))
+    .limit(1);
+  const wantsOffers = offerPrefs.length === 0 || offerPrefs[0].offerAlerts;
+  if (!wantsOffers) return;
+
+  const existingExpiry = await db
+    .select({ id: notificationsTable.id })
+    .from(notificationsTable)
+    .where(
+      and(
+        eq(notificationsTable.userId, userId),
+        eq(notificationsTable.type, "coupon_expiry"),
+        sql`${notificationsTable.metadata}->>'couponId' = ${coupon.id}`
+      )
+    )
+    .limit(1);
+  if (existingExpiry.length > 0) return;
+
+  const daysLeft = Math.max(1, Math.ceil(hoursLeft / 24));
+  await db.insert(notificationsTable).values({
+    userId,
+    type: "coupon_expiry",
+    title: `Coupon "${coupon.code}" expiring soon`,
+    body: `Your coupon expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}. Use it before it's gone!`,
+    metadata: { couponId: coupon.id, couponCode: coupon.code },
+  });
+}
 
 // ─── Admin endpoints ──────────────────────────────────────────────────────────
 
@@ -256,6 +301,16 @@ router.get("/coupons/validate", async (req: any, res: any): Promise<void> => {
     if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
       res.status(400).json({ error: "This coupon has reached its usage limit" });
       return;
+    }
+
+    const auth = getAuth(req);
+    const userId: string | undefined = (auth?.sessionClaims as any)?.userId || auth?.userId;
+    if (userId) {
+      maybeNotifyCouponExpiry(userId, {
+        id: coupon.id,
+        code: coupon.code,
+        expiresAt: coupon.expiresAt ? new Date(coupon.expiresAt) : null,
+      }).catch((err) => req.log.error({ err }, "Failed to insert coupon_expiry notification"));
     }
 
     res.json({

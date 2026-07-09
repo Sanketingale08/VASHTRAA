@@ -92,6 +92,13 @@
       "when": 1783570800000,
       "tag": "0012_add_vendor_kyc",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1752076800000,
+      "tag": "0013_add_vendor_registration",
+      "breakpoints": true
     }
   ]
 }

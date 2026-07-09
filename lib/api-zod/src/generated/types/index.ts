@@ -7,12 +7,22 @@
  */
 
 export * from './errorResponse';
+export * from './getProductFacetsCategory';
+export * from './getProductFacetsParams';
 export * from './healthStatus';
 export * from './listProductsCategory';
 export * from './listProductsParams';
 export * from './listProductsSort';
 export * from './productDetail';
+export * from './productFacets';
+export * from './productFacetsColor';
+export * from './productFacetsFabric';
+export * from './productFacetsOccasion';
+export * from './productFacetsRating';
+export * from './productFacetsVendor';
 export * from './productListResponse';
 export * from './productSummary';
 export * from './productSummaryCategory';
+export * from './uploadUrlRequest';
+export * from './uploadUrlResponse';
 export * from './vendorSummary';

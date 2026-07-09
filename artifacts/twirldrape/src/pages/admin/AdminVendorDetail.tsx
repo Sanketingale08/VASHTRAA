@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, MapPin, Mail, FileText, Star, Package, ShoppingBag,
   CheckCircle, Clock, XCircle, Truck, RotateCcw, IndianRupee, BadgeCheck,
+  Phone, Landmark, Home,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -27,6 +28,18 @@ interface VendorDetail {
   status: string;
   ownerId: string | null;
   kycVerified: boolean;
+  mobile: string | null;
+  panNumber: string | null;
+  panCardUrl: string | null;
+  bankHolder: string | null;
+  bankName: string | null;
+  bankAccount: string | null;
+  bankIfsc: string | null;
+  shopStreet: string | null;
+  shopCity: string | null;
+  shopState: string | null;
+  shopPincode: string | null;
+  termsAcceptedAt: string | null;
   totalProducts: number;
   activeProducts: number;
   totalRevenue: number;
@@ -270,6 +283,45 @@ function VendorDetailContent() {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <h3 className="font-serif font-bold text-base mb-4" style={{ color: NAVY }}>Registration Details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                {[
+                  { icon: Phone, label: "Mobile", value: vendor.mobile ? `+91 ${vendor.mobile}` : null },
+                  { icon: FileText, label: "PAN Number", value: vendor.panNumber },
+                  { icon: Landmark, label: "Bank", value: vendor.bankName ? `${vendor.bankName}` : null },
+                  { icon: Landmark, label: "Account", value: vendor.bankAccount ? `••••${vendor.bankAccount.slice(-4)} (${vendor.bankIfsc ?? ""})` : null },
+                  { icon: Landmark, label: "Account Holder", value: vendor.bankHolder },
+                  { icon: Home, label: "Shop Address", value: [vendor.shopStreet, vendor.shopCity, vendor.shopState, vendor.shopPincode].filter(Boolean).join(", ") || null },
+                  { icon: CheckCircle, label: "Terms Accepted", value: vendor.termsAcceptedAt ? new Date(vendor.termsAcceptedAt).toLocaleDateString("en-IN") : "Not accepted" },
+                ].map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-gray-50">
+                    <Icon size={13} className="mt-0.5 shrink-0 text-gray-400" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400">{label}</p>
+                      <p className={`text-xs font-semibold truncate ${value ? "text-gray-700" : "text-gray-300 italic"}`}>
+                        {value ?? "Not provided"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {vendor.panCardUrl && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">KYC Document</p>
+                  <a
+                    href={`${basePath}/api/storage${vendor.panCardUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-blue-50"
+                    style={{ color: "#1d4ed8", borderColor: "#bfdbfe" }}
+                  >
+                    <FileText size={12} /> View PAN Card
+                  </a>
+                </div>
+              )}
             </div>
 
             {vendor.monthlyRevenue.length > 0 && (

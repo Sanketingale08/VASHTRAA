@@ -6,11 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -23,11 +27,13 @@ import type {
   ProductDetail,
   ProductFacets,
   ProductListResponse,
+  UploadUrlRequest,
+  UploadUrlResponse,
   VendorSummary
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -41,6 +47,8 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
   const result = { queryKey } as T & { queryKey: K };
   for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
     if (key === 'queryKey') continue;
     Object.defineProperty(result, key, {
       enumerable: true,
@@ -52,6 +60,10 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
 };
 
 export const getHealthCheckUrl = () => {
+
+
+
+
   return `/api/healthz`
 }
 
@@ -60,12 +72,19 @@ export const getHealthCheckUrl = () => {
  * @summary Health check
  */
 export const healthCheck = async ( options?: RequestInit): Promise<HealthStatus> => {
+
   return customFetch<HealthStatus>(getHealthCheckUrl(),
   {
     ...options,
     method: 'GET'
+
+
   }
 );}
+
+
+
+
 
 export const getHealthCheckQueryKey = () => {
     return [
@@ -73,36 +92,63 @@ export const getHealthCheckQueryKey = () => {
     ] as const;
     }
 
+
 export const getHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
+
 const {query: queryOptions, request: requestOptions} = options ?? {};
+
   const queryKey =  queryOptions?.queryKey ?? getHealthCheckQueryKey();
+
+
+
     const queryFn: QueryFunction<Awaited<ReturnType<typeof healthCheck>>> = ({ signal }) => healthCheck({ signal, ...requestOptions });
+
+
+
+
+
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData> & { queryKey: QueryKey }
 }
 
 export type HealthCheckQueryResult = NonNullable<Awaited<ReturnType<typeof healthCheck>>>
 export type HealthCheckQueryError = ErrorType<unknown>
 
+
 /**
  * @summary Health check
  */
+
 export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
   const queryOptions = getHealthCheckQueryOptions(options)
+
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+
+
+
+
+
+
 export const getListProductsUrl = (params?: ListProductsParams,) => {
   const normalizedParams = new URLSearchParams();
+
   Object.entries(params || {}).forEach(([key, value]) => {
+
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : String(value))
     }
   });
+
   const stringifiedParams = normalizedParams.toString();
+
   return stringifiedParams.length > 0 ? `/api/products?${stringifiedParams}` : `/api/products`
 }
 
@@ -111,12 +157,19 @@ export const getListProductsUrl = (params?: ListProductsParams,) => {
  * @summary List products
  */
 export const listProducts = async (params?: ListProductsParams, options?: RequestInit): Promise<ProductListResponse> => {
+
   return customFetch<ProductListResponse>(getListProductsUrl(params),
   {
     ...options,
     method: 'GET'
+
+
   }
 );}
+
+
+
+
 
 export const getListProductsQueryKey = (params?: ListProductsParams,) => {
     return [
@@ -124,29 +177,141 @@ export const getListProductsQueryKey = (params?: ListProductsParams,) => {
     ] as const;
     }
 
+
 export const getListProductsQueryOptions = <TData = Awaited<ReturnType<typeof listProducts>>, TError = ErrorType<unknown>>(params?: ListProductsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
+
 const {query: queryOptions, request: requestOptions} = options ?? {};
+
   const queryKey =  queryOptions?.queryKey ?? getListProductsQueryKey(params);
+
+
+
     const queryFn: QueryFunction<Awaited<ReturnType<typeof listProducts>>> = ({ signal }) => listProducts(params, { signal, ...requestOptions });
+
+
+
+
+
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProducts>>, TError, TData> & { queryKey: QueryKey }
 }
 
 export type ListProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listProducts>>>
 export type ListProductsQueryError = ErrorType<unknown>
 
+
 /**
  * @summary List products
  */
+
 export function useListProducts<TData = Awaited<ReturnType<typeof listProducts>>, TError = ErrorType<unknown>>(
  params?: ListProductsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
   const queryOptions = getListProductsQueryOptions(params,options)
+
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+
+
+
+
+
+
+export const getGetProductFacetsUrl = (params?: GetProductFacetsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/products/facets?${stringifiedParams}` : `/api/products/facets`
+}
+
+/**
+ * Returns counts per filter dimension for faceted search
+ * @summary Get product facet counts
+ */
+export const getProductFacets = async (params?: GetProductFacetsParams, options?: RequestInit): Promise<ProductFacets> => {
+
+  return customFetch<ProductFacets>(getGetProductFacetsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductFacetsQueryKey = (params?: GetProductFacetsParams,) => {
+    return [
+    `/api/products/facets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetProductFacetsQueryOptions = <TData = Awaited<ReturnType<typeof getProductFacets>>, TError = ErrorType<unknown>>(params?: GetProductFacetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductFacets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductFacetsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductFacets>>> = ({ signal }) => getProductFacets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductFacets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductFacetsQueryResult = NonNullable<Awaited<ReturnType<typeof getProductFacets>>>
+export type GetProductFacetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get product facet counts
+ */
+
+export function useGetProductFacets<TData = Awaited<ReturnType<typeof getProductFacets>>, TError = ErrorType<unknown>>(
+ params?: GetProductFacetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductFacets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductFacetsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetProductUrl = (id: string,) => {
+
+
+
+
   return `/api/products/${id}`
 }
 
@@ -154,12 +319,19 @@ export const getGetProductUrl = (id: string,) => {
  * @summary Get a single product
  */
 export const getProduct = async (id: string, options?: RequestInit): Promise<ProductDetail> => {
+
   return customFetch<ProductDetail>(getGetProductUrl(id),
   {
     ...options,
     method: 'GET'
+
+
   }
 );}
+
+
+
+
 
 export const getGetProductQueryKey = (id: string,) => {
     return [
@@ -167,74 +339,56 @@ export const getGetProductQueryKey = (id: string,) => {
     ] as const;
     }
 
+
 export const getGetProductQueryOptions = <TData = Awaited<ReturnType<typeof getProduct>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
+
 const {query: queryOptions, request: requestOptions} = options ?? {};
+
   const queryKey =  queryOptions?.queryKey ?? getGetProductQueryKey(id);
+
+
+
     const queryFn: QueryFunction<Awaited<ReturnType<typeof getProduct>>> = ({ signal }) => getProduct(id, { signal, ...requestOptions });
+
+
+
+
+
    return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData> & { queryKey: QueryKey }
 }
 
 export type GetProductQueryResult = NonNullable<Awaited<ReturnType<typeof getProduct>>>
 export type GetProductQueryError = ErrorType<ErrorResponse>
 
+
 /**
  * @summary Get a single product
  */
+
 export function useGetProduct<TData = Awaited<ReturnType<typeof getProduct>>, TError = ErrorType<ErrorResponse>>(
  id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
   const queryOptions = getGetProductQueryOptions(id,options)
+
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
   return withQueryKey(query, queryOptions.queryKey);
 }
 
-export const getGetProductFacetsUrl = (params?: GetProductFacetsParams) => {
-  const normalizedParams = new URLSearchParams();
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value));
-    }
-  });
-  const stringifiedParams = normalizedParams.toString();
-  return stringifiedParams.length > 0 ? `/api/products/facets?${stringifiedParams}` : `/api/products/facets`;
-};
 
-export const getProductFacets = async (params?: GetProductFacetsParams, options?: RequestInit): Promise<ProductFacets> => {
-  return customFetch<ProductFacets>(getGetProductFacetsUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-};
 
-export const getGetProductFacetsQueryKey = (params?: GetProductFacetsParams) => {
-  return [`/api/products/facets`, ...(params ? [params] : [])] as const;
-};
 
-export const getGetProductFacetsQueryOptions = <TData = Awaited<ReturnType<typeof getProductFacets>>, TError = ErrorType<unknown>>(
-  params?: GetProductFacetsParams,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getProductFacets>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetProductFacetsQueryKey(params);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductFacets>>> = ({ signal }) =>
-    getProductFacets(params, { signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getProductFacets>>, TError, TData> & { queryKey: QueryKey };
-};
 
-export type GetProductFacetsQueryResult = NonNullable<Awaited<ReturnType<typeof getProductFacets>>>;
-export type GetProductFacetsQueryError = ErrorType<unknown>;
 
-export function useGetProductFacets<TData = Awaited<ReturnType<typeof getProductFacets>>, TError = ErrorType<unknown>>(
-  params?: GetProductFacetsParams,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getProductFacets>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetProductFacetsQueryOptions(params, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return withQueryKey(query, queryOptions.queryKey);
-}
 
 export const getListVendorsUrl = () => {
+
+
+
+
   return `/api/vendors`
 }
 
@@ -242,12 +396,19 @@ export const getListVendorsUrl = () => {
  * @summary List vendors
  */
 export const listVendors = async ( options?: RequestInit): Promise<VendorSummary[]> => {
+
   return customFetch<VendorSummary[]>(getListVendorsUrl(),
   {
     ...options,
     method: 'GET'
+
+
   }
 );}
+
+
+
+
 
 export const getListVendorsQueryKey = () => {
     return [
@@ -255,24 +416,118 @@ export const getListVendorsQueryKey = () => {
     ] as const;
     }
 
+
 export const getListVendorsQueryOptions = <TData = Awaited<ReturnType<typeof listVendors>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVendors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
+
 const {query: queryOptions, request: requestOptions} = options ?? {};
+
   const queryKey =  queryOptions?.queryKey ?? getListVendorsQueryKey();
+
+
+
     const queryFn: QueryFunction<Awaited<ReturnType<typeof listVendors>>> = ({ signal }) => listVendors({ signal, ...requestOptions });
+
+
+
+
+
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVendors>>, TError, TData> & { queryKey: QueryKey }
 }
 
 export type ListVendorsQueryResult = NonNullable<Awaited<ReturnType<typeof listVendors>>>
 export type ListVendorsQueryError = ErrorType<unknown>
 
+
 /**
  * @summary List vendors
  */
+
 export function useListVendors<TData = Awaited<ReturnType<typeof listVendors>>, TError = ErrorType<unknown>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVendors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
   const queryOptions = getListVendorsQueryOptions(options)
+
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
+export const getRequestUploadUrlUrl = () => {
+
+
+
+
+  return `/api/storage/uploads/request-url`
+}
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+export const requestUploadUrl = async (uploadUrlRequest: UploadUrlRequest, options?: RequestInit): Promise<UploadUrlResponse> => {
+
+  return customFetch<UploadUrlResponse>(getRequestUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(uploadUrlRequest)
+  }
+);}
+
+
+
+
+export const getRequestUploadUrlMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestUploadUrl>>, TError,{data: BodyType<UploadUrlRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestUploadUrl>>, TError,{data: BodyType<UploadUrlRequest>}, TContext> => {
+
+const mutationKey = ['requestUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestUploadUrl>>, {data: BodyType<UploadUrlRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof requestUploadUrl>>>
+    export type RequestUploadUrlMutationBody = BodyType<UploadUrlRequest>
+    export type RequestUploadUrlMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Request a presigned URL for file upload
+ */
+export const useRequestUploadUrl = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestUploadUrl>>, TError,{data: BodyType<UploadUrlRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestUploadUrl>>,
+        TError,
+        {data: BodyType<UploadUrlRequest>},
+        TContext
+      > => {
+      return useMutation(getRequestUploadUrlMutationOptions(options));
+    }
+

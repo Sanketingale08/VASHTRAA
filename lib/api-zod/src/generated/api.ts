@@ -67,6 +67,34 @@ export const ListProductsResponse = zod.object({
 
 
 /**
+ * Returns counts per filter dimension for faceted search
+ * @summary Get product facet counts
+ */
+export const GetProductFacetsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "category": zod.enum(['paithani', 'designer']).optional(),
+  "fabric": zod.coerce.string().optional(),
+  "color": zod.coerce.string().optional(),
+  "occasion": zod.coerce.string().optional(),
+  "vendorId": zod.coerce.string().optional(),
+  "minPrice": zod.coerce.number().optional(),
+  "maxPrice": zod.coerce.number().optional(),
+  "bestSeller": zod.coerce.boolean().optional(),
+  "newArrival": zod.coerce.boolean().optional(),
+  "hasDiscount": zod.coerce.boolean().optional(),
+  "minRating": zod.coerce.number().optional()
+})
+
+export const GetProductFacetsResponse = zod.object({
+  "fabric": zod.record(zod.string(), zod.number()),
+  "occasion": zod.record(zod.string(), zod.number()),
+  "color": zod.record(zod.string(), zod.number()),
+  "vendor": zod.record(zod.string(), zod.number()),
+  "rating": zod.record(zod.string(), zod.number())
+})
+
+
+/**
  * @summary Get a single product
  */
 export const GetProductParams = zod.object({
@@ -107,5 +135,25 @@ export const ListVendorsResponseItem = zod.object({
   "bio": zod.string().nullish()
 })
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
+
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+
+
+
+
+
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string().min(1),
+  "size": zod.number().min(1),
+  "contentType": zod.string().min(1)
+})
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string()
+})
 
 

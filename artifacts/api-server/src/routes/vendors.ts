@@ -110,13 +110,22 @@ router.get("/vendors/:id", async (req: any, res: any) => {
 });
 
 router.post("/vendors", requireAuth, async (req: any, res: any) => {
-  const { name, location, bio, gstin, contactEmail, tagline } = req.body;
+  const {
+    name, location, bio, gstin, contactEmail, tagline,
+    mobile, panNumber, panCardUrl,
+    bankHolder, bankName, bankAccount, bankIfsc,
+    shopStreet, shopCity, shopState, shopPincode,
+    termsAccepted,
+  } = req.body;
 
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: "Shop name is required" });
   }
   if (!location || !String(location).trim()) {
     return res.status(400).json({ error: "Location is required" });
+  }
+  if (!termsAccepted) {
+    return res.status(400).json({ error: "You must accept the terms and conditions" });
   }
 
   try {
@@ -141,6 +150,18 @@ router.post("/vendors", requireAuth, async (req: any, res: any) => {
         tagline: tagline ? String(tagline).trim() : null,
         ownerId: req.userId,
         status: "pending",
+        mobile: mobile ? String(mobile).trim() : null,
+        panNumber: panNumber ? String(panNumber).trim().toUpperCase() : null,
+        panCardUrl: panCardUrl ? String(panCardUrl).trim() : null,
+        bankHolder: bankHolder ? String(bankHolder).trim() : null,
+        bankName: bankName ? String(bankName).trim() : null,
+        bankAccount: bankAccount ? String(bankAccount).trim() : null,
+        bankIfsc: bankIfsc ? String(bankIfsc).trim().toUpperCase() : null,
+        shopStreet: shopStreet ? String(shopStreet).trim() : null,
+        shopCity: shopCity ? String(shopCity).trim() : null,
+        shopState: shopState ? String(shopState).trim() : null,
+        shopPincode: shopPincode ? String(shopPincode).trim() : null,
+        termsAcceptedAt: termsAccepted ? new Date() : null,
       })
       .returning();
 
@@ -437,6 +458,18 @@ router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => 
       status: vendor.status,
       ownerId: vendor.ownerId ?? null,
       kycVerified: vendor.kycVerified,
+      mobile: vendor.mobile ?? null,
+      panNumber: vendor.panNumber ?? null,
+      panCardUrl: vendor.panCardUrl ?? null,
+      bankHolder: vendor.bankHolder ?? null,
+      bankName: vendor.bankName ?? null,
+      bankAccount: vendor.bankAccount ?? null,
+      bankIfsc: vendor.bankIfsc ?? null,
+      shopStreet: vendor.shopStreet ?? null,
+      shopCity: vendor.shopCity ?? null,
+      shopState: vendor.shopState ?? null,
+      shopPincode: vendor.shopPincode ?? null,
+      termsAcceptedAt: vendor.termsAcceptedAt ?? null,
       totalProducts: vendorProducts.length,
       activeProducts: vendorProducts.filter(p => p.active).length,
       totalRevenue,

@@ -5,6 +5,20 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface UploadUrlRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -51,6 +65,24 @@ export interface ProductListResponse {
   totalPages: number;
 }
 
+export type ProductFacetsFabric = {[key: string]: number};
+
+export type ProductFacetsOccasion = {[key: string]: number};
+
+export type ProductFacetsColor = {[key: string]: number};
+
+export type ProductFacetsVendor = {[key: string]: number};
+
+export type ProductFacetsRating = {[key: string]: number};
+
+export interface ProductFacets {
+  fabric: ProductFacetsFabric;
+  occasion: ProductFacetsOccasion;
+  color: ProductFacetsColor;
+  vendor: ProductFacetsVendor;
+  rating: ProductFacetsRating;
+}
+
 export interface VendorSummary {
   id: string;
   name: string;
@@ -77,30 +109,6 @@ bestSeller?: boolean;
 newArrival?: boolean;
 hasDiscount?: boolean;
 minRating?: number;
-ids?: string;
-};
-
-export interface ProductFacets {
-  fabric: Record<string, number>;
-  occasion: Record<string, number>;
-  color: Record<string, number>;
-  vendor: Record<string, number>;
-  rating: Record<string, number>;
-}
-
-export type GetProductFacetsParams = {
-search?: string;
-category?: ListProductsCategory;
-fabric?: string;
-color?: string;
-occasion?: string;
-vendorId?: string;
-minPrice?: number;
-maxPrice?: number;
-bestSeller?: boolean;
-newArrival?: boolean;
-hasDiscount?: boolean;
-minRating?: number;
 };
 
 export type ListProductsCategory = typeof ListProductsCategory[keyof typeof ListProductsCategory];
@@ -120,3 +128,27 @@ export const ListProductsSort = {
   rating_desc: 'rating_desc',
   newest: 'newest',
 } as const;
+
+export type GetProductFacetsParams = {
+search?: string;
+category?: GetProductFacetsCategory;
+fabric?: string;
+color?: string;
+occasion?: string;
+vendorId?: string;
+minPrice?: number;
+maxPrice?: number;
+bestSeller?: boolean;
+newArrival?: boolean;
+hasDiscount?: boolean;
+minRating?: number;
+};
+
+export type GetProductFacetsCategory = typeof GetProductFacetsCategory[keyof typeof GetProductFacetsCategory];
+
+
+export const GetProductFacetsCategory = {
+  paithani: 'paithani',
+  designer: 'designer',
+} as const;
+

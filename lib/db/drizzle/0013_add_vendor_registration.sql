@@ -1,0 +1,12 @@
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "mobile" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "pan_number" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "pan_card_url" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_holder" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_name" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_account" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_ifsc" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "shop_street" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "shop_city" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "shop_state" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "shop_pincode" text;
+ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "terms_accepted_at" timestamp;

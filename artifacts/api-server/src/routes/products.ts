@@ -246,6 +246,33 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 
+async function notifyWishlistRestock(productId: string, productName: string, previousStock: number, newStock: number) {
+  if (!(previousStock === 0 && newStock > 0)) return;
+
+  const wishlistRows = await db
+    .select({ userId: wishlistsTable.userId })
+    .from(wishlistsTable)
+    .where(eq(wishlistsTable.productId, productId));
+
+  for (const { userId } of wishlistRows) {
+    const prefRows = await db
+      .select({ stockAlerts: notificationPreferencesTable.stockAlerts })
+      .from(notificationPreferencesTable)
+      .where(eq(notificationPreferencesTable.userId, userId))
+      .limit(1);
+    const wantsStock = prefRows.length === 0 || prefRows[0].stockAlerts;
+    if (wantsStock) {
+      await db.insert(notificationsTable).values({
+        userId,
+        type: "wishlist_restock",
+        title: "Back in stock!",
+        body: `"${productName}" is back in stock. Don't miss out!`,
+        metadata: { productId },
+      });
+    }
+  }
+}
+
 router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   const { stock } = req.body;
@@ -294,30 +321,7 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
       .returning({ stock: productsTable.stock });
 
     // If restocked (was 0, now > 0) notify users who have this in their wishlist
-    if (before.stock === 0 && stock > 0) {
-      const wishlistRows = await db
-        .select({ userId: wishlistsTable.userId })
-        .from(wishlistsTable)
-        .where(eq(wishlistsTable.productId, id));
-
-      for (const { userId } of wishlistRows) {
-        const prefRows = await db
-          .select({ stockAlerts: notificationPreferencesTable.stockAlerts })
-          .from(notificationPreferencesTable)
-          .where(eq(notificationPreferencesTable.userId, userId))
-          .limit(1);
-        const wantsStock = prefRows.length === 0 || prefRows[0].stockAlerts;
-        if (wantsStock) {
-          await db.insert(notificationsTable).values({
-            userId,
-            type: "wishlist_restock",
-            title: "Back in stock!",
-            body: `"${before.name}" is back in stock. Don't miss out!`,
-            metadata: { productId: id },
-          });
-        }
-      }
-    }
+    await notifyWishlistRestock(id, before.name, before.stock, stock);
 
     res.json({ stock: updated.stock });
   } catch (err: any) {
@@ -367,7 +371,7 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
   const { name, description, category, fabric, color, occasion, price, originalPrice, stock, images, isBestSeller, isNewArrival } = req.body;
 
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
     if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
 
@@ -386,6 +390,11 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
     if (isNewArrival !== undefined) updates.isNewArrival = Boolean(isNewArrival);
 
     const [updated] = await db.update(productsTable).set(updates).where(eq(productsTable.id, id)).returning();
+
+    if (updates.stock !== undefined) {
+      await notifyWishlistRestock(id, updated.name ?? existing.name, existing.stock, updated.stock);
+    }
+
     res.json(normalizeProduct(updated));
   } catch (err) {
     req.log.error({ err }, "Failed to update product");

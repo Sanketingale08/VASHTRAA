@@ -23,6 +23,7 @@ export function CartDrawer() {
   const shipping = subtotal >= 5000 ? 0 : 199;
   const gst = Math.round(subtotal * 0.05);
   const total = subtotal + shipping + gst;
+  const hasOutOfStock = items.some((i) => i.stock === 0);
 
   return (
     <AnimatePresence>
@@ -182,11 +183,27 @@ export function CartDrawer() {
                     Add ₹{(5000 - subtotal).toLocaleString("en-IN")} more for free shipping
                   </p>
                 )}
-                <Link href="/cart" onClick={closeDrawer}>
-                  <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-3 font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 rounded-sm transition-colors">
+                {hasOutOfStock && (
+                  <div className="flex items-center gap-1.5 text-red-500 text-xs font-semibold bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">
+                    <AlertTriangle size={13} className="shrink-0" />
+                    Remove out-of-stock items to proceed to checkout.
+                  </div>
+                )}
+                {hasOutOfStock ? (
+                  <button
+                    disabled
+                    title="Remove out-of-stock items to proceed to checkout"
+                    className="w-full bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 py-3 font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 rounded-sm cursor-not-allowed"
+                  >
                     View Cart & Checkout <ArrowRight size={16} />
                   </button>
-                </Link>
+                ) : (
+                  <Link href="/cart" onClick={closeDrawer}>
+                    <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-3 font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 rounded-sm transition-colors">
+                      View Cart & Checkout <ArrowRight size={16} />
+                    </button>
+                  </Link>
+                )}
                 <button
                   onClick={closeDrawer}
                   className="w-full py-2 text-sm text-[#1E6B5A] dark:text-[#C9A84C] hover:underline transition-colors"

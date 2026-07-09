@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingBag, Minus, Plus, Trash2, Tag, X, Heart, Clock } from "lucide-react";
+import { ShoppingBag, Minus, Plus, Trash2, Tag, X, Heart, Clock, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
@@ -57,6 +57,7 @@ export function CartPage() {
   const shipping = afterDiscount >= 5000 ? 0 : afterDiscount === 0 ? 0 : 199;
   const gst = Math.round(afterDiscount * 0.05);
   const total = afterDiscount + shipping + gst;
+  const hasOutOfStock = items.some((i) => i.stock === 0);
 
   async function applyCoupon() {
     const code = couponCode.trim().toUpperCase();
@@ -170,8 +171,15 @@ export function CartPage() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C9A84C]/10 p-4 flex gap-4"
+                className={`bg-white dark:bg-[#1E2329] rounded-lg border p-4 flex flex-col gap-2 ${item.stock === 0 ? "border-red-400/60" : "border-[#C9A84C]/10"}`}
               >
+                {item.stock === 0 && (
+                  <div className="flex items-center gap-1.5 text-red-500 text-xs font-semibold bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">
+                    <AlertTriangle size={13} className="shrink-0" />
+                    This item is now out of stock and cannot be purchased. Please remove it.
+                  </div>
+                )}
+                <div className="flex gap-4">
                 <Link href={`/products/${item.productId}`} className="shrink-0">
                   <img
                     src={item.images[0] ?? "/images/product-1.png"}
@@ -231,6 +239,7 @@ export function CartPage() {
                       <Trash2 size={13} /> Remove
                     </button>
                   </div>
+                </div>
                 </div>
               </motion.div>
             ))}
@@ -330,11 +339,27 @@ export function CartPage() {
                 📦 Estimated delivery: <span className="font-semibold">{getDeliveryDate()}</span>
               </div>
 
-              <Link href="/checkout">
-                <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
+              {hasOutOfStock && (
+                <div className="flex items-center gap-1.5 text-red-500 text-xs font-semibold bg-red-50 dark:bg-red-900/20 rounded px-3 py-2">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  Remove out-of-stock items to proceed to checkout.
+                </div>
+              )}
+              {hasOutOfStock ? (
+                <button
+                  disabled
+                  title="Remove out-of-stock items to proceed to checkout"
+                  className="w-full bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 py-4 font-bold uppercase tracking-wider text-sm rounded-sm cursor-not-allowed"
+                >
                   Proceed to Checkout
                 </button>
-              </Link>
+              ) : (
+                <Link href="/checkout">
+                  <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
+                    Proceed to Checkout
+                  </button>
+                </Link>
+              )}
 
               <button
                 onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.href = `${basePath}/`; }}

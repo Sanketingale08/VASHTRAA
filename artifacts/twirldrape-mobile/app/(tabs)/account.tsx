@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth, useUser } from "@clerk/expo";
 import { Image } from "expo-image";
-import { router } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -87,6 +87,25 @@ export default function AccountScreen() {
   useEffect(() => {
     if (isLoaded) fetchOrders();
   }, [isLoaded, fetchOrders]);
+
+  const isFirstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      if (isLoaded && isSignedIn) fetchOrders();
+    }, [isLoaded, isSignedIn, fetchOrders])
+  );
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [isLoaded, isSignedIn, fetchOrders]);
 
   const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },

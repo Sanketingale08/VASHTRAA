@@ -1,0 +1,114 @@
+# Implement Product & Inventory Management in the Seller Dashboard
+
+Implement a complete **Product Management** and **Inventory Management** module within the **Seller Dashboard**.
+
+Only the logged-in seller should be able to manage their own products and inventory.
+
+---
+
+## Product Management
+
+Allow sellers to create and manage products with the following details:
+
+### Add Product
+
+The **Add Product** form should include:
+
+* Product Name
+* Category
+* Subcategory
+* Brand Name
+* Product Description
+* Fabric Details
+* Color
+* Design Pattern
+* Price
+* Discount
+* Stock Quantity
+* Multiple Product Images
+* Product Videos
+* Product Variants (Size, Color, etc., if applicable)
+* Product Specifications
+* Delivery Information
+* Return Policy
+
+All fields should be validated before the product is published.
+
+---
+
+## Product Actions
+
+Allow sellers to perform the following actions:
+
+* Add Products
+* Edit Products
+* Delete Products
+* Activate Products
+* Deactivate Products
+* Duplicate Products
+* Bulk Product Upload (CSV/Excel)
+
+Display all products in a modern, searchable, and filterable data table with actions for viewing, editing, deleting, activating, and deactivating products.
+
+---
+
+## Inventory Management
+
+Implement a complete inventory management system with the following features:
+
+* Available Stock
+* Low Stock Alerts
+* Out of Stock Alerts
+* Stock Update History
+* Bulk Stock Updates
+* Inventory Reports
+* Bulk Price Updates
+
+Inventory should automatically update whenever:
+
+* A customer places an order
+* An order is cancelled
+* A return is completed
+* The seller manually updates stock
+
+---
+
+## Product Visibility
+
+Products added by a seller should automatically appear in the **Customer Portal** after meeting the marketplace's approval workflow (or immediately if product approval is disabled).
+
+Whenever a seller:
+
+* Adds a product
+* Updates product information
+* Changes the price
+* Applies a discount
+* Updates stock quantity
+* Activates or deactivates a product
+
+The changes should automatically synchronize with the Customer Portal and the Super Admin Panel in real time.
+
+---
+
+## Seller Permissions
+
+Each seller should only be able to:
+
+* View their own products
+* Add products to their own shop
+* Edit their own products
+* Delete their own products
+* Manage their own inventory
+
+Sellers must **not** be able to access or modify products belonging to other sellers.
+
+---
+
+## Additional Requirements
+
+* Build the Product Management and Inventory Management modules with a premium, modern, and responsive UI.
+* Include advanced search, filtering, sorting, and pagination for product listings.
+* Support image and video uploads with previews.
+* Validate all required fields before saving products.
+* Ensure all APIs, database operations, and routing are secure and role-based.
+* Preserve all existing functionality and ensure this implementation does not affect any existing features, routing, APIs, database relationships, or business logic.

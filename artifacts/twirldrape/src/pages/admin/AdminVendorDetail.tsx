@@ -95,7 +95,10 @@ function VendorDetailContent() {
         if (!r.ok) throw new Error("Not found");
         return r.json();
       })
-      .then((d) => setVendor(d))
+      .then((d) => {
+        setVendor(d);
+        setKycDone(!!d.kycVerified);
+      })
       .catch(() => setError("Failed to load vendor details"))
       .finally(() => setLoading(false));
   }, [id, adminKey]);

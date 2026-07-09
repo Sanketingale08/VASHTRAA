@@ -691,6 +691,9 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.0(react@19.1.0)
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
       '@types/react':
         specifier: ~19.1.10
         version: 19.1.17
@@ -769,6 +772,9 @@ importers:
       expo-web-browser:
         specifier: ~15.0.10
         version: 15.0.11(expo@54.0.35)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
       react:
         specifier: 'catalog:'
         version: 19.1.0

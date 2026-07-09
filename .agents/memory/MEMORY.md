@@ -1,1 +1,2 @@
 - [E2E stock-aware product selection](e2e-product-selection.md) — tests must query /api/products and pick in-stock product; never rely on first explore-page card being available
+- [TwirlDrape mobile checkout step layout](twirldrape-checkout-steps.md) — coupon UI lives in step 4 (Review), not step 3 (Payment); API_BASE for e2e should hit the shared proxy on port 80, not a guessed internal port

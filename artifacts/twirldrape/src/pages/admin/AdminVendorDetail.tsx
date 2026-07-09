@@ -31,6 +31,7 @@ interface VendorDetail {
   mobile: string | null;
   panNumber: string | null;
   panCardUrl: string | null;
+  gstCertUrl: string | null;
   bankHolder: string | null;
   bankName: string | null;
   bankAccount: string | null;
@@ -308,18 +309,33 @@ function VendorDetailContent() {
                   </div>
                 ))}
               </div>
-              {vendor.panCardUrl && (
+              {(vendor.panCardUrl || vendor.gstCertUrl) && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">KYC Document</p>
-                  <a
-                    href={`${basePath}/api/storage${vendor.panCardUrl}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-blue-50"
-                    style={{ color: "#1d4ed8", borderColor: "#bfdbfe" }}
-                  >
-                    <FileText size={12} /> View PAN Card
-                  </a>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">KYC Documents</p>
+                  <div className="flex flex-wrap gap-2">
+                    {vendor.panCardUrl && (
+                      <a
+                        href={`${basePath}/api/storage${vendor.panCardUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-blue-50"
+                        style={{ color: "#1d4ed8", borderColor: "#bfdbfe" }}
+                      >
+                        <FileText size={12} /> View PAN Card
+                      </a>
+                    )}
+                    {vendor.gstCertUrl && (
+                      <a
+                        href={`${basePath}/api/storage${vendor.gstCertUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-green-50"
+                        style={{ color: "#166534", borderColor: "#bbf7d0" }}
+                      >
+                        <FileText size={12} /> View GST Certificate
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

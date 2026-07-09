@@ -109,10 +109,10 @@ router.get("/vendors/:id", async (req: any, res: any) => {
   }
 });
 
-router.post("/vendors", requireAuth, async (req: any, res: any) => {
+async function handleSellerRegistration(req: any, res: any) {
   const {
     name, location, bio, gstin, contactEmail, tagline,
-    mobile, panNumber, panCardUrl,
+    mobile, panNumber, panCardUrl, gstCertUrl,
     bankHolder, bankName, bankAccount, bankIfsc,
     shopStreet, shopCity, shopState, shopPincode,
     termsAccepted,
@@ -153,6 +153,7 @@ router.post("/vendors", requireAuth, async (req: any, res: any) => {
         mobile: mobile ? String(mobile).trim() : null,
         panNumber: panNumber ? String(panNumber).trim().toUpperCase() : null,
         panCardUrl: panCardUrl ? String(panCardUrl).trim() : null,
+        gstCertUrl: gstCertUrl ? String(gstCertUrl).trim() : null,
         bankHolder: bankHolder ? String(bankHolder).trim() : null,
         bankName: bankName ? String(bankName).trim() : null,
         bankAccount: bankAccount ? String(bankAccount).trim() : null,
@@ -174,7 +175,10 @@ router.post("/vendors", requireAuth, async (req: any, res: any) => {
     req.log.error({ err }, "Failed to create vendor");
     res.status(500).json({ error: "Failed to create vendor account" });
   }
-});
+}
+
+router.post("/vendors", requireAuth, handleSellerRegistration);
+router.post("/seller/register", requireAuth, handleSellerRegistration);
 
 router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
   const { id } = req.params;
@@ -461,6 +465,7 @@ router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => 
       mobile: vendor.mobile ?? null,
       panNumber: vendor.panNumber ?? null,
       panCardUrl: vendor.panCardUrl ?? null,
+      gstCertUrl: vendor.gstCertUrl ?? null,
       bankHolder: vendor.bankHolder ?? null,
       bankName: vendor.bankName ?? null,
       bankAccount: vendor.bankAccount ?? null,

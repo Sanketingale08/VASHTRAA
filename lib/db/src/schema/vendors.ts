@@ -21,6 +21,7 @@ export const vendorsTable = pgTable("vendors", {
   mobile: text("mobile"),
   panNumber: text("pan_number"),
   panCardUrl: text("pan_card_url"),
+  gstCertUrl: text("gst_cert_url"),
   bankHolder: text("bank_holder"),
   bankName: text("bank_name"),
   bankAccount: text("bank_account"),

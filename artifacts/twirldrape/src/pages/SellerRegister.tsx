@@ -36,6 +36,7 @@ interface WizardData {
   gstin: string;
   panNumber: string;
   panCardUrl: string;
+  gstCertUrl: string;
   bankHolder: string;
   bankName: string;
   bankAccount: string;
@@ -50,7 +51,7 @@ interface WizardData {
 const DEFAULT_DATA: WizardData = {
   email: "", password: "", mobile: "",
   name: "", location: "", tagline: "", bio: "", contactEmail: "", gstin: "",
-  panNumber: "", panCardUrl: "",
+  panNumber: "", panCardUrl: "", gstCertUrl: "",
   bankHolder: "", bankName: "", bankAccount: "", bankIfsc: "",
   shopStreet: "", shopCity: "", shopState: "", shopPincode: "",
   termsAccepted: false,
@@ -436,7 +437,7 @@ export default function SellerRegister() {
     if (!data.termsAccepted) { setApiErr("Please accept the terms and conditions to proceed."); return; }
     setLoading(true); setApiErr("");
     try {
-      const res = await fetch(getApiUrl("/api/vendors"), {
+      const res = await fetch(getApiUrl("/api/seller/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -444,6 +445,7 @@ export default function SellerRegister() {
           name: data.name, location: data.location, bio: data.bio, gstin: data.gstin,
           contactEmail: data.contactEmail, tagline: data.tagline, mobile: data.mobile,
           panNumber: data.panNumber.toUpperCase(), panCardUrl: data.panCardUrl,
+          gstCertUrl: data.gstCertUrl || undefined,
           bankHolder: data.bankHolder, bankName: data.bankName,
           bankAccount: data.bankAccount, bankIfsc: data.bankIfsc.toUpperCase(),
           shopStreet: data.shopStreet, shopCity: data.shopCity,
@@ -514,28 +516,22 @@ export default function SellerRegister() {
 
             {step === 2 && (
               <StepShell key="s2" title="Verify Mobile Number"
-                subtitle="We need your mobile number for order updates and account security."
+                subtitle="Required for order updates and account security. We'll send a one-time password."
                 onBack={!isSignedIn ? () => { setErrs({}); setStep(1); } : undefined}
                 onNext={phoneSent ? verifyPhone : sendPhoneOtp}
-                nextLabel={phoneSent ? "Verify OTP" : "Send OTP"}
+                nextLabel={phoneSent ? "Verify & Continue" : "Send OTP"}
                 loading={loading}>
                 {!phoneSent ? (
-                  <>
-                    <Field label="Mobile Number" required>
-                      <div className="flex rounded-xl border overflow-hidden" style={{ borderColor: "#C8D8D0" }}>
-                        <span className="bg-[#E6F0EA] px-4 py-2.5 text-sm font-semibold border-r text-gray-600"
-                          style={{ borderColor: "#C8D8D0" }}>+91</span>
-                        <input type="tel" maxLength={10} value={data.mobile}
-                          onChange={(e2) => set("mobile")(e2.target.value.replace(/\D/g, "").slice(0, 10))}
-                          placeholder="9876543210"
-                          className="flex-1 px-4 py-2.5 text-sm outline-none bg-white" />
-                      </div>
-                    </Field>
-                    <button type="button" onClick={() => { setApiErr(""); setStep(3); }}
-                      className="text-xs text-gray-400 underline w-full text-right">
-                      Skip for now →
-                    </button>
-                  </>
+                  <Field label="Mobile Number" required helper="Indian mobile number — we'll send a 6-digit OTP">
+                    <div className="flex rounded-xl border overflow-hidden" style={{ borderColor: "#C8D8D0" }}>
+                      <span className="bg-[#E6F0EA] px-4 py-2.5 text-sm font-semibold border-r text-gray-600"
+                        style={{ borderColor: "#C8D8D0" }}>+91</span>
+                      <input type="tel" maxLength={10} value={data.mobile}
+                        onChange={(e2) => set("mobile")(e2.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="9876543210"
+                        className="flex-1 px-4 py-2.5 text-sm outline-none bg-white" />
+                    </div>
+                  </Field>
                 ) : (
                   <>
                     <div className="bg-[#E6F0EA] rounded-xl p-4 text-sm text-center" style={{ color: EMERALD }}>
@@ -593,9 +589,9 @@ export default function SellerRegister() {
                     <AlertCircle size={11} />{e("panCardUrl")}
                   </p>
                 )}
-                <FileUpload label="GST Certificate (Optional)" objectPath={""} onUploaded={() => {}}
+                <FileUpload label="GST Certificate (Optional)" objectPath={data.gstCertUrl} onUploaded={set("gstCertUrl")}
                   accept="image/jpeg,image/png,application/pdf"
-                  helper="Upload if you have GST registration" />
+                  helper="Upload your GST registration certificate if applicable" />
               </StepShell>
             )}
 

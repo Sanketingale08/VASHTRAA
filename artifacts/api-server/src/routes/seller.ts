@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { ordersTable, productsTable } from "@workspace/db";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, inArray } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 
 const router = Router();
@@ -256,12 +256,12 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
   const vendorId = req.vendorId;
 
   try {
-    const products = await db
+    const myProducts = await db
       .select({ id: productsTable.id })
       .from(productsTable)
       .where(eq(productsTable.vendorId, vendorId));
 
-    const productIdSet = new Set(products.map((p) => p.id));
+    const myProductIdSet = new Set(myProducts.map((p) => p.id));
 
     const [order] = await db
       .select()
@@ -274,8 +274,8 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
     }
 
     const items = (order.items as any[]) ?? [];
-    const vendorItems = items.filter((i) => productIdSet.has(i.productId));
-    if (vendorItems.length === 0) {
+    const myItems = items.filter((i) => myProductIdSet.has(i.productId));
+    if (myItems.length === 0) {
       return res.status(403).json({ error: "You don't have any items in this order" });
     }
 
@@ -285,25 +285,54 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
     if (order.status === "delivered") {
       return res.status(400).json({ error: "Order already delivered" });
     }
-    if (order.status === "dispatched") {
-      return res.status(400).json({ error: "Order already dispatched" });
+
+    const history = Array.isArray(order.statusHistory) ? [...(order.statusHistory as any[])] : [];
+
+    const alreadyDispatched = history.some((h) => h.status === "vendor_dispatched" && h.vendorId === vendorId);
+    if (alreadyDispatched) {
+      return res.status(400).json({ error: "You have already dispatched your items for this order" });
     }
 
-    const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
     history.push({
-      status: "dispatched",
+      status: "vendor_dispatched",
+      vendorId,
       timestamp: new Date().toISOString(),
       note: `Dispatched via ${String(courierName).trim()} — Tracking: ${String(trackingNumber).trim()}`,
       courierName: String(courierName).trim(),
       trackingNumber: String(trackingNumber).trim(),
     });
 
+    const allProductIdsInOrder = items.map((i: any) => i.productId).filter(Boolean);
+    const allOrderProducts = allProductIdsInOrder.length > 0
+      ? await db
+          .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+          .from(productsTable)
+          .where(inArray(productsTable.id, allProductIdsInOrder))
+      : [];
+
+    const allVendorIdsInOrder = new Set(allOrderProducts.map((p) => p.vendorId).filter(Boolean));
+
+    const dispatchedVendorIds = new Set(
+      history.filter((h) => h.status === "vendor_dispatched").map((h) => h.vendorId)
+    );
+    const allDispatched = [...allVendorIdsInOrder].every((vid) => dispatchedVendorIds.has(vid));
+
+    const newStatus = allDispatched ? "dispatched" : order.status;
+
+    if (allDispatched) {
+      history.push({
+        status: "dispatched",
+        timestamp: new Date().toISOString(),
+        note: "All vendors have dispatched — order fully dispatched",
+      });
+    }
+
     await db
       .update(ordersTable)
-      .set({ status: "dispatched", statusHistory: history, updatedAt: new Date() })
+      .set({ status: newStatus, statusHistory: history, updatedAt: new Date() })
       .where(eq(ordersTable.id, orderId));
 
-    res.json({ success: true });
+    res.json({ success: true, allDispatched });
   } catch (err: any) {
     req.log?.error({ err }, "orders/dispatch failed");
     res.status(500).json({ error: "Failed to dispatch order" });

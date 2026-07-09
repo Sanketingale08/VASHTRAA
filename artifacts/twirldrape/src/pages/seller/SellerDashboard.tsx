@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "wouter";
+import React, { useEffect, useState, useCallback } from "react";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { LayoutDashboard, Package, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
@@ -21,16 +21,50 @@ const fadeUp = {
 
 const NAV_LINKS = [
   { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/seller/products", label: "My Products", icon: Package },
-  { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
+  { href: "/seller/products", label: "My Products", icon: Package, group: "/seller/products" },
+  { href: "/seller/orders", label: "Orders", icon: ShoppingBag, group: "/seller/orders" },
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },
   { href: "/seller/payouts", label: "Payouts", icon: CreditCard, stub: true },
   { href: "/seller/help", label: "Help", icon: HelpCircle, stub: true },
 ];
 
+const UNREAD_KEY = "td_seller_orders_last_viewed";
+
 export function SellerLayout({ children, title }: { children: React.ReactNode; title?: string }) {
   const { vendor } = useSellerContext();
+  const [location] = useLocation();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    const lastViewed = localStorage.getItem(UNREAD_KEY);
+    if (!lastViewed) {
+      localStorage.setItem(UNREAD_KEY, new Date().toISOString());
+      return;
+    }
+    try {
+      const res = await fetch(`${basePath}/api/seller/orders`, { credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const lastTs = new Date(lastViewed).getTime();
+      const newOrders = (data.orders ?? []).filter(
+        (o: any) => new Date(o.createdAt).getTime() > lastTs
+      );
+      setUnreadCount(newOrders.length);
+    } catch {
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (location.startsWith("/seller/orders")) {
+      localStorage.setItem(UNREAD_KEY, new Date().toISOString());
+      setUnreadCount(0);
+    }
+  }, [location]);
 
   return (
     <div className="min-h-screen flex" style={{ background: CREAM }}>
@@ -65,8 +99,12 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
         )}
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_LINKS.map(({ href, label, icon: Icon, stub }) => {
-            const isActive = typeof window !== "undefined" && window.location.pathname === (basePath + href);
+          {NAV_LINKS.map(({ href, label, icon: Icon, stub, group }: any) => {
+            const fullPath = basePath + href;
+            const fullGroup = group ? basePath + group : null;
+            const isActive = location === href ||
+              (fullGroup ? location.startsWith(group) : false);
+            const showBadge = href === "/seller/orders" && unreadCount > 0;
             return (
               <Link
                 key={href}
@@ -80,7 +118,13 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
               >
                 <Icon size={16} />
                 {label}
-                {stub && (
+                {showBadge && (
+                  <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+                    style={{ background: GOLD, color: MAROON }}>
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+                {stub && !showBadge && (
                   <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.4)" }}>
                     Soon
                   </span>

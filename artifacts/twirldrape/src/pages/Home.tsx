@@ -179,22 +179,34 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const ids: string[] = JSON.parse(localStorage.getItem("twirl_recently_viewed") ?? "[]");
-      if (!ids.length) { setLoaded(true); return; }
-      fetch(`${BASE}/api/products?ids=${ids.join(",")}&limit=8`, { credentials: "include" })
-        .then(r => r.ok ? r.json() : { products: [] })
-        .then(data => {
-          const ordered = ids
-            .map(id => (data.products as ProductSummary[]).find(p => p.id === id))
-            .filter((p): p is ProductSummary => !!p);
-          setProducts(ordered);
-          setLoaded(true);
-        })
-        .catch(() => setLoaded(true));
-    } catch {
-      setLoaded(true);
+    function loadRecentlyViewed() {
+      try {
+        const ids: string[] = JSON.parse(localStorage.getItem("twirl_recently_viewed") ?? "[]");
+        if (!ids.length) { setLoaded(true); setProducts([]); return; }
+        fetch(`${BASE}/api/products?ids=${ids.join(",")}&limit=8`, { credentials: "include" })
+          .then(r => r.ok ? r.json() : { products: [] })
+          .then(data => {
+            const ordered = ids
+              .map(id => (data.products as ProductSummary[]).find(p => p.id === id))
+              .filter((p): p is ProductSummary => !!p);
+            setProducts(ordered);
+            setLoaded(true);
+          })
+          .catch(() => setLoaded(true));
+      } catch {
+        setLoaded(true);
+      }
     }
+
+    loadRecentlyViewed();
+
+    document.addEventListener("visibilitychange", loadRecentlyViewed);
+    window.addEventListener("popstate", loadRecentlyViewed);
+
+    return () => {
+      document.removeEventListener("visibilitychange", loadRecentlyViewed);
+      window.removeEventListener("popstate", loadRecentlyViewed);
+    };
   }, []);
 
   if (!loaded || products.length === 0) return null;

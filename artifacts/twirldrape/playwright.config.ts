@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import { execSync } from "child_process";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:80";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${process.env.PORT ?? 23779}`;
 
 function resolveChromiumPath(): string | undefined {
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {

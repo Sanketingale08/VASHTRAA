@@ -114,6 +114,52 @@ test.describe("Home page — Quick View, Add to Cart, Recently Viewed, Flash Sal
     ).toBeVisible({ timeout: 5_000 });
   });
 
+  test("Recently Viewed section updates after SPA back navigation without full reload", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+
+    // 1. Load home page and pick a product card via SPA link click (not page.goto)
+    await page.goto("/");
+    const firstCard = page.locator('[data-testid^="card-product-"]').first();
+    await firstCard.waitFor({ state: "visible", timeout: 25_000 });
+    const testId = await firstCard.getAttribute("data-testid");
+    const productId = testId?.replace("card-product-", "") ?? "";
+    expect(productId).toBeTruthy();
+
+    // 2. Click the card link — this is a real SPA navigation (history.pushState via wouter)
+    await firstCard.click();
+    await page.waitForURL(/\/products\//, { timeout: 10_000, waitUntil: "commit" });
+
+    // 3. Wait for the product detail page to record the view in localStorage
+    await page.waitForFunction(
+      (id: string) =>
+        (JSON.parse(localStorage.getItem("twirl_recently_viewed") ?? "[]") as string[]).includes(
+          id,
+        ),
+      productId,
+      { timeout: 15_000 },
+    );
+
+    // 4. Browser back — fires popstate; wouter re-renders Home without a full page reload
+    await page.goBack({ waitUntil: "commit" });
+    await page.waitForURL("/", { timeout: 10_000, waitUntil: "commit" });
+
+    // 5. Recently Viewed section must appear with the viewed product
+    const recentlyViewedHeading = page
+      .getByRole("heading")
+      .filter({ hasText: /Recently Viewed/i });
+    await recentlyViewedHeading.scrollIntoViewIfNeeded();
+    await expect(recentlyViewedHeading).toBeVisible({ timeout: 15_000 });
+
+    const rvSection = page
+      .locator("section")
+      .filter({ hasText: /Recently Viewed/i });
+    await expect(
+      rvSection.locator(`[data-testid="card-product-${productId}"]`).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
   test("Flash Sales section countdown timer shows a valid non-zero time", async ({
     page,
   }) => {

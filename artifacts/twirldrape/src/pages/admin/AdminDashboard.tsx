@@ -1,199 +1,205 @@
 import React, { useEffect, useState } from "react";
-import { useLocation } from "wouter";
-import { Shield, Users, CheckCircle, Clock, XCircle, LogOut } from "lucide-react";
-import { motion } from "framer-motion";
+import {
+  TrendingUp, ShoppingBag, Package, Users, Store,
+  CheckCircle, XCircle, RotateCcw, Clock, IndianRupee,
+} from "lucide-react";
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell,
+} from "recharts";
+import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-const MAROON = "#7B1C2C";
+const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
-const IVORY = "#FAF6EE";
 
-type VendorStatus = "pending" | "approved" | "suspended";
-
-interface Vendor {
-  id: string;
-  name: string;
-  location: string;
-  ownerId: string | null;
-  status: VendorStatus;
-  gstin: string | null;
-  contactEmail: string | null;
+interface Stats {
+  totalOrders: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  deliveredOrders: number;
+  cancelledOrders: number;
+  returnedOrders: number;
+  confirmedOrders: number;
+  dispatchedOrders: number;
+  refundedRevenue: number;
+  totalProducts: number;
+  totalVendors: number;
+  approvedVendors: number;
+  pendingVendors: number;
+  dailyRevenue: { date: string; revenue: number; orders: number }[];
 }
 
-export default function AdminDashboard() {
-  const [, setLocation] = useLocation();
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+function fmt(n: number) {
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
+  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
+  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
+  return `₹${n}`;
+}
+
+function fmtDate(d: string) {
+  return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+interface MetricCardProps {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+  sub?: string;
+}
+
+function MetricCard({ label, value, icon: Icon, iconBg, iconColor, sub }: MetricCardProps) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+      <div className="flex items-start justify-between mb-4">
+        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: iconBg }}>
+          <Icon size={16} style={{ color: iconColor }} />
+        </div>
+      </div>
+      <div className="text-2xl font-serif font-bold" style={{ color: NAVY }}>{value}</div>
+      {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function DashboardContent() {
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   useEffect(() => {
-    if (!adminKey) {
-      setLocation("/seller/login");
-      return;
-    }
-    fetch(`${basePath}/api/admin/vendors`, {
+    fetch(`${basePath}/api/admin/stats`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
-      .then((r) => {
-        if (r.status === 403) {
-          sessionStorage.removeItem("td_admin_key");
-          setLocation("/seller/login");
-          return null;
-        }
-        return r.json();
-      })
-      .then((data) => {
-        if (data) setVendors(data.vendors ?? []);
-      })
-      .catch(() => setError("Failed to load vendors"))
+      .then((r) => r.json())
+      .then((d) => setStats(d))
+      .catch(() => setError("Failed to load platform stats"))
       .finally(() => setLoading(false));
   }, [adminKey]);
 
-  async function updateStatus(id: string, action: "approve" | "suspend") {
-    setActionLoading(id + action);
-    try {
-      const res = await fetch(`${basePath}/api/admin/vendors/${id}/${action}`, {
-        method: "POST",
-        headers: { "x-admin-key": adminKey },
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setVendors((prev) =>
-          prev.map((v) => (v.id === id ? { ...v, status: data.vendor.status } : v))
-        );
-      }
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  const statusIcon = (s: VendorStatus) => {
-    if (s === "approved") return <CheckCircle size={14} className="text-green-600" />;
-    if (s === "pending") return <Clock size={14} className="text-amber-500" />;
-    return <XCircle size={14} className="text-red-500" />;
-  };
-
-  const statusLabel = (s: VendorStatus) => {
-    if (s === "approved") return "text-green-700 bg-green-50";
-    if (s === "pending") return "text-amber-700 bg-amber-50";
-    return "text-red-700 bg-red-50";
-  };
-
-  const pendingCount = vendors.filter((v) => v.status === "pending").length;
-  const approvedCount = vendors.filter((v) => v.status === "approved").length;
+  const orderStatusData = stats
+    ? [
+        { name: "Confirmed", value: stats.confirmedOrders, color: "#3B82F6" },
+        { name: "Dispatched", value: stats.dispatchedOrders, color: GOLD },
+        { name: "Delivered", value: stats.deliveredOrders, color: "#10B981" },
+        { name: "Cancelled", value: stats.cancelledOrders, color: "#EF4444" },
+        { name: "Returned", value: stats.returnedOrders, color: "#8B5CF6" },
+      ]
+    : [];
 
   return (
-    <div className="min-h-screen" style={{ background: IVORY }}>
-      <header className="border-b border-[#C9A84C]/20 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: MAROON }}>
-              <Shield size={17} className="text-white" />
-            </div>
-            <div>
-              <div className="font-serif font-bold text-base" style={{ color: MAROON }}>Admin Dashboard</div>
-              <div className="text-xs text-gray-400">TwirlDrape Operations</div>
-            </div>
-          </div>
-          <button
-            onClick={() => { sessionStorage.removeItem("td_admin_key"); setLocation("/admin/login"); }}
-            className="flex items-center gap-2 text-xs text-gray-500 hover:text-red-600 transition-colors"
-          >
-            <LogOut size={14} /> Sign out
-          </button>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-serif font-bold" style={{ color: NAVY }}>Platform Overview</h1>
+        <p className="text-sm text-gray-400 mt-0.5">Real-time marketplace metrics</p>
+      </div>
 
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <div className="grid grid-cols-3 gap-4 mb-10">
-          {[
-            { label: "Total Vendors", value: vendors.length, icon: Users, color: MAROON },
-            { label: "Pending Approval", value: pendingCount, icon: Clock, color: "#d97706" },
-            { label: "Approved", value: approvedCount, icon: CheckCircle, color: "#16a34a" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-white rounded-2xl border border-[#C9A84C]/20 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
-                <Icon size={16} style={{ color }} />
-              </div>
-              <div className="text-3xl font-serif font-bold" style={{ color }}>{value}</div>
-            </div>
+      {loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-200 p-5 h-28 animate-pulse" />
           ))}
         </div>
+      )}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600">{error}</div>
+      )}
 
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-serif font-bold text-base" style={{ color: MAROON }}>Vendor Applications</h2>
-            {pendingCount > 0 && (
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
-                {pendingCount} pending
-              </span>
-            )}
+      {stats && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard label="Total Revenue" value={fmt(stats.totalRevenue)} icon={IndianRupee}
+              iconBg="rgba(201,168,76,0.12)" iconColor={GOLD} sub="All completed orders" />
+            <MetricCard label="Total Orders" value={stats.totalOrders.toLocaleString("en-IN")} icon={ShoppingBag}
+              iconBg="rgba(59,130,246,0.1)" iconColor="#3B82F6" sub={`${stats.deliveredOrders} delivered`} />
+            <MetricCard label="Products" value={stats.totalProducts.toLocaleString("en-IN")} icon={Package}
+              iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" sub="Active catalogue" />
+            <MetricCard label="Customers" value={stats.totalCustomers.toLocaleString("en-IN")} icon={Users}
+              iconBg="rgba(139,92,246,0.1)" iconColor="#8B5CF6" sub="Unique buyers" />
+            <MetricCard label="Total Vendors" value={stats.totalVendors} icon={Store}
+              iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} sub={`${stats.approvedVendors} approved`} />
+            <MetricCard label="Pending Approval" value={stats.pendingVendors} icon={Clock}
+              iconBg="rgba(245,158,11,0.1)" iconColor="#D97706" sub="Awaiting review" />
+            <MetricCard label="Delivered" value={stats.deliveredOrders} icon={CheckCircle}
+              iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" />
+            <MetricCard label="Cancelled + Returned" value={stats.cancelledOrders + stats.returnedOrders}
+              icon={XCircle} iconBg="rgba(239,68,68,0.1)" iconColor="#EF4444"
+              sub={`${stats.returnedOrders} returned`} />
           </div>
 
-          {loading && (
-            <div className="py-16 text-center text-gray-400 text-sm">Loading vendors…</div>
-          )}
-          {error && (
-            <div className="py-10 text-center text-red-500 text-sm">{error}</div>
-          )}
-          {!loading && vendors.length === 0 && (
-            <div className="py-16 text-center text-gray-400 text-sm">No vendor applications yet.</div>
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="font-serif font-bold text-base" style={{ color: NAVY }}>Daily Revenue</h2>
+                  <p className="text-xs text-gray-400">Last 30 days</p>
+                </div>
+                <TrendingUp size={16} className="text-green-500" />
+              </div>
+              {stats.dailyRevenue.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No revenue data yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={stats.dailyRevenue} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9CA3AF" }}
+                      tickFormatter={fmtDate} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 10, fill: "#9CA3AF" }} tickFormatter={fmt} width={52} />
+                    <Tooltip formatter={(v: number) => [fmt(v), "Revenue"]} labelFormatter={fmtDate}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                    <Line type="monotone" dataKey="revenue" stroke={GOLD} strokeWidth={2}
+                      dot={false} activeDot={{ r: 4, fill: GOLD }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
 
-          {!loading && vendors.length > 0 && (
-            <div className="divide-y divide-gray-50">
-              {vendors.map((v) => (
-                <motion.div
-                  key={v.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="px-6 py-4 flex items-center justify-between gap-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-semibold text-sm" style={{ color: "#3D1515" }}>{v.name}</span>
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${statusLabel(v.status)}`}>
-                        {statusIcon(v.status)} {v.status}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400 truncate">
-                      {v.location}{v.contactEmail ? ` · ${v.contactEmail}` : ""}{v.gstin ? ` · GSTIN: ${v.gstin}` : ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {v.status !== "approved" && (
-                      <button
-                        disabled={actionLoading === v.id + "approve"}
-                        onClick={() => updateStatus(v.id, "approve")}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                        style={{ background: "#16a34a15", color: "#16a34a" }}
-                      >
-                        Approve
-                      </button>
-                    )}
-                    {v.status !== "suspended" && (
-                      <button
-                        disabled={actionLoading === v.id + "suspend"}
-                        onClick={() => updateStatus(v.id, "suspend")}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                        style={{ background: "#ef444415", color: "#dc2626" }}
-                      >
-                        Suspend
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <div className="mb-5">
+                <h2 className="font-serif font-bold text-base" style={{ color: NAVY }}>Order Status</h2>
+                <p className="text-xs text-gray-400">Distribution</p>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={orderStatusData} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
+                  <XAxis type="number" tick={{ fontSize: 10, fill: "#9CA3AF" }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#6B7280" }} width={68} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {orderStatusData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {stats.refundedRevenue > 0 && (
+            <div className="flex items-center gap-3 bg-purple-50 border border-purple-100 rounded-xl p-4">
+              <RotateCcw size={16} className="text-purple-500 shrink-0" />
+              <div className="text-sm">
+                <span className="font-semibold text-purple-700">Refunds Processed: </span>
+                <span className="text-purple-600">{fmt(stats.refundedRevenue)}</span>
+              </div>
             </div>
           )}
-        </div>
-      </main>
+        </>
+      )}
     </div>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <AdminGuard>
+      <AdminLayout>
+        <DashboardContent />
+      </AdminLayout>
+    </AdminGuard>
   );
 }

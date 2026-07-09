@@ -34,6 +34,7 @@ import { AccountRewardsPage } from "@/pages/account/Rewards";
 import { AccountNotificationsPage } from "@/pages/account/Notifications";
 import { AccountSupportPage } from "@/pages/account/Support";
 import Contact from "@/pages/Contact";
+import About from "@/pages/About";
 import NewArrivals from "@/pages/NewArrivals";
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -218,6 +219,7 @@ function Router() {
       <Route path="/account/support" component={AccountSupportPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/contact" component={Contact} />
+      <Route path="/about" component={About} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/vendors/:id" component={AdminVendorDetail} />

@@ -42,9 +42,11 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0;
-  const maxQty = Math.min(product.stock ?? 10, 10);
+  const isOutOfStock = (product.stock ?? 1) <= 0;
+  const maxQty = isOutOfStock ? 0 : Math.min(product.stock ?? 10, 10);
 
   function handleAddToCart() {
+    if (isOutOfStock) return;
     addItem({
       id: product!.id,
       productId: product!.id,
@@ -175,44 +177,59 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
                 </p>
               )}
 
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-[#7B1C2C] dark:text-[#FAF6EE]">Qty:</span>
-                <div className="flex items-center border border-[#C9A84C]/30 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setQty((q) => Math.max(1, q - 1))}
-                    className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-[#2A2E35] transition-colors"
-                    disabled={qty <= 1}
-                  >
-                    <Minus size={14} className="text-[#7B1C2C]" />
-                  </button>
-                  <span className="px-4 py-2 font-semibold text-sm border-x border-[#C9A84C]/30 min-w-[40px] text-center">
-                    {qty}
+              {isOutOfStock ? (
+                <div
+                  data-testid="out-of-stock-banner"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg"
+                >
+                  <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Out of Stock
                   </span>
-                  <button
-                    onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-                    className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-[#2A2E35] transition-colors"
-                    disabled={qty >= maxQty}
-                  >
-                    <Plus size={14} className="text-[#7B1C2C]" />
-                  </button>
                 </div>
-                {product.stock != null && product.stock <= 5 && (
-                  <span className="text-xs text-orange-500 font-medium">Only {product.stock} left</span>
-                )}
-              </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-[#7B1C2C] dark:text-[#FAF6EE]">Qty:</span>
+                  <div className="flex items-center border border-[#C9A84C]/30 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setQty((q) => Math.max(1, q - 1))}
+                      className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-[#2A2E35] transition-colors"
+                      disabled={qty <= 1}
+                    >
+                      <Minus size={14} className="text-[#7B1C2C]" />
+                    </button>
+                    <span className="px-4 py-2 font-semibold text-sm border-x border-[#C9A84C]/30 min-w-[40px] text-center">
+                      {qty}
+                    </span>
+                    <button
+                      onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+                      className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-[#2A2E35] transition-colors"
+                      disabled={qty >= maxQty}
+                    >
+                      <Plus size={14} className="text-[#7B1C2C]" />
+                    </button>
+                  </div>
+                  {product.stock != null && product.stock <= 5 && product.stock > 0 && (
+                    <span className="text-xs text-orange-500 font-medium">Only {product.stock} left</span>
+                  )}
+                </div>
+              )}
 
               <div className="flex gap-3 mt-auto">
                 <button
                   onClick={handleAddToCart}
+                  disabled={isOutOfStock}
+                  data-testid="quick-view-add-to-cart"
                   className={cn(
                     "flex-1 flex items-center justify-center gap-2 py-3 font-bold text-sm uppercase tracking-wider rounded-sm transition-all",
-                    added
+                    isOutOfStock
+                      ? "bg-gray-400 text-white cursor-not-allowed opacity-80"
+                      : added
                       ? "bg-green-600 text-white"
                       : "bg-[#7B1C2C] hover:bg-[#6a1826] text-[#FAF6EE]"
                   )}
                 >
                   <ShoppingBag size={16} />
-                  {added ? "Added!" : "Add to Cart"}
+                  {isOutOfStock ? "Out of Stock" : added ? "Added!" : "Add to Cart"}
                 </button>
                 <button
                   onClick={handleWishlist}

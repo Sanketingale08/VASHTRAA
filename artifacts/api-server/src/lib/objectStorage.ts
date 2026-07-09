@@ -204,6 +204,13 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  async getSignedReadUrl(objectPath: string, ttlSec: number = 300): Promise<string> {
+    const file = await this.getObjectEntityFile(objectPath);
+    const bucketName = (file as any).bucket.name as string;
+    const objectName = file.name;
+    return signObjectURL({ bucketName, objectName, method: "GET", ttlSec });
+  }
 }
 
 function parseObjectPath(path: string): {

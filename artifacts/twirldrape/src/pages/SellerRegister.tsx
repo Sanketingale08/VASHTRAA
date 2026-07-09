@@ -57,8 +57,9 @@ const DEFAULT_DATA: WizardData = {
   termsAccepted: false,
 };
 
-async function uploadKycFile(file: File): Promise<string> {
-  const metaRes = await fetch(getApiUrl("/api/storage/uploads/request-url"), {
+async function uploadKycFile(file: File, docType: "pan" | "gst" = "pan"): Promise<string> {
+  const endpoint = docType === "gst" ? "/api/seller/upload/gst" : "/api/seller/upload/pan";
+  const metaRes = await fetch(getApiUrl(endpoint), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -173,8 +174,9 @@ function OTPBox({ value, onChange }: { value: string; onChange: (v: string) => v
   );
 }
 
-function FileUpload({ label, objectPath, onUploaded, accept, helper }: {
-  label: string; objectPath: string; onUploaded: (path: string) => void; accept?: string; helper?: string;
+function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "pan" }: {
+  label: string; objectPath: string; onUploaded: (path: string) => void;
+  accept?: string; helper?: string; docType?: "pan" | "gst";
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -187,7 +189,7 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper }: {
     if (f.size > 5 * 1024 * 1024) { setErr("File must be under 5MB"); return; }
     setBusy(true); setErr("");
     try {
-      const path = await uploadKycFile(f);
+      const path = await uploadKycFile(f, docType);
       setFname(f.name);
       onUploaded(path);
     } catch { setErr("Upload failed. Please try again."); }
@@ -591,7 +593,8 @@ export default function SellerRegister() {
                 )}
                 <FileUpload label="GST Certificate (Optional)" objectPath={data.gstCertUrl} onUploaded={set("gstCertUrl")}
                   accept="image/jpeg,image/png,application/pdf"
-                  helper="Upload your GST registration certificate if applicable" />
+                  helper="Upload your GST registration certificate if applicable"
+                  docType="gst" />
               </StepShell>
             )}
 

@@ -86,6 +86,32 @@ const ORDER_STATUS_META: Record<string, { label: string; color: string; icon: Re
   returned: { label: "Returned", color: "#8B5CF6", icon: <RotateCcw size={14} /> },
 };
 
+function KycDocButton({ label, objectPath, adminKey, className }: {
+  label: string; objectPath: string; adminKey: string; className: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  async function open() {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${basePath}/api/admin/storage/signed-url?path=${encodeURIComponent(objectPath)}`,
+        { headers: { "x-admin-key": adminKey } }
+      );
+      if (!res.ok) { alert("Could not load document — access denied or file missing."); return; }
+      const { signedUrl } = await res.json();
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    } catch { alert("Network error loading document."); }
+    finally { setLoading(false); }
+  }
+  return (
+    <button onClick={open} disabled={loading}
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-60 ${className}`}>
+      {loading ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" /> : <FileText size={12} />}
+      {label}
+    </button>
+  );
+}
+
 function VendorDetailContent() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
@@ -314,26 +340,12 @@ function VendorDetailContent() {
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">KYC Documents</p>
                   <div className="flex flex-wrap gap-2">
                     {vendor.panCardUrl && (
-                      <a
-                        href={`${basePath}/api/storage${vendor.panCardUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-blue-50"
-                        style={{ color: "#1d4ed8", borderColor: "#bfdbfe" }}
-                      >
-                        <FileText size={12} /> View PAN Card
-                      </a>
+                      <KycDocButton label="View PAN Card" objectPath={vendor.panCardUrl} adminKey={adminKey}
+                        className="text-[#1d4ed8] border-[#bfdbfe] hover:bg-blue-50" />
                     )}
                     {vendor.gstCertUrl && (
-                      <a
-                        href={`${basePath}/api/storage${vendor.gstCertUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-green-50"
-                        style={{ color: "#166534", borderColor: "#bbf7d0" }}
-                      >
-                        <FileText size={12} /> View GST Certificate
-                      </a>
+                      <KycDocButton label="View GST Certificate" objectPath={vendor.gstCertUrl} adminKey={adminKey}
+                        className="text-[#166534] border-[#bbf7d0] hover:bg-green-50" />
                     )}
                   </div>
                 </div>

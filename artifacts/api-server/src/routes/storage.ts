@@ -18,47 +18,60 @@ function requireClerkAuth(req: Request, res: Response, next: any) {
     res.status(401).json({ error: "Unauthorized — sign in to upload files" });
     return;
   }
+  (req as any).userId = userId;
   next();
 }
 
-/**
- * POST /storage/uploads/request-url
- *
- * Request a presigned URL for file upload.
- * Requires Clerk authentication — only signed-in sellers may upload KYC docs.
- */
-router.post("/storage/uploads/request-url", requireClerkAuth, async (req: Request, res: Response) => {
+function requireAdminKey(req: Request, res: Response, next: any) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  const provided = (req.headers as any)["x-admin-key"];
+  if (!adminKey || !provided || provided !== adminKey) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  next();
+}
+
+async function issueUploadUrl(req: Request, res: Response) {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Missing or invalid required fields" });
     return;
   }
-
   try {
     const { name, size, contentType } = parsed.data;
-
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-
     res.json(
-      RequestUploadUrlResponse.parse({
-        uploadURL,
-        objectPath,
-        metadata: { name, size, contentType },
-      }),
+      RequestUploadUrlResponse.parse({ uploadURL, objectPath, metadata: { name, size, contentType } })
     );
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
-});
+}
+
+/**
+ * POST /storage/uploads/request-url
+ * Generic presigned upload URL — requires Clerk auth.
+ */
+router.post("/storage/uploads/request-url", requireClerkAuth, issueUploadUrl);
+
+/**
+ * POST /seller/upload/pan
+ * Dedicated endpoint for PAN card upload — requires Clerk auth (seller).
+ */
+router.post("/seller/upload/pan", requireClerkAuth, issueUploadUrl);
+
+/**
+ * POST /seller/upload/gst
+ * Dedicated endpoint for GST certificate upload — requires Clerk auth (seller).
+ */
+router.post("/seller/upload/gst", requireClerkAuth, issueUploadUrl);
 
 /**
  * GET /storage/public-objects/*
- *
- * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
- * These are unconditionally public — no authentication or ACL checks.
- * IMPORTANT: Always provide this endpoint when object storage is set up.
+ * Serve public assets unconditionally.
  */
 router.get("/storage/public-objects/*filePath", async (req: Request, res: Response) => {
   try {
@@ -69,12 +82,9 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
       res.status(404).json({ error: "File not found" });
       return;
     }
-
     const response = await objectStorageService.downloadObject(file);
-
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
-
     if (response.body) {
       const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
       nodeStream.pipe(res);
@@ -88,11 +98,32 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
 });
 
 /**
+ * GET /admin/storage/signed-url?path=/objects/uploads/xxx
+ * Admin-only: generate a short-lived signed GET URL for a private KYC document.
+ * Admins cannot attach headers to anchor tags, so we generate a bearer-signed URL instead.
+ */
+router.get("/admin/storage/signed-url", requireAdminKey, async (req: Request, res: Response) => {
+  const objectPath = req.query.path as string;
+  if (!objectPath || !objectPath.startsWith("/objects/")) {
+    res.status(400).json({ error: "Invalid object path — must start with /objects/" });
+    return;
+  }
+  try {
+    const signedUrl = await objectStorageService.getSignedReadUrl(objectPath, 300);
+    res.json({ signedUrl });
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Object not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Error generating admin signed URL");
+    res.status(500).json({ error: "Failed to generate signed URL" });
+  }
+});
+
+/**
  * GET /storage/objects/*
- *
- * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
+ * Private object serving — owner ACL or admin key required.
  */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   try {
@@ -102,7 +133,7 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
     const adminKey = process.env.ADMIN_API_KEY;
-    const providedAdminKey = (req as any).headers?.["x-admin-key"];
+    const providedAdminKey = (req.headers as any)["x-admin-key"];
     const auth = getAuth(req as any);
     const userId = (auth as any)?.sessionClaims?.userId || auth?.userId;
     const isAdmin = adminKey && providedAdminKey && providedAdminKey === adminKey;
@@ -124,10 +155,8 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     }
 
     const response = await objectStorageService.downloadObject(objectFile);
-
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
-
     if (response.body) {
       const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
       nodeStream.pipe(res);

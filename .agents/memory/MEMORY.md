@@ -3,3 +3,4 @@
 - [drizzle-kit migrate vs push](drizzle-migrate-vs-push.md) — silent exit-1 on migrate usually means schema was pushed, not migrated; baseline __drizzle_migrations by hash instead of dropping tables
 - [Seller notification owner guard](seller-notification-owner-guard.md) — insertSellerNotification must skip vendors with NULL ownerId or it crashes the order transaction
 - [lib/db composite build](lib-db-composite-build.md) — schema changes in lib/db need a forced tsc -b rebuild or dependent packages see stale types
+- [Support ticket SLA direction](support-ticket-sla-direction.md) — SLA auto-escalation must only fire while the seller owes a reply; "Waiting for Customer" must not count as breach.

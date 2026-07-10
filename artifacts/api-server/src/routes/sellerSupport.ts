@@ -7,7 +7,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
-import { computeSlaDueAt, notifyTicketEvent } from "../lib/ticketSupport";
+import { notifyTicketEvent } from "../lib/ticketSupport";
 
 const router = Router();
 
@@ -134,7 +134,7 @@ router.post("/seller/support/tickets/:id/messages", requireVendorAuth, async (re
 
     const [updated] = await db
       .update(supportTicketsTable)
-      .set({ updatedAt: new Date(), status: "Waiting for Customer", slaDueAt: computeSlaDueAt() })
+      .set({ updatedAt: new Date(), status: "Waiting for Customer", slaDueAt: null })
       .where(eq(supportTicketsTable.id, id))
       .returning();
 

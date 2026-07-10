@@ -243,6 +243,16 @@ router.patch("/admin/support/tickets/:id/assign", requireAdminKey, async (req: a
       internal: true,
     });
 
+    if (assignedAdmin) {
+      await notifyTicketEvent(
+        updated,
+        "ticket_assigned",
+        "Ticket assigned",
+        `"${updated.subject}" was assigned to ${assignedAdmin}.`,
+        { notifyAdmin: true }
+      );
+    }
+
     res.json(updated);
   } catch (err: any) {
     req.log?.error({ err }, "admin/support/tickets/:id/assign failed");

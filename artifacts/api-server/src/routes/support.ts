@@ -10,7 +10,7 @@ import {
   CUSTOMER_TICKET_CATEGORIES,
   routeTicket,
 } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, ilike } from "drizzle-orm";
 import { computeSlaDueAt, notifyTicketEvent } from "../lib/ticketSupport";
 
 const router = Router();
@@ -140,10 +140,16 @@ router.post("/support/tickets", requireAuth, async (req: any, res: any): Promise
 
 router.get("/support/tickets", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
+    const status = req.query.status as string | undefined;
+    const search = (req.query.search as string | undefined)?.trim();
+    const conditions: any[] = [eq(supportTicketsTable.userId, req.userId)];
+    if (status) conditions.push(eq(supportTicketsTable.status, status as any));
+    if (search) conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
+
     const tickets = await db
       .select()
       .from(supportTicketsTable)
-      .where(eq(supportTicketsTable.userId, req.userId))
+      .where(and(...conditions))
       .orderBy(desc(supportTicketsTable.updatedAt));
 
     const ticketsWithLastReply = await Promise.all(
@@ -338,9 +344,14 @@ router.post("/support/tickets/:id/messages", requireAuth, async (req: any, res: 
       .values({ ticketId: id, userId: req.userId, body: body.trim(), attachments: cleanAttachments, isStaff: false })
       .returning();
 
+    const backToSeller = ticket.status === "Waiting for Customer";
     const [updated] = await db
       .update(supportTicketsTable)
-      .set({ updatedAt: new Date(), status: ticket.status === "Waiting for Customer" ? "In Progress" : ticket.status })
+      .set({
+        updatedAt: new Date(),
+        status: backToSeller ? "In Progress" : ticket.status,
+        slaDueAt: backToSeller && ticket.assignedTo === "seller" ? computeSlaDueAt() : ticket.slaDueAt,
+      })
       .where(eq(supportTicketsTable.id, id))
       .returning();
 

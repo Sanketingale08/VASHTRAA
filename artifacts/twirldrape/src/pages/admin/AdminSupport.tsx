@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   HelpCircle, Send, Clock, CheckCircle2, AlertCircle, XCircle,
@@ -19,6 +19,7 @@ interface Ticket {
   category: string;
   status: TicketStatus;
   assignedTo: string;
+  assignedAdmin: string | null;
   escalated: boolean;
   createdBy: string;
   createdAt: string;
@@ -140,6 +141,28 @@ function AdminSupportContent() {
     },
   });
 
+  const [assigneeInput, setAssigneeInput] = useState("");
+  useEffect(() => {
+    setAssigneeInput(detail?.assignedAdmin ?? "");
+  }, [detail?.id, detail?.assignedAdmin]);
+
+  const assignTicket = useMutation({
+    mutationFn: async (assignedAdmin: string) => {
+      const r = await fetch(`${basePath}/api/admin/support/tickets/${selectedId}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        credentials: "include",
+        body: JSON.stringify({ assignedAdmin }),
+      });
+      if (!r.ok) throw new Error("Failed to assign ticket");
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-support-ticket", selectedId] });
+      qc.invalidateQueries({ queryKey: ["admin-support-tickets"] });
+    },
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -232,15 +255,35 @@ function AdminSupportContent() {
               <div className="border-b p-4 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-serif font-bold">{detail.subject}</p>
-                  <p className="text-xs" style={{ color: GOLD }}>{detail.category} · assigned: {detail.assignedTo}</p>
+                  <p className="text-xs" style={{ color: GOLD }}>{detail.category} · portal: {detail.assignedTo}</p>
                 </div>
-                <select
-                  value={detail.status}
-                  onChange={(e) => updateStatus.mutate(e.target.value)}
-                  className="text-xs border rounded-lg px-2 py-1"
-                >
-                  {STATUS_TABS.filter((s) => s !== "all").map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <div className="flex items-center gap-2">
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); assignTicket.mutate(assigneeInput.trim()); }}
+                    className="flex items-center gap-1"
+                  >
+                    <input
+                      value={assigneeInput}
+                      onChange={(e) => setAssigneeInput(e.target.value)}
+                      placeholder="Assign to admin…"
+                      className="text-xs border rounded-lg px-2 py-1 w-32"
+                    />
+                    <button
+                      type="submit"
+                      disabled={assignTicket.isPending}
+                      className="text-xs font-semibold px-2 py-1 rounded-lg border disabled:opacity-40"
+                    >
+                      {detail.assignedAdmin ? "Reassign" : "Assign"}
+                    </button>
+                  </form>
+                  <select
+                    value={detail.status}
+                    onChange={(e) => updateStatus.mutate(e.target.value)}
+                    className="text-xs border rounded-lg px-2 py-1"
+                  >
+                    {STATUS_TABS.filter((s) => s !== "all").map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="p-4 space-y-3 max-h-[360px] overflow-y-auto">
                 {detail.messages.map((m) => (

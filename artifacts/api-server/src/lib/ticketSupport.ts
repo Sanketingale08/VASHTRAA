@@ -9,10 +9,15 @@ export function computeSlaDueAt(from: Date = new Date()): Date {
   return new Date(from.getTime() + SLA_HOURS * 60 * 60 * 1000);
 }
 
+// Statuses where the seller currently owes the customer a response.
+// "Waiting for Customer" means the ball is in the customer's court, so it
+// must never be treated as an SLA breach against the seller.
+const SELLER_OWES_RESPONSE_STATUSES = new Set(["Open", "In Progress"]);
+
 export function isPastSla(ticket: Pick<SupportTicket, "slaDueAt" | "status" | "escalated" | "assignedTo">): boolean {
   if (!ticket.slaDueAt || ticket.escalated) return false;
   if (ticket.assignedTo !== "seller") return false;
-  if (ticket.status === "Resolved" || ticket.status === "Closed") return false;
+  if (!SELLER_OWES_RESPONSE_STATUSES.has(ticket.status)) return false;
   return new Date(ticket.slaDueAt).getTime() < Date.now();
 }
 

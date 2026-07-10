@@ -14,13 +14,22 @@ export interface CartItem {
   category: string;
 }
 
+export interface StockAdjustment {
+  productId: string;
+  name: string;
+  previousQuantity: number;
+  newQuantity: number;
+  currentStock: number;
+  nowOutOfStock: boolean;
+}
+
 interface CartContextType {
   items: CartItem[];
   addItem: (product: Omit<CartItem, "quantity">, qty?: number) => Promise<void>;
   removeItem: (productId: string) => Promise<void>;
   updateQuantity: (productId: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
-  refreshStock: () => Promise<void>;
+  refreshStock: () => Promise<StockAdjustment[]>;
   totalItems: number;
   isDrawerOpen: boolean;
   openDrawer: () => void;
@@ -33,7 +42,7 @@ const CartContext = createContext<CartContextType>({
   removeItem: async () => {},
   updateQuantity: async () => {},
   clearCart: async () => {},
-  refreshStock: async () => {},
+  refreshStock: async () => [],
   totalItems: 0,
   isDrawerOpen: false,
   openDrawer: () => {},
@@ -73,6 +82,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const syncedRef = useRef(false);
+  const itemsRef = useRef<CartItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -211,35 +224,58 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSignedIn]);
 
-  const refreshStock = useCallback(async () => {
-    setItems((current) => {
-      if (current.length === 0) return current;
-      const ids = current.map((i) => i.productId).join(",");
-      apiFetch(`/api/products?ids=${encodeURIComponent(ids)}&limit=100`)
-        .then((data) => {
-          const products: any[] = data.products ?? [];
-          const stockById = new Map(products.map((p) => [p.id, p.stock ?? 0]));
-          setItems((prev) => {
-            let changed = false;
-            const next = prev.map((item) => {
-              const liveStock = stockById.get(item.productId);
-              if (liveStock === undefined || liveStock === item.stock) return item;
-              changed = true;
-              return {
-                ...item,
-                stock: liveStock,
-                quantity: liveStock === 0 ? item.quantity : Math.min(item.quantity, liveStock),
-              };
-            });
-            if (!changed) return prev;
-            saveLocalCart(next);
-            return next;
+  const refreshStock = useCallback(async (): Promise<StockAdjustment[]> => {
+    const current = itemsRef.current;
+    if (current.length === 0) return [];
+    const ids = current.map((i) => i.productId).join(",");
+    try {
+      const data = await apiFetch(`/api/products?ids=${encodeURIComponent(ids)}&limit=100`);
+      const products: any[] = data.products ?? [];
+      const stockById = new Map(products.map((p) => [p.id, p.stock ?? 0]));
+      const adjustments: StockAdjustment[] = [];
+      let anyChange = false;
+
+      const next = current.map((item) => {
+        const liveStock = stockById.get(item.productId);
+        if (liveStock === undefined) return item;
+        const cappedQty = Math.min(item.quantity, liveStock);
+        if (cappedQty !== item.quantity) {
+          adjustments.push({
+            productId: item.productId,
+            name: item.name,
+            previousQuantity: item.quantity,
+            newQuantity: cappedQty,
+            currentStock: liveStock,
+            nowOutOfStock: liveStock === 0,
           });
-        })
-        .catch(() => {});
-      return current;
-    });
-  }, []);
+        }
+        if (liveStock === item.stock && cappedQty === item.quantity) return item;
+        anyChange = true;
+        return { ...item, stock: liveStock, quantity: cappedQty };
+      });
+
+      if (anyChange) {
+        setItems(next);
+        saveLocalCart(next);
+        if (isSignedIn) {
+          for (const adj of adjustments) {
+            if (!adj.nowOutOfStock && adj.newQuantity !== adj.previousQuantity) {
+              try {
+                await apiFetch(`/api/cart/${adj.productId}`, {
+                  method: "PUT",
+                  body: JSON.stringify({ quantity: adj.newQuantity }),
+                });
+              } catch {}
+            }
+          }
+        }
+      }
+
+      return adjustments;
+    } catch {
+      return [];
+    }
+  }, [isSignedIn]);
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
 

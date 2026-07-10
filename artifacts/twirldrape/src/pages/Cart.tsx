@@ -4,6 +4,7 @@ import { ShoppingBag, Minus, Plus, Trash2, Tag, X, Heart, Clock, AlertTriangle }
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
+import type { StockAdjustment } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useUser } from "@clerk/react";
 import { useListProducts } from "@workspace/api-client-react";
@@ -22,7 +23,7 @@ function getRecentlyViewed(): string[] {
 }
 
 export function CartPage() {
-  const { items, removeItem, updateQuantity, clearCart } = useCart();
+  const { items, removeItem, updateQuantity, clearCart, refreshStock } = useCart();
   const { wishlistedIds, toggle: toggleWishlist } = useWishlist();
   const { isSignedIn } = useUser();
   const [couponCode, setCouponCode] = useState("");
@@ -30,6 +31,17 @@ export function CartPage() {
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [stockNotice, setStockNotice] = useState<StockAdjustment[]>([]);
+  const validatedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (validatedRef.current) return;
+    if (items.length === 0) return;
+    validatedRef.current = true;
+    refreshStock().then((adjustments) => {
+      if (adjustments.length > 0) setStockNotice(adjustments);
+    });
+  }, [items, refreshStock]);
 
   useEffect(() => {
     const ids = getRecentlyViewed().slice(0, 8);
@@ -161,6 +173,40 @@ export function CartPage() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">{items.length} item{items.length !== 1 ? "s" : ""}</p>
         </motion.div>
+
+        {stockNotice.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-4 py-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800 dark:text-amber-300">
+                  <p className="font-semibold mb-1">We updated your cart</p>
+                  <ul className="space-y-0.5 list-disc list-inside">
+                    {stockNotice.map((adj) => (
+                      <li key={adj.productId}>
+                        {adj.nowOutOfStock ? (
+                          <>"{adj.name}" is now out of stock.</>
+                        ) : (
+                          <>Only {adj.currentStock} left of "{adj.name}" — quantity reduced from {adj.previousQuantity} to {adj.newQuantity}.</>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <button
+                onClick={() => setStockNotice([])}
+                className="text-amber-500 hover:text-amber-700 shrink-0"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items */}

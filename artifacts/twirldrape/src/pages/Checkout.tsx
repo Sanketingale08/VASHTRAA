@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Check, ChevronRight, Truck, Zap, CreditCard, Smartphone,
   HandCoins, Tag, X, Loader2, CheckCircle, XCircle, Building2, Wallet as WalletIcon,
+  AlertTriangle,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
-import type { CartItem } from "@/context/CartContext";
+import type { CartItem, StockAdjustment } from "@/context/CartContext";
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -121,12 +122,13 @@ function Field({
 export function CheckoutPage() {
   const [, setLocation] = useLocation();
   const { isSignedIn, isLoaded } = useUser();
-  const { items: cartItems, clearCart } = useCart();
+  const { items: cartItems, clearCart, refreshStock } = useCart();
 
   const [step, setStep] = useState(1);
   const [buyNowItems, setBuyNowItems] = useState<CartItem[] | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState("");
+  const [stockNotice, setStockNotice] = useState<StockAdjustment[]>([]);
   const orderPlacedRef = React.useRef(false);
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -237,6 +239,59 @@ export function CheckoutPage() {
     if (isLoaded && !isSignedIn) setLocation("/sign-in");
   }, [isLoaded, isSignedIn, setLocation]);
 
+  async function revalidateStock(): Promise<StockAdjustment[]> {
+    if (buyNowItems) {
+      try {
+        const ids = buyNowItems.map((i) => i.productId).join(",");
+        const res = await fetch(`${BASE}/api/products?ids=${encodeURIComponent(ids)}&limit=100`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        const products: any[] = data.products ?? [];
+        const stockById = new Map(products.map((p) => [p.id, p.stock ?? 0]));
+        const adjustments: StockAdjustment[] = [];
+        let anyChange = false;
+        const next = buyNowItems.map((item) => {
+          const liveStock = stockById.get(item.productId);
+          if (liveStock === undefined) return item;
+          const cappedQty = Math.min(item.quantity, liveStock);
+          if (cappedQty !== item.quantity) {
+            adjustments.push({
+              productId: item.productId,
+              name: item.name,
+              previousQuantity: item.quantity,
+              newQuantity: cappedQty,
+              currentStock: liveStock,
+              nowOutOfStock: liveStock === 0,
+            });
+          }
+          if (liveStock === item.stock && cappedQty === item.quantity) return item;
+          anyChange = true;
+          return { ...item, stock: liveStock, quantity: cappedQty };
+        });
+        if (anyChange) setBuyNowItems(next);
+        return adjustments;
+      } catch {
+        return [];
+      }
+    }
+    return refreshStock();
+  }
+
+  const validatedRef = useRef(false);
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (validatedRef.current) return;
+    const itemsToCheck = buyNowItems ?? cartItems;
+    if (itemsToCheck.length === 0) return;
+    validatedRef.current = true;
+    revalidateStock().then((adjustments) => {
+      if (adjustments.length > 0) setStockNotice(adjustments);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isSignedIn, buyNowItems, cartItems]);
+
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     fetch(`${BASE}/api/addresses`, { credentials: "include" })
@@ -259,6 +314,7 @@ export function CheckoutPage() {
   }, [isLoaded, isSignedIn]);
 
   const orderItems = buyNowItems ?? cartItems;
+  const hasOutOfStockItem = orderItems.some((i) => i.stock === 0);
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
 
   let discount = 0;
@@ -335,6 +391,19 @@ export function CheckoutPage() {
     setPlacing(true);
     setPlaceError("");
     setCouponOrderError("");
+    const adjustments = await revalidateStock();
+    if (adjustments.length > 0) {
+      setStockNotice(adjustments);
+      const blocking = adjustments.some((a) => a.nowOutOfStock);
+      setPlaceError(
+        blocking
+          ? "One or more items in your order are no longer available. Please review your cart before placing the order."
+          : "Some item quantities were reduced due to limited stock. Please review the updated order below."
+      );
+      setStep(4);
+      setPlacing(false);
+      return;
+    }
     try {
       const res = await fetch(`${BASE}/api/orders`, {
         method: "POST",
@@ -1096,6 +1165,28 @@ export function CheckoutPage() {
                       )}
                     </div>
 
+                    {stockNotice.length > 0 && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                          <div className="text-sm text-amber-800 dark:text-amber-300">
+                            <p className="font-semibold mb-1">We updated your order</p>
+                            <ul className="space-y-0.5 list-disc list-inside">
+                              {stockNotice.map((adj) => (
+                                <li key={adj.productId}>
+                                  {adj.nowOutOfStock ? (
+                                    <>"{adj.name}" is now out of stock.</>
+                                  ) : (
+                                    <>Only {adj.currentStock} left of "{adj.name}" — quantity reduced from {adj.previousQuantity} to {adj.newQuantity}.</>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {placeError && (
                       <p className="text-red-500 text-sm text-center bg-red-50 rounded-lg py-2 px-4">{placeError}</p>
                     )}
@@ -1109,8 +1200,9 @@ export function CheckoutPage() {
                       </button>
                       <button
                         onClick={placeOrder}
-                        disabled={placing}
-                        className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
+                        disabled={placing || hasOutOfStockItem}
+                        title={hasOutOfStockItem ? "Remove out-of-stock items before placing your order" : undefined}
+                        className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 disabled:cursor-not-allowed text-[#F3F8F5] py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
                       >
                         {placing ? (
                           <><Loader2 size={14} className="animate-spin" /> Placing Order…</>

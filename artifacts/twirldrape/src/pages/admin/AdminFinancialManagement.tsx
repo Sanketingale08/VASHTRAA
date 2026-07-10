@@ -63,7 +63,16 @@ const TABS = [
   { key: "payments", label: "Payment Report", icon: CreditCard },
   { key: "refunds", label: "Refund Report", icon: RotateCcw },
   { key: "profit", label: "Profit Analysis", icon: TrendingUp },
+  { key: "schedules", label: "Automated Reports", icon: Clock },
 ] as const;
+
+const SCHEDULE_REPORT_TYPES = ["revenue", "payments", "refunds", "profit", "settlements"] as const;
+const SCHEDULE_FREQUENCIES = ["daily", "weekly", "monthly"] as const;
+
+interface ReportSchedule {
+  id: string; reportType: string; frequency: string; recipientEmail: string | null;
+  active: boolean; lastRunAt: string | null; createdAt: string;
+}
 
 type TabKey = typeof TABS[number]["key"];
 
@@ -86,6 +95,17 @@ function useAdminKey() {
   return typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 }
 
+const POLL_INTERVAL_MS = 30000;
+
+function usePolling(fn: () => void, deps: React.DependencyList) {
+  useEffect(() => {
+    fn();
+    const id = setInterval(fn, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 function SettlementsPanel() {
   const adminKey = useAdminKey();
   const [data, setData] = useState<{ settlements: Settlement[]; summary: { pendingTotal: number; completedTotal: number; count: number } } | null>(null);
@@ -105,7 +125,26 @@ function SettlementsPanel() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [adminKey, statusFilter]);
+  usePolling(load, [adminKey, statusFilter]);
+
+  function exportPdf() {
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+    doc.setFontSize(16); doc.text("Vendor Settlements", 14, 14);
+    autoTable(doc, {
+      startY: 20,
+      head: [["Vendor", "Type", "Amount", "Status", "Date"]],
+      body: settlements.map((s) => [s.vendorName, s.type, fmt(s.amount), s.status, new Date(s.createdAt).toLocaleDateString("en-IN")]),
+      styles: { fontSize: 8 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    doc.save(`settlements-${Date.now()}.pdf`);
+  }
+
+  function exportExcel() {
+    const ws = XLSX.utils.json_to_sheet(settlements.map((s) => ({ Vendor: s.vendorName, Type: s.type, Amount: s.amount, Status: s.status, Date: s.createdAt })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Settlements");
+    XLSX.writeFile(wb, `settlements-${Date.now()}.xlsx`);
+  }
 
   async function review(id: string, decision: "approve" | "reject" | "complete") {
     setBusyId(id);
@@ -148,15 +187,23 @@ function SettlementsPanel() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-bold" style={{ color: NAVY }}>Vendor Settlements</h3>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-xs px-2 py-2 rounded-lg border border-gray-200">
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="completed">Completed</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-xs px-2 py-2 rounded-lg border border-gray-200">
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="completed">Completed</option>
+            </select>
+            <button onClick={exportPdf} disabled={settlements.length === 0} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+              <Download size={13} /> PDF
+            </button>
+            <button onClick={exportExcel} disabled={settlements.length === 0} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+              <FileSpreadsheet size={13} /> Excel
+            </button>
+          </div>
         </div>
         {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
         {!loading && settlements.length === 0 && <div className="py-10 text-center text-sm text-gray-400">No settlements found.</div>}
@@ -241,7 +288,7 @@ function CommissionRulesPanel() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [adminKey]);
+  usePolling(load, [adminKey]);
 
   async function createRule() {
     setCreating(true);
@@ -383,7 +430,7 @@ function RevenueReportPanel() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
 
-  useEffect(() => {
+  usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
     fetch(`${basePath}/api/admin/financial/reports/revenue?${query}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
@@ -494,16 +541,63 @@ function PaymentReportPanel() {
   const [data, setData] = useState<PaymentReport | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
     fetch(`${basePath}/api/admin/financial/reports/payments?${query}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, query]);
 
+  function exportPdf() {
+    if (!data) return;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    doc.setFontSize(16); doc.text("Payment Report", 14, 14);
+    autoTable(doc, {
+      startY: 20,
+      head: [["Metric", "Amount", "Count"]],
+      body: [
+        ["Successful", fmt(data.successfulAmount), String(data.successfulCount)],
+        ["Pending", fmt(data.pendingAmount), String(data.pendingCount)],
+        ["Failed", fmt(data.failedAmount), String(data.failedCount)],
+      ],
+      styles: { fontSize: 9 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [["Payment Method", "Amount"]],
+      body: data.methodBreakdown.map((m) => [m.method, fmt(m.amount)]),
+      styles: { fontSize: 9 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    doc.save(`payment-report-${Date.now()}.pdf`);
+  }
+
+  function exportExcel() {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+    const summarySheet = XLSX.utils.json_to_sheet([
+      { Metric: "Successful", Amount: data.successfulAmount, Count: data.successfulCount },
+      { Metric: "Pending", Amount: data.pendingAmount, Count: data.pendingCount },
+      { Metric: "Failed", Amount: data.failedAmount, Count: data.failedCount },
+    ]);
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+    const methodSheet = XLSX.utils.json_to_sheet(data.methodBreakdown.map((m) => ({ Method: m.method, Amount: m.amount })));
+    XLSX.utils.book_append_sheet(wb, methodSheet, "Methods");
+    XLSX.writeFile(wb, `payment-report-${Date.now()}.xlsx`);
+  }
+
   return (
     <div className="space-y-4">
-      {filterBar}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        {filterBar}
+        <div className="flex gap-2">
+          <button onClick={exportPdf} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+            <Download size={13} /> PDF
+          </button>
+          <button onClick={exportExcel} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+        </div>
+      </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
       {data && (
         <>
@@ -548,16 +642,67 @@ function RefundReportPanel() {
   const [data, setData] = useState<RefundReport | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
     fetch(`${basePath}/api/admin/financial/reports/refunds?${query}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, query]);
 
+  function exportPdf() {
+    if (!data) return;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    doc.setFontSize(16); doc.text("Refund Report", 14, 14);
+    autoTable(doc, {
+      startY: 20,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Total Requests", String(data.totalRequests)],
+        ["Refund Amount", fmt(data.totalRefundAmount)],
+        ["Approved", String(data.approvedCount)],
+        ["Rejected", String(data.rejectedCount)],
+        ["Avg Processing (hrs)", String(data.avgProcessingHours)],
+      ],
+      styles: { fontSize: 9 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [["Return Reason", "Count"]],
+      body: data.reasons.map((r) => [r.reason, String(r.count)]),
+      styles: { fontSize: 9 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    doc.save(`refund-report-${Date.now()}.pdf`);
+  }
+
+  function exportExcel() {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+    const summarySheet = XLSX.utils.json_to_sheet([
+      { Metric: "Total Requests", Value: data.totalRequests },
+      { Metric: "Refund Amount", Value: data.totalRefundAmount },
+      { Metric: "Approved", Value: data.approvedCount },
+      { Metric: "Rejected", Value: data.rejectedCount },
+      { Metric: "Avg Processing (hrs)", Value: data.avgProcessingHours },
+    ]);
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+    const reasonSheet = XLSX.utils.json_to_sheet(data.reasons.map((r) => ({ Reason: r.reason, Count: r.count })));
+    XLSX.utils.book_append_sheet(wb, reasonSheet, "Reasons");
+    XLSX.writeFile(wb, `refund-report-${Date.now()}.xlsx`);
+  }
+
   return (
     <div className="space-y-4">
-      {filterBar}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        {filterBar}
+        <div className="flex gap-2">
+          <button onClick={exportPdf} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+            <Download size={13} /> PDF
+          </button>
+          <button onClick={exportExcel} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+        </div>
+      </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
       {data && (
         <>
@@ -603,22 +748,73 @@ function ProfitAnalysisPanel() {
   const [data, setData] = useState<ProfitAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
     fetch(`${basePath}/api/admin/financial/profit-analysis?period=${period}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, period]);
 
+  function exportPdf() {
+    if (!data) return;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    doc.setFontSize(16); doc.text(`Profit Analysis (${period})`, 14, 14);
+    autoTable(doc, {
+      startY: 20,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Gross Profit", fmt(data.grossProfit)],
+        ["Net Profit", fmt(data.netProfit)],
+        ["Profit Growth", `${data.profitGrowthPercent.toFixed(1)}%`],
+        ["Commission Earnings", fmt(data.commissionEarnings)],
+        ["Vendor Settlements Paid", fmt(data.vendorSettlementsPaid)],
+      ],
+      styles: { fontSize: 9 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [["Month", "Profit"]],
+      body: data.monthlyProfit.map((m) => [m.month, fmt(m.profit)]),
+      styles: { fontSize: 9 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
+    });
+    doc.save(`profit-analysis-${Date.now()}.pdf`);
+  }
+
+  function exportExcel() {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+    const summarySheet = XLSX.utils.json_to_sheet([
+      { Metric: "Gross Profit", Value: data.grossProfit },
+      { Metric: "Net Profit", Value: data.netProfit },
+      { Metric: "Profit Growth %", Value: data.profitGrowthPercent },
+      { Metric: "Commission Earnings", Value: data.commissionEarnings },
+      { Metric: "Vendor Settlements Paid", Value: data.vendorSettlementsPaid },
+    ]);
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+    const monthlySheet = XLSX.utils.json_to_sheet(data.monthlyProfit.map((m) => ({ Month: m.month, Profit: m.profit })));
+    XLSX.utils.book_append_sheet(wb, monthlySheet, "Monthly");
+    XLSX.writeFile(wb, `profit-analysis-${Date.now()}.xlsx`);
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-1 w-fit">
-        {(["daily", "weekly", "monthly", "yearly"] as const).map((p) => (
-          <button key={p} onClick={() => setPeriod(p)} className="px-2.5 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors"
-            style={{ background: period === p ? NAVY : "transparent", color: period === p ? "white" : "#6b7280" }}>
-            {p}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-1 w-fit">
+          {(["daily", "weekly", "monthly", "yearly"] as const).map((p) => (
+            <button key={p} onClick={() => setPeriod(p)} className="px-2.5 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors"
+              style={{ background: period === p ? NAVY : "transparent", color: period === p ? "white" : "#6b7280" }}>
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={exportPdf} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+            <Download size={13} /> PDF
           </button>
-        ))}
+          <button onClick={exportExcel} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+        </div>
       </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
       {data && (
@@ -669,6 +865,146 @@ function ProfitAnalysisPanel() {
   );
 }
 
+function ReportSchedulesPanel() {
+  const adminKey = useAdminKey();
+  const [schedules, setSchedules] = useState<ReportSchedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reportType, setReportType] = useState<typeof SCHEDULE_REPORT_TYPES[number]>("revenue");
+  const [frequency, setFrequency] = useState<typeof SCHEDULE_FREQUENCIES[number]>("weekly");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
+  function load() {
+    if (!adminKey) return;
+    setLoading(true);
+    fetch(`${basePath}/api/admin/financial/report-schedules`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => setSchedules(d.schedules ?? []))
+      .finally(() => setLoading(false));
+  }
+
+  usePolling(load, [adminKey]);
+
+  async function createSchedule() {
+    setCreating(true);
+    setError("");
+    try {
+      const r = await fetch(`${basePath}/api/admin/financial/report-schedules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        credentials: "include",
+        body: JSON.stringify({ reportType, frequency, recipientEmail: recipientEmail || undefined }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "Failed"); }
+      setRecipientEmail("");
+      load();
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create schedule");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function toggle(id: string) {
+    await fetch(`${basePath}/api/admin/financial/report-schedules/${id}/toggle`, {
+      method: "POST",
+      headers: { "x-admin-key": adminKey },
+      credentials: "include",
+    });
+    load();
+  }
+
+  async function remove(id: string) {
+    await fetch(`${basePath}/api/admin/financial/report-schedules/${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-key": adminKey },
+      credentials: "include",
+    });
+    load();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold mb-4" style={{ color: NAVY }}>Schedule Automated Report</h3>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Report</label>
+            <select value={reportType} onChange={(e) => setReportType(e.target.value as any)} className="text-xs px-2 py-2 rounded-lg border border-gray-200 capitalize">
+              {SCHEDULE_REPORT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Frequency</label>
+            <select value={frequency} onChange={(e) => setFrequency(e.target.value as any)} className="text-xs px-2 py-2 rounded-lg border border-gray-200 capitalize">
+              {SCHEDULE_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Recipient Email (optional)</label>
+            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder="finance@twirldrape.com" className="text-xs px-2 py-2 rounded-lg border border-gray-200 w-56" />
+          </div>
+          <button onClick={createSchedule} disabled={creating} className="text-xs font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: NAVY }}>
+            {creating ? "Saving…" : "Schedule Report"}
+          </button>
+        </div>
+        {error && <div className="text-xs text-red-500 mt-2">{error}</div>}
+        <p className="text-xs text-gray-400 mt-3">Scheduled reports are generated automatically on the chosen cadence.</p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-bold" style={{ color: NAVY }}>Active & Past Schedules</h3>
+        </div>
+        {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
+        {!loading && schedules.length === 0 && <div className="py-10 text-center text-sm text-gray-400">No automated reports scheduled yet.</div>}
+        {!loading && schedules.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Report</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Frequency</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Recipient</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Last Run</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {schedules.map((s) => (
+                  <tr key={s.id} className="hover:bg-gray-50/60">
+                    <td className="px-4 py-3.5 capitalize font-semibold" style={{ color: NAVY }}>{s.reportType}</td>
+                    <td className="px-4 py-3.5 text-xs capitalize text-gray-500">{s.frequency}</td>
+                    <td className="px-4 py-3.5 text-xs text-gray-500">{s.recipientEmail ?? "—"}</td>
+                    <td className="px-4 py-3.5 text-xs text-gray-400">{s.lastRunAt ? new Date(s.lastRunAt).toLocaleString("en-IN") : "Never"}</td>
+                    <td className="px-4 py-3.5">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: s.active ? "#f0fdf4" : "#f3f4f6", color: s.active ? "#15803d" : "#9ca3af" }}>
+                        {s.active ? "Active" : "Paused"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <button onClick={() => toggle(s.id)} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+                          {s.active ? "Pause" : "Resume"}
+                        </button>
+                        <button onClick={() => remove(s.id)} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FinancialManagementContent() {
   const [tab, setTab] = useState<TabKey>("settlements");
 
@@ -700,6 +1036,7 @@ function FinancialManagementContent() {
       {tab === "payments" && <PaymentReportPanel />}
       {tab === "refunds" && <RefundReportPanel />}
       {tab === "profit" && <ProfitAnalysisPanel />}
+      {tab === "schedules" && <ReportSchedulesPanel />}
     </div>
   );
 }

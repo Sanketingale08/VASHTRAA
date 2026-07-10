@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { vendorSettlementsTable, commissionRulesTable, vendorsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import {
+  vendorSettlementsTable, commissionRulesTable, vendorsTable, reportSchedulesTable,
+  REPORT_TYPES, REPORT_FREQUENCIES,
+} from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import {
   computeRevenueReport, computePaymentReport, computeRefundReport, computeProfitAnalysis,
@@ -191,6 +194,63 @@ router.get("/admin/financial/profit-analysis", requireAdminKey, async (req: any,
   } catch (err) {
     req.log.error({ err }, "Failed to compute profit analysis");
     res.status(500).json({ error: "Failed to compute profit analysis" });
+  }
+});
+
+router.get("/admin/financial/report-schedules", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const schedules = await db.select().from(reportSchedulesTable).orderBy(desc(reportSchedulesTable.createdAt));
+    res.json({ schedules });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch report schedules");
+    res.status(500).json({ error: "Failed to fetch report schedules" });
+  }
+});
+
+router.post("/admin/financial/report-schedules", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const { reportType, frequency, recipientEmail } = req.body ?? {};
+    if (!REPORT_TYPES.includes(reportType) || !REPORT_FREQUENCIES.includes(frequency)) {
+      res.status(400).json({ error: `reportType must be one of ${REPORT_TYPES.join(", ")} and frequency one of ${REPORT_FREQUENCIES.join(", ")}` });
+      return;
+    }
+    const [schedule] = await db.insert(reportSchedulesTable).values({
+      reportType, frequency, recipientEmail: recipientEmail ?? null,
+    }).returning();
+    res.status(201).json({ schedule });
+  } catch (err) {
+    req.log.error({ err }, "Failed to create report schedule");
+    res.status(500).json({ error: "Failed to create report schedule" });
+  }
+});
+
+router.post("/admin/financial/report-schedules/:id/toggle", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.select().from(reportSchedulesTable).where(eq(reportSchedulesTable.id, id)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Report schedule not found" });
+      return;
+    }
+    const [updated] = await db.update(reportSchedulesTable)
+      .set({ active: !existing.active, updatedAt: new Date() })
+      .where(eq(reportSchedulesTable.id, id))
+      .returning();
+    res.json({ schedule: updated });
+  } catch (err) {
+    req.log.error({ err }, "Failed to toggle report schedule");
+    res.status(500).json({ error: "Failed to toggle report schedule" });
+  }
+});
+
+router.delete("/admin/financial/report-schedules/:id", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    await db.delete(reportSchedulesTable).where(eq(reportSchedulesTable.id, id));
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete report schedule");
+    res.status(500).json({ error: "Failed to delete report schedule" });
   }
 });
 

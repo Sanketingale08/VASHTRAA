@@ -1,0 +1,28 @@
+import { db } from "@workspace/db";
+import { commissionRulesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+
+export const DEFAULT_COMMISSION_RATE = 0.10;
+
+export async function loadActiveCommissionRules() {
+  return db.select().from(commissionRulesTable).where(eq(commissionRulesTable.active, true));
+}
+
+export function effectiveRateFromRules(
+  rules: { scope: string; category: string | null; vendorId: string | null; rate: number }[],
+  vendorId: string | null | undefined,
+  category: string | null | undefined,
+): number {
+  const vendorRule = vendorId ? rules.find((r) => r.scope === "vendor" && r.vendorId === vendorId) : undefined;
+  if (vendorRule) return vendorRule.rate;
+  const categoryRule = category ? rules.find((r) => r.scope === "category" && r.category === category) : undefined;
+  if (categoryRule) return categoryRule.rate;
+  const globalRule = rules.find((r) => r.scope === "global");
+  if (globalRule) return globalRule.rate;
+  return DEFAULT_COMMISSION_RATE;
+}
+
+export async function getEffectiveCommissionRate(vendorId: string, category: string): Promise<number> {
+  const rules = await loadActiveCommissionRules();
+  return effectiveRateFromRules(rules, vendorId, category);
+}

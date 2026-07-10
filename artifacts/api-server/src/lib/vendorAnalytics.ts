@@ -4,6 +4,7 @@ import {
   productQueriesTable, vendorSettlementsTable,
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { loadActiveCommissionRules, effectiveRateFromRules } from "./commission";
 
 export type OrderItem = { productId: string; price: number; quantity: number; name?: string };
 
@@ -38,8 +39,6 @@ export interface VendorAggregate {
   monthlyRevenue: { period: string; revenue: number; orders: number }[];
 }
 
-const COMMISSION_RATE = 0.10;
-
 export async function computeAllVendorAggregates(): Promise<Map<string, VendorAggregate>> {
   const vendors = await db.select().from(vendorsTable);
   const products = await db
@@ -52,6 +51,7 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
   const orders = await db.select().from(ordersTable);
   const reviews = await db.select().from(productReviewsTable);
   const settlements = await db.select().from(vendorSettlementsTable);
+  const commissionRules = await loadActiveCommissionRules();
 
   const productToVendor = new Map(products.filter(p => p.vendorId).map(p => [p.id, p.vendorId as string]));
 
@@ -148,8 +148,9 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
   }
 
   for (const [vendorId, agg] of map) {
-    agg.netRevenue = Math.round(agg.grossRevenue * (1 - COMMISSION_RATE));
-    agg.commissionEarned = Math.round(agg.grossRevenue * COMMISSION_RATE);
+    const vendorRate = effectiveRateFromRules(commissionRules, vendorId, undefined);
+    agg.netRevenue = Math.round(agg.grossRevenue * (1 - vendorRate));
+    agg.commissionEarned = Math.round(agg.grossRevenue * vendorRate);
 
     const vMonthly = monthlyMap.get(vendorId) ?? new Map();
     agg.monthlyRevenue = [...vMonthly.entries()]

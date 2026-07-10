@@ -6,19 +6,9 @@ import { eq, desc } from "drizzle-orm";
 import type { OrderItem } from "./vendorAnalytics";
 import type { Period } from "./businessIntelligence";
 import { resolveRange } from "./businessIntelligence";
+import { DEFAULT_COMMISSION_RATE, loadActiveCommissionRules, effectiveRateFromRules, getEffectiveCommissionRate } from "./commission";
 
-const DEFAULT_COMMISSION_RATE = 0.10;
-
-export async function getEffectiveCommissionRate(vendorId: string, category: string): Promise<number> {
-  const rules = await db.select().from(commissionRulesTable).where(eq(commissionRulesTable.active, true));
-  const vendorRule = rules.find(r => r.scope === "vendor" && r.vendorId === vendorId);
-  if (vendorRule) return vendorRule.rate;
-  const categoryRule = rules.find(r => r.scope === "category" && r.category === category);
-  if (categoryRule) return categoryRule.rate;
-  const globalRule = rules.find(r => r.scope === "global");
-  if (globalRule) return globalRule.rate;
-  return DEFAULT_COMMISSION_RATE;
-}
+export { getEffectiveCommissionRate };
 
 export interface RevenueReportFilters {
   from?: string;
@@ -38,7 +28,7 @@ export async function computeRevenueReport(filters: RevenueReportFilters) {
   const [orders, products, rules] = await Promise.all([
     db.select().from(ordersTable),
     db.select().from(productsTable),
-    db.select().from(commissionRulesTable).where(eq(commissionRulesTable.active, true)),
+    loadActiveCommissionRules(),
   ]);
   const productById = new Map(products.map(p => [p.id, p]));
 
@@ -46,13 +36,7 @@ export async function computeRevenueReport(filters: RevenueReportFilters) {
   const to = filters.to ? new Date(filters.to) : undefined;
 
   function rateFor(vendorId: string | null | undefined, category: string | null | undefined): number {
-    const vendorRule = vendorId ? rules.find(r => r.scope === "vendor" && r.vendorId === vendorId) : undefined;
-    if (vendorRule) return vendorRule.rate;
-    const categoryRule = rules.find(r => r.scope === "category" && r.category === category);
-    if (categoryRule) return categoryRule.rate;
-    const globalRule = rules.find(r => r.scope === "global");
-    if (globalRule) return globalRule.rate;
-    return DEFAULT_COMMISSION_RATE;
+    return effectiveRateFromRules(rules, vendorId, category);
   }
 
   let grossRevenue = 0, taxesCollected = 0, shippingRevenue = 0, commissionRevenue = 0, vendorRevenue = 0;
@@ -62,7 +46,7 @@ export async function computeRevenueReport(filters: RevenueReportFilters) {
     const createdAt = new Date(o.createdAt);
     if (!inRange(createdAt, from, to)) continue;
     if (["cancelled", "returned"].includes(o.status)) continue;
-    if (filters.paymentStatus && o.paymentMethod !== filters.paymentStatus) continue;
+    if (filters.paymentStatus && o.status !== filters.paymentStatus) continue;
 
     const items = (o.items as OrderItem[]) ?? [];
     let orderMatchesFilter = !filters.vendorId && !filters.category;
@@ -189,17 +173,30 @@ export async function computeRefundReport(filters: { from?: string; to?: string 
 
 export async function computeProfitAnalysis(period: Period, from?: string, to?: string) {
   const range = resolveRange(period, from, to);
-  const [orders, settlements] = await Promise.all([
+  const [orders, settlements, products, rules] = await Promise.all([
     db.select().from(ordersTable),
     db.select().from(vendorSettlementsTable),
+    db.select().from(productsTable),
+    loadActiveCommissionRules(),
   ]);
+  const productById = new Map(products.map(p => [p.id, p]));
+
+  function orderCommission(o: typeof orders[number]): number {
+    const items = (o.items as OrderItem[]) ?? [];
+    let commission = 0;
+    for (const item of items) {
+      const p = productById.get(item.productId);
+      const rate = effectiveRateFromRules(rules, p?.vendorId, p?.category);
+      commission += Math.round(item.price * (item.quantity ?? 1) * rate);
+    }
+    return commission;
+  }
 
   const inR = orders.filter(o => new Date(o.createdAt) >= range.from && new Date(o.createdAt) <= range.to);
   const nonCancelled = inR.filter(o => !["cancelled", "returned"].includes(o.status));
 
   const grossRevenue = nonCancelled.reduce((s, o) => s + o.total, 0);
-  const COMMISSION_RATE = 0.10;
-  const commissionEarnings = Math.round(grossRevenue * COMMISSION_RATE);
+  const commissionEarnings = nonCancelled.reduce((s, o) => s + orderCommission(o), 0);
   const vendorSettlementsPaid = settlements
     .filter(s => s.status === "completed" && new Date(s.createdAt) >= range.from && new Date(s.createdAt) <= range.to)
     .reduce((s, x) => s + x.amount, 0);
@@ -212,7 +209,7 @@ export async function computeProfitAnalysis(period: Period, from?: string, to?: 
     const key = new Date(o.createdAt).toISOString().slice(0, 7);
     const cur = monthlyBuckets.get(key) ?? { revenue: 0, commission: 0 };
     cur.revenue += o.total;
-    cur.commission += Math.round(o.total * COMMISSION_RATE);
+    cur.commission += orderCommission(o);
     monthlyBuckets.set(key, cur);
   }
   const monthlyProfit = [...monthlyBuckets.entries()]
@@ -223,7 +220,7 @@ export async function computeProfitAnalysis(period: Period, from?: string, to?: 
   const yearlyBuckets = new Map<string, number>();
   for (const o of orders.filter(o => !["cancelled", "returned"].includes(o.status))) {
     const key = String(new Date(o.createdAt).getFullYear());
-    yearlyBuckets.set(key, (yearlyBuckets.get(key) ?? 0) + Math.round(o.total * COMMISSION_RATE));
+    yearlyBuckets.set(key, (yearlyBuckets.get(key) ?? 0) + orderCommission(o));
   }
   const yearlyProfit = [...yearlyBuckets.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([year, profit]) => ({ year, profit }));
 

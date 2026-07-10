@@ -34,3 +34,19 @@ export const commissionRulesTable = pgTable("commission_rules", {
 });
 
 export type CommissionRule = typeof commissionRulesTable.$inferSelect;
+
+export const REPORT_TYPES = ["revenue", "payments", "refunds", "profit-analysis"] as const;
+export const REPORT_FREQUENCIES = ["daily", "weekly", "monthly"] as const;
+
+export const reportSchedulesTable = pgTable("report_schedules", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  reportType: text("report_type").$type<typeof REPORT_TYPES[number]>().notNull(),
+  frequency: text("frequency").$type<typeof REPORT_FREQUENCIES[number]>().notNull(),
+  recipientEmail: text("recipient_email"),
+  active: boolean("active").notNull().default(true),
+  lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type ReportSchedule = typeof reportSchedulesTable.$inferSelect;

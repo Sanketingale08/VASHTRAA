@@ -4,6 +4,7 @@ import {
   searchQueriesTable, wishlistsTable,
 } from "@workspace/db";
 import { computeAllVendorAggregates, computeResponseScores, computePerformanceScore, type OrderItem } from "./vendorAnalytics";
+import { loadActiveCommissionRules, effectiveRateFromRules } from "./commission";
 
 export type Period = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -71,12 +72,13 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const range = resolveRange(period, from, to);
   const prevRange = previousRange(range);
 
-  const [vendors, products, orders, reviews, searches] = await Promise.all([
+  const [vendors, products, orders, reviews, searches, commissionRules] = await Promise.all([
     db.select().from(vendorsTable),
     db.select().from(productsTable),
     db.select().from(ordersTable),
     db.select().from(productReviewsTable),
     db.select().from(searchQueriesTable),
+    loadActiveCommissionRules(),
   ]);
 
   const productById = new Map(products.map(p => [p.id, p]));
@@ -100,8 +102,18 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     .filter(o => o.refundStatus === "processed" || o.refundStatus === "approved")
     .reduce((s, o) => s + orderRevenue(o), 0);
 
-  const COMMISSION_RATE = 0.10;
-  const commissionRevenue = Math.round(totalRevenue * COMMISSION_RATE);
+  function orderCommission(o: typeof orders[number]): number {
+    const items = (o.items as OrderItem[]) ?? [];
+    let commission = 0;
+    for (const item of items) {
+      const p = productById.get(item.productId);
+      const rate = effectiveRateFromRules(commissionRules, p?.vendorId, p?.category);
+      commission += Math.round(item.price * (item.quantity ?? 1) * rate);
+    }
+    return commission;
+  }
+
+  const commissionRevenue = ordersInRange.filter(nonCancelled).reduce((s, o) => s + orderCommission(o), 0);
   const totalProfit = commissionRevenue - totalRefundAmount * 0.02;
 
   const customerIdsInRange = new Set(ordersInRange.map(o => o.userId));

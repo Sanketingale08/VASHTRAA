@@ -6,3 +6,4 @@
 - [Support ticket SLA direction](support-ticket-sla-direction.md) — SLA auto-escalation must only fire while the seller owes a reply; "Waiting for Customer" must not count as breach.
 - [TwirlDrape e2e base URL](twirldrape-e2e-base-url.md) — web playwright.config.ts must default to the Vite dev server port, not :80 proxy, since /api on :80 misroutes to the wrong port
 - [Clerk react signal-based hooks](clerk-react-legacy-hooks.md) — @clerk/react's top-level useSignIn/useSignUp are now signal-based (no isLoaded/setActive); use `@clerk/react/legacy` for the classic API custom flows expect
+- [Financial module commission consistency](financial-management-commission-consistency.md) — all revenue/profit/vendor-analytics code must resolve commission rate via shared commission.ts, never hardcode a flat rate

@@ -28,6 +28,7 @@ interface VendorDetail {
   status: string;
   ownerId: string | null;
   kycVerified: boolean;
+  kycResubmissionRequested: boolean;
   mobile: string | null;
   panNumber: string | null;
   panCardUrl: string | null;
@@ -78,6 +79,22 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function KycBadge({ kycVerified, kycResubmissionRequested }: { kycVerified: boolean; kycResubmissionRequested: boolean }) {
+  const s = kycVerified
+    ? { bg: "#f0fdf4", color: "#15803d", label: "Verified" }
+    : kycResubmissionRequested
+      ? { bg: "#fffbeb", color: "#b45309", label: "Re-submission requested" }
+      : { bg: "#f3f4f6", color: "#6b7280", label: "Pending" };
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ background: s.bg, color: s.color }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 const ORDER_STATUS_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   confirmed: { label: "Confirmed", color: "#3B82F6", icon: <Clock size={14} /> },
   dispatched: { label: "Dispatched", color: GOLD, icon: <Truck size={14} /> },
@@ -121,7 +138,6 @@ function VendorDetailContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [kycDone, setKycDone] = useState(false);
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   useEffect(() => {
@@ -137,7 +153,6 @@ function VendorDetailContent() {
       })
       .then((d) => {
         setVendor(d);
-        setKycDone(!!d.kycVerified);
       })
       .catch(() => setError("Failed to load vendor details"))
       .finally(() => setLoading(false));
@@ -154,11 +169,28 @@ function VendorDetailContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (action === "verify-kyc") {
-          setKycDone(true);
-        } else {
-          setVendor((prev) => prev ? { ...prev, status: data.vendor.status } : prev);
-        }
+        setVendor((prev) => prev ? { ...prev, status: data.vendor.status } : prev);
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function doKycAction(action: "verify" | "request_resubmission") {
+    if (!vendor) return;
+    setActionLoading(action);
+    try {
+      const res = await fetch(`${basePath}/api/admin/vendors/${vendor.id}/kyc`, {
+        method: "PATCH",
+        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVendor((prev) => prev
+          ? { ...prev, kycVerified: data.vendor.kycVerified, kycResubmissionRequested: data.vendor.kycResubmissionRequested }
+          : prev);
       }
     } finally {
       setActionLoading(null);
@@ -264,15 +296,32 @@ function VendorDetailContent() {
               {vendor.status === "suspended" && (
                 <ActionBtn label="✓ Activate Vendor" action="activate" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
               )}
-              <ActionBtn
-                label={kycDone ? "✓ KYC Verified" : "Verify KYC"}
-                action="verify-kyc"
-                color={kycDone ? "#15803d" : "#1d4ed8"}
-                bg={kycDone ? "#f0fdf4" : "#eff6ff"}
-                loading={actionLoading}
-                onClick={doAction}
-                disabled={kycDone}
-              />
+              <div className="pt-1 mt-1 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-gray-400">KYC status</span>
+                  <KycBadge kycVerified={vendor.kycVerified} kycResubmissionRequested={vendor.kycResubmissionRequested} />
+                </div>
+                <div className="space-y-2.5">
+                  <ActionBtn
+                    label="✓ Mark KYC Verified"
+                    action="verify"
+                    color="#15803d"
+                    bg="#f0fdf4"
+                    loading={actionLoading}
+                    onClick={() => doKycAction("verify")}
+                    disabled={vendor.kycVerified}
+                  />
+                  <ActionBtn
+                    label="Request Re-submission"
+                    action="request_resubmission"
+                    color="#b45309"
+                    bg="#fffbeb"
+                    loading={actionLoading}
+                    onClick={() => doKycAction("request_resubmission")}
+                    disabled={vendor.kycResubmissionRequested && !vendor.kycVerified}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

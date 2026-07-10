@@ -16,7 +16,9 @@ export type SellerNotificationType =
   | "order_cancelled_seller"
   | "settlement_released"
   | "payout_successful"
-  | "new_customer_query";
+  | "new_customer_query"
+  | "kyc_verified"
+  | "kyc_resubmission_requested";
 
 export type AdminNotificationType =
   | "new_seller_registration"

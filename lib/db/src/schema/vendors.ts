@@ -18,6 +18,7 @@ export const vendorsTable = pgTable("vendors", {
   contactEmail: text("contact_email"),
   tagline: text("tagline"),
   kycVerified: boolean("kyc_verified").notNull().default(false),
+  kycResubmissionRequested: boolean("kyc_resubmission_requested").notNull().default(false),
   mobile: text("mobile"),
   panNumber: text("pan_number"),
   panCardUrl: text("pan_card_url"),

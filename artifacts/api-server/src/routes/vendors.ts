@@ -311,6 +311,7 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         gstin: v.gstin ?? null,
         contactEmail: v.contactEmail ?? null,
         kycVerified: v.kycVerified,
+        kycResubmissionRequested: v.kycResubmissionRequested,
         revenue: vendorRevenue[v.id] ?? 0,
         totalOrders: vendorOrders[v.id] ?? 0,
       })),
@@ -414,7 +415,7 @@ router.post("/admin/vendors/:id/verify-kyc", requireAdminKey, async (req: any, r
   try {
     const [updated] = await db
       .update(vendorsTable)
-      .set({ kycVerified: true })
+      .set({ kycVerified: true, kycResubmissionRequested: false })
       .where(eq(vendorsTable.id, id))
       .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status, kycVerified: vendorsTable.kycVerified });
     if (!updated) return res.status(404).json({ error: "Vendor not found" });
@@ -422,6 +423,65 @@ router.post("/admin/vendors/:id/verify-kyc", requireAdminKey, async (req: any, r
   } catch (err) {
     req.log.error({ err }, "Failed to verify KYC");
     res.status(500).json({ error: "Failed to verify KYC" });
+  }
+});
+
+router.patch("/admin/vendors/:id/kyc", requireAdminKey, async (req: any, res: any) => {
+  const { id } = req.params;
+  const { action, reason } = req.body ?? {};
+
+  if (!["verify", "request_resubmission"].includes(action)) {
+    return res.status(400).json({ error: "Invalid action. Must be 'verify' or 'request_resubmission'." });
+  }
+
+  try {
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id))
+      .limit(1);
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+    const isVerify = action === "verify";
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({
+        kycVerified: isVerify,
+        kycResubmissionRequested: !isVerify,
+      })
+      .where(eq(vendorsTable.id, id))
+      .returning({
+        id: vendorsTable.id,
+        name: vendorsTable.name,
+        status: vendorsTable.status,
+        kycVerified: vendorsTable.kycVerified,
+        kycResubmissionRequested: vendorsTable.kycResubmissionRequested,
+      });
+
+    if (isVerify) {
+      await insertSellerNotification({
+        vendorId: id,
+        type: "kyc_verified",
+        title: "KYC verified",
+        body: "Your KYC documents have been verified by our admin team.",
+        metadata: { vendorId: id },
+      });
+    } else {
+      await insertSellerNotification({
+        vendorId: id,
+        type: "kyc_resubmission_requested",
+        title: "KYC re-submission requested",
+        body: reason
+          ? `Please re-submit your KYC documents. Reason: ${reason}`
+          : "Please re-submit your KYC documents for verification.",
+        metadata: { vendorId: id, reason: reason ?? null },
+      });
+    }
+
+    res.json({ vendor: updated });
+  } catch (err) {
+    req.log.error({ err }, "Failed to update KYC status");
+    res.status(500).json({ error: "Failed to update KYC status" });
   }
 });
 
@@ -565,6 +625,7 @@ router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => 
       status: vendor.status,
       ownerId: vendor.ownerId ?? null,
       kycVerified: vendor.kycVerified,
+      kycResubmissionRequested: vendor.kycResubmissionRequested,
       mobile: vendor.mobile ?? null,
       panNumber: vendor.panNumber ?? null,
       panCardUrl: vendor.panCardUrl ?? null,

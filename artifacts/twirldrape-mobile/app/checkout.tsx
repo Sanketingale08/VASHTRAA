@@ -88,6 +88,7 @@ export default function CheckoutScreen() {
   const [addressesLoading, setAddressesLoading] = useState(true);
   const [addressesError, setAddressesError] = useState(false);
   const [addressesLoaded, setAddressesLoaded] = useState(false);
+  const [addressSaveError, setAddressSaveError] = useState("");
 
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("standard");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
@@ -545,6 +546,15 @@ export default function CheckoutScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={s.content}>
+            {addressSaveError ? (
+              <View style={[s.errorBox, { flexDirection: "row", alignItems: "flex-start", gap: 8 }]}>
+                <Ionicons name="warning-outline" size={16} color={colors.destructive} />
+                <Text style={[s.errorBoxText, { flex: 1 }]}>{addressSaveError}</Text>
+                <Pressable onPress={() => setAddressSaveError("")} hitSlop={8}>
+                  <Ionicons name="close" size={16} color={colors.destructive} />
+                </Pressable>
+              </View>
+            ) : null}
             {step === 1 && (
               <>
                 <Text style={s.sectionTitle}>Shipping Address</Text>
@@ -874,6 +884,7 @@ export default function CheckoutScreen() {
             style={[s.primaryBtn, !validateAddress() && { opacity: 0.5 }]}
             onPress={async () => {
               if (!validateAddress()) return;
+              setAddressSaveError("");
               if (saveAddress && enteringNew && !selectedSavedId) {
                 try {
                   const token = await getToken();
@@ -886,8 +897,12 @@ export default function CheckoutScreen() {
                     const data = await r.json();
                     setSavedAddresses((prev) => [data.address, ...prev]);
                     setSelectedSavedId(data.address.id);
+                  } else {
+                    setAddressSaveError("We couldn't save this address for next time, but your order will still use it.");
                   }
-                } catch {}
+                } catch {
+                  setAddressSaveError("We couldn't save this address for next time, but your order will still use it.");
+                }
               }
               setStep(2);
             }}

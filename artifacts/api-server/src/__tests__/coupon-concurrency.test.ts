@@ -28,6 +28,15 @@ const state = vi.hoisted(() => ({
   orderCounter: 0,
   /** Promise-chain mutex: each transaction appends to the tail and awaits the head. */
   mutexTail: Promise.resolve() as Promise<unknown>,
+  /**
+   * Tracks whether the (single) user in a "same-user double redemption" test
+   * has already redeemed the coupon. Only meaningful when every concurrent
+   * request in a test shares the same userId — see `forceSameUser`.
+   */
+  redemptionRecorded: false,
+  redemptionInsertCount: 0,
+  /** When true, the Clerk mock returns the SAME userId for every request. */
+  forceSameUser: false,
 }));
 
 // ---------------------------------------------------------------------------
@@ -67,6 +76,13 @@ vi.mock("@workspace/db", () => {
                 usedCount: state.couponUsedCount,
               },
             ];
+            break;
+          case "couponRedemptions":
+            // Only meaningful in the "same-user" tests where every concurrent
+            // request shares one userId — otherwise there's nothing to key on.
+            rows = state.forceSameUser && state.redemptionRecorded
+              ? [{ id: "redemption-existing" }]
+              : [];
             break;
           default:
             rows = [];
@@ -109,14 +125,20 @@ vi.mock("@workspace/db", () => {
       const txMock = {
         select: vi.fn(() => makeSelectChain()),
 
-        insert: vi.fn((_table: any) => ({
-          values: vi.fn(() => ({
-            returning: vi.fn(() => {
-              state.orderCounter++;
-              return Promise.resolve([{ id: `order-${state.orderCounter}` }]);
-            }),
-            onConflictDoNothing: vi.fn(() => Promise.resolve()),
-          })),
+        insert: vi.fn((table: any) => ({
+          values: vi.fn(() => {
+            if (table?._t === "couponRedemptions") {
+              state.redemptionRecorded = true;
+              state.redemptionInsertCount++;
+            }
+            return Object.assign(Promise.resolve(undefined as unknown), {
+              returning: vi.fn(() => {
+                state.orderCounter++;
+                return Promise.resolve([{ id: `order-${state.orderCounter}` }]);
+              }),
+              onConflictDoNothing: vi.fn(() => Promise.resolve()),
+            });
+          }),
         })),
 
         update: vi.fn((table: any) => ({
@@ -208,6 +230,19 @@ vi.mock("@workspace/db", () => {
       orderUpdates: "orderUpdates",
       offerAlerts: "offerAlerts",
     },
+    stockHistoryTable: {
+      _t: "stockHistory",
+      productId: "productId",
+      vendorId: "vendorId",
+      delta: "delta",
+      previousStock: "previousStock",
+      newStock: "newStock",
+      source: "source",
+      reason: "reason",
+      actorId: "actorId",
+      orderId: "orderId",
+    },
+    ADMIN_NOTIFICATION_USER_ID: "admin-notifications-user",
   };
 });
 
@@ -217,7 +252,9 @@ vi.mock("@workspace/db", () => {
 // ---------------------------------------------------------------------------
 let userIndex = 0;
 vi.mock("@clerk/express", () => ({
-  getAuth: vi.fn(() => ({ userId: `user-${++userIndex}` })),
+  getAuth: vi.fn(() => ({
+    userId: state.forceSameUser ? "user-shared" : `user-${++userIndex}`,
+  })),
   clerkMiddleware: vi.fn(
     () =>
       (_req: unknown, _res: unknown, next: () => void) =>
@@ -264,6 +301,9 @@ describe("Coupon concurrency — SELECT FOR UPDATE prevents over-redemption", ()
     state.couponUsedCount = 0;
     state.orderCounter = 0;
     state.mutexTail = Promise.resolve();
+    state.redemptionRecorded = false;
+    state.redemptionInsertCount = 0;
+    state.forceSameUser = false;
     userIndex = 0;
     app = await buildApp();
   });
@@ -337,5 +377,64 @@ describe("Coupon concurrency — SELECT FOR UPDATE prevents over-redemption", ()
 
     const successes = results.filter((r) => r.status === 200);
     expect(successes).toHaveLength(10);
+  });
+});
+
+describe("Coupon concurrency — same user cannot redeem a coupon twice via double-tap/double-tab", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    state.couponUsedCount = 0;
+    state.orderCounter = 0;
+    state.mutexTail = Promise.resolve();
+    state.redemptionRecorded = false;
+    state.redemptionInsertCount = 0;
+    state.forceSameUser = true;
+    userIndex = 0;
+    app = await buildApp();
+  });
+
+  it("only redeems once when the same user submits 2 near-simultaneous orders with the same coupon", async () => {
+    // Unlimited coupon so the per-user redemption check (not the global
+    // maxUses check) is what has to prevent the double redemption.
+    state.couponMaxUses = null;
+
+    const results = await Promise.all([
+      request(app).post("/api/orders").send(ORDER_BODY),
+      request(app).post("/api/orders").send(ORDER_BODY),
+    ]);
+
+    const successes = results.filter((r) => r.status === 200);
+    const failures = results.filter((r) => r.status === 400);
+
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].body.error).toMatch(/already used this coupon/i);
+
+    // usedCount and the redemption row must each be written exactly once.
+    expect(state.couponUsedCount).toBe(1);
+    expect(state.redemptionInsertCount).toBe(1);
+  });
+
+  it("only redeems once when the same user double-taps and fires 10 near-simultaneous requests", async () => {
+    state.couponMaxUses = null;
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        request(app).post("/api/orders").send(ORDER_BODY),
+      ),
+    );
+
+    const successes = results.filter((r) => r.status === 200);
+    const failures = results.filter((r) => r.status === 400);
+
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(9);
+    for (const f of failures) {
+      expect(f.body.error).toMatch(/already used this coupon/i);
+    }
+
+    expect(state.couponUsedCount).toBe(1);
+    expect(state.redemptionInsertCount).toBe(1);
   });
 });

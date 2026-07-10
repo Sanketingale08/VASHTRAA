@@ -9,6 +9,7 @@ import { Platform, StyleSheet, Text, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
@@ -41,6 +42,8 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const colors = useColors();
   const { totalItems } = useCart();
+  const { wishlistItems } = useWishlist();
+  const totalWishlistItems = wishlistItems.length;
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -64,6 +67,22 @@ function ClassicTabLayout() {
         }}
       >
         {String(totalItems)}
+      </Text>
+      {/* Accessible wishlist count for E2E tests — visually hidden */}
+      <Text
+        testID="wishlist-badge-count"
+        accessibilityElementsHidden
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+          fontSize: 1,
+          pointerEvents: "none",
+        }}
+      >
+        {String(totalWishlistItems)}
       </Text>
     <Tabs
       screenOptions={{
@@ -121,6 +140,7 @@ function ClassicTabLayout() {
         name="wishlist"
         options={{
           title: "Wishlist",
+          tabBarBadge: totalWishlistItems > 0 ? totalWishlistItems : undefined,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="heart" tintColor={color} size={24} />

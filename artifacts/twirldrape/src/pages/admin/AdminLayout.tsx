@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import {
   LayoutDashboard, Users, ShoppingBag, Package, UserCircle, Settings,
-  LogOut, Shield, Menu, X, RotateCcw, ShieldAlert,
+  LogOut, Shield, Menu, X, RotateCcw, ShieldAlert, BadgePercent,
 } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag, stub: true },
   { label: "Returns & Refunds", href: "/admin/returns", icon: RotateCcw },
   { label: "Seller Disputes", href: "/admin/disputes", icon: ShieldAlert },
+  { label: "Coupons", href: "/admin/coupons", icon: BadgePercent },
   { label: "Products", href: "/admin/products", icon: Package, stub: true },
   { label: "Customers", href: "/admin/customers", icon: UserCircle, stub: true },
   { label: "Settings", href: "/admin/settings", icon: Settings, stub: true },

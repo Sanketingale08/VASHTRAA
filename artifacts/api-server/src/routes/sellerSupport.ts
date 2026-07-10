@@ -127,23 +127,35 @@ router.post("/seller/support/tickets/:id/messages", requireVendorAuth, async (re
       return;
     }
 
+    // A vendor's own ticket can flow in two directions:
+    // - assignedTo "seller": the customer raised it and the seller is staff
+    //   answering them, so the ball moves to the customer.
+    // - assignedTo "admin": the seller raised (or it was escalated to) Super
+    //   Admin, so the seller is the ticket owner messaging admin, and the
+    //   ball moves to admin, not the customer.
+    const repliesToAdmin = ticket.assignedTo === "admin";
+
     const [msg] = await db
       .insert(ticketMessagesTable)
-      .values({ ticketId: id, userId: req.userId, body: body.trim(), attachments: cleanAttachments, isStaff: true })
+      .values({ ticketId: id, userId: req.userId, body: body.trim(), attachments: cleanAttachments, isStaff: !repliesToAdmin })
       .returning();
 
     const [updated] = await db
       .update(supportTicketsTable)
-      .set({ updatedAt: new Date(), status: "Waiting for Customer", slaDueAt: null })
+      .set(
+        repliesToAdmin
+          ? { updatedAt: new Date(), status: ticket.status === "Waiting for Customer" ? "In Progress" : ticket.status }
+          : { updatedAt: new Date(), status: "Waiting for Customer", slaDueAt: null }
+      )
       .where(eq(supportTicketsTable.id, id))
       .returning();
 
     await notifyTicketEvent(
       updated,
       "ticket_replied",
-      "Seller replied to your ticket",
+      repliesToAdmin ? "New reply from seller" : "Seller replied to your ticket",
       `${ticket.subject}: ${body.trim().slice(0, 120)}`,
-      { notifyCustomer: true }
+      repliesToAdmin ? { notifyAdmin: true } : { notifyCustomer: true }
     );
 
     res.status(201).json(msg);

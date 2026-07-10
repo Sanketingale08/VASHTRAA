@@ -76,11 +76,13 @@ function AdminSupportContent() {
   const [search, setSearch] = useState("");
   const [replyBody, setReplyBody] = useState("");
   const [internal, setInternal] = useState(false);
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
-  const { data, isLoading } = useQuery<{ tickets: Ticket[] }>({
-    queryKey: ["admin-support-tickets", scopeTab, statusTab, search],
+  const { data, isLoading } = useQuery<{ tickets: Ticket[]; total: number }>({
+    queryKey: ["admin-support-tickets", scopeTab, statusTab, search, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ scope: scopeTab });
+      const params = new URLSearchParams({ scope: scopeTab, page: String(page), limit: String(limit) });
       if (statusTab !== "all") params.set("status", statusTab);
       if (search.trim()) params.set("search", search.trim());
       const r = await fetch(`${basePath}/api/admin/support/tickets?${params}`, {
@@ -92,6 +94,8 @@ function AdminSupportContent() {
     },
   });
   const tickets = data?.tickets ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const { data: detail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: ["admin-support-ticket", selectedId],
@@ -174,7 +178,7 @@ function AdminSupportContent() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search tickets…"
             className="pl-8 pr-3 py-1.5 border rounded-lg text-sm w-56"
           />
@@ -185,7 +189,7 @@ function AdminSupportContent() {
         {(["customer", "seller"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => { setScopeTab(s); setSelectedId(null); }}
+            onClick={() => { setScopeTab(s); setSelectedId(null); setPage(1); }}
             className={cn(
               "px-4 py-2 text-sm font-semibold rounded-lg border transition-colors",
               scopeTab === s ? "text-white" : "bg-white text-gray-600 border-gray-200"
@@ -201,7 +205,7 @@ function AdminSupportContent() {
         {STATUS_TABS.map((s) => (
           <button
             key={s}
-            onClick={() => setStatusTab(s)}
+            onClick={() => { setStatusTab(s); setPage(1); }}
             className={cn(
               "px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors",
               statusTab === s ? "text-white" : "bg-white text-gray-600 border-gray-200"
@@ -244,6 +248,25 @@ function AdminSupportContent() {
                 </div>
               </button>
             ))
+          )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-1 text-xs text-gray-500">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <span>Page {page} of {totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
           )}
         </div>
 

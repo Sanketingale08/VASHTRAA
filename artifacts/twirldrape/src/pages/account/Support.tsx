@@ -145,6 +145,10 @@ export function AccountSupportPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [form, setForm] = useState({ subject: "", category: "" as Category | "", description: "", orderId: "" });
   const [formError, setFormError] = useState("");
+  const [ticketSearch, setTicketSearch] = useState("");
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<string>("");
+  const [ticketPage, setTicketPage] = useState(1);
+  const ticketLimit = 10;
 
   const { data: orders = [] } = useQuery<{ id: string; createdAt: string; items?: { name?: string }[] }[]>({
     queryKey: ["support-orders"],
@@ -166,14 +170,20 @@ export function AccountSupportPage() {
     },
   });
 
-  const { data: tickets = [], isLoading: ticketsLoading } = useQuery<Ticket[]>({
-    queryKey: ["support-tickets"],
+  const { data: ticketsData, isLoading: ticketsLoading } = useQuery<{ tickets: Ticket[]; total: number }>({
+    queryKey: ["support-tickets", ticketSearch, ticketStatusFilter, ticketPage],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/support/tickets`, { credentials: "include" });
+      const params = new URLSearchParams({ page: String(ticketPage), limit: String(ticketLimit) });
+      if (ticketSearch.trim()) params.set("search", ticketSearch.trim());
+      if (ticketStatusFilter) params.set("status", ticketStatusFilter);
+      const r = await fetch(`${basePath}/api/support/tickets?${params.toString()}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to fetch tickets");
       return r.json();
     },
   });
+  const tickets = ticketsData?.tickets ?? [];
+  const ticketTotal = ticketsData?.total ?? 0;
+  const ticketTotalPages = Math.max(1, Math.ceil(ticketTotal / ticketLimit));
 
   const { data: ticketDetail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: ["support-ticket", selectedId],
@@ -307,6 +317,30 @@ export function AccountSupportPage() {
 
   const TicketListPanel = (
     <div className="space-y-2">
+      <div className="flex flex-col sm:flex-row gap-2 mb-1">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={ticketSearch}
+            onChange={(e) => { setTicketSearch(e.target.value); setTicketPage(1); }}
+            placeholder="Search your tickets…"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-[#C9A84C]/30 rounded-lg focus:outline-none focus:border-[#1E6B5A]/40 bg-white"
+          />
+        </div>
+        <select
+          value={ticketStatusFilter}
+          onChange={(e) => { setTicketStatusFilter(e.target.value); setTicketPage(1); }}
+          className="px-3 py-2 text-sm border border-[#C9A84C]/30 rounded-lg bg-white"
+        >
+          <option value="">All statuses</option>
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Waiting for Customer">Waiting for Customer</option>
+          <option value="Resolved">Resolved</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
       {ticketsLoading ? (
         [...Array(3)].map((_, i) => (
           <div key={i} className="bg-white border border-[#C9A84C]/15 rounded-xl p-4 animate-pulse h-[72px]" />
@@ -361,6 +395,25 @@ export function AccountSupportPage() {
             </button>
           );
         })
+      )}
+      {ticketTotalPages > 1 && (
+        <div className="flex items-center justify-between pt-1 text-xs text-gray-500">
+          <button
+            disabled={ticketPage <= 1}
+            onClick={() => setTicketPage((p) => Math.max(1, p - 1))}
+            className="px-2 py-1 rounded border border-[#C9A84C]/30 disabled:opacity-40"
+          >
+            Prev
+          </button>
+          <span>Page {ticketPage} of {ticketTotalPages}</span>
+          <button
+            disabled={ticketPage >= ticketTotalPages}
+            onClick={() => setTicketPage((p) => Math.min(ticketTotalPages, p + 1))}
+            className="px-2 py-1 rounded border border-[#C9A84C]/30 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
       )}
     </div>
   );

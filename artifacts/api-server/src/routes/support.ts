@@ -142,15 +142,26 @@ router.get("/support/tickets", requireAuth, async (req: any, res: any): Promise<
   try {
     const status = req.query.status as string | undefined;
     const search = (req.query.search as string | undefined)?.trim();
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
+    const offset = (page - 1) * limit;
     const conditions: any[] = [eq(supportTicketsTable.userId, req.userId)];
     if (status) conditions.push(eq(supportTicketsTable.status, status as any));
     if (search) conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
+    const whereClause = and(...conditions);
 
     const tickets = await db
       .select()
       .from(supportTicketsTable)
-      .where(and(...conditions))
-      .orderBy(desc(supportTicketsTable.updatedAt));
+      .where(whereClause)
+      .orderBy(desc(supportTicketsTable.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(supportTicketsTable)
+      .where(whereClause);
 
     const ticketsWithLastReply = await Promise.all(
       tickets.map(async (ticket) => {
@@ -164,7 +175,7 @@ router.get("/support/tickets", requireAuth, async (req: any, res: any): Promise<
       })
     );
 
-    res.json(ticketsWithLastReply);
+    res.json({ tickets: ticketsWithLastReply, total, page, limit });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch tickets");
     res.status(500).json({ error: "Failed to fetch tickets" });

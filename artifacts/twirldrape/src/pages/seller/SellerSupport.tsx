@@ -71,6 +71,10 @@ export default function SellerSupport() {
   const [replyBody, setReplyBody] = useState("");
   const [form, setForm] = useState({ subject: "", category: "", description: "" });
   const [formError, setFormError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
   const { data: categories = [] } = useQuery<string[]>({
     queryKey: ["seller-support-categories"],
@@ -82,15 +86,20 @@ export default function SellerSupport() {
     },
   });
 
-  const { data, isLoading } = useQuery<{ tickets: Ticket[] }>({
-    queryKey: ["seller-support-tickets", scopeTab],
+  const { data, isLoading } = useQuery<{ tickets: Ticket[]; total: number }>({
+    queryKey: ["seller-support-tickets", scopeTab, search, statusFilter, page],
     queryFn: async () => {
-      const r = await fetch(getApiUrl(`/api/seller/support/tickets?scope=${scopeTab}`), { credentials: "include" });
+      const params = new URLSearchParams({ scope: scopeTab, page: String(page), limit: String(limit) });
+      if (search.trim()) params.set("search", search.trim());
+      if (statusFilter) params.set("status", statusFilter);
+      const r = await fetch(getApiUrl(`/api/seller/support/tickets?${params.toString()}`), { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load tickets");
       return r.json();
     },
   });
   const tickets = data?.tickets ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const { data: detail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: ["seller-support-ticket", selectedId],
@@ -209,7 +218,7 @@ export default function SellerSupport() {
           {(["customer", "mine"] as const).map((s) => (
             <button
               key={s}
-              onClick={() => { setScopeTab(s); setSelectedId(null); setShowNew(false); }}
+              onClick={() => { setScopeTab(s); setSelectedId(null); setShowNew(false); setPage(1); }}
               className={cn(
                 "px-4 py-2 text-sm font-semibold rounded-lg border transition-colors",
                 scopeTab === s ? "text-white" : "bg-white text-gray-600 border-gray-200"
@@ -219,6 +228,28 @@ export default function SellerSupport() {
               {s === "customer" ? "Customer Tickets" : "My Tickets to Admin"}
             </button>
           ))}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search by subject..."
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-1"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white"
+          >
+            <option value="">All statuses</option>
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Waiting for Customer">Waiting for Customer</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Closed">Closed</option>
+          </select>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-4">
@@ -250,6 +281,25 @@ export default function SellerSupport() {
                   <p className="text-[11px] mt-1" style={{ color: GOLD }}>{t.category}</p>
                 </button>
               ))
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-1 text-xs text-gray-500">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <span>Page {page} of {totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
             )}
           </div>
 

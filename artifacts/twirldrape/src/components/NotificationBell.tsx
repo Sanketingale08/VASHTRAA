@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, X, Package, Truck, CheckCircle, XCircle, Tag, Heart, ArrowRight } from "lucide-react";
+import { Bell, X, Package, Truck, CheckCircle, XCircle, Tag, Heart, ArrowRight, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,12 @@ function typeIcon(type: string) {
     case "order_shipped":    return <Truck size={14} className="text-blue-500" />;
     case "order_delivered":  return <CheckCircle size={14} className="text-green-600" />;
     case "order_cancelled":  return <XCircle size={14} className="text-red-500" />;
+    case "return_requested":
+    case "refund_requested": return <Clock size={14} className="text-amber-500" />;
+    case "return_approved":
+    case "refund_approved":  return <CheckCircle size={14} className="text-green-600" />;
+    case "return_rejected":
+    case "refund_rejected":  return <XCircle size={14} className="text-red-500" />;
     case "coupon_expiry":    return <Tag size={14} className="text-emerald-600" />;
     case "wishlist_restock": return <Heart size={14} className="text-rose-500" />;
     default:                 return <Bell size={14} className="text-gray-400" />;

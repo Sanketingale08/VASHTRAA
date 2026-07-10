@@ -2,7 +2,12 @@ import { db } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-type OrderNotifType = "order_shipped" | "order_delivered" | "order_cancelled";
+type OrderNotifType =
+  | "order_shipped"
+  | "order_delivered"
+  | "order_cancelled"
+  | "return_requested"
+  | "refund_requested";
 
 interface InsertOrderNotificationOpts {
   tx?: any;
@@ -33,6 +38,16 @@ function buildNotifContent(
       return {
         title: "Order cancelled",
         body: `Your order for ${itemName}${extra} has been cancelled.`,
+      };
+    case "return_requested":
+      return {
+        title: "Return requested",
+        body: `Your return request for ${itemName}${extra} has been received and is under review.`,
+      };
+    case "refund_requested":
+      return {
+        title: "Refund requested",
+        body: `Your refund request for ${itemName}${extra} has been received and is under review.`,
       };
   }
 }

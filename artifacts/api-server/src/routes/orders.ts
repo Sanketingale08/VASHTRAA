@@ -739,6 +739,7 @@ router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): 
             status: ordersTable.status,
             deliveredAt: ordersTable.deliveredAt,
             updatedAt: ordersTable.updatedAt,
+            items: ordersTable.items,
           })
           .from(ordersTable)
           .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
@@ -782,6 +783,16 @@ router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): 
             returnReason: JSON.stringify(returnData),
           })
           .where(eq(ordersTable.id, orderId));
+
+        const items = order.items as Array<{ name: string }>;
+        await insertOrderStatusNotification({
+          tx,
+          userId: req.userId,
+          type: "return_requested",
+          orderId: order.id,
+          itemName: items?.[0]?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
+        });
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {
@@ -821,6 +832,7 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
             userId: ordersTable.userId,
             status: ordersTable.status,
             refundStatus: ordersTable.refundStatus,
+            items: ordersTable.items,
           })
           .from(ordersTable)
           .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
@@ -854,6 +866,16 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
             updatedAt: new Date(),
           })
           .where(eq(ordersTable.id, orderId));
+
+        const items = order.items as Array<{ name: string }>;
+        await insertOrderStatusNotification({
+          tx,
+          userId: req.userId,
+          type: "refund_requested",
+          orderId: order.id,
+          itemName: items?.[0]?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
+        });
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {

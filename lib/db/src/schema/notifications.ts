@@ -4,7 +4,7 @@ export const notificationsTable = pgTable("notifications", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
   type: text("type")
-    .$type<"order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "coupon_expiry" | "wishlist_restock" | "return_approved" | "return_rejected" | "refund_approved" | "refund_rejected">()
+    .$type<"order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "coupon_expiry" | "wishlist_restock" | "return_requested" | "return_approved" | "return_rejected" | "refund_requested" | "refund_approved" | "refund_rejected">()
     .notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),

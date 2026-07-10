@@ -61,6 +61,26 @@ vi.mock("@workspace/db", () => {
 
   const dbMock = {
     select: vi.fn(() => makeChain(state.dbSelectRows)),
+    insert: vi.fn((_table: unknown) => ({
+      values: vi.fn((vals: Record<string, unknown>) => ({
+        returning: vi.fn(() =>
+          Promise.resolve([{ id: "coupon-uuid-new", createdAt: new Date(), usedCount: 0, ...vals }]),
+        ),
+      })),
+    })),
+    update: vi.fn((_table: unknown) => ({
+      set: vi.fn((vals: Record<string, unknown>) => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(() =>
+            Promise.resolve(
+              state.dbSelectRows[0]
+                ? [{ ...state.dbSelectRows[0], ...vals }]
+                : [],
+            ),
+          ),
+        })),
+      })),
+    })),
     transaction: vi.fn(async (cb: (tx: typeof txMock) => Promise<unknown>) => {
       txMock._resetCallCount();
       return cb(txMock);
@@ -78,6 +98,7 @@ vi.mock("@workspace/db", () => {
     rewardPointsLogTable: { _t: "rewardPointsLog", userId: "userId", points: "points", type: "type", description: "description", orderId: "orderId" },
     notificationsTable: { _t: "notifications", userId: "userId", type: "type", title: "title", body: "body", metadata: "metadata", id: "id" },
     notificationPreferencesTable: { _t: "notificationPreferences", userId: "userId", orderUpdates: "orderUpdates", offerAlerts: "offerAlerts" },
+    stockHistoryTable: { _t: "stockHistory", productId: "productId", change: "change", reason: "reason", orderId: "orderId" },
   };
 });
 
@@ -133,6 +154,246 @@ const VALID_ORDER_BODY = {
   deliveryMethod: "standard",
   paymentMethod: "upi",
 };
+
+const ADMIN_KEY = "test-admin-key-123";
+
+describe("Admin coupon endpoints — authentication", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    app = await buildApp();
+    state.dbSelectRows = [];
+    state.txSelectQueue = [];
+  });
+
+  it("returns 403 for GET /api/admin/coupons with missing x-admin-key", async () => {
+    const res = await request(app).get("/api/admin/coupons");
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/forbidden/i);
+  });
+
+  it("returns 403 for GET /api/admin/coupons with wrong x-admin-key", async () => {
+    const res = await request(app)
+      .get("/api/admin/coupons")
+      .set("x-admin-key", "wrong-key");
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for POST /api/admin/coupons with missing x-admin-key", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .send({ code: "NEW10", type: "percent", value: 10 });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for POST /api/admin/coupons with wrong x-admin-key", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", "wrong-key")
+      .send({ code: "NEW10", type: "percent", value: 10 });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for PUT /api/admin/coupons/:id with missing x-admin-key", async () => {
+    const res = await request(app)
+      .put("/api/admin/coupons/coupon-uuid-1")
+      .send({ maxUses: 20 });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for PUT /api/admin/coupons/:id with wrong x-admin-key", async () => {
+    const res = await request(app)
+      .put("/api/admin/coupons/coupon-uuid-1")
+      .set("x-admin-key", "wrong-key")
+      .send({ maxUses: 20 });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for DELETE /api/admin/coupons/:id with missing x-admin-key", async () => {
+    const res = await request(app).delete("/api/admin/coupons/coupon-uuid-1");
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for DELETE /api/admin/coupons/:id with wrong x-admin-key", async () => {
+    const res = await request(app)
+      .delete("/api/admin/coupons/coupon-uuid-1")
+      .set("x-admin-key", "wrong-key");
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for all admin endpoints when ADMIN_API_KEY is not configured on the server", async () => {
+    delete process.env.ADMIN_API_KEY;
+    const res = await request(app)
+      .get("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/admin/coupons — validation", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    app = await buildApp();
+    state.dbSelectRows = [];
+    state.txSelectQueue = [];
+  });
+
+  it("returns 400 when code is missing", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ type: "percent", value: 10 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/code is required/i);
+  });
+
+  it("returns 400 when code is an empty string", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "   ", type: "percent", value: 10 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/code is required/i);
+  });
+
+  it("returns 400 when type is invalid", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "NEW10", type: "bogus", value: 10 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/type must be/i);
+  });
+
+  it("returns 400 when value is not a number", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "NEW10", type: "percent", value: "ten" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/value must be/i);
+  });
+
+  it("returns 400 when value is zero or negative", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "NEW10", type: "percent", value: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/value must be/i);
+  });
+
+  it("returns 400 when maxUses is less than 1", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "NEW10", type: "percent", value: 10, maxUses: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/maxUses must be a positive integer/i);
+  });
+
+  it("returns 400 when maxUses is not an integer", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "NEW10", type: "percent", value: 10, maxUses: 2.5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/maxUses must be a positive integer/i);
+  });
+
+  it("returns 409 when the coupon code already exists", async () => {
+    const { db } = await import("@workspace/db");
+    (db.insert as any).mockImplementationOnce(() => ({
+      values: vi.fn(() => ({
+        returning: vi.fn(() => {
+          const err: any = new Error("duplicate key");
+          err.code = "23505";
+          return Promise.reject(err);
+        }),
+      })),
+    }));
+
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "SAVE10", type: "percent", value: 10 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already exists/i);
+  });
+});
+
+describe("PUT /api/admin/coupons/:id — validation", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    app = await buildApp();
+    state.dbSelectRows = [];
+    state.txSelectQueue = [];
+  });
+
+  it("returns 404 when the coupon does not exist", async () => {
+    state.dbSelectRows = [];
+
+    const res = await request(app)
+      .put("/api/admin/coupons/unknown-id")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ maxUses: 20 });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it("updates maxUses for an existing coupon", async () => {
+    state.dbSelectRows = [VALID_COUPON];
+    const { db } = await import("@workspace/db");
+    (db.update as any).mockImplementationOnce(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(() =>
+            Promise.resolve([{ ...VALID_COUPON, maxUses: 20 }]),
+          ),
+        })),
+      })),
+    }));
+
+    const res = await request(app)
+      .put(`/api/admin/coupons/${VALID_COUPON.id}`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ maxUses: 20 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.coupon.maxUses).toBe(20);
+  });
+
+  it("returns 400 when maxUses is invalid on update", async () => {
+    state.dbSelectRows = [VALID_COUPON];
+
+    const res = await request(app)
+      .put(`/api/admin/coupons/${VALID_COUPON.id}`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ maxUses: -1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/maxUses must be a positive integer/i);
+  });
+
+  it("returns 400 when type is invalid on update", async () => {
+    state.dbSelectRows = [VALID_COUPON];
+
+    const res = await request(app)
+      .put(`/api/admin/coupons/${VALID_COUPON.id}`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ type: "invalid-type" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/type must be/i);
+  });
+});
 
 describe("GET /api/coupons/validate", () => {
   let app: Express;
@@ -217,7 +478,7 @@ describe("POST /api/orders coupon handling", () => {
     expect((state.capturedInsertValues as any).couponCode).toBe("SAVE10");
   });
 
-  it("creates the order without discount when the coupon is deactivated", async () => {
+  it("rejects the order with 400 when the coupon is deactivated", async () => {
     state.dbSelectRows = [{ ...VALID_COUPON, active: false }];
     state.txSelectQueue = [[PRODUCT]];
 
@@ -225,13 +486,12 @@ describe("POST /api/orders coupon handling", () => {
       .post("/api/orders")
       .send({ ...VALID_ORDER_BODY, couponCode: "SAVE10" });
 
-    expect(res.status).toBe(200);
-    expect(res.body.orderId).toBe("order-uuid-123");
-    expect((state.capturedInsertValues as any).discount).toBe(0);
-    expect((state.capturedInsertValues as any).couponCode).toBeNull();
+    expect(res.status).toBe(400);
+    expect(res.body.couponInvalid).toBe(true);
+    expect(state.capturedInsertValues).toBeNull();
   });
 
-  it("creates the order without discount when the coupon is expired", async () => {
+  it("rejects the order with 400 when the coupon is expired", async () => {
     state.dbSelectRows = [
       { ...VALID_COUPON, expiresAt: new Date("2020-01-01T00:00:00Z") },
     ];
@@ -241,13 +501,12 @@ describe("POST /api/orders coupon handling", () => {
       .post("/api/orders")
       .send({ ...VALID_ORDER_BODY, couponCode: "SAVE10" });
 
-    expect(res.status).toBe(200);
-    expect(res.body.orderId).toBe("order-uuid-123");
-    expect((state.capturedInsertValues as any).discount).toBe(0);
-    expect((state.capturedInsertValues as any).couponCode).toBeNull();
+    expect(res.status).toBe(400);
+    expect(res.body.couponInvalid).toBe(true);
+    expect(state.capturedInsertValues).toBeNull();
   });
 
-  it("creates the order without discount for an unknown coupon code", async () => {
+  it("rejects the order with 400 for an unknown coupon code", async () => {
     state.dbSelectRows = [];
     state.txSelectQueue = [[PRODUCT]];
 
@@ -255,10 +514,9 @@ describe("POST /api/orders coupon handling", () => {
       .post("/api/orders")
       .send({ ...VALID_ORDER_BODY, couponCode: "FAKE99" });
 
-    expect(res.status).toBe(200);
-    expect(res.body.orderId).toBe("order-uuid-123");
-    expect((state.capturedInsertValues as any).discount).toBe(0);
-    expect((state.capturedInsertValues as any).couponCode).toBeNull();
+    expect(res.status).toBe(400);
+    expect(res.body.couponInvalid).toBe(true);
+    expect(state.capturedInsertValues).toBeNull();
   });
 
   it("rejects the order with 400 when coupon has reached its maxUses limit", async () => {

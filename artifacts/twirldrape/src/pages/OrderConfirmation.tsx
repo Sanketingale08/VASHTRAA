@@ -81,6 +81,8 @@ const statusColors: Record<string, string> = {
   delivered: "bg-teal-100 text-teal-700",
   cancelled: "bg-red-100 text-red-700",
   return_requested: "bg-orange-100 text-orange-700",
+  return_approved: "bg-green-100 text-green-700",
+  return_rejected: "bg-red-100 text-red-700",
 };
 
 const CANCEL_REASONS = [

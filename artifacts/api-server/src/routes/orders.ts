@@ -874,4 +874,204 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
   }
 });
 
+// GET /admin/returns — list orders pending return/refund review
+router.get("/admin/returns", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const rows = await db
+      .select()
+      .from(ordersTable)
+      .where(
+        sql`${ordersTable.status} in ('return_requested', 'return_approved', 'return_rejected') or ${ordersTable.refundStatus} is not null`
+      )
+      .orderBy(desc(ordersTable.updatedAt));
+
+    res.json({ orders: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch return/refund requests");
+    res.status(500).json({ error: "Failed to fetch return/refund requests" });
+  }
+});
+
+// POST /admin/orders/:orderId/return — approve or reject a return request
+router.post("/admin/orders/:orderId/return", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { decision, note } = req.body;
+
+  if (!decision || !["approved", "rejected"].includes(decision)) {
+    res.status(400).json({ error: "Decision must be 'approved' or 'rejected'" });
+    return;
+  }
+
+  try {
+    let updatedOrder: any;
+    try {
+      updatedOrder = await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            status: ordersTable.status,
+            statusHistory: ordersTable.statusHistory,
+            items: ordersTable.items,
+          })
+          .from(ordersTable)
+          .where(eq(ordersTable.id, orderId))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.status !== "return_requested") {
+          throw Object.assign(
+            new Error(`Cannot ${decision === "approved" ? "approve" : "reject"} a return for an order with status "${order.status}". Only orders with a pending return request can be reviewed.`),
+            { status: 400 }
+          );
+        }
+
+        const newStatus = decision === "approved" ? "return_approved" : "return_rejected";
+        const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        const historyEntry: { status: string; timestamp: string; note?: string } = {
+          status: newStatus,
+          timestamp: new Date().toISOString(),
+        };
+        if (note) historyEntry.note = String(note).trim();
+        history.push(historyEntry);
+
+        const [updated] = await tx
+          .update(ordersTable)
+          .set({
+            status: newStatus,
+            statusHistory: history,
+            updatedAt: new Date(),
+          })
+          .where(eq(ordersTable.id, orderId))
+          .returning();
+
+        const notifItems = order.items as Array<{ name: string }>;
+        const firstItemName = notifItems?.[0]?.name ?? "your order";
+        const extra = notifItems.length > 1 ? ` and ${notifItems.length - 1} more item(s)` : "";
+        await tx.insert(notificationsTable).values({
+          userId: order.userId,
+          type: decision === "approved" ? "return_approved" : "return_rejected",
+          title: decision === "approved" ? "Return approved" : "Return rejected",
+          body: decision === "approved"
+            ? `Your return request for ${firstItemName}${extra} has been approved.`
+            : `Your return request for ${firstItemName}${extra} was rejected.`,
+          metadata: { orderId: order.id },
+        });
+
+        return updated;
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ order: updatedOrder });
+  } catch (err) {
+    req.log.error({ err }, "Failed to review return request");
+    res.status(500).json({ error: "Failed to review return request" });
+  }
+});
+
+// POST /admin/orders/:orderId/refund — approve or reject a refund
+router.post("/admin/orders/:orderId/refund", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { decision, note } = req.body;
+
+  if (!decision || !["approved", "rejected"].includes(decision)) {
+    res.status(400).json({ error: "Decision must be 'approved' or 'rejected'" });
+    return;
+  }
+
+  try {
+    let updatedOrder: any;
+    try {
+      updatedOrder = await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            status: ordersTable.status,
+            refundStatus: ordersTable.refundStatus,
+            statusHistory: ordersTable.statusHistory,
+            items: ordersTable.items,
+          })
+          .from(ordersTable)
+          .where(eq(ordersTable.id, orderId))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.refundStatus !== "pending") {
+          throw Object.assign(
+            new Error(`Cannot ${decision === "approved" ? "approve" : "reject"} a refund with current status "${order.refundStatus ?? "none"}". Only pending refunds can be reviewed.`),
+            { status: 400 }
+          );
+        }
+
+        const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        const historyEntry: { status: string; timestamp: string; note?: string } = {
+          status: `refund_${decision}`,
+          timestamp: new Date().toISOString(),
+        };
+        if (note) historyEntry.note = String(note).trim();
+        history.push(historyEntry);
+
+        const [updated] = await tx
+          .update(ordersTable)
+          .set({
+            refundStatus: decision,
+            statusHistory: history,
+            updatedAt: new Date(),
+          })
+          .where(eq(ordersTable.id, orderId))
+          .returning();
+
+        const notifItems = order.items as Array<{ name: string }>;
+        const firstItemName = notifItems?.[0]?.name ?? "your order";
+        const extra = notifItems.length > 1 ? ` and ${notifItems.length - 1} more item(s)` : "";
+        await tx.insert(notificationsTable).values({
+          userId: order.userId,
+          type: decision === "approved" ? "refund_approved" : "refund_rejected",
+          title: decision === "approved" ? "Refund approved" : "Refund rejected",
+          body: decision === "approved"
+            ? `Your refund for ${firstItemName}${extra} has been approved and will be processed shortly.`
+            : `Your refund request for ${firstItemName}${extra} was rejected.`,
+          metadata: { orderId: order.id },
+        });
+
+        return updated;
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ order: updatedOrder });
+  } catch (err) {
+    req.log.error({ err }, "Failed to review refund");
+    res.status(500).json({ error: "Failed to review refund" });
+  }
+});
+
 export default router;

@@ -100,8 +100,11 @@ test.describe("Home page — Quick View, Add to Cart, Recently Viewed, Flash Sal
     const recentlyViewedHeading = page
       .getByRole("heading")
       .filter({ hasText: /Recently Viewed/i });
-    await recentlyViewedHeading.scrollIntoViewIfNeeded();
     await expect(recentlyViewedHeading).toBeVisible({ timeout: 10_000 });
+    await expect(async () => {
+      await recentlyViewedHeading.scrollIntoViewIfNeeded();
+      await expect(recentlyViewedHeading).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 10_000 });
 
     const rvSection = page
       .locator("section")
@@ -149,8 +152,14 @@ test.describe("Home page — Quick View, Add to Cart, Recently Viewed, Flash Sal
     const recentlyViewedHeading = page
       .getByRole("heading")
       .filter({ hasText: /Recently Viewed/i });
-    await recentlyViewedHeading.scrollIntoViewIfNeeded();
     await expect(recentlyViewedHeading).toBeVisible({ timeout: 15_000 });
+    // The heading can re-render (e.g. from a live countdown re-rendering an
+    // adjacent section) right as we scroll, momentarily detaching it from the
+    // DOM. Retry the scroll+visibility check as a unit until it settles.
+    await expect(async () => {
+      await recentlyViewedHeading.scrollIntoViewIfNeeded();
+      await expect(recentlyViewedHeading).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
 
     const rvSection = page
       .locator("section")

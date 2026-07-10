@@ -1097,6 +1097,26 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
   }
 });
 
+// GET /admin/orders — list all orders for admin management
+router.get("/admin/orders", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const { status } = req.query;
+    const conditions = status ? [eq(ordersTable.status, String(status) as any)] : [];
+
+    const rows = await db
+      .select()
+      .from(ordersTable)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(200);
+
+    res.json({ orders: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch admin orders");
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
+
 // GET /admin/returns — list orders pending return/refund review
 router.get("/admin/returns", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {

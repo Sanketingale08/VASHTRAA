@@ -16,7 +16,7 @@ const GOLD_DIM = "rgba(201,168,76,0.6)";
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Vendors", href: "/admin/vendors", icon: Users },
-  { label: "Orders", href: "/admin/orders", icon: ShoppingBag, stub: true },
+  { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Returns & Refunds", href: "/admin/returns", icon: RotateCcw },
   { label: "Seller Disputes", href: "/admin/disputes", icon: ShieldAlert },
   { label: "Coupons", href: "/admin/coupons", icon: BadgePercent },

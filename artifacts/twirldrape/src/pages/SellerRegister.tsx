@@ -58,6 +58,42 @@ const DEFAULT_DATA: WizardData = {
   termsAccepted: false,
 };
 
+const DRAFT_KEY = "twirldrape_seller_registration_draft_v1";
+
+interface WizardDraft {
+  data: Partial<Omit<WizardData, "password">>;
+  step: number;
+}
+
+function loadDraft(): WizardDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.step !== "number" || typeof parsed.data !== "object") return null;
+    return parsed as WizardDraft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(data: WizardData, step: number) {
+  try {
+    const { password, ...rest } = data;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: rest, step }));
+  } catch {
+    // localStorage unavailable (e.g. private browsing) — fail silently, wizard still works in-session
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 async function uploadKycFile(file: File, docType: "pan" | "gst" = "pan"): Promise<string> {
   const endpoint = docType === "gst" ? "/api/seller/upload/gst" : "/api/seller/upload/pan";
   const metaRes = await fetch(getApiUrl(endpoint), {
@@ -276,14 +312,43 @@ export default function SellerRegister() {
 
   useEffect(() => {
     if (!userLoaded || !signUpLoaded || step !== 0) return;
+    const draft = loadDraft();
     if (isSignedIn) {
-      setStep(2);
       const email = user?.primaryEmailAddress?.emailAddress ?? "";
-      if (email) setData((d) => ({ ...d, contactEmail: email }));
+      if (draft && draft.step >= 2) {
+        setData((d) => ({ ...d, ...draft.data, contactEmail: draft.data.contactEmail || email }));
+        setStep(draft.step);
+      } else {
+        setStep(2);
+        if (email) setData((d) => ({ ...d, contactEmail: email }));
+      }
     } else {
+      // Any account-creation progress from a prior session is unverified, so always
+      // restart at step 1 — but keep whatever downstream fields were already filled in.
+      if (draft && draft.data) setData((d) => ({ ...d, ...draft.data, email: "", password: "" }));
       setStep(1);
     }
   }, [isSignedIn, userLoaded, signUpLoaded]);
+
+  useEffect(() => {
+    if (step === 0 || done) return;
+    saveDraft(data, step);
+  }, [data, step, done]);
+
+  function startOver() {
+    clearDraft();
+    setErrs({}); setApiErr("");
+    setEmailOtpSent(false); setEmailCode("");
+    setPhoneObj(null); setPhoneSent(false); setPhoneCode("");
+    if (isSignedIn) {
+      const email = user?.primaryEmailAddress?.emailAddress ?? "";
+      setData({ ...DEFAULT_DATA, contactEmail: email });
+      setStep(2);
+    } else {
+      setData(DEFAULT_DATA);
+      setStep(1);
+    }
+  }
 
   if (!userLoaded || !signUpLoaded || step === 0) {
     return (
@@ -458,6 +523,7 @@ export default function SellerRegister() {
       });
       const json = await res.json();
       if (!res.ok) { if (res.status === 409) { setAlready(true); return; } setApiErr(json.error || "Submission failed."); return; }
+      clearDraft();
       setDone(true);
     } catch { setApiErr("Network error. Please check your connection."); }
     finally { setLoading(false); }
@@ -474,6 +540,15 @@ export default function SellerRegister() {
 
         <div className="w-full max-w-lg bg-white rounded-2xl border border-[#C8D8D0] p-7 shadow-sm">
           <ProgressBar step={step} />
+
+          {step > (isSignedIn ? 2 : 1) && (
+            <div className="flex justify-end -mt-4 mb-4">
+              <button type="button" onClick={startOver}
+                className="text-xs text-gray-400 underline hover:text-red-400">
+                Start over
+              </button>
+            </div>
+          )}
 
           {apiErr && (
             <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-red-600">

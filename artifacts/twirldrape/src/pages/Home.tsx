@@ -20,6 +20,7 @@ import { ProductSection } from "@/components/ProductSection";
 import { VendorCard } from "@/components/VendorCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { StatsBar } from "@/components/StatsBar";
+import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import type { ProductSummary, VendorSummary } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -174,42 +175,79 @@ function FeaturedShopsSection() {
   );
 }
 
+function RecentlyViewedSkeleton() {
+  return (
+    <section className="py-16 md:py-20 bg-white">
+      <div className="container mx-auto px-4">
+        <SectionTitle subtitle="Pick up where you left off">
+          Recently Viewed Products
+        </SectionTitle>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-lg overflow-hidden bg-[#E6F0EA] animate-pulse">
+              <div className="aspect-square bg-gray-200" />
+              <div className="p-4 space-y-2">
+                <div className="h-3 bg-gray-200 rounded w-3/4" />
+                <div className="h-4 bg-gray-200 rounded" />
+                <div className="h-3 bg-gray-200 rounded w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummary) => void }) {
-  const [products, setProducts] = useState<ProductSummary[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [ids, setIds] = useState<string[] | null>(null);
 
   useEffect(() => {
-    function loadRecentlyViewed() {
+    function loadIds() {
       try {
-        const ids: string[] = JSON.parse(localStorage.getItem("twirl_recently_viewed") ?? "[]");
-        if (!ids.length) { setLoaded(true); setProducts([]); return; }
-        fetch(`${BASE}/api/products?ids=${ids.join(",")}&limit=8`, { credentials: "include" })
-          .then(r => r.ok ? r.json() : { products: [] })
-          .then(data => {
-            const ordered = ids
-              .map(id => (data.products as ProductSummary[]).find(p => p.id === id))
-              .filter((p): p is ProductSummary => !!p);
-            setProducts(ordered);
-            setLoaded(true);
-          })
-          .catch(() => setLoaded(true));
+        const stored: string[] = JSON.parse(localStorage.getItem("twirl_recently_viewed") ?? "[]");
+        setIds(stored);
       } catch {
-        setLoaded(true);
+        setIds([]);
       }
     }
 
-    loadRecentlyViewed();
+    loadIds();
 
-    document.addEventListener("visibilitychange", loadRecentlyViewed);
-    window.addEventListener("popstate", loadRecentlyViewed);
+    document.addEventListener("visibilitychange", loadIds);
+    window.addEventListener("popstate", loadIds);
 
     return () => {
-      document.removeEventListener("visibilitychange", loadRecentlyViewed);
-      window.removeEventListener("popstate", loadRecentlyViewed);
+      document.removeEventListener("visibilitychange", loadIds);
+      window.removeEventListener("popstate", loadIds);
     };
   }, []);
 
-  if (!loaded || products.length === 0) return null;
+  const hasIds = !!ids && ids.length > 0;
+
+  const recentlyViewedParams = { ids: hasIds ? ids!.join(",") : undefined, limit: 8 };
+  const { data, isLoading, isError } = useListProducts(recentlyViewedParams, {
+    query: {
+      enabled: hasIds,
+      queryKey: getListProductsQueryKey(recentlyViewedParams),
+    },
+  });
+
+  // Still determining which IDs to look up (localStorage read pending).
+  if (ids === null) return null;
+
+  // Nothing has been viewed yet — nothing to show, no error state needed.
+  if (!hasIds) return null;
+
+  // Loading or transient error: keep the section visible with a skeleton
+  // instead of silently disappearing, so a slow/flaky API doesn't hide it.
+  if (isLoading || isError) return <RecentlyViewedSkeleton />;
+
+  const products = (data?.products ?? [])
+    .slice()
+    .sort((a, b) => ids!.indexOf(a.id) - ids!.indexOf(b.id));
+
+  if (products.length === 0) return null;
 
   return (
     <section className="py-16 md:py-20 bg-white">

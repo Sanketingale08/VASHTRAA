@@ -100,6 +100,11 @@ paths:
           in: query
           schema:
             type: number
+        - name: ids
+          in: query
+          description: Comma-separated list of product IDs to filter by
+          schema:
+            type: string
       responses:
         "200":
           description: List of products

@@ -109,6 +109,10 @@ bestSeller?: boolean;
 newArrival?: boolean;
 hasDiscount?: boolean;
 minRating?: number;
+/**
+ * Comma-separated list of product IDs to filter by
+ */
+ids?: string;
 };
 
 export type ListProductsCategory = typeof ListProductsCategory[keyof typeof ListProductsCategory];

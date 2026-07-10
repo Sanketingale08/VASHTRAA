@@ -698,6 +698,7 @@ export default function ProductDetail() {
     { label: "Shop Name", value: `${product.vendorName} – TwirlDrape` },
     { label: "In Stock", value: product.stock > 0 ? `${product.stock} units available` : "Out of stock" },
   ];
+  const isOutOfStock = product.stock <= 0;
 
   const shopPath = product.vendorId
     ? `/stores/${product.vendorId}`
@@ -944,7 +945,7 @@ export default function ProductDetail() {
                     </span>
                   </div>
                 )}
-                {product.stock === 0 && (
+                {isOutOfStock && (
                   <div className="flex items-center gap-2 mb-4 text-red-500">
                     <Package size={16} />
                     <span className="text-sm font-semibold">Currently out of stock</span>
@@ -955,7 +956,7 @@ export default function ProductDetail() {
                 <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <button
                     onClick={() => {
-                      if (product.stock === 0) return;
+                      if (isOutOfStock) return;
                       addItem({
                         id: product.id,
                         productId: product.id,
@@ -970,10 +971,10 @@ export default function ProductDetail() {
                       setAddedToCart(true);
                       setTimeout(() => setAddedToCart(false), 2000);
                     }}
-                    disabled={product.stock === 0}
+                    disabled={isOutOfStock}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 py-4 font-bold uppercase tracking-wider text-sm transition-all rounded-sm disabled:cursor-not-allowed",
-                      product.stock === 0
+                      isOutOfStock
                         ? "bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                         : addedToCart
                         ? "bg-green-600 text-white"
@@ -981,7 +982,7 @@ export default function ProductDetail() {
                     )}
                   >
                     <ShoppingBag size={18} />
-                    {product.stock === 0 ? "Sold Out" : addedToCart ? "Added to Cart!" : "Add to Cart"}
+                    {isOutOfStock ? "Out of Stock" : addedToCart ? "Added to Cart!" : "Add to Cart"}
                   </button>
                   <button
                     onClick={() => toggle(id ?? "")}
@@ -1020,7 +1021,7 @@ export default function ProductDetail() {
                     } catch {}
                     setLocation("/checkout");
                   }}
-                  disabled={product.stock === 0}
+                  disabled={isOutOfStock}
                   className={cn(
                     "w-full flex items-center justify-center gap-2 py-4 border-2 font-bold uppercase tracking-wider text-sm rounded-sm transition-all mb-6 disabled:opacity-50 disabled:cursor-not-allowed",
                     isDesigner

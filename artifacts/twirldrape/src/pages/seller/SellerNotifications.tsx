@@ -28,6 +28,7 @@ function deepLinkFor(n: SellerNotification): string | null {
   const m = n.metadata || {};
   if (m.orderId) return `${sellerBasePath}/seller/orders`;
   if (m.productId) return `${sellerBasePath}/seller/products`;
+  if (m.ticketId) return `${sellerBasePath}/seller/support`;
   return null;
 }
 
@@ -43,6 +44,7 @@ function typeIcon(type: string, size = 16) {
     case "order_cancelled_seller": return <XCircle size={size} className="text-red-500" />;
     case "settlement_released": return <Wallet size={size} className="text-green-600" />;
     case "payout_successful": return <IndianRupee size={size} className="text-green-600" />;
+    case "new_customer_query": return <Clock size={size} className="text-blue-500" />;
     default: return <Bell size={size} className="text-gray-400" />;
   }
 }
@@ -76,6 +78,7 @@ const TYPE_FILTERS = [
   { key: "return_requested_seller,refund_requested_seller", label: "Returns & Refunds" },
   { key: "product_pending_approval,product_approved,product_rejected", label: "Products" },
   { key: "settlement_released,payout_successful", label: "Payouts" },
+  { key: "new_customer_query", label: "Queries" },
 ];
 
 export default function SellerNotifications() {

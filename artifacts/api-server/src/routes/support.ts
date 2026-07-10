@@ -125,8 +125,8 @@ router.post("/support/tickets", requireAuth, async (req: any, res: any): Promise
 
     await notifyTicketEvent(
       ticket,
-      "ticket_created",
-      assignedTo === "seller" ? "New customer ticket" : "New support ticket",
+      assignedTo === "seller" ? "new_customer_query" : "ticket_created",
+      assignedTo === "seller" ? "New customer query" : "New support ticket",
       `${subject} — ${category}`,
       assignedTo === "seller" ? { notifySeller: true } : { notifyAdmin: true }
     );

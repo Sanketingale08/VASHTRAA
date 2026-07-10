@@ -6,6 +6,7 @@ import {
   couponRedemptionsTable,
   notificationsTable,
   notificationPreferencesTable,
+  wishlistsTable,
 } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 
@@ -100,7 +101,7 @@ router.get("/admin/coupons", requireAdminKey, async (req: any, res: any): Promis
 
 // POST /admin/coupons — create a new coupon (admin)
 router.post("/admin/coupons", requireAdminKey, async (req: any, res: any): Promise<void> => {
-  const { code, type, value, description, active, expiresAt, maxUses } = req.body;
+  const { code, type, value, description, active, expiresAt, maxUses, isFlashSale } = req.body;
 
   if (!code || typeof code !== "string" || !code.trim()) {
     res.status(400).json({ error: "code is required" });
@@ -134,6 +135,28 @@ router.post("/admin/coupons", requireAdminKey, async (req: any, res: any): Promi
         maxUses: maxUses ?? null,
       })
       .returning();
+
+    if (isFlashSale === true && created.active) {
+      try {
+        const interested = await db
+          .selectDistinct({ userId: wishlistsTable.userId })
+          .from(wishlistsTable);
+        const discountLabel = type === "percent" ? `${value}% off` : `₹${value} off`;
+        if (interested.length > 0) {
+          await db.insert(notificationsTable).values(
+            interested.map((row) => ({
+              userId: row.userId,
+              type: "flash_sale" as const,
+              title: "Flash sale is live!",
+              body: `${discountLabel} with code ${created.code}${created.expiresAt ? " — limited time only." : "."}`,
+              metadata: { couponId: created.id, code: created.code },
+            }))
+          );
+        }
+      } catch (notifyErr) {
+        req.log.error({ notifyErr }, "Failed to send flash sale notifications");
+      }
+    }
 
     res.status(201).json({
       coupon: {

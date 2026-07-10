@@ -15,7 +15,8 @@ export type SellerNotificationType =
   | "promotional"
   | "order_cancelled_seller"
   | "settlement_released"
-  | "payout_successful";
+  | "payout_successful"
+  | "new_customer_query";
 
 export type AdminNotificationType =
   | "new_seller_registration"
@@ -44,7 +45,7 @@ export const notificationsTable = pgTable("notifications", {
   vendorId: uuid("vendor_id"),
   type: text("type")
     .$type<
-      | "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "coupon_expiry" | "wishlist_restock" | "return_requested" | "return_approved" | "return_rejected" | "refund_requested" | "refund_approved" | "refund_rejected"
+      | "order_confirmed" | "new_order_placed" | "order_shipped" | "order_delivered" | "order_cancelled" | "coupon_expiry" | "wishlist_restock" | "return_requested" | "return_approved" | "return_rejected" | "refund_requested" | "refund_approved" | "refund_rejected"
       | "payment_successful" | "order_packed" | "out_for_delivery" | "price_drop" | "flash_sale"
       | SellerNotificationType
       | TicketNotificationType

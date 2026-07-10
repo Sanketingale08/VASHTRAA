@@ -38,7 +38,8 @@ interface Preferences {
 
 function typeIcon(type: string, size = 16) {
   switch (type) {
-    case "order_confirmed":  return <Package size={size} className="text-green-600" />;
+    case "order_confirmed":
+    case "new_order_placed": return <Package size={size} className="text-green-600" />;
     case "order_shipped":    return <Truck size={size} className="text-blue-500" />;
     case "order_delivered":  return <CheckCircle size={size} className="text-green-600" />;
     case "order_cancelled":  return <XCircle size={size} className="text-red-500" />;
@@ -84,7 +85,7 @@ function relativeTime(dateStr: string): string {
 
 const TYPE_FILTERS = [
   { key: "all", label: "All" },
-  { key: "order_confirmed,payment_successful,order_packed,order_shipped,out_for_delivery,order_delivered,order_cancelled,return_requested,return_approved,return_rejected,refund_requested,refund_approved,refund_rejected", label: "Orders" },
+  { key: "order_confirmed,new_order_placed,payment_successful,order_packed,order_shipped,out_for_delivery,order_delivered,order_cancelled,return_requested,return_approved,return_rejected,refund_requested,refund_approved,refund_rejected", label: "Orders" },
   { key: "coupon_expiry,price_drop,flash_sale", label: "Offers" },
   { key: "wishlist_restock", label: "Stock" },
 ];

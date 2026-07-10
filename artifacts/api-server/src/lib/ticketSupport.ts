@@ -1,9 +1,9 @@
 import { db } from "@workspace/db";
 import { notificationsTable, vendorsTable, ADMIN_NOTIFICATION_USER_ID } from "@workspace/db";
-import type { SupportTicket, TicketNotificationType, AdminNotificationType } from "@workspace/db";
+import type { SupportTicket, TicketNotificationType, AdminNotificationType, SellerNotificationType } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-type NotifyTicketEventType = TicketNotificationType | AdminNotificationType;
+type NotifyTicketEventType = TicketNotificationType | AdminNotificationType | SellerNotificationType;
 
 export const SLA_HOURS = 48;
 

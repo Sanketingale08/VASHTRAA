@@ -20,7 +20,8 @@ interface Notification {
 
 function typeIcon(type: string) {
   switch (type) {
-    case "order_confirmed":  return <Package size={14} className="text-green-600" />;
+    case "order_confirmed":
+    case "new_order_placed": return <Package size={14} className="text-green-600" />;
     case "order_shipped":    return <Truck size={14} className="text-blue-500" />;
     case "order_delivered":  return <CheckCircle size={14} className="text-green-600" />;
     case "order_cancelled":  return <XCircle size={14} className="text-red-500" />;

@@ -402,6 +402,13 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
           const extraSuffix = resolvedItems.length > 1 ? ` and ${resolvedItems.length - 1} more item(s)` : "";
           await tx.insert(notificationsTable).values({
             userId: req.userId,
+            type: "new_order_placed",
+            title: "Order placed",
+            body: `Your order for ${firstItem.name}${extraSuffix} has been placed successfully.`,
+            metadata: { orderId: order.id },
+          });
+          await tx.insert(notificationsTable).values({
+            userId: req.userId,
             type: "order_confirmed",
             title: "Order confirmed",
             body: `Your order for ${firstItem.name}${extraSuffix} has been confirmed.`,
@@ -442,6 +449,26 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
     res.json({ orderId });
   } catch (err) {
     req.log.error({ err }, "Failed to create order");
+    try {
+      const failedPaymentMethod = req.body?.paymentMethod;
+      if (failedPaymentMethod && failedPaymentMethod !== "cod") {
+        await insertAdminNotification({
+          type: "payment_gateway_issue",
+          title: "Payment gateway issue",
+          body: `A payment could not be processed while placing an order (method: ${failedPaymentMethod}).`,
+          metadata: { userId: req.userId },
+        });
+      } else {
+        await insertAdminNotification({
+          type: "system_error_alert",
+          title: "System error: order creation failed",
+          body: `Order creation failed unexpectedly for a customer request.`,
+          metadata: { userId: req.userId },
+        });
+      }
+    } catch (notifyErr) {
+      req.log.error({ notifyErr }, "Failed to record system error alert");
+    }
     res.status(500).json({ error: "Failed to create order" });
   }
 });

@@ -6,6 +6,34 @@ import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { recordStockChange } from "../lib/stockHistory";
+import { insertSellerNotification } from "../lib/sellerNotifications";
+
+async function notifySellerStockLevel(
+  vendorId: string | null,
+  productId: string,
+  productName: string,
+  newStock: number,
+  lowStockThreshold: number
+): Promise<void> {
+  if (!vendorId) return;
+  if (newStock <= 0) {
+    await insertSellerNotification({
+      vendorId,
+      type: "out_of_stock",
+      title: "Product out of stock",
+      body: `"${productName}" is now out of stock.`,
+      metadata: { productId },
+    });
+  } else if (newStock <= lowStockThreshold) {
+    await insertSellerNotification({
+      vendorId,
+      type: "low_stock",
+      title: "Low stock alert",
+      body: `"${productName}" has only ${newStock} unit(s) left.`,
+      metadata: { productId },
+    });
+  }
+}
 
 const router = Router();
 
@@ -289,6 +317,7 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
         stock: productsTable.stock,
         name: productsTable.name,
         vendorId: productsTable.vendorId,
+        lowStockThreshold: productsTable.lowStockThreshold,
       })
       .from(productsTable)
       .where(eq(productsTable.id, id))
@@ -333,6 +362,7 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
 
     // If restocked (was 0, now > 0) notify users who have this in their wishlist
     await notifyWishlistRestock(id, before.name, before.stock, stock);
+    await notifySellerStockLevel(before.vendorId, id, before.name, stock, before.lowStockThreshold ?? 5);
 
     res.json({ stock: updated.stock });
   } catch (err: any) {
@@ -421,7 +451,7 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
   } = req.body;
 
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name, lowStockThreshold: productsTable.lowStockThreshold }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
     if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
 
@@ -461,6 +491,7 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
         actorId: req.userId,
       });
       await notifyWishlistRestock(id, updated.name ?? existing.name, existing.stock, updated.stock);
+      await notifySellerStockLevel(existing.vendorId, id, updated.name ?? existing.name, updated.stock, updated.lowStockThreshold ?? existing.lowStockThreshold ?? 5);
     }
 
     res.json(normalizeProduct(updated));

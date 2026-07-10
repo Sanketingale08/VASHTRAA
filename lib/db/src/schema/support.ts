@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 export const supportTicketsTable = pgTable("support_tickets", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -16,6 +16,12 @@ export const supportTicketsTable = pgTable("support_tickets", {
     .notNull()
     .default("Medium"),
   vendorId: uuid("vendor_id"),
+  isDispute: boolean("is_dispute").notNull().default(false),
+  disputeStatus: text("dispute_status")
+    .$type<"none" | "open" | "needs_admin" | "resolved">()
+    .notNull()
+    .default("none"),
+  evidenceUrls: jsonb("evidence_urls").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -28,6 +34,7 @@ export const ticketMessagesTable = pgTable("ticket_messages", {
   userId: text("user_id").notNull(),
   body: text("body").notNull(),
   isStaff: boolean("is_staff").notNull().default(false),
+  internal: boolean("internal").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

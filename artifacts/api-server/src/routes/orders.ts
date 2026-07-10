@@ -5,10 +5,12 @@ import {
   ordersTable, cartItemsTable, productsTable, couponsTable,
   couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
   notificationsTable, notificationPreferencesTable,
+  supportTicketsTable, vendorsTable,
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { isValidPaymentMethod } from "@workspace/api-zod";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
+import { insertSellerNotification } from "../lib/sellerNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
@@ -106,6 +108,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             vendorName: productsTable.vendorName,
             vendorId: productsTable.vendorId,
             stock: productsTable.stock,
+            lowStockThreshold: productsTable.lowStockThreshold,
           })
           .from(productsTable)
           .where(inArray(productsTable.id, productIds))
@@ -244,6 +247,36 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
           })
           .returning({ id: ordersTable.id });
 
+        const vendorOrderGroups = new Map<string, { itemNames: string[]; vendorTotal: number }>();
+        for (const item of resolvedItems) {
+          const p = productMap.get(item.productId);
+          if (!p?.vendorId) continue;
+          const group = vendorOrderGroups.get(p.vendorId) ?? { itemNames: [], vendorTotal: 0 };
+          group.itemNames.push(item.name);
+          group.vendorTotal += item.price * item.quantity;
+          vendorOrderGroups.set(p.vendorId, group);
+        }
+        for (const [vendorId, group] of vendorOrderGroups) {
+          const firstItem = group.itemNames[0];
+          const extra = group.itemNames.length > 1 ? ` and ${group.itemNames.length - 1} more item(s)` : "";
+          await insertSellerNotification({
+            tx,
+            vendorId,
+            type: "new_order",
+            title: "New order received",
+            body: `You have a new order for ${firstItem}${extra} worth ₹${group.vendorTotal.toLocaleString("en-IN")}.`,
+            metadata: { orderId: order.id },
+          });
+          await insertSellerNotification({
+            tx,
+            vendorId,
+            type: "payment_success",
+            title: "Payment received",
+            body: `Payment of ₹${group.vendorTotal.toLocaleString("en-IN")} confirmed for your order (${firstItem}${extra}).`,
+            metadata: { orderId: order.id },
+          });
+        }
+
         for (const item of resolvedItems) {
           await tx
             .update(productsTable)
@@ -262,6 +295,30 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             actorId: req.userId,
             orderId: order.id,
           });
+
+          const newStockAfterOrder = (originalProduct?.stock ?? 0) - item.quantity;
+          const lowStockThreshold = originalProduct?.lowStockThreshold ?? 5;
+          if (originalProduct?.vendorId) {
+            if (newStockAfterOrder <= 0) {
+              await insertSellerNotification({
+                tx,
+                vendorId: originalProduct.vendorId,
+                type: "out_of_stock",
+                title: "Product out of stock",
+                body: `"${item.name}" is now out of stock.`,
+                metadata: { productId: item.productId },
+              });
+            } else if (newStockAfterOrder <= lowStockThreshold) {
+              await insertSellerNotification({
+                tx,
+                vendorId: originalProduct.vendorId,
+                type: "low_stock",
+                title: "Low stock alert",
+                body: `"${item.name}" has only ${newStockAfterOrder} unit(s) left.`,
+                metadata: { productId: item.productId },
+              });
+            }
+          }
         }
 
         if (coupon) {
@@ -784,7 +841,7 @@ router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): 
           })
           .where(eq(ordersTable.id, orderId));
 
-        const items = order.items as Array<{ name: string }>;
+        const items = order.items as Array<{ name: string; productId: string }>;
         await insertOrderStatusNotification({
           tx,
           userId: req.userId,
@@ -793,6 +850,27 @@ router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): 
           itemName: items?.[0]?.name ?? "your order",
           extraItemCount: items.length > 1 ? items.length - 1 : 0,
         });
+
+        const returnVendorIds = new Set<string>();
+        if (items.length > 0) {
+          const itemProducts = await tx
+            .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+            .from(productsTable)
+            .where(inArray(productsTable.id, items.map((i) => i.productId)));
+          for (const p of itemProducts) {
+            if (p.vendorId) returnVendorIds.add(p.vendorId);
+          }
+        }
+        for (const vendorId of returnVendorIds) {
+          await insertSellerNotification({
+            tx,
+            vendorId,
+            type: "return_requested_seller",
+            title: "Return requested",
+            body: `A customer requested a return for order #${order.id.slice(0, 8)}.`,
+            metadata: { orderId: order.id },
+          });
+        }
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {
@@ -867,7 +945,7 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
           })
           .where(eq(ordersTable.id, orderId));
 
-        const items = order.items as Array<{ name: string }>;
+        const items = order.items as Array<{ name: string; productId: string }>;
         await insertOrderStatusNotification({
           tx,
           userId: req.userId,
@@ -876,6 +954,27 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
           itemName: items?.[0]?.name ?? "your order",
           extraItemCount: items.length > 1 ? items.length - 1 : 0,
         });
+
+        const refundVendorIds = new Set<string>();
+        if (items.length > 0) {
+          const itemProducts = await tx
+            .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+            .from(productsTable)
+            .where(inArray(productsTable.id, items.map((i) => i.productId)));
+          for (const p of itemProducts) {
+            if (p.vendorId) refundVendorIds.add(p.vendorId);
+          }
+        }
+        for (const vendorId of refundVendorIds) {
+          await insertSellerNotification({
+            tx,
+            vendorId,
+            type: "refund_requested_seller",
+            title: "Refund requested",
+            body: `A customer requested a refund for order #${order.id.slice(0, 8)}.`,
+            metadata: { orderId: order.id },
+          });
+        }
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {
@@ -911,6 +1010,41 @@ router.get("/admin/returns", requireAdminKey, async (req: any, res: any): Promis
   } catch (err) {
     req.log.error({ err }, "Failed to fetch return/refund requests");
     res.status(500).json({ error: "Failed to fetch return/refund requests" });
+  }
+});
+
+// GET /admin/tickets — list support tickets, optionally filtered to disputes needing admin
+router.get("/admin/tickets", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const { disputeStatus } = req.query;
+    const conditions = disputeStatus
+      ? [eq(supportTicketsTable.disputeStatus, String(disputeStatus) as any)]
+      : [eq(supportTicketsTable.isDispute, true)];
+
+    const rows = await db
+      .select({
+        id: supportTicketsTable.id,
+        vendorId: supportTicketsTable.vendorId,
+        vendorName: vendorsTable.name,
+        subject: supportTicketsTable.subject,
+        category: supportTicketsTable.category,
+        status: supportTicketsTable.status,
+        priority: supportTicketsTable.priority,
+        isDispute: supportTicketsTable.isDispute,
+        disputeStatus: supportTicketsTable.disputeStatus,
+        evidenceUrls: supportTicketsTable.evidenceUrls,
+        createdAt: supportTicketsTable.createdAt,
+        updatedAt: supportTicketsTable.updatedAt,
+      })
+      .from(supportTicketsTable)
+      .leftJoin(vendorsTable, eq(supportTicketsTable.vendorId, vendorsTable.id))
+      .where(and(...conditions))
+      .orderBy(desc(supportTicketsTable.updatedAt));
+
+    res.json({ tickets: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch admin tickets");
+    res.status(500).json({ error: "Failed to fetch admin tickets" });
   }
 });
 

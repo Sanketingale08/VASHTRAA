@@ -118,13 +118,51 @@ router.get("/support/tickets/:id", requireAuth, async (req: any, res: any): Prom
     const messages = await db
       .select()
       .from(ticketMessagesTable)
-      .where(eq(ticketMessagesTable.ticketId, id))
+      .where(and(eq(ticketMessagesTable.ticketId, id), eq(ticketMessagesTable.internal, false)))
       .orderBy(ticketMessagesTable.createdAt);
 
     res.json({ ...ticket, messages });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch ticket");
     res.status(500).json({ error: "Failed to fetch ticket" });
+  }
+});
+
+router.post("/support/tickets/:id/reopen", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const [ticket] = await db
+      .select()
+      .from(supportTicketsTable)
+      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.userId, req.userId)));
+
+    if (!ticket) {
+      res.status(404).json({ error: "Ticket not found" });
+      return;
+    }
+
+    if (ticket.status !== "Resolved" && ticket.status !== "Closed") {
+      res.status(400).json({ error: "Only resolved or closed tickets can be reopened" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(supportTicketsTable)
+      .set({ status: "Open", updatedAt: new Date() })
+      .where(eq(supportTicketsTable.id, id))
+      .returning();
+
+    await db.insert(ticketMessagesTable).values({
+      ticketId: id,
+      userId: "system",
+      body: "This ticket has been reopened by the customer.",
+      isStaff: true,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Failed to reopen ticket");
+    res.status(500).json({ error: "Failed to reopen ticket" });
   }
 });
 

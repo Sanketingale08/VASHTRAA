@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import {
   Search, Users, Star, MessageCircle, LifeBuoy, X, Send, Flag,
   ChevronRight, Mail, Phone, MapPin, ShoppingBag, IndianRupee, AlertCircle,
+  ShieldAlert, Lock, RotateCcw, Paperclip, ArrowUpDown, Bell, PackageX, ShoppingCart,
 } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -53,10 +55,12 @@ const TABS = [
 export default function SellerCustomers() {
   const [tab, setTab] = useState("overview");
   const [summary, setSummary] = useState<any>(null);
+  const [dashSummary, setDashSummary] = useState<any>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
 
   const loadSummary = useCallback(() => {
     apiGet("/api/seller/customers-summary").then(setSummary).catch(() => {});
+    apiGet("/api/seller/dashboard-summary").then(setDashSummary).catch(() => {});
   }, []);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
@@ -84,7 +88,7 @@ export default function SellerCustomers() {
           ))}
         </motion.div>
 
-        {tab === "overview" && <OverviewTab summary={summary} onNavigate={setTab} />}
+        {tab === "overview" && <OverviewTab summary={summary} dashSummary={dashSummary} onNavigate={setTab} />}
         {tab === "customers" && <CustomersTab onSelect={(id) => setSelectedCustomer(id)} />}
         {tab === "reviews" && <ReviewsTab onChange={loadSummary} />}
         {tab === "queries" && <QueriesTab onChange={loadSummary} />}
@@ -98,35 +102,75 @@ export default function SellerCustomers() {
   );
 }
 
-function OverviewTab({ summary, onNavigate }: { summary: any; onNavigate: (t: string) => void }) {
+function OverviewTab({ summary, dashSummary, onNavigate }: { summary: any; dashSummary: any; onNavigate: (t: string) => void }) {
+  const [, setLocation] = useLocation();
+
+  const statCards = [
+    { label: "Unread Notifications", value: dashSummary?.unreadNotifications ?? "—", icon: Bell, sub: "in your inbox", nav: () => setLocation("/seller/notifications") },
+    { label: "New Orders", value: dashSummary?.newOrders ?? "—", icon: ShoppingCart, sub: "awaiting fulfillment", nav: () => setLocation("/seller/orders") },
+    { label: "Pending Returns", value: dashSummary?.pendingReturns ?? "—", icon: RotateCcw, sub: "return requests", nav: () => setLocation("/seller/orders") },
+    { label: "Low Stock Alerts", value: dashSummary?.lowStock ?? "—", icon: PackageX, sub: "products running low", nav: () => setLocation("/seller/inventory") },
+    { label: "Open Tickets", value: dashSummary?.openTickets ?? "—", icon: LifeBuoy, sub: "needs attention", nav: () => onNavigate("tickets") },
+    { label: "Pending Queries", value: dashSummary?.pendingQueries ?? "—", icon: MessageCircle, sub: "awaiting reply", nav: () => onNavigate("queries") },
+    { label: "Active Complaints", value: dashSummary?.activeComplaints ?? "—", icon: Flag, sub: "order & return issues", nav: () => onNavigate("tickets") },
+    { label: "Active Disputes", value: dashSummary?.activeDisputes ?? "—", icon: ShieldAlert, sub: "escalated to admin", nav: () => onNavigate("tickets") },
+  ];
+
   const cards = [
     { label: "Total Customers", value: summary?.totalCustomers ?? "—", icon: Users, sub: `${summary?.activeCustomers ?? 0} active (90d)`, tab: "customers" },
     { label: "Average Rating", value: summary ? summary.avgRating.toFixed(1) : "—", icon: Star, sub: `${summary?.totalReviews ?? 0} reviews`, tab: "reviews" },
     { label: "Reported Reviews", value: summary?.reportedReviews ?? "—", icon: Flag, sub: "flagged for moderation", tab: "reviews" },
-    { label: "Pending Queries", value: summary?.pendingQueries ?? "—", icon: MessageCircle, sub: "awaiting reply", tab: "queries" },
-    { label: "Open Tickets", value: summary?.openTickets ?? "—", icon: LifeBuoy, sub: "needs attention", tab: "tickets" },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-      {cards.map((c, i) => (
-        <motion.button
-          key={c.label}
-          custom={i}
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          onClick={() => onNavigate(c.tab)}
-          className="text-left bg-white rounded-2xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/50 transition-colors"
-        >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: MAROON }}>
-            <c.icon size={16} className="text-white" />
-          </div>
-          <p className="text-2xl font-bold" style={{ color: MAROON }}>{c.value}</p>
-          <p className="text-xs font-semibold text-gray-500 mt-0.5">{c.label}</p>
-          <p className="text-[10px] text-gray-400">{c.sub}</p>
-        </motion.button>
-      ))}
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Seller Snapshot</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((c, i) => (
+            <motion.button
+              key={c.label}
+              custom={i}
+              initial="hidden"
+              animate="visible"
+              variants={fadeUp}
+              onClick={c.nav}
+              className="text-left bg-white rounded-2xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/50 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: GOLD }}>
+                <c.icon size={16} style={{ color: MAROON }} />
+              </div>
+              <p className="text-2xl font-bold" style={{ color: MAROON }}>{c.value}</p>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">{c.label}</p>
+              <p className="text-[10px] text-gray-400">{c.sub}</p>
+            </motion.button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Customers & Reviews</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          {cards.map((c, i) => (
+            <motion.button
+              key={c.label}
+              custom={i}
+              initial="hidden"
+              animate="visible"
+              variants={fadeUp}
+              onClick={() => onNavigate(c.tab)}
+              className="text-left bg-white rounded-2xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/50 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: MAROON }}>
+                <c.icon size={16} className="text-white" />
+              </div>
+              <p className="text-2xl font-bold" style={{ color: MAROON }}>{c.value}</p>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">{c.label}</p>
+              <p className="text-[10px] text-gray-400">{c.sub}</p>
+            </motion.button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -579,11 +623,30 @@ function priorityColor(p: string) {
   }
 }
 
+const VIEW_FILTERS = [
+  { key: "all", label: "All Tickets" },
+  { key: "complaints", label: "Complaints" },
+  { key: "disputes", label: "Disputes" },
+];
+
+const SORT_OPTIONS = [
+  { key: "newest", label: "Newest first" },
+  { key: "oldest", label: "Oldest first" },
+  { key: "priority", label: "Priority" },
+];
+
+const PRIORITY_RANK: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
+
 function TicketsTab({ onChange }: { onChange: () => void }) {
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [view, setView] = useState("all");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
   const [openTicket, setOpenTicket] = useState<any>(null);
+  const PAGE_SIZE = 8;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -594,32 +657,84 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [view, search, sort, statusFilter]);
+
+  const filtered = tickets
+    .filter((t) => {
+      if (view === "disputes") return !!t.isDispute;
+      if (view === "complaints") return t.category === "Order Issue" || t.category === "Return/Refund";
+      return true;
+    })
+    .filter((t) => {
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return t.subject?.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q) || t.customerName?.toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      if (sort === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (sort === "priority") return (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0);
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-4">
       <div className="flex gap-2 flex-wrap">
-        {["all", ...TICKET_STATUSES].map((s) => (
+        {VIEW_FILTERS.map((v) => (
           <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
+            key={v.key}
+            onClick={() => setView(v.key)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-            style={{ background: statusFilter === s ? MAROON : "#fff", color: statusFilter === s ? "#fff" : "#6b7280", border: "1px solid #e5e7eb" }}
+            style={{ background: view === v.key ? MAROON : "#fff", color: view === v.key ? "#fff" : "#6b7280", border: "1px solid #e5e7eb" }}
           >
-            {s === "all" ? "All" : s}
+            {v.label}
           </button>
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tickets..."
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#C9A84C]"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-200 text-xs"
+        >
+          <option value="all">All statuses</option>
+          {TICKET_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <div className="flex items-center gap-1.5">
+          <ArrowUpDown size={13} className="text-gray-400" />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-xs"
+          >
+            {SORT_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </div>
+        <span className="text-xs text-gray-400 ml-auto">{filtered.length} tickets</span>
+      </div>
+
       {loading ? (
         <div className="space-y-3">{[1, 2, 3].map((n) => <div key={n} className="h-16 rounded-xl bg-gray-100 animate-pulse" />)}</div>
-      ) : tickets.length === 0 ? (
+      ) : pageItems.length === 0 ? (
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 py-16 text-center text-gray-400 text-sm">
           <LifeBuoy size={32} className="mx-auto mb-3 opacity-30" />
-          No support tickets yet.
+          No support tickets found.
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 divide-y divide-gray-50">
-          {tickets.map((t) => {
+          {pageItems.map((t) => {
             const pc = priorityColor(t.priority);
             return (
               <button
@@ -628,7 +743,14 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
                 className="w-full px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-700 truncate">{t.subject}</p>
+                  <p className="text-sm font-semibold text-gray-700 truncate flex items-center gap-1.5">
+                    {t.subject}
+                    {t.isDispute && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#fee2e2", color: "#991b1b" }}>
+                        <ShieldAlert size={9} /> Dispute
+                      </span>
+                    )}
+                  </p>
                   <p className="text-[10px] text-gray-400">{t.category} · {formatDate(t.createdAt)}</p>
                 </div>
                 <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: pc.bg, color: pc.text }}>
@@ -641,6 +763,26 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 text-xs font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-lg disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1.5 text-xs font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-lg disabled:opacity-40"
+          >
+            Next
+          </button>
         </div>
       )}
 
@@ -659,8 +801,11 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState("");
+  const [internalNote, setInternalNote] = useState("");
+  const [evidenceUrl, setEvidenceUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [noteMode, setNoteMode] = useState<"reply" | "note">("reply");
 
   const load = useCallback(() => {
     apiGet(`/api/seller/tickets/${ticketId}`).then(setTicket).catch(() => {}).finally(() => setLoading(false));
@@ -675,6 +820,51 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
     try {
       await apiSend(`/api/seller/tickets/${ticketId}/messages`, "POST", { body: reply.trim() });
       setReply("");
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendInternalNote = async () => {
+    if (!internalNote.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await apiSend(`/api/seller/tickets/${ticketId}/messages`, "POST", { body: internalNote.trim(), internal: true });
+      setInternalNote("");
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const escalate = async () => {
+    if (!confirm("Escalate this ticket to a dispute needing admin review?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await apiSend(`/api/seller/tickets/${ticketId}/escalate`, "POST");
+      load();
+      onChanged();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addEvidence = async () => {
+    if (!evidenceUrl.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await apiSend(`/api/seller/tickets/${ticketId}/evidence`, "POST", { url: evidenceUrl.trim() });
+      setEvidenceUrl("");
       load();
     } catch (e: any) {
       setError(e.message);
@@ -718,7 +908,7 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
                 <AlertCircle size={15} /> {error}
               </div>
             )}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 items-end">
               <div>
                 <label className="text-[10px] font-bold uppercase text-gray-400">Status</label>
                 <select
@@ -741,36 +931,135 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
                   {TICKET_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
+              {ticket.isDispute ? (
+                <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: "#fee2e2", color: "#991b1b" }}>
+                  <ShieldAlert size={11} /> Dispute · {ticket.disputeStatus?.replace(/_/g, " ") ?? "needs admin"}
+                </span>
+              ) : (
+                <button
+                  onClick={escalate}
+                  disabled={busy}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-red-600 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:border-red-200 transition-colors"
+                >
+                  <ShieldAlert size={12} /> Escalate to Admin
+                </button>
+              )}
+              {ticket.status !== "Closed" && ticket.status !== "Resolved" && (
+                <span className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <RotateCcw size={11} /> Reopened by customer if resolved again
+                </span>
+              )}
+            </div>
+
+            {ticket.evidenceUrls?.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase text-gray-400 mb-1.5">Evidence</p>
+                <div className="flex flex-wrap gap-2">
+                  {ticket.evidenceUrls.map((u: string, i: number) => (
+                    <a
+                      key={i}
+                      href={u}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:border-[#C9A84C] hover:text-[#1E6B5A] transition-colors"
+                    >
+                      <Paperclip size={11} /> Evidence {i + 1}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                value={evidenceUrl}
+                onChange={(e) => setEvidenceUrl(e.target.value)}
+                placeholder="Paste evidence link (image/document URL)..."
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+              />
+              <button
+                onClick={addEvidence}
+                disabled={busy || !evidenceUrl.trim()}
+                className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 border border-gray-200 text-gray-600 hover:border-[#C9A84C] disabled:opacity-50"
+              >
+                <Paperclip size={12} /> Attach
+              </button>
             </div>
 
             <div className="space-y-3 max-h-72 overflow-y-auto">
               {ticket.messages.map((m: any) => (
-                <div
-                  key={m.id}
-                  className={`p-3 rounded-xl text-xs max-w-[85%] ${m.isStaff ? "ml-auto text-white" : "bg-gray-100 text-gray-700"}`}
-                  style={m.isStaff ? { background: MAROON } : {}}
-                >
-                  {m.body}
-                </div>
+                m.internal ? (
+                  <div key={m.id} className="p-3 rounded-xl text-xs bg-amber-50 border border-amber-200 text-amber-800 flex items-start gap-2">
+                    <Lock size={12} className="mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-wide mb-0.5">Internal note</p>
+                      {m.body}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    key={m.id}
+                    className={`p-3 rounded-xl text-xs max-w-[85%] ${m.isStaff ? "ml-auto text-white" : "bg-gray-100 text-gray-700"}`}
+                    style={m.isStaff ? { background: MAROON } : {}}
+                  >
+                    {m.body}
+                  </div>
+                )
               ))}
             </div>
 
-            <div className="flex gap-2">
-              <input
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                placeholder="Reply to customer..."
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
-              />
+            <div className="flex gap-1.5 p-1 bg-gray-100 rounded-lg w-fit">
               <button
-                onClick={sendReply}
-                disabled={busy}
-                className="px-3 py-2 rounded-lg text-xs font-bold text-white flex items-center gap-1"
-                style={{ background: MAROON }}
+                onClick={() => setNoteMode("reply")}
+                className="px-3 py-1 rounded-md text-[11px] font-semibold transition-colors"
+                style={{ background: noteMode === "reply" ? "#fff" : "transparent", color: noteMode === "reply" ? MAROON : "#6b7280" }}
               >
-                <Send size={12} /> Send
+                Reply to customer
+              </button>
+              <button
+                onClick={() => setNoteMode("note")}
+                className="px-3 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1"
+                style={{ background: noteMode === "note" ? "#fff" : "transparent", color: noteMode === "note" ? MAROON : "#6b7280" }}
+              >
+                <Lock size={10} /> Internal note
               </button>
             </div>
+
+            {noteMode === "reply" ? (
+              <div className="flex gap-2">
+                <input
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="Reply to customer..."
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+                />
+                <button
+                  onClick={sendReply}
+                  disabled={busy}
+                  className="px-3 py-2 rounded-lg text-xs font-bold text-white flex items-center gap-1"
+                  style={{ background: MAROON }}
+                >
+                  <Send size={12} /> Send
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  value={internalNote}
+                  onChange={(e) => setInternalNote(e.target.value)}
+                  placeholder="Add a note visible only to your team..."
+                  className="flex-1 px-3 py-2 rounded-lg border border-amber-200 text-xs focus:outline-none focus:border-amber-400 bg-amber-50"
+                />
+                <button
+                  onClick={sendInternalNote}
+                  disabled={busy}
+                  className="px-3 py-2 rounded-lg text-xs font-bold text-white flex items-center gap-1"
+                  style={{ background: "#b45309" }}
+                >
+                  <Lock size={12} /> Save
+                </button>
+              </div>
+            )}
           </div>
         )}
       </motion.div>

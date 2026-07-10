@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users } from "lucide-react";
+import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -25,6 +25,7 @@ const NAV_LINKS = [
   { href: "/seller/inventory", label: "Inventory", icon: PackageCheck, group: "/seller/inventory" },
   { href: "/seller/orders", label: "Orders", icon: ShoppingBag, group: "/seller/orders" },
   { href: "/seller/customers", label: "Customers", icon: Users, group: "/seller/customers" },
+  { href: "/seller/notifications", label: "Notifications", icon: Bell, group: "/seller/notifications" },
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },
   { href: "/seller/payouts", label: "Payouts", icon: CreditCard, stub: true },
@@ -37,6 +38,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
   const { vendor } = useSellerContext();
   const [location] = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   const fetchUnreadCount = useCallback(async () => {
     const lastViewed = localStorage.getItem(UNREAD_KEY);
@@ -57,16 +59,32 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
     }
   }, []);
 
+  const fetchUnreadNotifCount = useCallback(async () => {
+    try {
+      const res = await fetch(`${basePath}/api/seller/notifications/unread-count`, { credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setUnreadNotifCount(data.count ?? 0);
+    } catch {
+    }
+  }, []);
+
   useEffect(() => {
     fetchUnreadCount();
-  }, [fetchUnreadCount]);
+    fetchUnreadNotifCount();
+    const interval = setInterval(fetchUnreadNotifCount, 60000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount, fetchUnreadNotifCount]);
 
   useEffect(() => {
     if (location.startsWith("/seller/orders")) {
       localStorage.setItem(UNREAD_KEY, new Date().toISOString());
       setUnreadCount(0);
     }
-  }, [location]);
+    if (location.startsWith("/seller/notifications")) {
+      fetchUnreadNotifCount();
+    }
+  }, [location, fetchUnreadNotifCount]);
 
   return (
     <div className="min-h-screen flex" style={{ background: CREAM }}>
@@ -106,7 +124,10 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
             const fullGroup = group ? basePath + group : null;
             const isActive = location === href ||
               (fullGroup ? location.startsWith(group) : false);
-            const showBadge = href === "/seller/orders" && unreadCount > 0;
+            const showBadge =
+              (href === "/seller/orders" && unreadCount > 0) ||
+              (href === "/seller/notifications" && unreadNotifCount > 0);
+            const badgeCount = href === "/seller/notifications" ? unreadNotifCount : unreadCount;
             return (
               <Link
                 key={href}
@@ -123,7 +144,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
                 {showBadge && (
                   <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
                     style={{ background: GOLD, color: MAROON }}>
-                    {unreadCount > 99 ? "99+" : unreadCount}
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 )}
                 {stub && !showBadge && (

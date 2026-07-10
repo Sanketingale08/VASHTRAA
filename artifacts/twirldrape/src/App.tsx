@@ -41,6 +41,7 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminVendors from "@/pages/admin/AdminVendors";
 import AdminVendorDetail from "@/pages/admin/AdminVendorDetail";
 import AdminReturns from "@/pages/admin/AdminReturns";
+import AdminDisputes from "@/pages/admin/AdminDisputes";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
 import SellerProfile from "@/pages/seller/SellerProfile";
@@ -51,6 +52,7 @@ import SellerInventory from "@/pages/seller/SellerInventory";
 import SellerOrders from "@/pages/seller/SellerOrders";
 import SellerOrderDetail from "@/pages/seller/SellerOrderDetail";
 import SellerCustomers from "@/pages/seller/SellerCustomers";
+import SellerNotifications from "@/pages/seller/SellerNotifications";
 import SellerAnalytics from "@/pages/seller/SellerAnalytics";
 import SellerLogin from "@/pages/seller/SellerLogin";
 import VendorStore from "@/pages/VendorStore";
@@ -227,6 +229,7 @@ function Router() {
       <Route path="/admin/vendors/:id" component={AdminVendorDetail} />
       <Route path="/admin/vendors" component={AdminVendors} />
       <Route path="/admin/returns" component={AdminReturns} />
+      <Route path="/admin/disputes" component={AdminDisputes} />
       <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
       <Route path="/seller/dashboard" component={() => (
@@ -255,6 +258,9 @@ function Router() {
       )} />
       <Route path="/seller/customers" component={() => (
         <SellerGuard><SellerCustomers /></SellerGuard>
+      )} />
+      <Route path="/seller/notifications" component={() => (
+        <SellerGuard><SellerNotifications /></SellerGuard>
       )} />
       <Route path="/seller/analytics" component={() => (
         <SellerGuard><SellerAnalytics /></SellerGuard>

@@ -15,6 +15,7 @@ import notificationsRouter from "./notifications";
 import sellerRouter from "./seller";
 import supportRouter from "./support";
 import sellerCustomersRouter from "./sellerCustomers";
+import sellerNotificationsRouter from "./sellerNotifications";
 import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
@@ -35,6 +36,7 @@ router.use(notificationsRouter);
 router.use(sellerRouter);
 router.use(supportRouter);
 router.use(sellerCustomersRouter);
+router.use(sellerNotificationsRouter);
 router.use(reviewsRouter);
 
 export default router;

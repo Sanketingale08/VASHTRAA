@@ -8,6 +8,7 @@ import {
   productQueriesTable,
   supportTicketsTable,
   ticketMessagesTable,
+  notificationsTable,
 } from "@workspace/db";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
@@ -420,7 +421,7 @@ router.get("/seller/tickets/:id", requireVendorAuth, async (req: any, res: any) 
 router.post("/seller/tickets/:id/messages", requireVendorAuth, async (req: any, res: any) => {
   const vendorId = req.vendorId;
   const { id } = req.params;
-  const { body } = req.body;
+  const { body, internal } = req.body;
   if (!body || !String(body).trim()) return res.status(400).json({ error: "body is required" });
 
   try {
@@ -433,7 +434,7 @@ router.post("/seller/tickets/:id/messages", requireVendorAuth, async (req: any, 
 
     const [msg] = await db
       .insert(ticketMessagesTable)
-      .values({ ticketId: id, userId: req.userId, body: String(body).trim(), isStaff: true })
+      .values({ ticketId: id, userId: req.userId, body: String(body).trim(), isStaff: true, internal: Boolean(internal) })
       .returning();
 
     await db.update(supportTicketsTable).set({ updatedAt: new Date() }).where(eq(supportTicketsTable.id, id));
@@ -442,6 +443,69 @@ router.post("/seller/tickets/:id/messages", requireVendorAuth, async (req: any, 
   } catch (err: any) {
     req.log?.error({ err }, "seller/tickets/:id/messages failed");
     res.status(500).json({ error: "Failed to add message" });
+  }
+});
+
+router.post("/seller/tickets/:id/escalate", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const { id } = req.params;
+  const { reason } = req.body;
+
+  try {
+    const [ticket] = await db
+      .select()
+      .from(supportTicketsTable)
+      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
+      .limit(1);
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    const [updated] = await db
+      .update(supportTicketsTable)
+      .set({ isDispute: true, disputeStatus: "needs_admin", updatedAt: new Date() })
+      .where(eq(supportTicketsTable.id, id))
+      .returning();
+
+    await db.insert(ticketMessagesTable).values({
+      ticketId: id,
+      userId: req.userId,
+      body: reason && String(reason).trim() ? `Escalated to admin: ${String(reason).trim()}` : "Escalated to admin for dispute resolution.",
+      isStaff: true,
+      internal: true,
+    });
+
+    res.json(updated);
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/tickets/:id/escalate failed");
+    res.status(500).json({ error: "Failed to escalate ticket" });
+  }
+});
+
+router.post("/seller/tickets/:id/evidence", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const { id } = req.params;
+  const { url } = req.body;
+  if (!url || !String(url).trim()) return res.status(400).json({ error: "url is required" });
+
+  try {
+    const [ticket] = await db
+      .select()
+      .from(supportTicketsTable)
+      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
+      .limit(1);
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    const nextEvidence = [...(ticket.evidenceUrls ?? []), String(url).trim()];
+
+    const [updated] = await db
+      .update(supportTicketsTable)
+      .set({ evidenceUrls: nextEvidence, updatedAt: new Date() })
+      .where(eq(supportTicketsTable.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/tickets/:id/evidence failed");
+    res.status(500).json({ error: "Failed to add evidence" });
   }
 });
 
@@ -547,6 +611,87 @@ router.get("/seller/customers-summary", requireVendorAuth, async (req: any, res:
   } catch (err: any) {
     req.log?.error({ err }, "seller/customers-summary failed");
     res.status(500).json({ error: "Failed to load summary" });
+  }
+});
+
+router.get("/seller/dashboard-summary", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+
+  try {
+    const productIdSet = await getVendorProductIds(vendorId);
+
+    let newOrders = 0;
+    let pendingReturns = 0;
+    if (productIdSet.size > 0) {
+      const allOrders = await db.select().from(ordersTable);
+      for (const order of allOrders) {
+        const items = (order.items as any[]) ?? [];
+        if (!items.some((i) => productIdSet.has(i.productId))) continue;
+        if (order.status === "confirmed") newOrders += 1;
+        if (order.status === "return_requested") pendingReturns += 1;
+      }
+    }
+
+    const [unreadNotifications] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notificationsTable)
+      .where(and(eq(notificationsTable.vendorId, vendorId), eq(notificationsTable.read, false)));
+
+    const [lowStock] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(productsTable)
+      .where(and(eq(productsTable.vendorId, vendorId), sql`${productsTable.stock} <= ${productsTable.lowStockThreshold}`));
+
+    const [openTickets] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(supportTicketsTable)
+      .where(
+        and(
+          eq(supportTicketsTable.vendorId, vendorId),
+          sql`${supportTicketsTable.status} IN ('Open', 'In Progress', 'Waiting for Customer')`
+        )
+      );
+
+    const [pendingQueries] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(productQueriesTable)
+      .where(and(eq(productQueriesTable.vendorId, vendorId), sql`${productQueriesTable.status} != 'Resolved'`));
+
+    const [activeComplaints] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(supportTicketsTable)
+      .where(
+        and(
+          eq(supportTicketsTable.vendorId, vendorId),
+          sql`${supportTicketsTable.category} IN ('Order Issue', 'Return/Refund')`,
+          sql`${supportTicketsTable.status} NOT IN ('Resolved', 'Closed')`
+        )
+      );
+
+    const [activeDisputes] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(supportTicketsTable)
+      .where(
+        and(
+          eq(supportTicketsTable.vendorId, vendorId),
+          eq(supportTicketsTable.isDispute, true),
+          sql`${supportTicketsTable.disputeStatus} != 'resolved'`
+        )
+      );
+
+    res.json({
+      unreadNotifications: unreadNotifications?.count ?? 0,
+      newOrders,
+      pendingReturns,
+      lowStock: lowStock?.count ?? 0,
+      openTickets: openTickets?.count ?? 0,
+      pendingQueries: pendingQueries?.count ?? 0,
+      activeComplaints: activeComplaints?.count ?? 0,
+      activeDisputes: activeDisputes?.count ?? 0,
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/dashboard-summary failed");
+    res.status(500).json({ error: "Failed to load dashboard summary" });
   }
 });
 

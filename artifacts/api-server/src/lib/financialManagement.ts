@@ -110,9 +110,9 @@ export async function computePaymentReport(filters: { from?: string; to?: string
 
   const filtered = orders.filter(o => inRange(new Date(o.createdAt), from, to));
 
-  const successful = filtered.filter(o => !["cancelled"].includes(o.status) && o.status !== "payment_failed");
   const failed = filtered.filter(o => o.status === "payment_failed");
   const pending = filtered.filter(o => o.status === "pending_payment");
+  const successful = filtered.filter(o => o.status !== "cancelled" && o.status !== "payment_failed" && o.status !== "pending_payment");
 
   const methodBreakdown = new Map<string, { count: number; amount: number }>();
   for (const o of filtered) {

@@ -99,7 +99,7 @@ export default function CheckoutScreen() {
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
-    code: string; type: "percent" | "flat"; value: number;
+    code: string; type: "percent" | "flat"; value: number; expiresAt: string | null;
   }>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -153,6 +153,11 @@ export default function CheckoutScreen() {
 
   const orderItems = buyNowItem ? [buyNowItem] : cartItems;
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
+  const couponHoursLeft = appliedCoupon?.expiresAt
+    ? (new Date(appliedCoupon.expiresAt).getTime() - Date.now()) / 3600000
+    : null;
+  const couponExpiringSoon = couponHoursLeft !== null && couponHoursLeft > 0 && couponHoursLeft <= 72;
+  const couponDaysLeft = couponExpiringSoon ? Math.max(1, Math.ceil((couponHoursLeft as number) / 24)) : null;
   let discount = 0;
   if (appliedCoupon) {
     discount = appliedCoupon.type === "percent"
@@ -191,7 +196,7 @@ export default function CheckoutScreen() {
         return;
       }
       const data = await res.json();
-      setAppliedCoupon({ code: data.code, type: data.type, value: data.value });
+      setAppliedCoupon({ code: data.code, type: data.type, value: data.value, expiresAt: data.expiresAt ?? null });
       setCouponCode("");
     } catch {
       setCouponError("Could not validate coupon.");
@@ -813,6 +818,14 @@ export default function CheckoutScreen() {
                           <Pressable onPress={() => { setAppliedCoupon(null); setCouponOrderError(""); }}>
                             <Text style={{ fontFamily: "DMSans_700Bold", fontSize: 12, color: colors.destructive, textDecorationLine: "underline" }}>Remove coupon and continue without discount</Text>
                           </Pressable>
+                        </View>
+                      ) : null}
+                      {couponExpiringSoon ? (
+                        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#F59E0B15", borderColor: "#F59E0B33", borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8 }}>
+                          <Ionicons name="warning" size={16} color="#B45309" style={{ marginTop: 1 }} />
+                          <Text style={{ fontFamily: "DMSans_400Regular", fontSize: 12, color: "#B45309", flex: 1 }}>
+                            This coupon expires in {couponDaysLeft} day{couponDaysLeft !== 1 ? "s" : ""} — complete your order soon to use it.
+                          </Text>
                         </View>
                       ) : null}
                     </>

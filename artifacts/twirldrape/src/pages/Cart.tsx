@@ -27,7 +27,7 @@ export function CartPage() {
   const { wishlistedIds, toggle: toggleWishlist } = useWishlist();
   const { isSignedIn } = useUser();
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: "percent" | "flat"; value: number; description: string }>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: "percent" | "flat"; value: number; description: string; expiresAt: string | null }>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>([]);
@@ -86,7 +86,7 @@ export function CartPage() {
         return;
       }
       const data = await res.json();
-      setAppliedCoupon({ code: data.code, type: data.type, value: data.value, description: data.description });
+      setAppliedCoupon({ code: data.code, type: data.type, value: data.value, description: data.description, expiresAt: data.expiresAt ?? null });
       setCouponCode("");
     } catch {
       setCouponError("Could not validate coupon. Please try again.");
@@ -99,6 +99,12 @@ export function CartPage() {
     setAppliedCoupon(null);
     setCouponError("");
   }
+
+  const couponHoursLeft = appliedCoupon?.expiresAt
+    ? (new Date(appliedCoupon.expiresAt).getTime() - Date.now()) / 3600000
+    : null;
+  const couponExpiringSoon = couponHoursLeft !== null && couponHoursLeft > 0 && couponHoursLeft <= 72;
+  const couponDaysLeft = couponExpiringSoon ? Math.max(1, Math.ceil((couponHoursLeft as number) / 24)) : null;
 
   function moveToWishlist(productId: string) {
     if (!isSignedIn) {
@@ -323,7 +329,16 @@ export function CartPage() {
                       <X size={14} />
                     </button>
                   </div>
-                ) : (
+                ) : null}
+                {appliedCoupon && couponExpiringSoon && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md px-3 py-2 text-amber-800 dark:text-amber-400 text-xs">
+                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                    <span>
+                      Your coupon "{appliedCoupon.code}" expires in {couponDaysLeft} day{couponDaysLeft !== 1 ? "s" : ""} — complete checkout soon to use it.
+                    </span>
+                  </div>
+                )}
+                {!appliedCoupon && (
                   <div className="space-y-2">
                     <div className="flex gap-2">
                       <input

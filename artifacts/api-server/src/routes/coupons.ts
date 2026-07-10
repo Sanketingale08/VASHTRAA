@@ -343,6 +343,7 @@ router.get("/coupons/validate", async (req: any, res: any): Promise<void> => {
       description: coupon.description,
       maxUses: coupon.maxUses ?? null,
       usedCount: coupon.usedCount,
+      expiresAt: coupon.expiresAt,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to validate coupon");

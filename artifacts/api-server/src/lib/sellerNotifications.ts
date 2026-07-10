@@ -22,7 +22,7 @@ export async function insertSellerNotification(opts: InsertSellerNotificationOpt
     .where(eq(vendorsTable.id, vendorId))
     .limit(1);
 
-  if (!vendor) return;
+  if (!vendor || !vendor.ownerId) return;
 
   await client.insert(notificationsTable).values({
     userId: vendor.ownerId,

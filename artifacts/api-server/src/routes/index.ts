@@ -21,6 +21,8 @@ import adminSupportRouter from "./adminSupport";
 import adminNotificationsRouter from "./adminNotifications";
 import reviewsRouter from "./reviews";
 import vendorAnalyticsRouter from "./vendorAnalytics";
+import businessIntelligenceRouter from "./businessIntelligence";
+import financialManagementRouter from "./financialManagement";
 
 const router: IRouter = Router();
 
@@ -46,5 +48,7 @@ router.use(adminSupportRouter);
 router.use(adminNotificationsRouter);
 router.use(reviewsRouter);
 router.use(vendorAnalyticsRouter);
+router.use(businessIntelligenceRouter);
+router.use(financialManagementRouter);
 
 export default router;

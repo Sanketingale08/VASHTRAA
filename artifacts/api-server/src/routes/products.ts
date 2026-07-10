@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable } from "@workspace/db";
+import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
@@ -129,6 +129,14 @@ router.get("/products", async (req, res) => {
     ]);
 
     const total = countResult[0]?.count ?? 0;
+
+    if (search && search.trim()) {
+      const auth = getAuth(req);
+      const userId: string | null = (auth?.sessionClaims?.userId as string) || auth?.userId || null;
+      db.insert(searchQueriesTable)
+        .values({ term: search.trim().toLowerCase(), resultCount: total, userId })
+        .catch((err: unknown) => req.log.warn({ err }, "Failed to log search query"));
+    }
 
     res.json({
       products: products.map(normalizeProduct),
@@ -260,6 +268,11 @@ router.get("/products/:id", async (req, res) => {
       res.status(404).json({ error: "Product not found" });
       return;
     }
+
+    db.update(productsTable)
+      .set({ viewCount: sql`${productsTable.viewCount} + 1` })
+      .where(eq(productsTable.id, id))
+      .catch((err: unknown) => req.log.warn({ err }, "Failed to increment product view count"));
 
     res.json(normalizeProduct(rows[0]));
   } catch (err) {

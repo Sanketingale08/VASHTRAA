@@ -48,6 +48,8 @@ import AdminDisputes from "@/pages/admin/AdminDisputes";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
 import AdminSupport from "@/pages/admin/AdminSupport";
 import AdminNotifications from "@/pages/admin/AdminNotifications";
+import AdminBusinessIntelligence from "@/pages/admin/AdminBusinessIntelligence";
+import AdminFinancialManagement from "@/pages/admin/AdminFinancialManagement";
 import SellerSupport from "@/pages/seller/SellerSupport";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
@@ -244,6 +246,8 @@ function Router() {
       <Route path="/admin/coupons" component={AdminCoupons} />
       <Route path="/admin/support" component={AdminSupport} />
       <Route path="/admin/notifications" component={AdminNotifications} />
+      <Route path="/admin/business-intelligence" component={AdminBusinessIntelligence} />
+      <Route path="/admin/financial" component={AdminFinancialManagement} />
       <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
       <Route path="/seller/dashboard" component={() => (

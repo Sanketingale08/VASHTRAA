@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, boolean, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, boolean, uuid, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
@@ -50,8 +50,19 @@ export const productsTable = pgTable("products", {
   stock: integer("stock").notNull().default(10),
   lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
   active: boolean("active").notNull().default(true),
+  viewCount: integer("view_count").notNull().default(0),
 });
 
 export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true });
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof productsTable.$inferSelect;
+
+export const searchQueriesTable = pgTable("search_queries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  term: text("term").notNull(),
+  resultCount: integer("result_count").notNull().default(0),
+  userId: text("user_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type SearchQuery = typeof searchQueriesTable.$inferSelect;

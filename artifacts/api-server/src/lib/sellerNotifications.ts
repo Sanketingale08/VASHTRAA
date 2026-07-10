@@ -39,9 +39,10 @@ export async function insertSellerNotificationForVendors(
   type: SellerNotificationType,
   title: string,
   body: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  tx?: any
 ): Promise<void> {
   await Promise.all(
-    vendorIds.map((vendorId) => insertSellerNotification({ vendorId, type, title, body, metadata }))
+    vendorIds.map((vendorId) => insertSellerNotification({ tx, vendorId, type, title, body, metadata }))
   );
 }

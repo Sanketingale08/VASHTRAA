@@ -5,6 +5,7 @@ import { vendorsTable, productsTable, ordersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { insertAdminNotification } from "../lib/adminNotifications";
 
 const router = Router();
 
@@ -190,6 +191,19 @@ async function handleSellerRegistration(req: any, res: any) {
       );
     }
     await Promise.all(aclPromises);
+
+    await insertAdminNotification({
+      type: "new_seller_registration",
+      title: "New seller registration",
+      body: `"${vendor.name}" has registered as a new seller and is pending review.`,
+      metadata: { vendorId: vendor.id },
+    });
+    await insertAdminNotification({
+      type: "kyc_submitted",
+      title: "KYC documents submitted",
+      body: `"${vendor.name}" has submitted KYC documents for verification.`,
+      metadata: { vendorId: vendor.id },
+    });
 
     res.status(201).json({
       id: vendor.id,

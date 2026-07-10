@@ -7,11 +7,25 @@ export type SellerNotificationType =
   | "product_updated"
   | "product_approved"
   | "product_rejected"
+  | "product_pending_approval"
   | "return_requested_seller"
   | "refund_requested_seller"
   | "low_stock"
   | "out_of_stock"
-  | "promotional";
+  | "promotional"
+  | "order_cancelled_seller"
+  | "settlement_released"
+  | "payout_successful";
+
+export type AdminNotificationType =
+  | "new_seller_registration"
+  | "kyc_submitted"
+  | "product_pending_approval"
+  | "high_value_order"
+  | "customer_complaint"
+  | "system_error_alert"
+  | "payout_failed"
+  | "payment_gateway_issue";
 
 export type TicketNotificationType =
   | "ticket_created"
@@ -30,8 +44,10 @@ export const notificationsTable = pgTable("notifications", {
   type: text("type")
     .$type<
       | "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "coupon_expiry" | "wishlist_restock" | "return_requested" | "return_approved" | "return_rejected" | "refund_requested" | "refund_approved" | "refund_rejected"
+      | "payment_successful" | "order_packed" | "out_for_delivery" | "price_drop" | "flash_sale"
       | SellerNotificationType
       | TicketNotificationType
+      | AdminNotificationType
     >()
     .notNull(),
   title: text("title").notNull(),

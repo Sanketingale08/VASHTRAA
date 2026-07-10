@@ -7,6 +7,7 @@ import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { recordStockChange } from "../lib/stockHistory";
 import { insertSellerNotification } from "../lib/sellerNotifications";
+import { insertAdminNotification } from "../lib/adminNotifications";
 
 async function notifySellerStockLevel(
   vendorId: string | null,
@@ -302,6 +303,34 @@ async function notifyWishlistRestock(productId: string, productName: string, pre
   }
 }
 
+async function notifyWishlistPriceDrop(productId: string, productName: string, previousPrice: number, newPrice: number) {
+  if (!(newPrice < previousPrice)) return;
+
+  const wishlistRows = await db
+    .select({ userId: wishlistsTable.userId })
+    .from(wishlistsTable)
+    .where(eq(wishlistsTable.productId, productId));
+
+  const pctOff = Math.round(((previousPrice - newPrice) / previousPrice) * 100);
+  for (const { userId } of wishlistRows) {
+    const prefRows = await db
+      .select({ offerAlerts: notificationPreferencesTable.offerAlerts })
+      .from(notificationPreferencesTable)
+      .where(eq(notificationPreferencesTable.userId, userId))
+      .limit(1);
+    const wantsOffers = prefRows.length === 0 || prefRows[0].offerAlerts;
+    if (wantsOffers) {
+      await db.insert(notificationsTable).values({
+        userId,
+        type: "price_drop",
+        title: "Price drop alert",
+        body: `"${productName}" is now ${pctOff}% off — grab it before the price goes back up!`,
+        metadata: { productId, previousPrice, newPrice },
+      });
+    }
+  }
+}
+
 router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   const { stock } = req.body;
@@ -434,6 +463,20 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
       })
       .returning();
 
+    await insertSellerNotification({
+      vendorId: req.vendorId,
+      type: "product_pending_approval",
+      title: "Product submitted for review",
+      body: `"${product.name}" has been submitted and is pending approval.`,
+      metadata: { productId: product.id },
+    });
+    await insertAdminNotification({
+      type: "product_pending_approval",
+      title: "New product pending approval",
+      body: `"${product.name}" from ${req.vendor.name} is awaiting approval.`,
+      metadata: { productId: product.id, vendorId: req.vendorId },
+    });
+
     res.status(201).json(normalizeProduct(product));
   } catch (err) {
     req.log.error({ err }, "Failed to create product");
@@ -451,7 +494,7 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
   } = req.body;
 
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name, lowStockThreshold: productsTable.lowStockThreshold }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name, lowStockThreshold: productsTable.lowStockThreshold, price: productsTable.price }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
     if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
 
@@ -492,6 +535,10 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
       });
       await notifyWishlistRestock(id, updated.name ?? existing.name, existing.stock, updated.stock);
       await notifySellerStockLevel(existing.vendorId, id, updated.name ?? existing.name, updated.stock, updated.lowStockThreshold ?? existing.lowStockThreshold ?? 5);
+    }
+
+    if (updates.price !== undefined && updates.price < existing.price) {
+      await notifyWishlistPriceDrop(id, updated.name ?? existing.name, existing.price, updated.price);
     }
 
     res.json(normalizeProduct(updated));

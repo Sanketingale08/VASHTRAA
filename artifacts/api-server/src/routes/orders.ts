@@ -10,7 +10,8 @@ import {
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { isValidPaymentMethod } from "@workspace/api-zod";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
-import { insertSellerNotification } from "../lib/sellerNotifications";
+import { insertSellerNotification, insertSellerNotificationForVendors } from "../lib/sellerNotifications";
+import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
@@ -398,12 +399,33 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
         const wantsOrderUpdates = prefs.length === 0 || prefs[0].orderUpdates;
         if (wantsOrderUpdates) {
           const firstItem = resolvedItems[0];
+          const extraSuffix = resolvedItems.length > 1 ? ` and ${resolvedItems.length - 1} more item(s)` : "";
           await tx.insert(notificationsTable).values({
             userId: req.userId,
             type: "order_confirmed",
             title: "Order confirmed",
-            body: `Your order for ${firstItem.name}${resolvedItems.length > 1 ? ` and ${resolvedItems.length - 1} more item(s)` : ""} has been confirmed.`,
+            body: `Your order for ${firstItem.name}${extraSuffix} has been confirmed.`,
             metadata: { orderId: order.id },
+          });
+          if (paymentMethod !== "cod") {
+            await tx.insert(notificationsTable).values({
+              userId: req.userId,
+              type: "payment_successful",
+              title: "Payment successful",
+              body: `Your payment of ₹${total.toLocaleString("en-IN")} for ${firstItem.name}${extraSuffix} was successful.`,
+              metadata: { orderId: order.id },
+            });
+          }
+        }
+
+        const HIGH_VALUE_ORDER_THRESHOLD = 50000;
+        if (total >= HIGH_VALUE_ORDER_THRESHOLD) {
+          await insertAdminNotification({
+            tx,
+            type: "high_value_order",
+            title: "High-value order placed",
+            body: `A high-value order worth ₹${total.toLocaleString("en-IN")} was just placed.`,
+            metadata: { orderId: order.id, total },
           });
         }
 
@@ -558,7 +580,9 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
           .where(eq(ordersTable.id, orderId));
 
         const notifType =
+          status === "processing" ? "order_packed" as const :
           status === "dispatched" ? "order_shipped" as const :
+          status === "out_for_delivery" ? "out_for_delivery" as const :
           status === "delivered" ? "order_delivered" as const :
           status === "cancelled" ? "order_cancelled" as const :
           null;
@@ -573,6 +597,25 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
             itemName: orderItems?.[0]?.name ?? "your order",
             extraItemCount: orderItems.length > 1 ? orderItems.length - 1 : 0,
           });
+        }
+
+        if (status === "cancelled") {
+          const orderItems = order.items as Array<{ productId: string; name: string }>;
+          const cancelledProducts = await tx
+            .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+            .from(productsTable)
+            .where(inArray(productsTable.id, orderItems.map((i) => i.productId)));
+          const cancelVendorIds = [...new Set(cancelledProducts.filter((p) => p.vendorId).map((p) => p.vendorId as string))];
+          if (cancelVendorIds.length > 0) {
+            await insertSellerNotificationForVendors(
+              cancelVendorIds,
+              "order_cancelled_seller",
+              "Order cancelled",
+              `Order #${order.id.slice(0, 8)} was cancelled.`,
+              { orderId: order.id },
+              tx
+            );
+          }
         }
       });
     } catch (txErr: any) {
@@ -670,6 +713,22 @@ router.post("/orders/:orderId/cancel", requireAuth, async (req: any, res: any): 
           itemName: items?.[0]?.name ?? "your order",
           extraItemCount: items.length > 1 ? items.length - 1 : 0,
         });
+
+        const cancelledProducts = await tx
+          .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+          .from(productsTable)
+          .where(inArray(productsTable.id, items.map((i) => i.productId)));
+        const cancelVendorIds = [...new Set(cancelledProducts.filter((p) => p.vendorId).map((p) => p.vendorId as string))];
+        if (cancelVendorIds.length > 0) {
+          await insertSellerNotificationForVendors(
+            cancelVendorIds,
+            "order_cancelled_seller",
+            "Order cancelled",
+            `Order #${order.id.slice(0, 8)} was cancelled by the customer.`,
+            { orderId: order.id },
+            tx
+          );
+        }
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {
@@ -756,6 +815,22 @@ router.patch("/orders/:orderId/cancel", requireAuth, async (req: any, res: any):
           itemName: items?.[0]?.name ?? "your order",
           extraItemCount: items.length > 1 ? items.length - 1 : 0,
         });
+
+        const cancelledProducts = await tx
+          .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+          .from(productsTable)
+          .where(inArray(productsTable.id, items.map((i) => i.productId)));
+        const cancelVendorIds = [...new Set(cancelledProducts.filter((p) => p.vendorId).map((p) => p.vendorId as string))];
+        if (cancelVendorIds.length > 0) {
+          await insertSellerNotificationForVendors(
+            cancelVendorIds,
+            "order_cancelled_seller",
+            "Order cancelled",
+            `Order #${order.id.slice(0, 8)} was cancelled by the customer.`,
+            { orderId: order.id },
+            tx
+          );
+        }
       });
     } catch (txErr: any) {
       if (txErr.status === 404) {

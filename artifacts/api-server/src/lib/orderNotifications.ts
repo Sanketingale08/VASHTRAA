@@ -7,7 +7,10 @@ type OrderNotifType =
   | "order_delivered"
   | "order_cancelled"
   | "return_requested"
-  | "refund_requested";
+  | "refund_requested"
+  | "payment_successful"
+  | "order_packed"
+  | "out_for_delivery";
 
 interface InsertOrderNotificationOpts {
   tx?: any;
@@ -48,6 +51,21 @@ function buildNotifContent(
       return {
         title: "Refund requested",
         body: `Your refund request for ${itemName}${extra} has been received and is under review.`,
+      };
+    case "payment_successful":
+      return {
+        title: "Payment successful",
+        body: `Your payment for ${itemName}${extra} was successful.`,
+      };
+    case "order_packed":
+      return {
+        title: "Order packed",
+        body: `${itemName}${extra} has been packed and will ship soon.`,
+      };
+    case "out_for_delivery":
+      return {
+        title: "Out for delivery",
+        body: `${itemName}${extra} is out for delivery and will arrive soon.`,
       };
   }
 }

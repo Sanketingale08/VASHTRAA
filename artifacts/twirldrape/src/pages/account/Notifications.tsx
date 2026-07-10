@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   Bell, Package, Truck, CheckCircle, XCircle, Tag, Heart,
-  Trash2, CheckCheck, Clock,
+  Trash2, CheckCheck, Clock, CreditCard, PackageCheck, MapPin, TrendingDown, Zap,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,11 @@ function typeIcon(type: string, size = 16) {
     case "refund_rejected":  return <XCircle size={size} className="text-red-500" />;
     case "coupon_expiry":    return <Tag size={size} className="text-emerald-600" />;
     case "wishlist_restock": return <Heart size={size} className="text-rose-500" />;
+    case "payment_successful": return <CreditCard size={size} className="text-green-600" />;
+    case "order_packed":     return <PackageCheck size={size} className="text-blue-500" />;
+    case "out_for_delivery": return <MapPin size={size} className="text-blue-500" />;
+    case "price_drop":       return <TrendingDown size={size} className="text-rose-500" />;
+    case "flash_sale":       return <Zap size={size} className="text-amber-500" />;
     default:                 return <Bell size={size} className="text-gray-400" />;
   }
 }
@@ -69,8 +74,8 @@ function relativeTime(dateStr: string): string {
 
 const TYPE_FILTERS = [
   { key: "all", label: "All" },
-  { key: "order_confirmed,order_shipped,order_delivered,order_cancelled,return_requested,return_approved,return_rejected,refund_requested,refund_approved,refund_rejected", label: "Orders" },
-  { key: "coupon_expiry", label: "Offers" },
+  { key: "order_confirmed,payment_successful,order_packed,order_shipped,out_for_delivery,order_delivered,order_cancelled,return_requested,return_approved,return_rejected,refund_requested,refund_approved,refund_rejected", label: "Orders" },
+  { key: "coupon_expiry,price_drop,flash_sale", label: "Offers" },
   { key: "wishlist_restock", label: "Stock" },
 ];
 

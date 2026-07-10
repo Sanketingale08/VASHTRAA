@@ -1,0 +1,302 @@
+import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Bell, Trash2, CheckCheck, CheckCircle, Search, UserPlus, FileCheck,
+  FileClock, IndianRupee, MessageSquareWarning, ServerCrash, Wallet, CreditCard,
+} from "lucide-react";
+import AdminLayout, { AdminGuard } from "./AdminLayout";
+import { cn } from "@/lib/utils";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const NAVY = "#0D1B36";
+const GOLD = "#C9A84C";
+const CREAM = "#F1F5F9";
+
+interface AdminNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
+function typeIcon(type: string, size = 16) {
+  switch (type) {
+    case "new_seller_registration": return <UserPlus size={size} className="text-blue-500" />;
+    case "kyc_submitted": return <FileCheck size={size} className="text-amber-500" />;
+    case "product_pending_approval": return <FileClock size={size} className="text-amber-500" />;
+    case "high_value_order": return <IndianRupee size={size} className="text-green-600" />;
+    case "customer_complaint": return <MessageSquareWarning size={size} className="text-red-500" />;
+    case "system_error_alert": return <ServerCrash size={size} className="text-red-500" />;
+    case "payout_failed": return <Wallet size={size} className="text-red-500" />;
+    case "payment_gateway_issue": return <CreditCard size={size} className="text-red-500" />;
+    default: return <Bell size={size} className="text-gray-400" />;
+  }
+}
+
+function formatDate(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function relativeTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+const TYPE_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "new_seller_registration,kyc_submitted", label: "Sellers" },
+  { key: "product_pending_approval", label: "Products" },
+  { key: "high_value_order", label: "Orders" },
+  { key: "customer_complaint", label: "Complaints" },
+  { key: "system_error_alert,payment_gateway_issue,payout_failed", label: "System" },
+];
+
+function AdminNotificationsContent() {
+  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
+  const [activeTab, setActiveTab] = useState("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const qc = useQueryClient();
+
+  const filterTypes = activeTab === "all" ? undefined : activeTab.split(",");
+
+  useEffect(() => { setPage(1); }, [activeTab, search]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-notif-list", activeTab, search, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (filterTypes) for (const t of filterTypes) params.append("type", t);
+      if (search.trim()) params.set("search", search.trim());
+      const r = await fetch(`${basePath}/api/admin/notifications?${params}`, {
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Failed");
+      return r.json() as Promise<{ notifications: AdminNotification[]; total: number; page: number; limit: number }>;
+    },
+    staleTime: 10000,
+  });
+
+  const markRead = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`${basePath}/api/admin/notifications/${id}/read`, {
+        method: "PATCH",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-notif-list"] });
+      qc.invalidateQueries({ queryKey: ["admin-notif-count"] });
+    },
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      await fetch(`${basePath}/api/admin/notifications/read-all`, {
+        method: "PATCH",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-notif-list"] });
+      qc.invalidateQueries({ queryKey: ["admin-notif-count"] });
+    },
+  });
+
+  const dismiss = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`${basePath}/api/admin/notifications/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-notif-list"] });
+      qc.invalidateQueries({ queryKey: ["admin-notif-count"] });
+    },
+  });
+
+  const notifications = data?.notifications ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / (data?.limit ?? 20)));
+  const hasUnread = notifications.some((n) => !n.read);
+
+  const grouped = notifications.reduce<Record<string, AdminNotification[]>>((acc, n) => {
+    const key = formatDate(n.createdAt);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(n);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-serif text-xl font-bold" style={{ color: NAVY }}>Notifications</h2>
+        <p className="text-sm text-gray-500">Platform-wide alerts: sellers, products, orders, and system events.</p>
+      </div>
+
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex gap-1 p-1 rounded-xl w-fit flex-wrap" style={{ background: CREAM }}>
+          {TYPE_FILTERS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={{
+                background: activeTab === key ? "#fff" : "transparent",
+                color: activeTab === key ? NAVY : "#6b7280",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search notifications..."
+            className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+          />
+        </div>
+      </div>
+
+      {hasUnread && !isLoading && (
+        <div
+          className="flex items-center justify-between rounded-xl px-4 py-3 border"
+          style={{ background: `${NAVY}08`, borderColor: `${NAVY}22` }}
+        >
+          <p className="text-sm" style={{ color: NAVY }}>You have unread notifications</p>
+          <button
+            onClick={() => markAllRead.mutate()}
+            disabled={markAllRead.isPending}
+            className="flex items-center gap-1.5 text-sm font-semibold hover:opacity-70 transition-opacity disabled:opacity-50"
+            style={{ color: NAVY }}
+          >
+            <CheckCheck size={15} /> Mark all as read
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        {isLoading ? (
+          <div className="p-4 space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex gap-3 animate-pulse">
+                <div className="w-9 h-9 rounded-full bg-gray-100 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 bg-gray-100 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 rounded w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+            <Bell size={36} className="text-gray-200 mb-3" />
+            <p className="text-sm font-medium text-gray-400">No notifications</p>
+            <p className="text-xs text-gray-300 mt-1">You're all caught up.</p>
+          </div>
+        ) : (
+          Object.entries(grouped).map(([dateLabel, items]) => (
+            <div key={dateLabel}>
+              <div className="px-4 py-2 border-b" style={{ background: CREAM, borderColor: "#e5e7eb" }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{dateLabel}</p>
+              </div>
+              {items.map((n) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "flex items-start gap-3 px-4 py-4 border-b border-gray-50 last:border-0 group transition-colors",
+                    !n.read ? "hover:bg-gray-50" : "hover:bg-gray-50/60"
+                  )}
+                  style={!n.read ? { background: `${NAVY}05` } : {}}
+                >
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: n.read ? "#f3f4f6" : "#fff", border: n.read ? "none" : "1px solid #C9A84C33" }}>
+                    {typeIcon(n.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-sm", n.read ? "text-gray-600" : "font-semibold")} style={!n.read ? { color: NAVY } : {}}>{n.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.body}</p>
+                    <p className="text-[10px] text-gray-300 mt-1">{relativeTime(n.createdAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!n.read && (
+                      <button
+                        onClick={() => markRead.mutate(n.id)}
+                        title="Mark as read"
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:bg-gray-100 hover:text-[#0D1B36]"
+                      >
+                        <CheckCircle size={14} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => dismiss.mutate(n.id)}
+                      title="Dismiss"
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  {!n.read && <span className="mt-2 w-2 h-2 rounded-full shrink-0" style={{ background: NAVY }} />}
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg disabled:opacity-40"
+            style={{ color: NAVY }}
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg disabled:opacity-40"
+            style={{ color: NAVY }}
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AdminNotifications() {
+  return (
+    <AdminGuard>
+      <AdminLayout>
+        <AdminNotificationsContent />
+      </AdminLayout>
+    </AdminGuard>
+  );
+}

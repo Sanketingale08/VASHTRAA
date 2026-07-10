@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Users, ShoppingBag, Package, UserCircle, Settings,
-  LogOut, Shield, Menu, X, RotateCcw, ShieldAlert, BadgePercent, HelpCircle,
+  LogOut, Shield, Menu, X, RotateCcw, ShieldAlert, BadgePercent, HelpCircle, Bell,
 } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { label: "Seller Disputes", href: "/admin/disputes", icon: ShieldAlert },
   { label: "Coupons", href: "/admin/coupons", icon: BadgePercent },
   { label: "Support", href: "/admin/support", icon: HelpCircle },
+  { label: "Notifications", href: "/admin/notifications", icon: Bell },
   { label: "Products", href: "/admin/products", icon: Package, stub: true },
   { label: "Customers", href: "/admin/customers", icon: UserCircle, stub: true },
   { label: "Settings", href: "/admin/settings", icon: Settings, stub: true },
@@ -70,6 +72,23 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
+
+  const { data: countData } = useQuery({
+    queryKey: ["admin-notif-count"],
+    queryFn: async () => {
+      const r = await fetch(`${basePath}/api/admin/notifications/unread-count`, {
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      if (!r.ok) return { count: 0 };
+      return r.json() as Promise<{ count: number }>;
+    },
+    enabled: !!adminKey,
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+  const unread = countData?.count ?? 0;
 
   function signOut() {
     sessionStorage.removeItem("td_admin_key");
@@ -164,6 +183,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Menu size={18} className="text-gray-600" />
           </button>
           <div className="flex-1" />
+          <button
+            onClick={() => setLocation("/admin/notifications")}
+            className="relative flex items-center justify-center w-9 h-9 rounded-md hover:bg-gray-100 transition-colors"
+            aria-label="Notifications"
+          >
+            <Bell size={18} className="text-gray-600" />
+            {unread > 0 && (
+              <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
           <div className="flex items-center gap-2">
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"

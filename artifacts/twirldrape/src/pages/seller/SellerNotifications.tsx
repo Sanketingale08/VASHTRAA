@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   Bell, Package, AlertTriangle, PackageX, Clock, RotateCcw,
-  Trash2, CheckCheck, CheckCircle, Search,
+  Trash2, CheckCheck, CheckCircle, Search, XCircle, Wallet, IndianRupee, FileClock,
 } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -29,6 +29,10 @@ function typeIcon(type: string, size = 16) {
     case "out_of_stock": return <PackageX size={size} className="text-red-500" />;
     case "return_requested_seller": return <RotateCcw size={size} className="text-amber-500" />;
     case "refund_requested_seller": return <Clock size={size} className="text-amber-500" />;
+    case "product_pending_approval": return <FileClock size={size} className="text-amber-500" />;
+    case "order_cancelled_seller": return <XCircle size={size} className="text-red-500" />;
+    case "settlement_released": return <Wallet size={size} className="text-green-600" />;
+    case "payout_successful": return <IndianRupee size={size} className="text-green-600" />;
     default: return <Bell size={size} className="text-gray-400" />;
   }
 }
@@ -57,9 +61,11 @@ function relativeTime(iso: string) {
 
 const TYPE_FILTERS = [
   { key: "all", label: "All" },
-  { key: "new_order,payment_success", label: "Orders" },
+  { key: "new_order,payment_success,order_cancelled_seller", label: "Orders" },
   { key: "low_stock,out_of_stock", label: "Stock" },
   { key: "return_requested_seller,refund_requested_seller", label: "Returns & Refunds" },
+  { key: "product_pending_approval,product_approved,product_rejected", label: "Products" },
+  { key: "settlement_released,payout_successful", label: "Payouts" },
 ];
 
 export default function SellerNotifications() {

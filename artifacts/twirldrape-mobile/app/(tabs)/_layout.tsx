@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { Badge, Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import React from "react";
 import { Platform, StyleSheet, Text, View, useColorScheme } from "react-native";
@@ -13,6 +13,10 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
+  const { totalItems } = useCart();
+  const { wishlistItems } = useWishlist();
+  const totalWishlistItems = wishlistItems.length;
+
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -26,10 +30,16 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="wishlist">
         <Icon sf={{ default: "heart", selected: "heart.fill" }} />
         <Label>Wishlist</Label>
+        <Badge hidden={totalWishlistItems === 0}>
+          {totalWishlistItems > 0 ? String(totalWishlistItems) : undefined}
+        </Badge>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="cart">
         <Icon sf={{ default: "bag", selected: "bag.fill" }} />
         <Label>Cart</Label>
+        <Badge hidden={totalItems === 0}>
+          {totalItems > 0 ? String(totalItems) : undefined}
+        </Badge>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: "person", selected: "person.fill" }} />

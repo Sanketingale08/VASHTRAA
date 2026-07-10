@@ -199,30 +199,75 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     item.wishlistCount = wishlistByProduct.get(item.id) ?? 0;
   }
 
-  const searchByTerm = new Map<string, { count: number; resultCount: number; latest: Date }>();
-  for (const s of searches) {
-    const cur = searchByTerm.get(s.term) ?? { count: 0, resultCount: 0, latest: new Date(0) };
+  const searchesInRange = searches.filter(s => inRange(new Date(s.createdAt), range));
+
+  function categoryForTerm(term: string): string {
+    const t = term.toLowerCase();
+    const catCounts = new Map<string, number>();
+    for (const p of products) {
+      if (p.name.toLowerCase().includes(t) || p.category.toLowerCase() === t || p.subcategory?.toLowerCase() === t) {
+        catCounts.set(p.category, (catCounts.get(p.category) ?? 0) + 1);
+      }
+    }
+    let best: string | null = null;
+    let bestCount = 0;
+    for (const [cat, count] of catCounts) {
+      if (count > bestCount) { best = cat; bestCount = count; }
+    }
+    return best ?? "General";
+  }
+
+  const searchByTerm = new Map<string, { count: number; resultCount: number; latest: Date; userIds: Set<string> }>();
+  for (const s of searchesInRange) {
+    const cur = searchByTerm.get(s.term) ?? { count: 0, resultCount: 0, latest: new Date(0), userIds: new Set<string>() };
     cur.count++;
     cur.resultCount = s.resultCount;
+    if (s.userId) cur.userIds.add(s.userId);
     const createdAt = new Date(s.createdAt);
     if (createdAt > cur.latest) cur.latest = createdAt;
     searchByTerm.set(s.term, cur);
   }
+
   const mostSearchedTerms = [...searchByTerm.entries()]
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 20)
-    .map(([term, d]) => ({
-      term,
-      searchCount: d.count,
-      resultCount: d.resultCount,
-      availability: d.resultCount > 0 ? "In Stock" : "No Results",
-    }));
+    .map(([term, d]) => {
+      const category = categoryForTerm(term);
+      const searchingUsers = [...d.userIds];
+      const convertedUsers = searchingUsers.filter(uid =>
+        orders.some(o => o.userId === uid && !["cancelled", "returned"].includes(o.status) &&
+          ((o.items as OrderItem[]) ?? []).some(i => productById.get(i.productId)?.category === category))
+      );
+      const conversionRate = searchingUsers.length > 0
+        ? Math.round((convertedUsers.length / searchingUsers.length) * 1000) / 10
+        : 0;
+      return {
+        term,
+        searchCount: d.count,
+        resultCount: d.resultCount,
+        category,
+        availability: d.resultCount > 0 ? "In Stock" : "No Results",
+        conversionRate,
+      };
+    });
 
   const trendingKeywords = [...searchByTerm.entries()]
     .filter(([, d]) => inRange(d.latest, range))
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 10)
     .map(([term]) => term);
+
+  const searchTrendBuckets = new Map<string, number>();
+  for (const s of searchesInRange) {
+    const key = bucketKey(new Date(s.createdAt), period);
+    searchTrendBuckets.set(key, (searchTrendBuckets.get(key) ?? 0) + 1);
+  }
+  const searchAnalytics = {
+    totalSearches: searchesInRange.length,
+    topTerms: mostSearchedTerms,
+    trendingKeywords,
+    trend: [...searchTrendBuckets.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-24).map(([p, count]) => ({ period: p, count })),
+  };
 
   const highestRevenueShops = [...vendorAggMap.entries()].map(([id, agg]) => {
     const perf = computePerformanceScore(agg, responseScores.get(id) ?? 100);
@@ -253,7 +298,7 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const returningCustomers = [...customerOrderCounts.entries()].filter(([, c]) => c > 1).length;
 
   const customerGrowthBuckets = new Map<string, number>();
-  for (const [, d] of customerFirstOrderDate) {
+  for (const [, d] of newCustomersInRange) {
     const key = bucketKey(d, period);
     customerGrowthBuckets.set(key, (customerGrowthBuckets.get(key) ?? 0) + 1);
   }
@@ -266,14 +311,12 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     trend: [...customerGrowthBuckets.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-24).map(([p, count]) => ({ period: p, count })),
   };
 
-  const vendorGrowthBuckets = new Map<string, number>();
-  for (const v of vendors) {
-    if (v.termsAcceptedAt) {
-      const key = bucketKey(new Date(v.termsAcceptedAt), period);
-      vendorGrowthBuckets.set(key, (vendorGrowthBuckets.get(key) ?? 0) + 1);
-    }
-  }
   const newVendorsInRange = vendors.filter(v => v.termsAcceptedAt && inRange(new Date(v.termsAcceptedAt), range));
+  const vendorGrowthBuckets = new Map<string, number>();
+  for (const v of newVendorsInRange) {
+    const key = bucketKey(new Date(v.termsAcceptedAt!), period);
+    vendorGrowthBuckets.set(key, (vendorGrowthBuckets.get(key) ?? 0) + 1);
+  }
   const vendorGrowth = {
     newRegistrations: newVendorsInRange.length,
     activeVendors: vendors.filter(v => v.status === "approved").length,
@@ -283,7 +326,7 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   };
 
   const revenueBuckets = new Map<string, number>();
-  for (const o of orders.filter(nonCancelled)) {
+  for (const o of ordersInRange.filter(nonCancelled)) {
     const key = bucketKey(new Date(o.createdAt), period);
     revenueBuckets.set(key, (revenueBuckets.get(key) ?? 0) + orderRevenue(o));
   }
@@ -301,19 +344,25 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   for (const o of ordersInRange.filter(nonCancelled)) {
     const items = (o.items as OrderItem[]) ?? [];
     const touchedVendors = new Set<string>();
+    const vendorItemRevenue = new Map<string, number>();
     for (const item of items) {
       const p = productById.get(item.productId);
       if (!p) continue;
+      const lineTotal = item.price * (item.quantity ?? 1);
       const catKey = p.category;
       const cur = categoryBuckets.get(catKey) ?? { orders: 0, unitsSold: 0, revenue: 0 };
       cur.unitsSold += item.quantity ?? 1;
-      cur.revenue += item.price * (item.quantity ?? 1);
+      cur.revenue += lineTotal;
       categoryBuckets.set(catKey, cur);
-      if (p.vendorId) touchedVendors.add(p.vendorId);
+      if (p.vendorId) {
+        touchedVendors.add(p.vendorId);
+        vendorItemRevenue.set(p.vendorId, (vendorItemRevenue.get(p.vendorId) ?? 0) + lineTotal);
+      }
     }
     for (const vId of touchedVendors) {
       const cur = vendorSalesBuckets.get(vId) ?? { orders: 0, revenue: 0 };
       cur.orders += 1;
+      cur.revenue += vendorItemRevenue.get(vId) ?? 0;
       vendorSalesBuckets.set(vId, cur);
     }
   }
@@ -380,6 +429,7 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     mostViewedProducts,
     mostSearchedProducts: mostSearchedTerms,
     trendingKeywords,
+    searchAnalytics,
     highestRevenueShops,
     customerGrowth,
     vendorGrowth,

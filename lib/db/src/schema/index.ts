@@ -10,3 +10,4 @@ export * from "./notifications";
 export * from "./support";
 export * from "./stock_history";
 export * from "./reviews";
+export * from "./settlements";

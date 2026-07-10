@@ -20,6 +20,7 @@ import sellerSupportRouter from "./sellerSupport";
 import adminSupportRouter from "./adminSupport";
 import adminNotificationsRouter from "./adminNotifications";
 import reviewsRouter from "./reviews";
+import vendorAnalyticsRouter from "./vendorAnalytics";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(sellerSupportRouter);
 router.use(adminSupportRouter);
 router.use(adminNotificationsRouter);
 router.use(reviewsRouter);
+router.use(vendorAnalyticsRouter);
 
 export default router;

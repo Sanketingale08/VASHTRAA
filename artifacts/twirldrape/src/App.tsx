@@ -39,6 +39,8 @@ import NewArrivals from "@/pages/NewArrivals";
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminVendors from "@/pages/admin/AdminVendors";
+import AdminVendorAnalytics from "@/pages/admin/AdminVendorAnalytics";
+import AdminVendorAnalyticsDetail from "@/pages/admin/AdminVendorAnalyticsDetail";
 import AdminVendorDetail from "@/pages/admin/AdminVendorDetail";
 import AdminOrders from "@/pages/admin/AdminOrders";
 import AdminReturns from "@/pages/admin/AdminReturns";
@@ -234,6 +236,8 @@ function Router() {
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/vendors/:id" component={AdminVendorDetail} />
       <Route path="/admin/vendors" component={AdminVendors} />
+      <Route path="/admin/vendor-analytics/:id" component={AdminVendorAnalyticsDetail} />
+      <Route path="/admin/vendor-analytics" component={AdminVendorAnalytics} />
       <Route path="/admin/orders" component={AdminOrders} />
       <Route path="/admin/returns" component={AdminReturns} />
       <Route path="/admin/disputes" component={AdminDisputes} />

@@ -44,6 +44,7 @@ export const productsTable = pgTable("products", {
   returnPolicy: text("return_policy").notNull().default(""),
   isBestSeller: boolean("is_best_seller").notNull().default(false),
   isNewArrival: boolean("is_new_arrival").notNull().default(false),
+  isFeatured: boolean("is_featured").notNull().default(false),
   rating: real("rating").notNull().default(4.5),
   reviewCount: integer("review_count").notNull().default(0),
   stock: integer("stock").notNull().default(10),

@@ -453,6 +453,12 @@ importers:
         specifier: ^5.0.8
         version: 5.0.8(jspdf@4.2.1)
     devDependencies:
+      '@clerk/backend':
+        specifier: ^3.10.0
+        version: 3.10.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@clerk/testing':
+        specifier: ^1.14.8
+        version: 1.14.8(@playwright/test@1.61.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.80.0(react@19.1.0))

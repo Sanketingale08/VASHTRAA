@@ -11,6 +11,8 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@clerk/backend": "^3.10.0",
+    "@clerk/testing": "^1.14.8",
     "@hookform/resolvers": "^3.10.0",
     "@playwright/test": "^1.61.1",
     "@radix-ui/react-accordion": "^1.2.4",

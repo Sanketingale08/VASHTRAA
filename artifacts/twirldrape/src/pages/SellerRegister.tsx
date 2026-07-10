@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useUser, useSignUp } from "@clerk/react";
+import { useUser } from "@clerk/react";
+import { useSignUp } from "@clerk/react/legacy";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -381,7 +382,7 @@ export default function SellerRegister() {
     setLoading(true); setApiErr("");
     try {
       const ph = await user!.createPhoneNumber({ phoneNumber: full });
-      await ph.prepareVerification({ strategy: "phone_code" });
+      await (ph as any).prepareVerification({ strategy: "phone_code" });
       setPhoneObj(ph); setPhoneSent(true);
     } catch (err: any) {
       setApiErr(err?.errors?.[0]?.longMessage || "Failed to send OTP. Check the number and try again.");

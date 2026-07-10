@@ -28,12 +28,15 @@ const executablePath = resolveChromiumPath();
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
-  retries: 1,
+  retries: process.env.CI ? 1 : 0,
+  timeout: 90_000,
   reporter: "list",
   use: {
     baseURL,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
   projects: [

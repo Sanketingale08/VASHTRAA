@@ -306,7 +306,7 @@ router.post("/seller/support/tickets", requireVendorAuth, async (req: any, res: 
       return newTicket;
     });
 
-    await notifyTicketEvent(ticket, "ticket_created", "New seller ticket", `${subject} — ${category}`, {
+    await notifyTicketEvent(ticket, "seller_support_request", "New seller support request", `${subject} — ${category}`, {
       notifyAdmin: true,
     });
 

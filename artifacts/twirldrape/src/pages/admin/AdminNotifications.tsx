@@ -26,6 +26,7 @@ interface AdminNotification {
 function deepLinkFor(n: AdminNotification): string | null {
   const m = n.metadata || {};
   if (m.vendorId) return `${basePath}/admin/vendors/${m.vendorId}`;
+  if (m.ticketId) return `${basePath}/admin/support`;
   if (m.orderId || m.productId) return `${basePath}/admin/dashboard`;
   return null;
 }
@@ -40,6 +41,7 @@ function typeIcon(type: string, size = 16) {
     case "system_error_alert": return <ServerCrash size={size} className="text-red-500" />;
     case "payout_failed": return <Wallet size={size} className="text-red-500" />;
     case "payment_gateway_issue": return <CreditCard size={size} className="text-red-500" />;
+    case "seller_support_request": return <MessageSquareWarning size={size} className="text-amber-500" />;
     default: return <Bell size={size} className="text-gray-400" />;
   }
 }
@@ -72,6 +74,7 @@ const TYPE_FILTERS = [
   { key: "product_pending_approval", label: "Products" },
   { key: "high_value_order", label: "Orders" },
   { key: "customer_complaint", label: "Complaints" },
+  { key: "seller_support_request", label: "Support" },
   { key: "system_error_alert,payment_gateway_issue,payout_failed", label: "System" },
 ];
 

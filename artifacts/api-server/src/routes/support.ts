@@ -319,6 +319,14 @@ router.post("/support/tickets/:id/escalate", requireAuth, async (req: any, res: 
       { notifyAdmin: true }
     );
 
+    await notifyTicketEvent(
+      updated,
+      "customer_complaint",
+      "Customer complaint escalated",
+      `A customer escalated "${updated.subject}"${reason ? `: ${reason}` : "."}`,
+      { notifyAdmin: true }
+    );
+
     res.json(updated);
   } catch (err) {
     req.log.error({ err }, "Failed to escalate ticket");

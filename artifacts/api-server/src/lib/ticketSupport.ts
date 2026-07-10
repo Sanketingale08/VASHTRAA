@@ -1,7 +1,9 @@
 import { db } from "@workspace/db";
 import { notificationsTable, vendorsTable, ADMIN_NOTIFICATION_USER_ID } from "@workspace/db";
-import type { SupportTicket, TicketNotificationType } from "@workspace/db";
+import type { SupportTicket, TicketNotificationType, AdminNotificationType } from "@workspace/db";
 import { eq } from "drizzle-orm";
+
+type NotifyTicketEventType = TicketNotificationType | AdminNotificationType;
 
 export const SLA_HOURS = 48;
 
@@ -24,7 +26,7 @@ export function isPastSla(ticket: Pick<SupportTicket, "slaDueAt" | "status" | "e
 async function insertNotification(opts: {
   userId: string;
   vendorId?: string | null;
-  type: TicketNotificationType;
+  type: NotifyTicketEventType;
   title: string;
   body: string;
   metadata?: Record<string, unknown>;
@@ -45,7 +47,7 @@ async function insertNotification(opts: {
  */
 export async function notifyTicketEvent(
   ticket: Pick<SupportTicket, "id" | "userId" | "userType" | "vendorId" | "assignedTo" | "subject">,
-  type: TicketNotificationType,
+  type: NotifyTicketEventType,
   title: string,
   body: string,
   opts: { notifyCustomer?: boolean; notifySeller?: boolean; notifyAdmin?: boolean } = {}

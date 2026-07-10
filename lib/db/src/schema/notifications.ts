@@ -25,7 +25,8 @@ export type AdminNotificationType =
   | "customer_complaint"
   | "system_error_alert"
   | "payout_failed"
-  | "payment_gateway_issue";
+  | "payment_gateway_issue"
+  | "seller_support_request";
 
 export type TicketNotificationType =
   | "ticket_created"

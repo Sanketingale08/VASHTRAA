@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { insertAdminNotification } from "../lib/adminNotifications";
+import { insertSellerNotification } from "../lib/sellerNotifications";
 
 const router = Router();
 
@@ -421,6 +422,69 @@ router.post("/admin/vendors/:id/verify-kyc", requireAdminKey, async (req: any, r
   } catch (err) {
     req.log.error({ err }, "Failed to verify KYC");
     res.status(500).json({ error: "Failed to verify KYC" });
+  }
+});
+
+router.post("/admin/vendors/:id/payouts/release", requireAdminKey, async (req: any, res: any) => {
+  const { id } = req.params;
+  const { amount } = req.body ?? {};
+  try {
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id));
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+    await insertSellerNotification({
+      vendorId: id,
+      type: "settlement_released",
+      title: "Settlement released",
+      body: amount
+        ? `A settlement of ₹${amount} has been released to your account.`
+        : "Your pending settlement has been released.",
+      metadata: { vendorId: id, amount: amount ?? null },
+    });
+
+    res.json({ vendor, released: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to release settlement");
+    res.status(500).json({ error: "Failed to release settlement" });
+  }
+});
+
+router.post("/admin/vendors/:id/payouts/payout", requireAdminKey, async (req: any, res: any) => {
+  const { id } = req.params;
+  const { amount, success } = req.body ?? {};
+  try {
+    const [vendor] = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id));
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+    if (success === false) {
+      await insertAdminNotification({
+        type: "payout_failed",
+        title: "Payout failed",
+        body: `Payout to ${vendor.name} failed${amount ? ` (₹${amount})` : ""}.`,
+        metadata: { vendorId: id, amount: amount ?? null },
+      });
+    } else {
+      await insertSellerNotification({
+        vendorId: id,
+        type: "payout_successful",
+        title: "Payout successful",
+        body: amount
+          ? `₹${amount} has been paid out to your linked bank account.`
+          : "Your payout has been processed successfully.",
+        metadata: { vendorId: id, amount: amount ?? null },
+      });
+    }
+
+    res.json({ vendor, success: success !== false });
+  } catch (err) {
+    req.log.error({ err }, "Failed to process payout");
+    res.status(500).json({ error: "Failed to process payout" });
   }
 });
 

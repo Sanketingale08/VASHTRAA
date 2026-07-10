@@ -143,8 +143,18 @@ export function AccountSupportPage() {
   const [replyBody, setReplyBody] = useState("");
   const [faqSearch, setFaqSearch] = useState("");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [form, setForm] = useState({ subject: "", category: "" as Category | "", description: "" });
+  const [form, setForm] = useState({ subject: "", category: "" as Category | "", description: "", orderId: "" });
   const [formError, setFormError] = useState("");
+
+  const { data: orders = [] } = useQuery<{ id: string; createdAt: string; items?: { name?: string }[] }[]>({
+    queryKey: ["support-orders"],
+    queryFn: async () => {
+      const r = await fetch(`${basePath}/api/orders`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to fetch orders");
+      const data = await r.json();
+      return data.orders ?? [];
+    },
+  });
 
   const { data: categories = FALLBACK_CATEGORIES } = useQuery<Category[]>({
     queryKey: ["support-categories"],
@@ -176,7 +186,7 @@ export function AccountSupportPage() {
   });
 
   const createTicket = useMutation({
-    mutationFn: async (data: { subject: string; category: string; description: string }) => {
+    mutationFn: async (data: { subject: string; category: string; description: string; orderId?: string }) => {
       const r = await fetch(`${basePath}/api/support/tickets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -192,7 +202,7 @@ export function AccountSupportPage() {
     onSuccess: (ticket: Ticket) => {
       qc.invalidateQueries({ queryKey: ["support-tickets"] });
       qc.invalidateQueries({ queryKey: ["support-open-count"] });
-      setForm({ subject: "", category: "", description: "" });
+      setForm({ subject: "", category: "", description: "", orderId: "" });
       setFormError("");
       setSelectedId(ticket.id);
       setRightPanel("detail");
@@ -279,7 +289,12 @@ export function AccountSupportPage() {
     if (!form.subject.trim()) { setFormError("Subject is required"); return; }
     if (!form.category) { setFormError("Please select a category"); return; }
     if (!form.description.trim()) { setFormError("Description is required"); return; }
-    createTicket.mutate({ subject: form.subject, category: form.category, description: form.description });
+    createTicket.mutate({
+      subject: form.subject,
+      category: form.category,
+      description: form.description,
+      orderId: form.orderId || undefined,
+    });
   }
 
   function handleSendReply(e: React.FormEvent) {
@@ -383,6 +398,24 @@ export function AccountSupportPage() {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-[#3D1A1A] mb-1.5 uppercase tracking-wide">
+            Related Order (optional)
+          </label>
+          <select
+            value={form.orderId}
+            onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
+            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A]"
+          >
+            <option value="">Not related to an order</option>
+            {orders.map((o) => (
+              <option key={o.id} value={o.id}>
+                #{o.id.slice(0, 8)} — {o.items?.[0]?.name ?? "Order"}{o.items && o.items.length > 1 ? ` +${o.items.length - 1} more` : ""}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-gray-400 mt-1">Linking an order routes order/product/return issues to the right seller.</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-[#3D1A1A] mb-1.5 uppercase tracking-wide">

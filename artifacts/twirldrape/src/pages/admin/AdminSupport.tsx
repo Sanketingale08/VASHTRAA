@@ -70,15 +70,16 @@ function AdminSupportContent() {
   const qc = useQueryClient();
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scopeTab, setScopeTab] = useState<"customer" | "seller">("customer");
   const [statusTab, setStatusTab] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [replyBody, setReplyBody] = useState("");
   const [internal, setInternal] = useState(false);
 
   const { data, isLoading } = useQuery<{ tickets: Ticket[] }>({
-    queryKey: ["admin-support-tickets", statusTab, search],
+    queryKey: ["admin-support-tickets", scopeTab, statusTab, search],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ scope: scopeTab });
       if (statusTab !== "all") params.set("status", statusTab);
       if (search.trim()) params.set("search", search.trim());
       const r = await fetch(`${basePath}/api/admin/support/tickets?${params}`, {
@@ -155,6 +156,22 @@ function AdminSupportContent() {
             className="pl-8 pr-3 py-1.5 border rounded-lg text-sm w-56"
           />
         </div>
+      </div>
+
+      <div className="flex gap-1.5">
+        {(["customer", "seller"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => { setScopeTab(s); setSelectedId(null); }}
+            className={cn(
+              "px-4 py-2 text-sm font-semibold rounded-lg border transition-colors",
+              scopeTab === s ? "text-white" : "bg-white text-gray-600 border-gray-200"
+            )}
+            style={scopeTab === s ? { backgroundColor: NAVY, borderColor: NAVY } : {}}
+          >
+            {s === "customer" ? "Customer Tickets" : "Seller Tickets & Escalations"}
+          </button>
+        ))}
       </div>
 
       <div className="flex gap-1.5 flex-wrap">

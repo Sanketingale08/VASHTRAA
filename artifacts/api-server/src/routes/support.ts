@@ -5,6 +5,8 @@ import {
   supportTicketsTable,
   ticketMessagesTable,
   vendorsTable,
+  ordersTable,
+  productsTable,
   CUSTOMER_TICKET_CATEGORIES,
   routeTicket,
 } from "@workspace/db";
@@ -44,7 +46,7 @@ router.get("/support/categories", requireAuth, async (_req: any, res: any): Prom
 });
 
 router.post("/support/tickets", requireAuth, async (req: any, res: any): Promise<void> => {
-  const { subject, category, description, orderId, vendorId, attachments } = req.body;
+  const { subject, category, description, orderId, attachments } = req.body;
   if (!subject || !category || !description) {
     res.status(400).json({ error: "subject, category and description are required" });
     return;
@@ -56,7 +58,31 @@ router.post("/support/tickets", requireAuth, async (req: any, res: any): Promise
   const cleanAttachments = Array.isArray(attachments) ? attachments.filter((a) => typeof a === "string") : [];
 
   try {
-    const assignedTo = routeTicket("customer", category, vendorId ?? null);
+    // Never trust a client-supplied vendorId — derive it server-side from the
+    // linked order (owned by this user) so tickets always route to the
+    // correct seller.
+    let vendorId: string | null = null;
+    if (orderId) {
+      const [order] = await db
+        .select({ id: ordersTable.id, items: ordersTable.items })
+        .from(ordersTable)
+        .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)));
+      if (!order) {
+        res.status(400).json({ error: "Order not found" });
+        return;
+      }
+      const items = (order.items as Array<{ productId?: string }>) ?? [];
+      const firstProductId = items[0]?.productId;
+      if (firstProductId) {
+        const [product] = await db
+          .select({ vendorId: productsTable.vendorId })
+          .from(productsTable)
+          .where(eq(productsTable.id, firstProductId));
+        vendorId = product?.vendorId ?? null;
+      }
+    }
+
+    const assignedTo = routeTicket("customer", category, vendorId);
     const now = new Date();
 
     const ticket = await db.transaction(async (tx) => {

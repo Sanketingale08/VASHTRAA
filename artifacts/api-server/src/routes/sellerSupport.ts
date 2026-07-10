@@ -42,10 +42,10 @@ router.get("/seller/support/tickets", requireVendorAuth, async (req: any, res: a
     const status = req.query.status as string | undefined;
     const search = (req.query.search as string | undefined)?.trim();
 
-    const conditions: any[] = [
-      eq(supportTicketsTable.vendorId, req.vendorId),
-      eq(supportTicketsTable.assignedTo, "seller"),
-    ];
+    const scope = req.query.scope as string | undefined; // "customer" (routed from customers) | "mine" (raised by seller to admin)
+    const conditions: any[] = [eq(supportTicketsTable.vendorId, req.vendorId)];
+    if (scope === "customer") conditions.push(eq(supportTicketsTable.userType, "customer"));
+    else if (scope === "mine") conditions.push(eq(supportTicketsTable.userType, "seller"));
     if (status) conditions.push(eq(supportTicketsTable.status, status as any));
     if (search) conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
     const whereClause = and(...conditions);

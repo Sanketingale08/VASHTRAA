@@ -66,6 +66,7 @@ function formatDateTime(iso: string) {
 export default function SellerSupport() {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scopeTab, setScopeTab] = useState<"customer" | "mine">("customer");
   const [showNew, setShowNew] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [form, setForm] = useState({ subject: "", category: "", description: "" });
@@ -82,9 +83,9 @@ export default function SellerSupport() {
   });
 
   const { data, isLoading } = useQuery<{ tickets: Ticket[] }>({
-    queryKey: ["seller-support-tickets"],
+    queryKey: ["seller-support-tickets", scopeTab],
     queryFn: async () => {
-      const r = await fetch(getApiUrl("/api/seller/support/tickets"), { credentials: "include" });
+      const r = await fetch(getApiUrl(`/api/seller/support/tickets?scope=${scopeTab}`), { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load tickets");
       return r.json();
     },
@@ -202,6 +203,22 @@ export default function SellerSupport() {
           >
             <Plus size={14} /> Raise Ticket to Admin
           </button>
+        </div>
+
+        <div className="flex gap-1.5">
+          {(["customer", "mine"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => { setScopeTab(s); setSelectedId(null); setShowNew(false); }}
+              className={cn(
+                "px-4 py-2 text-sm font-semibold rounded-lg border transition-colors",
+                scopeTab === s ? "text-white" : "bg-white text-gray-600 border-gray-200"
+              )}
+              style={scopeTab === s ? { backgroundColor: MAROON, borderColor: MAROON } : {}}
+            >
+              {s === "customer" ? "Customer Tickets" : "My Tickets to Admin"}
+            </button>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-4">

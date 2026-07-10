@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, Trash2, CheckCheck, CheckCircle, Search, UserPlus, FileCheck,
-  FileClock, IndianRupee, MessageSquareWarning, ServerCrash, Wallet, CreditCard,
+  FileClock, IndianRupee, MessageSquareWarning, ServerCrash, Wallet, CreditCard, Circle, ExternalLink,
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,14 @@ interface AdminNotification {
   body: string;
   read: boolean;
   createdAt: string;
+  metadata?: Record<string, any> | null;
+}
+
+function deepLinkFor(n: AdminNotification): string | null {
+  const m = n.metadata || {};
+  if (m.vendorId) return `${basePath}/admin/vendors/${m.vendorId}`;
+  if (m.orderId || m.productId) return `${basePath}/admin/dashboard`;
+  return null;
 }
 
 function typeIcon(type: string, size = 16) {
@@ -70,19 +79,23 @@ function AdminNotificationsContent() {
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
   const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const qc = useQueryClient();
 
   const filterTypes = activeTab === "all" ? undefined : activeTab.split(",");
 
-  useEffect(() => { setPage(1); }, [activeTab, search]);
+  useEffect(() => { setPage(1); }, [activeTab, search, dateFrom, dateTo]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-notif-list", activeTab, search, page],
+    queryKey: ["admin-notif-list", activeTab, search, dateFrom, dateTo, page],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (filterTypes) for (const t of filterTypes) params.append("type", t);
       if (search.trim()) params.set("search", search.trim());
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       const r = await fetch(`${basePath}/api/admin/notifications?${params}`, {
         headers: { "x-admin-key": adminKey },
         credentials: "include",
@@ -91,11 +104,26 @@ function AdminNotificationsContent() {
       return r.json() as Promise<{ notifications: AdminNotification[]; total: number; page: number; limit: number }>;
     },
     staleTime: 10000,
+    refetchInterval: 8000,
   });
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
       await fetch(`${basePath}/api/admin/notifications/${id}/read`, {
+        method: "PATCH",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-notif-list"] });
+      qc.invalidateQueries({ queryKey: ["admin-notif-count"] });
+    },
+  });
+
+  const markUnread = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`${basePath}/api/admin/notifications/${id}/unread`, {
         method: "PATCH",
         headers: { "x-admin-key": adminKey },
         credentials: "include",
@@ -179,6 +207,28 @@ function AdminNotificationsContent() {
             className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
           />
         </div>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+        />
+        <span className="text-xs text-gray-400">to</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+        />
+        {(search || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); }}
+            className="text-xs font-semibold hover:opacity-70"
+            style={{ color: NAVY }}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {hasUnread && !isLoading && (
@@ -238,16 +288,35 @@ function AdminNotificationsContent() {
                   <div className="flex-1 min-w-0">
                     <p className={cn("text-sm", n.read ? "text-gray-600" : "font-semibold")} style={!n.read ? { color: NAVY } : {}}>{n.title}</p>
                     <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.body}</p>
-                    <p className="text-[10px] text-gray-300 mt-1">{relativeTime(n.createdAt)}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-[10px] text-gray-300">{relativeTime(n.createdAt)}</p>
+                      {deepLinkFor(n) && (
+                        <Link
+                          href={deepLinkFor(n)!}
+                          className="flex items-center gap-0.5 text-[10px] font-semibold hover:opacity-70"
+                          style={{ color: NAVY }}
+                        >
+                          View details <ExternalLink size={10} />
+                        </Link>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {!n.read && (
+                    {!n.read ? (
                       <button
                         onClick={() => markRead.mutate(n.id)}
                         title="Mark as read"
                         className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:bg-gray-100 hover:text-[#0D1B36]"
                       >
                         <CheckCircle size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => markUnread.mutate(n.id)}
+                        title="Mark as unread"
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:bg-gray-100 hover:text-[#0D1B36]"
+                      >
+                        <Circle size={14} />
                       </button>
                     )}
                     <button

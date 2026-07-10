@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { notificationsTable, ADMIN_NOTIFICATION_USER_ID } from "@workspace/db";
-import { eq, and, desc, sql, inArray, ilike, or } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 
 const router = Router();
 
@@ -33,6 +33,8 @@ router.get("/admin/notifications", requireAdminKey, async (req: any, res: any): 
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
     const offset = (page - 1) * limit;
     const search = (req.query.search as string | undefined)?.trim();
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
 
     const rawType = req.query.type;
     const types: string[] = rawType
@@ -47,6 +49,8 @@ router.get("/admin/notifications", requireAdminKey, async (req: any, res: any): 
         or(ilike(notificationsTable.title, `%${search}%`), ilike(notificationsTable.body, `%${search}%`))
       );
     }
+    if (dateFrom) conditions.push(gte(notificationsTable.createdAt, new Date(dateFrom)));
+    if (dateTo) conditions.push(lte(notificationsTable.createdAt, new Date(dateTo)));
     const whereClause = and(...conditions);
 
     const rows = await db
@@ -98,6 +102,25 @@ router.patch("/admin/notifications/:id/read", requireAdminKey, async (req: any, 
   } catch (err: any) {
     req.log?.error({ err }, "admin/notifications/:id/read failed");
     res.status(500).json({ error: "Failed to mark notification as read" });
+  }
+});
+
+router.patch("/admin/notifications/:id/unread", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const rows = await db
+      .update(notificationsTable)
+      .set({ read: false })
+      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
+      .returning({ id: notificationsTable.id });
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Notification not found" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    req.log?.error({ err }, "admin/notifications/:id/unread failed");
+    res.status(500).json({ error: "Failed to mark notification as unread" });
   }
 });
 

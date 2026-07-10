@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 
 const router = Router();
 
@@ -33,19 +33,26 @@ router.get("/notifications", requireAuth, async (req: any, res: any): Promise<vo
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
     const rawType = req.query.type;
     const offset = (page - 1) * limit;
+    const search = (req.query.search as string | undefined)?.trim();
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
 
     // rawType may be a string or array (Express parses repeated ?type= as array)
     const types: string[] = rawType
       ? (Array.isArray(rawType) ? rawType : String(rawType).split(",")).map(String).filter(Boolean)
       : [];
 
-    let whereClause = eq(notificationsTable.userId, req.userId) as any;
-    if (types.length > 0) {
-      const typeFilter = types.length === 1
-        ? eq(notificationsTable.type, types[0] as any)
-        : inArray(notificationsTable.type, types as any[]);
-      whereClause = and(eq(notificationsTable.userId, req.userId), typeFilter);
+    const conditions: any[] = [eq(notificationsTable.userId, req.userId)];
+    if (types.length === 1) conditions.push(eq(notificationsTable.type, types[0] as any));
+    else if (types.length > 1) conditions.push(inArray(notificationsTable.type, types as any[]));
+    if (search) {
+      conditions.push(
+        or(ilike(notificationsTable.title, `%${search}%`), ilike(notificationsTable.body, `%${search}%`))
+      );
     }
+    if (dateFrom) conditions.push(gte(notificationsTable.createdAt, new Date(dateFrom)));
+    if (dateTo) conditions.push(lte(notificationsTable.createdAt, new Date(dateTo)));
+    const whereClause = and(...conditions);
 
     const rows = await db
       .select()
@@ -99,6 +106,25 @@ router.patch("/notifications/:id/read", requireAuth, async (req: any, res: any):
   } catch (err) {
     req.log.error({ err }, "Failed to mark notification as read");
     res.status(500).json({ error: "Failed to mark notification as read" });
+  }
+});
+
+router.patch("/notifications/:id/unread", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const rows = await db
+      .update(notificationsTable)
+      .set({ read: false })
+      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, req.userId)))
+      .returning({ id: notificationsTable.id });
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Notification not found" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to mark notification as unread");
+    res.status(500).json({ error: "Failed to mark notification as unread" });
   }
 });
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { notificationsTable } from "@workspace/db";
-import { eq, and, desc, sql, inArray, ilike, or } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 
 const router = Router();
@@ -26,6 +26,8 @@ router.get("/seller/notifications", requireVendorAuth, async (req: any, res: any
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
     const offset = (page - 1) * limit;
     const search = (req.query.search as string | undefined)?.trim();
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
 
     const rawType = req.query.type;
     const types: string[] = rawType
@@ -40,6 +42,8 @@ router.get("/seller/notifications", requireVendorAuth, async (req: any, res: any
         or(ilike(notificationsTable.title, `%${search}%`), ilike(notificationsTable.body, `%${search}%`))
       );
     }
+    if (dateFrom) conditions.push(gte(notificationsTable.createdAt, new Date(dateFrom)));
+    if (dateTo) conditions.push(lte(notificationsTable.createdAt, new Date(dateTo)));
     const whereClause = and(...conditions);
 
     const rows = await db

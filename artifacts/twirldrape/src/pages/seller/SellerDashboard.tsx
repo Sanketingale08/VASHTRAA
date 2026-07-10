@@ -72,7 +72,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
   useEffect(() => {
     fetchUnreadCount();
     fetchUnreadNotifCount();
-    const interval = setInterval(fetchUnreadNotifCount, 60000);
+    const interval = setInterval(fetchUnreadNotifCount, 8000);
     return () => clearInterval(interval);
   }, [fetchUnreadCount, fetchUnreadNotifCount]);
 

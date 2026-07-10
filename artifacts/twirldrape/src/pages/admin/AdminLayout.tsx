@@ -85,7 +85,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return r.json() as Promise<{ count: number }>;
     },
     enabled: !!adminKey,
-    refetchInterval: 60000,
+    refetchInterval: 8000,
     staleTime: 30000,
   });
   const unread = countData?.count ?? 0;

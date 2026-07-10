@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   Bell, Package, Truck, CheckCircle, XCircle, Tag, Heart,
   Trash2, CheckCheck, Clock, CreditCard, PackageCheck, MapPin, TrendingDown, Zap,
+  Search, Circle, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,14 @@ interface Notification {
   body: string;
   read: boolean;
   createdAt: string;
+  metadata?: Record<string, any> | null;
+}
+
+function deepLinkFor(n: Notification): string | null {
+  const m = n.metadata || {};
+  if (m.orderId) return `${basePath}/account/orders`;
+  if (m.productId) return `${basePath}/products/${m.productId}`;
+  return null;
 }
 
 interface Preferences {
@@ -94,23 +104,30 @@ function SkeletonRow() {
 export function AccountNotificationsPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const qc = useQueryClient();
 
   const filterType = activeTab === "all" ? undefined : activeTab;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["notif-list", activeTab, page],
+    queryKey: ["notif-list", activeTab, page, search, dateFrom, dateTo],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (filterType) {
         const types = filterType.split(",");
         for (const t of types) params.append("type", t);
       }
+      if (search.trim()) params.set("search", search.trim());
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       const r = await fetch(`${apiBase}/api/notifications?${params}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json() as Promise<{ notifications: Notification[]; total: number; page: number; limit: number }>;
     },
     staleTime: 10000,
+    refetchInterval: 8000,
   });
 
   const { data: prefs, isLoading: prefsLoading } = useQuery({
@@ -138,6 +155,17 @@ export function AccountNotificationsPage() {
   const markRead = useMutation({
     mutationFn: async (id: string) => {
       await fetch(`${apiBase}/api/notifications/${id}/read`, { method: "PATCH", credentials: "include" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notif-list"] });
+      qc.invalidateQueries({ queryKey: ["notif-count"] });
+      qc.invalidateQueries({ queryKey: ["notif-drawer"] });
+    },
+  });
+
+  const markUnread = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`${apiBase}/api/notifications/${id}/unread`, { method: "PATCH", credentials: "include" });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notif-list"] });
@@ -212,6 +240,41 @@ export function AccountNotificationsPage() {
           ))}
         </div>
 
+        {/* Search + date range */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search notifications..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-[#C9A84C]/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+            />
+          </div>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            className="px-3 py-2 text-sm border border-[#C9A84C]/20 rounded-lg text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+          />
+          <span className="text-xs text-gray-400">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            className="px-3 py-2 text-sm border border-[#C9A84C]/20 rounded-lg text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+          />
+          {(search || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setPage(1); }}
+              className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C]"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         {/* Mark all read banner */}
         {hasUnread && !isLoading && (
           <motion.div
@@ -275,16 +338,34 @@ export function AccountNotificationsPage() {
                         {n.title}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.body}</p>
-                      <p className="text-[10px] text-gray-300 mt-1">{relativeTime(n.createdAt)}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[10px] text-gray-300">{relativeTime(n.createdAt)}</p>
+                        {deepLinkFor(n) && (
+                          <Link
+                            href={deepLinkFor(n)!}
+                            className="flex items-center gap-0.5 text-[10px] font-semibold text-[#1E6B5A] hover:text-[#C9A84C]"
+                          >
+                            View details <ExternalLink size={10} />
+                          </Link>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!n.read && (
+                      {!n.read ? (
                         <button
                           onClick={() => markRead.mutate(n.id)}
                           title="Mark as read"
                           className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
                         >
                           <CheckCircle size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => markUnread.mutate(n.id)}
+                          title="Mark as unread"
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
+                        >
+                          <Circle size={14} />
                         </button>
                       )}
                       <button

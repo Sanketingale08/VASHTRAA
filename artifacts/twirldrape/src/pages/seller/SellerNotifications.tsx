@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { Link } from "wouter";
 import {
   Bell, Package, AlertTriangle, PackageX, Clock, RotateCcw,
-  Trash2, CheckCheck, CheckCircle, Search, XCircle, Wallet, IndianRupee, FileClock,
+  Trash2, CheckCheck, CheckCircle, Search, XCircle, Wallet, IndianRupee, FileClock, Circle, ExternalLink,
 } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -11,6 +12,7 @@ import { getApiUrl } from "@/lib/api";
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
 const CREAM = "#E6F0EA";
+const sellerBasePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface SellerNotification {
   id: string;
@@ -19,6 +21,14 @@ interface SellerNotification {
   body: string;
   read: boolean;
   createdAt: string;
+  metadata?: Record<string, any> | null;
+}
+
+function deepLinkFor(n: SellerNotification): string | null {
+  const m = n.metadata || {};
+  if (m.orderId) return `${sellerBasePath}/seller/orders`;
+  if (m.productId) return `${sellerBasePath}/seller/products`;
+  return null;
 }
 
 function typeIcon(type: string, size = 16) {
@@ -71,29 +81,44 @@ const TYPE_FILTERS = [
 export default function SellerNotifications() {
   const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const qc = useQueryClient();
 
   const filterTypes = activeTab === "all" ? undefined : activeTab.split(",");
 
-  useEffect(() => { setPage(1); }, [activeTab, search]);
+  useEffect(() => { setPage(1); }, [activeTab, search, dateFrom, dateTo]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["seller-notif-list", activeTab, search, page],
+    queryKey: ["seller-notif-list", activeTab, search, dateFrom, dateTo, page],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (filterTypes) for (const t of filterTypes) params.append("type", t);
       if (search.trim()) params.set("search", search.trim());
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       const r = await fetch(getApiUrl(`/api/seller/notifications?${params}`), { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json() as Promise<{ notifications: SellerNotification[]; total: number; page: number; limit: number }>;
     },
     staleTime: 10000,
+    refetchInterval: 8000,
   });
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
       await fetch(getApiUrl(`/api/seller/notifications/${id}/read`), { method: "PATCH", credentials: "include" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seller-notif-list"] });
+      qc.invalidateQueries({ queryKey: ["seller-notif-count"] });
+    },
+  });
+
+  const markUnread = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(getApiUrl(`/api/seller/notifications/${id}/unread`), { method: "PATCH", credentials: "include" });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["seller-notif-list"] });
@@ -166,6 +191,28 @@ export default function SellerNotifications() {
               className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
             />
           </div>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+          />
+          <span className="text-xs text-gray-400">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+          />
+          {(search || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); }}
+              className="text-xs font-semibold hover:opacity-70"
+              style={{ color: MAROON }}
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {hasUnread && !isLoading && (
@@ -224,10 +271,21 @@ export default function SellerNotifications() {
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm ${n.read ? "text-gray-600" : "font-semibold"}`} style={!n.read ? { color: "#3D1A1A" } : {}}>{n.title}</p>
                       <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.body}</p>
-                      <p className="text-[10px] text-gray-300 mt-1">{relativeTime(n.createdAt)}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[10px] text-gray-300">{relativeTime(n.createdAt)}</p>
+                        {deepLinkFor(n) && (
+                          <Link
+                            href={deepLinkFor(n)!}
+                            className="flex items-center gap-0.5 text-[10px] font-semibold hover:opacity-70"
+                            style={{ color: MAROON }}
+                          >
+                            View details <ExternalLink size={10} />
+                          </Link>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!n.read && (
+                      {!n.read ? (
                         <button
                           onClick={() => markRead.mutate(n.id)}
                           title="Mark as read"
@@ -235,6 +293,14 @@ export default function SellerNotifications() {
                           style={{ color: undefined }}
                         >
                           <CheckCircle size={14} className="hover:text-[#1E6B5A]" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => markUnread.mutate(n.id)}
+                          title="Mark as unread"
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:bg-gray-100"
+                        >
+                          <Circle size={14} className="hover:text-[#1E6B5A]" />
                         </button>
                       )}
                       <button

@@ -71,7 +71,7 @@ export function NotificationBell({ isDark }: Props) {
       return r.json() as Promise<{ count: number }>;
     },
     enabled: !!isSignedIn,
-    refetchInterval: 60000,
+    refetchInterval: 8000,
     staleTime: 30000,
   });
 
@@ -84,6 +84,7 @@ export function NotificationBell({ isDark }: Props) {
     },
     enabled: !!isSignedIn && open,
     staleTime: 10000,
+    refetchInterval: 8000,
   });
 
   const markRead = useMutation({

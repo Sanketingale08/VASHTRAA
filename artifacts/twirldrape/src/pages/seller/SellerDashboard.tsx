@@ -28,7 +28,7 @@ const NAV_LINKS = [
   { href: "/seller/notifications", label: "Notifications", icon: Bell, group: "/seller/notifications" },
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },
-  { href: "/seller/payouts", label: "Payouts", icon: CreditCard, stub: true },
+  { href: "/seller/payouts", label: "Payouts", icon: CreditCard, group: "/seller/payouts" },
   { href: "/seller/help", label: "Help", icon: HelpCircle, stub: true },
 ];
 

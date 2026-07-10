@@ -55,6 +55,7 @@ import SellerOrderDetail from "@/pages/seller/SellerOrderDetail";
 import SellerCustomers from "@/pages/seller/SellerCustomers";
 import SellerNotifications from "@/pages/seller/SellerNotifications";
 import SellerAnalytics from "@/pages/seller/SellerAnalytics";
+import SellerPayouts from "@/pages/seller/SellerPayouts";
 import SellerLogin from "@/pages/seller/SellerLogin";
 import VendorStore from "@/pages/VendorStore";
 import { SellerGuard } from "@/components/SellerGuard";
@@ -266,6 +267,9 @@ function Router() {
       )} />
       <Route path="/seller/analytics" component={() => (
         <SellerGuard><SellerAnalytics /></SellerGuard>
+      )} />
+      <Route path="/seller/payouts" component={() => (
+        <SellerGuard><SellerPayouts /></SellerGuard>
       )} />
       <Route path="/stores/:vendorId" component={VendorStore} />
       <Route path="/sign-in/*?" component={SignInPage} />

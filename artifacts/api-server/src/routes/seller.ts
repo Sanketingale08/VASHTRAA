@@ -550,6 +550,63 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
   }
 });
 
+router.get("/seller/payouts", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+
+  try {
+    const products = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(eq(productsTable.vendorId, vendorId));
+
+    const productIdSet = new Set(products.map((p) => p.id));
+    if (productIdSet.size === 0) {
+      return res.json({
+        lifetimeEarnings: 0,
+        pendingBalance: 0,
+        payouts: [],
+      });
+    }
+
+    const allOrders = await db
+      .select({ id: ordersTable.id, items: ordersTable.items, createdAt: ordersTable.createdAt, updatedAt: ordersTable.updatedAt, status: ordersTable.status })
+      .from(ordersTable)
+      .orderBy(desc(ordersTable.createdAt));
+
+    let lifetimeEarnings = 0;
+    let pendingBalance = 0;
+    const payouts: any[] = [];
+
+    for (const order of allOrders) {
+      const items = (order.items as any[]) ?? [];
+      const vendorItems = items.filter((i) => productIdSet.has(i.productId));
+      if (vendorItems.length === 0) continue;
+      if (order.status !== "delivered") continue;
+
+      const vendorTotal = vendorItems.reduce((s: number, i: any) => s + (i.price ?? 0) * (i.quantity ?? 1), 0);
+      lifetimeEarnings += vendorTotal;
+      pendingBalance += vendorTotal;
+
+      payouts.push({
+        orderId: order.id,
+        deliveredAt: order.updatedAt,
+        itemCount: vendorItems.length,
+        amount: vendorTotal,
+        status: "pending",
+      });
+    }
+
+    res.json({
+      lifetimeEarnings,
+      pendingBalance,
+      payouts,
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/payouts failed");
+    res.status(500).json({ error: "Failed to load payouts" });
+  }
+});
+
 router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res: any) => {
   const { orderId } = req.params;
   const { courierName, trackingNumber } = req.body;

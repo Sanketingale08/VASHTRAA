@@ -1,0 +1,147 @@
+Implement Customer Management Module in the Seller Dashboard
+
+Implement a complete Customer Management module in the Seller Dashboard. This module should allow sellers to manage customers who have purchased products from their own shop.
+
+Only the logged-in seller should be able to access this module and view customer information related to their own orders.
+
+Features to Implement
+Customer Details
+
+Allow sellers to view:
+
+Customer Name
+Customer ID
+Email Address
+Phone Number
+Shipping Address
+Billing Address
+Total Orders
+Total Amount Spent
+Last Order Date
+Customer Status (Active/Inactive)
+
+Note: Sellers should only be able to view customers who have placed orders from their own shop.
+
+Customer Purchase History
+
+Allow sellers to view:
+
+Complete Order History
+Purchased Products
+Order Dates
+Order Status
+Payment Status
+Total Purchase Amount
+Invoice Details
+
+Provide filters by:
+
+Date Range
+Order Status
+Payment Status
+
+Customer Reviews
+
+Allow sellers to:
+
+View Product Reviews
+View Customer Ratings
+Reply to Customer Reviews
+Report Inappropriate Reviews
+Filter Reviews by Rating and Date
+
+Display:
+
+Product Name
+Customer Name
+Rating
+Review Comment
+Review Date
+Seller Reply
+Customer Queries
+
+Allow sellers to:
+
+View Customer Questions
+Reply to Customer Queries
+Mark Queries as Resolved
+Track Query Status
+View Conversation History
+
+Display:
+
+Customer Name
+Product Name
+Query Subject
+Message
+Date & Time
+Status (Open, In Progress, Resolved)
+
+Customer Support Tickets
+
+Allow sellers to:
+
+View Support Tickets
+Reply to Customer Tickets
+Update Ticket Status
+Assign Priority
+Close Resolved Tickets
+View Ticket History
+
+Support ticket statuses should include:
+
+Open
+In Progress
+Waiting for Customer
+Resolved
+Closed
+
+Priority levels:
+
+Low
+Medium
+High
+Urgent
+Customer Management Dashboard
+
+Display summary cards for:
+
+Total Customers
+New Customers
+Repeat Customers
+Customer Reviews
+Open Queries
+Open Support Tickets
+Average Customer Rating
+Real-Time Synchronization
+
+All customer-related activities should automatically synchronize with the Customer Portal and Super Admin Panel.
+
+When a customer:
+
+Places an Order
+Submits a Review
+Creates a Support Ticket
+Sends a Product Query
+
+The corresponding seller should receive a real-time notification, and the data should immediately appear in the Seller Dashboard.
+
+Seller Permissions
+
+Each seller should only be able to:
+
+View customers who purchased from their own shop.
+View purchase history for their own products.
+Reply to reviews and customer queries related to their own products.
+Manage support tickets related to their own customers.
+
+A seller must not be able to access customer information, orders, reviews, queries, or support tickets belonging to another seller.
+
+Additional Requirements
+Build the Customer Management module with a premium, modern, and fully responsive UI.
+Include advanced search, filtering, sorting, and pagination.
+Display customer statistics using summary cards and charts where applicable.
+Secure all customer data with role-based access control.
+Preserve all existing functionality and ensure this implementation does not affect any existing routing, APIs, database relationships, or business logic.
+
+plan accordingly

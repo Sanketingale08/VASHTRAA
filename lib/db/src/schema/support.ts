@@ -8,9 +8,14 @@ export const supportTicketsTable = pgTable("support_tickets", {
     .$type<"Order Issue" | "Payment Issue" | "Return/Refund" | "Product Query" | "Other">()
     .notNull(),
   status: text("status")
-    .$type<"Open" | "In Progress" | "Resolved" | "Closed">()
+    .$type<"Open" | "In Progress" | "Resolved" | "Closed" | "Waiting for Customer">()
     .notNull()
     .default("Open"),
+  priority: text("priority")
+    .$type<"Low" | "Medium" | "High" | "Urgent">()
+    .notNull()
+    .default("Medium"),
+  vendorId: uuid("vendor_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

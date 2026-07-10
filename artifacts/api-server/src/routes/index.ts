@@ -14,6 +14,8 @@ import rewardsRouter from "./rewards";
 import notificationsRouter from "./notifications";
 import sellerRouter from "./seller";
 import supportRouter from "./support";
+import sellerCustomersRouter from "./sellerCustomers";
+import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
 
@@ -32,5 +34,7 @@ router.use(rewardsRouter);
 router.use(notificationsRouter);
 router.use(sellerRouter);
 router.use(supportRouter);
+router.use(sellerCustomersRouter);
+router.use(reviewsRouter);
 
 export default router;

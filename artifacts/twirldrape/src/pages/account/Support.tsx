@@ -11,14 +11,16 @@ import { cn } from "@/lib/utils";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type TicketStatus = "Open" | "In Progress" | "Resolved" | "Closed";
-type Category = "Order Issue" | "Payment Issue" | "Return/Refund" | "Product Query" | "Other";
+type TicketStatus = "Open" | "In Progress" | "Resolved" | "Closed" | "Waiting for Customer";
+type Category = string;
 
 interface Ticket {
   id: string;
   subject: string;
   category: Category;
   status: TicketStatus;
+  assignedTo: "seller" | "admin";
+  escalated: boolean;
   createdAt: string;
   updatedAt: string;
   lastReplyAt: string;
@@ -37,11 +39,18 @@ interface TicketDetail extends Ticket {
   messages: Message[];
 }
 
-const CATEGORIES: Category[] = [
+const FALLBACK_CATEGORIES: Category[] = [
   "Order Issue",
-  "Payment Issue",
+  "Delivery/Shipping Delay",
+  "Product Quality Issue",
+  "Wrong/Damaged Item",
   "Return/Refund",
   "Product Query",
+  "Payment Issue",
+  "Coupon/Discount Issue",
+  "Account/Login Issue",
+  "Website/App Technical Issue",
+  "Seller Complaint",
   "Other",
 ];
 
@@ -84,8 +93,10 @@ function statusColor(status: TicketStatus) {
   switch (status) {
     case "Open":        return "bg-blue-50 text-blue-700 border-blue-200";
     case "In Progress": return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "Waiting for Customer": return "bg-amber-50 text-amber-700 border-amber-200";
     case "Resolved":    return "bg-green-50 text-green-700 border-green-200";
     case "Closed":      return "bg-gray-100 text-gray-500 border-gray-200";
+    default:            return "bg-gray-50 text-gray-600 border-gray-200";
   }
 }
 
@@ -93,8 +104,10 @@ function statusIcon(status: TicketStatus) {
   switch (status) {
     case "Open":        return <AlertCircle size={11} />;
     case "In Progress": return <Clock size={11} />;
+    case "Waiting for Customer": return <Clock size={11} />;
     case "Resolved":    return <CheckCircle2 size={11} />;
     case "Closed":      return <XCircle size={11} />;
+    default:            return <AlertCircle size={11} />;
   }
 }
 
@@ -132,6 +145,16 @@ export function AccountSupportPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [form, setForm] = useState({ subject: "", category: "" as Category | "", description: "" });
   const [formError, setFormError] = useState("");
+
+  const { data: categories = FALLBACK_CATEGORIES } = useQuery<Category[]>({
+    queryKey: ["support-categories"],
+    queryFn: async () => {
+      const r = await fetch(`${basePath}/api/support/categories`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to fetch categories");
+      const data = await r.json();
+      return data.categories ?? FALLBACK_CATEGORIES;
+    },
+  });
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery<Ticket[]>({
     queryKey: ["support-tickets"],
@@ -196,6 +219,44 @@ export function AccountSupportPage() {
       qc.invalidateQueries({ queryKey: ["support-ticket", selectedId] });
       qc.invalidateQueries({ queryKey: ["support-tickets"] });
       setReplyBody("");
+    },
+  });
+
+  const reopenTicket = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${basePath}/api/support/tickets/${selectedId}/reopen`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error((err as any).error || "Failed to reopen ticket");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["support-ticket", selectedId] });
+      qc.invalidateQueries({ queryKey: ["support-tickets"] });
+    },
+  });
+
+  const escalateTicket = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${basePath}/api/support/tickets/${selectedId}/escalate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: "Customer requested escalation to Super Admin" }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error((err as any).error || "Failed to escalate ticket");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["support-ticket", selectedId] });
+      qc.invalidateQueries({ queryKey: ["support-tickets"] });
     },
   });
 
@@ -318,7 +379,7 @@ export function AccountSupportPage() {
             className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A]"
           >
             <option value="">Select a category</option>
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -462,31 +523,54 @@ export function AccountSupportPage() {
           </div>
 
           {ticketDetail.status !== "Closed" && ticketDetail.status !== "Resolved" ? (
-            <form onSubmit={handleSendReply} className="border-t border-[#C9A84C]/15 p-3 flex gap-2">
-              <textarea
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                placeholder="Write a reply…"
-                rows={2}
-                className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B5A]/40 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (replyBody.trim()) addReply.mutate(replyBody.trim());
-                  }
-                }}
-              />
-              <button
-                type="submit"
-                disabled={!replyBody.trim() || addReply.isPending}
-                className="self-end px-3 py-2 bg-[#1E6B5A] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
-              >
-                <Send size={15} />
-              </button>
-            </form>
+            <>
+              <form onSubmit={handleSendReply} className="border-t border-[#C9A84C]/15 p-3 flex gap-2">
+                <textarea
+                  value={replyBody}
+                  onChange={(e) => setReplyBody(e.target.value)}
+                  placeholder="Write a reply…"
+                  rows={2}
+                  className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B5A]/40 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (replyBody.trim()) addReply.mutate(replyBody.trim());
+                    }
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!replyBody.trim() || addReply.isPending}
+                  className="self-end px-3 py-2 bg-[#1E6B5A] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
+                >
+                  <Send size={15} />
+                </button>
+              </form>
+              {ticketDetail.assignedTo === "seller" && !ticketDetail.escalated && (
+                <div className="border-t border-[#C9A84C]/15 p-3 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-gray-400">Not hearing back from the seller?</p>
+                  <button
+                    onClick={() => escalateTicket.mutate()}
+                    disabled={escalateTicket.isPending}
+                    className="text-xs font-semibold text-[#1E6B5A] hover:underline disabled:opacity-50"
+                  >
+                    {escalateTicket.isPending ? "Escalating…" : "Escalate to Super Admin"}
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
-            <div className="border-t border-[#C9A84C]/15 p-3 text-center text-xs text-gray-400">
-              This ticket is {ticketDetail.status.toLowerCase()}. Raise a new ticket for further assistance.
+            <div className="border-t border-[#C9A84C]/15 p-3 flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-400">
+                This ticket is {ticketDetail.status.toLowerCase()}.
+              </p>
+              <button
+                onClick={() => reopenTicket.mutate()}
+                disabled={reopenTicket.isPending}
+                className="text-xs font-semibold text-[#1E6B5A] hover:underline disabled:opacity-50"
+              >
+                {reopenTicket.isPending ? "Reopening…" : "Reopen ticket"}
+              </button>
             </div>
           )}
         </>

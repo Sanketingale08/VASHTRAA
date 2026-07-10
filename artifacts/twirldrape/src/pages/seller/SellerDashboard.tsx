@@ -29,7 +29,7 @@ const NAV_LINKS = [
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },
   { href: "/seller/payouts", label: "Payouts", icon: CreditCard, group: "/seller/payouts" },
-  { href: "/seller/help", label: "Help", icon: HelpCircle, stub: true },
+  { href: "/seller/support", label: "Support", icon: HelpCircle, group: "/seller/support" },
 ];
 
 const UNREAD_KEY = "td_seller_orders_last_viewed";

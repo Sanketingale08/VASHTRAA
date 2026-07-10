@@ -13,6 +13,16 @@ export type SellerNotificationType =
   | "out_of_stock"
   | "promotional";
 
+export type TicketNotificationType =
+  | "ticket_created"
+  | "ticket_assigned"
+  | "ticket_replied"
+  | "ticket_status_changed"
+  | "ticket_resolved"
+  | "ticket_escalated";
+
+export const ADMIN_NOTIFICATION_USER_ID = "admin";
+
 export const notificationsTable = pgTable("notifications", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
@@ -21,6 +31,7 @@ export const notificationsTable = pgTable("notifications", {
     .$type<
       | "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "coupon_expiry" | "wishlist_restock" | "return_requested" | "return_approved" | "return_rejected" | "refund_requested" | "refund_approved" | "refund_rejected"
       | SellerNotificationType
+      | TicketNotificationType
     >()
     .notNull(),
   title: text("title").notNull(),

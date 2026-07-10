@@ -43,6 +43,8 @@ import AdminVendorDetail from "@/pages/admin/AdminVendorDetail";
 import AdminReturns from "@/pages/admin/AdminReturns";
 import AdminDisputes from "@/pages/admin/AdminDisputes";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
+import AdminSupport from "@/pages/admin/AdminSupport";
+import SellerSupport from "@/pages/seller/SellerSupport";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
 import SellerProfile from "@/pages/seller/SellerProfile";
@@ -233,6 +235,7 @@ function Router() {
       <Route path="/admin/returns" component={AdminReturns} />
       <Route path="/admin/disputes" component={AdminDisputes} />
       <Route path="/admin/coupons" component={AdminCoupons} />
+      <Route path="/admin/support" component={AdminSupport} />
       <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
       <Route path="/seller/dashboard" component={() => (
@@ -270,6 +273,9 @@ function Router() {
       )} />
       <Route path="/seller/payouts" component={() => (
         <SellerGuard><SellerPayouts /></SellerGuard>
+      )} />
+      <Route path="/seller/support" component={() => (
+        <SellerGuard><SellerSupport /></SellerGuard>
       )} />
       <Route path="/stores/:vendorId" component={VendorStore} />
       <Route path="/sign-in/*?" component={SignInPage} />

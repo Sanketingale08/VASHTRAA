@@ -42,8 +42,8 @@ router.get("/notifications", requireAuth, async (req: any, res: any): Promise<vo
     let whereClause = eq(notificationsTable.userId, req.userId) as any;
     if (types.length > 0) {
       const typeFilter = types.length === 1
-        ? eq(notificationsTable.type, types[0])
-        : inArray(notificationsTable.type, types);
+        ? eq(notificationsTable.type, types[0] as any)
+        : inArray(notificationsTable.type, types as any[]);
       whereClause = and(eq(notificationsTable.userId, req.userId), typeFilter);
     }
 

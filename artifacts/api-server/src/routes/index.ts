@@ -16,6 +16,8 @@ import sellerRouter from "./seller";
 import supportRouter from "./support";
 import sellerCustomersRouter from "./sellerCustomers";
 import sellerNotificationsRouter from "./sellerNotifications";
+import sellerSupportRouter from "./sellerSupport";
+import adminSupportRouter from "./adminSupport";
 import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
@@ -37,6 +39,8 @@ router.use(sellerRouter);
 router.use(supportRouter);
 router.use(sellerCustomersRouter);
 router.use(sellerNotificationsRouter);
+router.use(sellerSupportRouter);
+router.use(adminSupportRouter);
 router.use(reviewsRouter);
 
 export default router;

@@ -2,3 +2,4 @@
 - [TwirlDrape mobile checkout step layout](twirldrape-checkout-steps.md) — coupon UI lives in step 4 (Review), not step 3 (Payment); API_BASE for e2e should hit the shared proxy on port 80, not a guessed internal port
 - [drizzle-kit migrate vs push](drizzle-migrate-vs-push.md) — silent exit-1 on migrate usually means schema was pushed, not migrated; baseline __drizzle_migrations by hash instead of dropping tables
 - [Seller notification owner guard](seller-notification-owner-guard.md) — insertSellerNotification must skip vendors with NULL ownerId or it crashes the order transaction
+- [lib/db composite build](lib-db-composite-build.md) — schema changes in lib/db need a forced tsc -b rebuild or dependent packages see stale types

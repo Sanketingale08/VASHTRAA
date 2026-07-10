@@ -29,6 +29,9 @@ export const commissionRulesTable = pgTable("commission_rules", {
   vendorId: uuid("vendor_id").references(() => vendorsTable.id),
   rate: real("rate").notNull(),
   active: boolean("active").notNull().default(true),
+  effectiveFrom: timestamp("effective_from"),
+  effectiveTo: timestamp("effective_to"),
+  supersedesId: uuid("supersedes_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -30,7 +30,7 @@ interface Overview {
 }
 
 interface VendorRow { id: string; name: string; shopCity: string; totalRevenue: number; totalOrders: number; productsSold: number; rating: number; performanceScore: number; performanceBadge: string; fulfillmentRate: number }
-interface ProductRow { id: string; name: string; vendorName: string; category: string; unitsSold: number; revenue: number }
+interface ProductRow { id: string; name: string; vendorName: string; category: string; unitsSold: number; revenue: number; rating: number; stock: number }
 interface ViewedProductRow { id: string; name: string; totalViews: number; vendorName: string; category: string; conversionRate: number; wishlistCount: number }
 interface SearchTermRow { term: string; searchCount: number; resultCount: number; availability: string }
 interface ShopRow { id: string; shopName: string; totalRevenue: number; totalOrders: number; averageOrderValue: number; rating: number; performanceScore: number }
@@ -134,6 +134,7 @@ function BusinessIntelligenceContent() {
   const [data, setData] = useState<BIData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [productSort, setProductSort] = useState<"revenue" | "unitsSold" | "rating" | "category">("revenue");
 
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
@@ -166,6 +167,18 @@ function BusinessIntelligenceContent() {
   }, [query, adminKey]);
 
   const ov = data?.overview;
+
+  const sortedTopProducts = useMemo(() => {
+    if (!data) return [];
+    const rows = [...data.topProducts];
+    rows.sort((a, b) => {
+      if (productSort === "category") return a.category.localeCompare(b.category);
+      if (productSort === "unitsSold") return b.unitsSold - a.unitsSold;
+      if (productSort === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
+      return b.revenue - a.revenue;
+    });
+    return rows;
+  }, [data, productSort]);
 
   return (
     <div className="space-y-6">
@@ -252,18 +265,38 @@ function BusinessIntelligenceContent() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                <Package size={15} style={{ color: GOLD }} />
-                <h3 className="text-sm font-bold" style={{ color: NAVY }}>Top Products</h3>
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Package size={15} style={{ color: GOLD }} />
+                  <h3 className="text-sm font-bold" style={{ color: NAVY }}>Top Products</h3>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] uppercase text-gray-400 mr-1">Sort:</span>
+                  {([
+                    { key: "revenue", label: "Revenue" },
+                    { key: "unitsSold", label: "Units" },
+                    { key: "rating", label: "Rating" },
+                    { key: "category", label: "Category" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setProductSort(opt.key)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${productSort === opt.key ? "text-white" : "text-gray-500 hover:bg-gray-100"}`}
+                      style={productSort === opt.key ? { background: NAVY } : undefined}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-                {data.topProducts.length === 0 && <div className="py-8 text-center text-xs text-gray-400">No sales in this period</div>}
-                {data.topProducts.map((p, i) => (
+                {sortedTopProducts.length === 0 && <div className="py-8 text-center text-xs text-gray-400">No sales in this period</div>}
+                {sortedTopProducts.map((p, i) => (
                   <div key={p.id} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50/60">
                     <span className="text-xs font-bold w-5 text-gray-300">{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate" style={{ color: NAVY }}>{p.name}</div>
-                      <div className="text-xs text-gray-400">{p.vendorName} · {p.unitsSold} sold</div>
+                      <div className="text-xs text-gray-400">{p.vendorName} · {p.category} · {p.unitsSold} sold · ★{(p.rating ?? 0).toFixed(1)}</div>
                     </div>
                     <div className="text-sm font-semibold" style={{ color: NAVY }}>{fmt(p.revenue)}</div>
                   </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Wallet, CheckCircle, XCircle, Clock, IndianRupee, TrendingUp, TrendingDown,
-  Download, FileSpreadsheet, Percent, Receipt, RotateCcw, CreditCard,
+  Download, FileSpreadsheet, Percent, Receipt, RotateCcw, CreditCard, Printer,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -22,6 +22,18 @@ function fmt(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+function PrintButton({ disabled }: { disabled?: boolean }) {
+  return (
+    <button
+      onClick={() => window.print()}
+      disabled={disabled}
+      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+    >
+      <Printer size={13} /> Print
+    </button>
+  );
+}
+
 interface Settlement {
   id: string; vendorId: string; vendorName: string; amount: number; type: string;
   status: string; paymentMethod: string | null; transactionId: string | null;
@@ -31,6 +43,7 @@ interface Settlement {
 interface CommissionRule {
   id: string; scope: string; category: string | null; vendorId: string | null;
   vendorName: string | null; rate: number; active: boolean; createdAt: string;
+  effectiveFrom?: string | null; effectiveTo?: string | null; supersedesId?: string | null;
 }
 
 interface RevenueReport {
@@ -203,6 +216,7 @@ function SettlementsPanel() {
             <button onClick={exportExcel} disabled={settlements.length === 0} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
               <FileSpreadsheet size={13} /> Excel
             </button>
+            <PrintButton disabled={settlements.length === 0} />
           </div>
         </div>
         {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
@@ -276,6 +290,10 @@ function CommissionRulesPanel() {
   const [category, setCategory] = useState("paithani");
   const [vendorId, setVendorId] = useState("");
   const [rate, setRate] = useState("10");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [effectiveTo, setEffectiveTo] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -290,6 +308,22 @@ function CommissionRulesPanel() {
 
   usePolling(load, [adminKey]);
 
+  function startEdit(r: CommissionRule) {
+    setEditingId(r.id);
+    setScope(r.scope as any);
+    setCategory(r.category ?? "paithani");
+    setVendorId(r.vendorId ?? "");
+    setRate((r.rate * 100).toString());
+    setEffectiveFrom(r.effectiveFrom ? r.effectiveFrom.slice(0, 10) : "");
+    setEffectiveTo(r.effectiveTo ? r.effectiveTo.slice(0, 10) : "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEffectiveFrom("");
+    setEffectiveTo("");
+  }
+
   async function createRule() {
     setCreating(true);
     setError("");
@@ -299,10 +333,15 @@ function CommissionRulesPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         credentials: "include",
-        body: JSON.stringify({ scope, category: scope === "category" ? category : undefined, vendorId: scope === "vendor" ? vendorId : undefined, rate: rateNum }),
+        body: JSON.stringify({
+          scope, category: scope === "category" ? category : undefined, vendorId: scope === "vendor" ? vendorId : undefined, rate: rateNum,
+          effectiveFrom: effectiveFrom || undefined, effectiveTo: effectiveTo || undefined,
+          supersedesId: editingId || undefined,
+        }),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "Failed"); }
       setVendorId("");
+      cancelEdit();
       load();
     } catch (e: any) {
       setError(e.message ?? "Failed to create rule");
@@ -319,6 +358,8 @@ function CommissionRulesPanel() {
     });
     load();
   }
+
+  const visibleRules = showHistory ? rules : rules.filter((r) => r.active);
 
   return (
     <div className="space-y-4">
@@ -352,21 +393,39 @@ function CommissionRulesPanel() {
             <label className="text-xs text-gray-400 block mb-1">Rate (%)</label>
             <input type="number" step="0.1" value={rate} onChange={(e) => setRate(e.target.value)} className="text-xs px-2 py-2 rounded-lg border border-gray-200 w-24" />
           </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Effective From</label>
+            <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} className="text-xs px-2 py-2 rounded-lg border border-gray-200" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Effective To</label>
+            <input type="date" value={effectiveTo} onChange={(e) => setEffectiveTo(e.target.value)} className="text-xs px-2 py-2 rounded-lg border border-gray-200" />
+          </div>
           <button onClick={createRule} disabled={creating || (scope === "vendor" && !vendorId)} className="text-xs font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: NAVY }}>
-            {creating ? "Saving…" : "Create Rule"}
+            {creating ? "Saving…" : editingId ? "Save Edit" : "Create Rule"}
           </button>
+          {editingId && (
+            <button onClick={cancelEdit} className="text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+          )}
         </div>
         {error && <div className="text-xs text-red-500 mt-2">{error}</div>}
+        {editingId && <p className="text-xs text-amber-600 mt-2">Editing rule — saving will deactivate the original and create a new dated version (kept for history).</p>}
         <p className="text-xs text-gray-400 mt-3">Precedence: vendor-specific &gt; category &gt; global. Default flat commission is 10% until an active rule overrides it.</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-bold" style={{ color: NAVY }}>Active & Past Rules</h3>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-bold" style={{ color: NAVY }}>{showHistory ? "All Rules (Active & History)" : "Active Rules"}</h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowHistory((v) => !v)} className="text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+              {showHistory ? "Hide History" : "Show History"}
+            </button>
+            <PrintButton disabled={rules.length === 0} />
+          </div>
         </div>
         {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
-        {!loading && rules.length === 0 && <div className="py-10 text-center text-sm text-gray-400">No custom commission rules yet — flat 10% applies platform-wide.</div>}
-        {!loading && rules.length > 0 && (
+        {!loading && visibleRules.length === 0 && <div className="py-10 text-center text-sm text-gray-400">No custom commission rules yet — flat 10% applies platform-wide.</div>}
+        {!loading && visibleRules.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -374,24 +433,33 @@ function CommissionRulesPanel() {
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Scope</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Target</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Rate</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Effective</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {rules.map((r) => (
+                {visibleRules.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50/60">
                     <td className="px-4 py-3.5 capitalize font-semibold" style={{ color: NAVY }}>{r.scope}</td>
                     <td className="px-4 py-3.5 text-xs text-gray-500">{r.scope === "category" ? r.category : r.scope === "vendor" ? r.vendorName : "All vendors"}</td>
                     <td className="px-4 py-3.5 text-right font-semibold" style={{ color: NAVY }}>{(r.rate * 100).toFixed(1)}%</td>
+                    <td className="px-4 py-3.5 text-xs text-gray-500">
+                      {r.effectiveFrom ? new Date(r.effectiveFrom).toLocaleDateString("en-IN") : "—"}
+                      {" → "}
+                      {r.effectiveTo ? new Date(r.effectiveTo).toLocaleDateString("en-IN") : "—"}
+                    </td>
                     <td className="px-4 py-3.5">
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: r.active ? "#f0fdf4" : "#f3f4f6", color: r.active ? "#15803d" : "#9ca3af" }}>
                         {r.active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       {r.active && (
-                        <button onClick={() => deactivate(r.id)} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Deactivate</button>
+                        <>
+                          <button onClick={() => startEdit(r)} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 mr-2">Edit</button>
+                          <button onClick={() => deactivate(r.id)} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Deactivate</button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -477,6 +545,7 @@ function RevenueReportPanel() {
           <button onClick={exportExcel} disabled={exporting !== null || !data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
             <FileSpreadsheet size={13} /> Excel
           </button>
+          <PrintButton disabled={!data} />
         </div>
       </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
@@ -596,6 +665,7 @@ function PaymentReportPanel() {
           <button onClick={exportExcel} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
             <FileSpreadsheet size={13} /> Excel
           </button>
+          <PrintButton disabled={!data} />
         </div>
       </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
@@ -701,6 +771,7 @@ function RefundReportPanel() {
           <button onClick={exportExcel} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
             <FileSpreadsheet size={13} /> Excel
           </button>
+          <PrintButton disabled={!data} />
         </div>
       </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}
@@ -814,6 +885,7 @@ function ProfitAnalysisPanel() {
           <button onClick={exportExcel} disabled={!data} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
             <FileSpreadsheet size={13} /> Excel
           </button>
+          <PrintButton disabled={!data} />
         </div>
       </div>
       {loading && <div className="py-10 text-center text-sm text-gray-400">Loading…</div>}

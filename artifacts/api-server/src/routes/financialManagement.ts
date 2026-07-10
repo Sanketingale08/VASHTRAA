@@ -110,7 +110,7 @@ router.get("/admin/financial/commission-rules", requireAdminKey, async (req: any
 
 router.post("/admin/financial/commission-rules", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
-    const { scope, category, vendorId, rate } = req.body ?? {};
+    const { scope, category, vendorId, rate, effectiveFrom, effectiveTo, supersedesId } = req.body ?? {};
     if (!["global", "category", "vendor"].includes(scope) || typeof rate !== "number" || rate < 0 || rate > 1) {
       res.status(400).json({ error: "scope (global/category/vendor) and rate (0-1) are required" });
       return;
@@ -123,8 +123,19 @@ router.post("/admin/financial/commission-rules", requireAdminKey, async (req: an
       res.status(400).json({ error: "vendorId is required for vendor-scoped rules" });
       return;
     }
+    // Editing a rule is modeled as: deactivate the old rule (kept for history)
+    // and insert a new one linked via supersedesId, so past effective rates
+    // remain auditable instead of being overwritten in place.
+    if (supersedesId) {
+      await db.update(commissionRulesTable)
+        .set({ active: false, effectiveTo: new Date(), updatedAt: new Date() })
+        .where(eq(commissionRulesTable.id, supersedesId));
+    }
     const [rule] = await db.insert(commissionRulesTable).values({
       scope, category: category ?? null, vendorId: vendorId ?? null, rate,
+      effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : null,
+      effectiveTo: effectiveTo ? new Date(effectiveTo) : null,
+      supersedesId: supersedesId ?? null,
     }).returning();
     res.status(201).json({ rule });
   } catch (err) {

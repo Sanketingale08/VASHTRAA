@@ -35,7 +35,7 @@ export const commissionRulesTable = pgTable("commission_rules", {
 
 export type CommissionRule = typeof commissionRulesTable.$inferSelect;
 
-export const REPORT_TYPES = ["revenue", "payments", "refunds", "profit-analysis"] as const;
+export const REPORT_TYPES = ["revenue", "payments", "refunds", "profit", "settlements"] as const;
 export const REPORT_FREQUENCIES = ["daily", "weekly", "monthly"] as const;
 
 export const reportSchedulesTable = pgTable("report_schedules", {

@@ -45,7 +45,7 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
     .select({
       id: productsTable.id, vendorId: productsTable.vendorId, active: productsTable.active,
       stock: productsTable.stock, lowStockThreshold: productsTable.lowStockThreshold,
-      isFeatured: productsTable.isFeatured,
+      isFeatured: productsTable.isFeatured, category: productsTable.category,
     })
     .from(productsTable);
   const orders = await db.select().from(ordersTable);
@@ -54,6 +54,7 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
   const commissionRules = await loadActiveCommissionRules();
 
   const productToVendor = new Map(products.filter(p => p.vendorId).map(p => [p.id, p.vendorId as string]));
+  const productToCategory = new Map(products.map(p => [p.id, p.category as string | null]));
 
   const map = new Map<string, VendorAggregate>();
   for (const v of vendors) {
@@ -120,6 +121,12 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
 
       if (!["cancelled", "returned"].includes(order.status)) {
         agg.grossRevenue += vendorTotal;
+        for (const item of vendorItems) {
+          const itemTotal = item.price * (item.quantity ?? 1);
+          const category = productToCategory.get(item.productId) ?? undefined;
+          const rate = effectiveRateFromRules(commissionRules, vendorId, category);
+          agg.commissionEarned += Math.round(itemTotal * rate);
+        }
       }
       if (order.refundStatus === "processed") {
         agg.refundedAmount += vendorTotal;
@@ -148,9 +155,7 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
   }
 
   for (const [vendorId, agg] of map) {
-    const vendorRate = effectiveRateFromRules(commissionRules, vendorId, undefined);
-    agg.netRevenue = Math.round(agg.grossRevenue * (1 - vendorRate));
-    agg.commissionEarned = Math.round(agg.grossRevenue * vendorRate);
+    agg.netRevenue = agg.grossRevenue - agg.commissionEarned;
 
     const vMonthly = monthlyMap.get(vendorId) ?? new Map();
     agg.monthlyRevenue = [...vMonthly.entries()]

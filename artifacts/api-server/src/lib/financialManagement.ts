@@ -49,15 +49,19 @@ export async function computeRevenueReport(filters: RevenueReportFilters) {
     if (filters.paymentStatus && o.status !== filters.paymentStatus) continue;
 
     const items = (o.items as OrderItem[]) ?? [];
-    let orderMatchesFilter = !filters.vendorId && !filters.category;
+    const hasLineFilter = !!filters.vendorId || !!filters.category;
+    let orderMatchesFilter = !hasLineFilter;
     let orderCommission = 0;
     let orderVendorRevenue = 0;
+    let matchedLineTotal = 0;
+    const orderLineTotal = items.reduce((s, i) => s + i.price * (i.quantity ?? 1), 0);
     for (const item of items) {
       const p = productById.get(item.productId);
       if (filters.vendorId && p?.vendorId !== filters.vendorId) continue;
       if (filters.category && p?.category !== filters.category) continue;
       orderMatchesFilter = true;
       const lineTotal = item.price * (item.quantity ?? 1);
+      matchedLineTotal += lineTotal;
       const rate = rateFor(p?.vendorId, p?.category);
       const commission = Math.round(lineTotal * rate);
       orderCommission += commission;
@@ -65,18 +69,25 @@ export async function computeRevenueReport(filters: RevenueReportFilters) {
     }
     if (!orderMatchesFilter) continue;
 
-    grossRevenue += o.total;
-    taxesCollected += o.tax;
-    shippingRevenue += o.shipping;
+    // When filtering by vendor/category, prorate order-level totals (tax, shipping, gross)
+    // by the matched line items' share of the order, instead of counting the full order.
+    const shareOfOrder = hasLineFilter ? (orderLineTotal > 0 ? matchedLineTotal / orderLineTotal : 0) : 1;
+    const orderGross = hasLineFilter ? matchedLineTotal : o.total;
+    const orderTax = Math.round(o.tax * shareOfOrder);
+    const orderShipping = Math.round(o.shipping * shareOfOrder);
+
+    grossRevenue += orderGross;
+    taxesCollected += orderTax;
+    shippingRevenue += orderShipping;
     commissionRevenue += orderCommission;
     vendorRevenue += orderVendorRevenue;
 
     rows.push({
       orderId: o.id,
       date: o.createdAt,
-      total: o.total,
-      tax: o.tax,
-      shipping: o.shipping,
+      total: orderGross,
+      tax: orderTax,
+      shipping: orderShipping,
       commission: orderCommission,
       vendorRevenue: orderVendorRevenue,
       paymentMethod: o.paymentMethod,

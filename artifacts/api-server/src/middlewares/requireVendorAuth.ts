@@ -1,5 +1,6 @@
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable } from "@workspace/db";
+import { db } from "@workspace/db";
+import { vendorsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function requireVendorAuth(req: any, res: any, next: any) {

@@ -272,4 +272,90 @@ test.describe("Checkout edge cases", () => {
       });
     }
   });
+
+  test("Coupon becomes invalid mid-checkout: clear error, remove-and-continue completes order without discount", async ({
+    page,
+  }) => {
+    if (!authUser) {
+      test.skip(true, "Clerk test user creation failed");
+      return;
+    }
+    if (!ADMIN_API_KEY) {
+      test.skip(true, "ADMIN_API_KEY missing — cannot create/deactivate a coupon");
+      return;
+    }
+
+    const codeToCreate = `E2EMID${Date.now()}`;
+    const created = await createCoupon(codeToCreate);
+    if (!created) {
+      test.skip(true, "Could not create a test coupon for this test");
+      return;
+    }
+
+    const [product] = await getInStockProducts(page, 1);
+
+    await signInWithTicket(page, BASE_URL, authUser.userId);
+
+    await addProductToCart(page, product.id);
+
+    await page.goto(`${BASE_URL}/checkout`);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(3_000);
+
+    await expect(page.getByText("Checkout")).toBeVisible({ timeout: 5_000 });
+
+    await fillAddressFormIfNeeded(page);
+
+    const continueBtn1 = page.getByTestId("checkout-continue-1");
+    await continueBtn1.waitFor({ state: "visible", timeout: 8_000 });
+    await continueBtn1.click();
+    await page.waitForTimeout(1_500);
+
+    await expect(page.getByText("Delivery Method")).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId("checkout-continue-2").click();
+    await page.waitForTimeout(1_500);
+
+    await expect(page.getByText("Payment Method")).toBeVisible({ timeout: 8_000 });
+    await page.getByText("Cash on Delivery").click();
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("checkout-continue-3").click();
+    await page.waitForTimeout(1_500);
+
+    await expect(page.getByText("Review Order")).toBeVisible({ timeout: 8_000 });
+
+    const couponInput = page.locator('input[placeholder="Enter coupon code"]');
+    await couponInput.fill(created.code);
+    await page.getByText("Apply", { exact: true }).click();
+    await page.waitForTimeout(1_500);
+
+    await expect(page.getByText(`"${created.code}" applied`)).toBeVisible({ timeout: 5_000 });
+
+    await deactivateCoupon(created.id);
+
+    await page.getByTestId("checkout-place-order").click();
+
+    await expect(page.getByText(/invalid|expired|no longer active/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const stillOnCheckout = page.url().includes("/checkout");
+    expect(stillOnCheckout).toBe(true);
+
+    await page
+      .getByText("Remove coupon and continue without discount")
+      .click();
+    await page.waitForTimeout(500);
+
+    await expect(page.getByText(`"${created.code}" applied`)).not.toBeVisible();
+
+    await page.getByTestId("checkout-place-order").click();
+    await page.waitForURL(/\/orders\//, { timeout: 25_000 });
+
+    await expect(page.getByTestId("order-confirmed-title")).toBeVisible({ timeout: 10_000 });
+
+    await expect(
+      page.getByText(new RegExp(`Discount \\(${created.code}\\)`, "i"))
+    ).not.toBeVisible();
+  });
 });

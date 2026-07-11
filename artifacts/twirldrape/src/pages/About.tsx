@@ -87,9 +87,9 @@ const TRUST_BADGES = [
 ];
 
 const TEAM = [
-  { name: "Anjali Deshmukh", role: "Founder & CEO", avatar: "/images/artisan-1.png", bio: "Third-generation textile enthusiast who founded TwirlDrape to bring authentic Paithani weaves to a global audience." },
-  { name: "Rohan Kulkarni", role: "Head of Vendor Relations", avatar: "/images/artisan-2.png", bio: "Works hand-in-hand with weaver collectives across Maharashtra to onboard and support artisan partners." },
-  { name: "Meera Iyer", role: "Head of Design & Curation", avatar: "/images/artisan-3.png", bio: "Curates every collection, ensuring each saree reflects timeless craftsmanship and contemporary taste." },
+  { name: "Anjali Deshmukh", role: "Founder & CEO", avatar: "/images/team-anjali.png", bio: "Third-generation textile enthusiast who founded TwirlDrape to bring authentic Paithani weaves to a global audience." },
+  { name: "Rohan Kulkarni", role: "Head of Vendor Relations", avatar: "/images/team-rohan.png", bio: "Works hand-in-hand with weaver collectives across Maharashtra to onboard and support artisan partners." },
+  { name: "Meera Iyer", role: "Head of Design & Curation", avatar: "/images/team-meera.png", bio: "Curates every collection, ensuring each saree reflects timeless craftsmanship and contemporary taste." },
 ];
 
 const STATS = [

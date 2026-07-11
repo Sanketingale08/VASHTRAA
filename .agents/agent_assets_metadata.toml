@@ -126,3 +126,21 @@ id = "zB0631wuf9CVNDEcXS9b2"
 uri = "file://attached_assets/designer_hero.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "NR1marUoREunvG7v5-A6_"
+uri = "file://artifacts/twirldrape/public/images/team-anjali.png"
+type = "image"
+title = "team headshot anjali"
+
+[[generated]]
+id = "gEPc67TM8eRwNs9WXzgOI"
+uri = "file://artifacts/twirldrape/public/images/team-rohan.png"
+type = "image"
+title = "team headshot rohan"
+
+[[generated]]
+id = "0va6WcXddJI3nDLSjCI9I"
+uri = "file://artifacts/twirldrape/public/images/team-meera.png"
+type = "image"
+title = "team headshot meera"

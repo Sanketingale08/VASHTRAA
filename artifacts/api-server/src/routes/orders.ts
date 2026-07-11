@@ -622,7 +622,7 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
                 vendorId: vid,
                 amount: netPayout,
                 type: "order_settlement",
-                status: "pending",
+                status: "processing",
                 orderId: order.id,
                 productAmount,
                 commission,

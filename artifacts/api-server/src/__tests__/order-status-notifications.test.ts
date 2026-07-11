@@ -163,6 +163,8 @@ vi.mock("@workspace/db", () => {
     notificationsTable: tag("notifications", ["id", "userId", "vendorId", "type", "title", "body", "metadata", "read", "createdAt"]),
     notificationPreferencesTable: tag("notificationPreferences", ["userId", "orderUpdates"]),
     stockHistoryTable: tag("stockHistory", ["id", "productId", "vendorId", "previousStock", "newStock", "source", "reason", "orderId"]),
+    vendorSettlementsTable: tag("vendorSettlements", ["id", "vendorId", "orderId", "type", "status", "amount", "productAmount", "commission", "commissionRate", "shippingCharge", "settlementTax", "netPayout"]),
+    commissionRulesTable: tag("commissionRules", ["active", "scope", "vendorId", "category", "rate"]),
   };
 });
 

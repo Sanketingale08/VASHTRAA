@@ -22,16 +22,16 @@ export function Footer() {
               Where Indian royalty meets modern commerce. A premium marketplace for authentic Paithani and designer sarees from trusted artisan vendors across India.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
+              <a href="https://www.instagram.com/twirldrape/" target="_blank" rel="noopener noreferrer" aria-label="TwirlDrape on Instagram" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Instagram size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
+              <a href="https://www.facebook.com/twirldrape" target="_blank" rel="noopener noreferrer" aria-label="TwirlDrape on Facebook" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Facebook size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
+              <a href="https://www.youtube.com/@twirldrape" target="_blank" rel="noopener noreferrer" aria-label="TwirlDrape on YouTube" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Youtube size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
+              <a href="https://twitter.com/twirldrape" target="_blank" rel="noopener noreferrer" aria-label="TwirlDrape on X (Twitter)" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors">
                 <Twitter size={18} />
               </a>
             </div>

@@ -13,6 +13,11 @@ import {
   Sparkles,
   Leaf,
   ArrowRight,
+  Instagram,
+  Facebook,
+  Youtube,
+  Twitter,
+  Linkedin,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 
@@ -367,6 +372,31 @@ export default function About() {
               >
                 Explore Collections <ArrowRight size={16} />
               </Link>
+
+              <div className="mt-12 pt-8 border-t border-[#C9A84C]/30">
+                <p className="text-xs uppercase tracking-[0.25em] font-bold text-[#C9A84C] mb-5">Follow Our Journey</p>
+                <div className="flex items-center justify-center gap-5">
+                  {[
+                    { icon: <Instagram size={20} />, label: "Instagram", href: "https://www.instagram.com/twirldrape/", hover: "hover:text-[#E1306C]" },
+                    { icon: <Facebook size={20} />, label: "Facebook", href: "https://www.facebook.com/twirldrape", hover: "hover:text-[#1877F2]" },
+                    { icon: <Youtube size={20} />, label: "YouTube", href: "https://www.youtube.com/@twirldrape", hover: "hover:text-[#FF0000]" },
+                    { icon: <Twitter size={20} />, label: "X (Twitter)", href: "https://twitter.com/twirldrape", hover: "hover:text-[#1DA1F2]" },
+                    { icon: <Linkedin size={20} />, label: "LinkedIn", href: "https://www.linkedin.com/company/twirldrape", hover: "hover:text-[#0A66C2]" },
+                  ].map((s) => (
+                    <a
+                      key={s.label}
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`TwirlDrape on ${s.label}`}
+                      title={s.label}
+                      className={`w-11 h-11 rounded-full border border-[#C9A84C]/30 bg-white flex items-center justify-center text-[#7a5f4e] ${s.hover} hover:border-[#C9A84C] hover:shadow-md transition-all duration-300`}
+                    >
+                      {s.icon}
+                    </a>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           </div>
         </section>

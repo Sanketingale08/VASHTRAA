@@ -65,11 +65,11 @@ const CONTACT_CARDS = [
     iconBg: "bg-gradient-to-br from-[#1E6B5A] to-[#C9A84C]",
     items: [],
     social: [
-      { icon: <Instagram size={18} />, label: "Instagram", href: "#", color: "hover:text-[#E1306C]" },
-      { icon: <Facebook size={18} />, label: "Facebook", href: "#", color: "hover:text-[#1877F2]" },
-      { icon: <Youtube size={18} />, label: "YouTube", href: "#", color: "hover:text-[#FF0000]" },
-      { icon: <Twitter size={18} />, label: "Pinterest", href: "#", color: "hover:text-[#E60023]" },
-      { icon: <Linkedin size={18} />, label: "LinkedIn", href: "#", color: "hover:text-[#0A66C2]" },
+      { icon: <Instagram size={18} />, label: "Instagram", href: "https://www.instagram.com/twirldrape/", color: "hover:text-[#E1306C]" },
+      { icon: <Facebook size={18} />, label: "Facebook", href: "https://www.facebook.com/twirldrape", color: "hover:text-[#1877F2]" },
+      { icon: <Youtube size={18} />, label: "YouTube", href: "https://www.youtube.com/@twirldrape", color: "hover:text-[#FF0000]" },
+      { icon: <Twitter size={18} />, label: "X (Twitter)", href: "https://twitter.com/twirldrape", color: "hover:text-[#1DA1F2]" },
+      { icon: <Linkedin size={18} />, label: "LinkedIn", href: "https://www.linkedin.com/company/twirldrape", color: "hover:text-[#0A66C2]" },
     ],
   },
 ];

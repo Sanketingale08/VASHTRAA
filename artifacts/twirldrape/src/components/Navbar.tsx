@@ -91,20 +91,10 @@ export function Navbar() {
     { query: { enabled: debouncedQuery.trim().length >= 2, queryKey: getListProductsQueryKey(searchParams) } }
   );
 
-  const isDesigner = location.startsWith("/designer");
-  const isPaithani = location.startsWith("/paithani");
-  const isHome = location === "/";
-  // Pages that share the Landing Page's light ivory header:
-  // Home, Collections, New Arrivals (/paithani), About Us, Contact
-  const isLightHeader = isHome || location.startsWith("/collections") || isPaithani || location.startsWith("/contact") || location.startsWith("/new-arrivals") || location.startsWith("/about");
-  const isDark = !isLightHeader && !isDesigner;
-  const isDesignerDark = isDesigner;
+  const isDark = false;
+  const isDesignerDark = false;
 
-  const navBg = isDesignerDark
-    ? "bg-[#1E2329]/97 text-[#E6F0EA] border-[#C9A84C]/20"
-    : isDark
-      ? "bg-[#1E6B5A]/97 text-[#F3F8F5] border-[#C9A84C]/20"
-      : "bg-[#F3F8F5]/98 text-[#3D1515] border-[#C9A84C]/30";
+  const navBg = "bg-[#F3F8F5]/98 text-[#3D1515] border-[#C9A84C]/30";
 
   const navLinks = [
     { href: "/", label: "Home" },

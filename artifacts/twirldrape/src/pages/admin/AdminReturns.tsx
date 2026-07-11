@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck } from "lucide-react";
+import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -12,10 +12,19 @@ interface OrderItem {
   quantity: number;
 }
 
+interface OrderAddress {
+  name?: string;
+  line1?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}
+
 interface AdminOrder {
   id: string;
   userId: string;
   items: OrderItem[];
+  address: OrderAddress | null;
   total: number;
   status: string;
   refundStatus: string | null;
@@ -71,6 +80,7 @@ function ReturnsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number]>("all");
+  const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
@@ -90,10 +100,24 @@ function ReturnsContent() {
   useEffect(() => { loadOrders(); }, [adminKey]);
 
   const filtered = useMemo(() => {
-    if (tab === "returns") return orders.filter((o) => o.status.startsWith("return_"));
-    if (tab === "refunds") return orders.filter((o) => !!o.refundStatus);
-    return orders;
-  }, [orders, tab]);
+    let list = orders;
+    if (tab === "returns") list = list.filter((o) => o.status.startsWith("return_"));
+    else if (tab === "refunds") list = list.filter((o) => !!o.refundStatus);
+
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter((o) => {
+        if (o.id.toLowerCase().includes(q)) return true;
+        if (o.id.slice(0, 8).toLowerCase().includes(q)) return true;
+        const customerName = o.address?.name ?? "";
+        if (customerName.toLowerCase().includes(q)) return true;
+        if (o.items.some((item) => item.name.toLowerCase().includes(q))) return true;
+        return false;
+      });
+    }
+
+    return list;
+  }, [orders, tab, search]);
 
   async function reviewReturn(orderId: string, decision: "approved" | "rejected") {
     const key = orderId + "return" + decision;
@@ -187,6 +211,17 @@ function ReturnsContent() {
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2">{error}</div>
       )}
 
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by order ID, customer name, or item…"
+          className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 outline-none focus:border-blue-300 bg-white shadow-sm"
+        />
+      </div>
+
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex gap-1 overflow-x-auto">
           {TABS.map((t) => (
@@ -207,7 +242,9 @@ function ReturnsContent() {
         {loading && <div className="py-16 text-center text-gray-400 text-sm">Loading requests…</div>}
 
         {!loading && filtered.length === 0 && (
-          <div className="py-16 text-center text-gray-400 text-sm">No return or refund requests match this filter.</div>
+          <div className="py-16 text-center text-gray-400 text-sm">
+            {search.trim() ? "No requests match your search." : "No return or refund requests match this filter."}
+          </div>
         )}
 
         {!loading && filtered.length > 0 && (
@@ -223,6 +260,9 @@ function ReturnsContent() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs text-gray-400">#{o.id.slice(0, 8)}</span>
+                        {o.address?.name && (
+                          <span className="text-xs font-medium text-gray-600">{o.address.name}</span>
+                        )}
                         <StatusPill label={o.status} tone={returnTone(o.status)} />
                         {o.refundStatus && (
                           <span className="inline-flex items-center gap-1">

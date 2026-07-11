@@ -266,7 +266,19 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [fname, setFname] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showConfirm) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowConfirm(false);
+    }
+    window.addEventListener("keydown", onKey);
+    confirmRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showConfirm]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -284,22 +296,65 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
 
   return (
     <Field label={label} helper={helper} error={err}>
-      <div onClick={() => !busy && ref.current?.click()}
-        className="flex items-center gap-3 w-full rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:bg-[#E6F0EA]"
-        style={{ borderColor: objectPath ? EMERALD : "#C8D8D0" }}>
-        <input ref={ref} type="file" accept={accept ?? "image/*,.pdf"} onChange={onFile} className="hidden" />
-        {busy ? (
-          <><Loader2 size={18} className="animate-spin shrink-0" style={{ color: EMERALD }} />
-            <span className="text-sm text-gray-500">Uploading…</span></>
-        ) : objectPath ? (
-          <><CheckCircle2 size={18} className="shrink-0" style={{ color: EMERALD }} />
-            <span className="text-sm font-medium truncate flex-1" style={{ color: EMERALD }}>{fname || "File uploaded"}</span>
-            <button type="button" onClick={(e) => { e.stopPropagation(); onUploaded(""); setFname(""); }}
-              className="text-gray-400 hover:text-red-400 shrink-0"><X size={14} /></button></>
-        ) : (
-          <><Upload size={18} className="text-gray-400 shrink-0" />
-            <span className="text-sm text-gray-500">Click to upload · JPG, PNG or PDF · max 5MB</span></>
-        )}
+      <div className="relative">
+        <div onClick={() => !busy && !showConfirm && ref.current?.click()}
+          className="flex items-center gap-3 w-full rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:bg-[#E6F0EA]"
+          style={{ borderColor: objectPath ? EMERALD : "#C8D8D0" }}>
+          <input ref={ref} type="file" accept={accept ?? "image/*,.pdf"} onChange={onFile} className="hidden" />
+          {busy ? (
+            <><Loader2 size={18} className="animate-spin shrink-0" style={{ color: EMERALD }} />
+              <span className="text-sm text-gray-500">Uploading…</span></>
+          ) : objectPath ? (
+            <><CheckCircle2 size={18} className="shrink-0" style={{ color: EMERALD }} />
+              <span className="text-sm font-medium truncate flex-1" style={{ color: EMERALD }}>{fname || "File uploaded"}</span>
+              <button
+                type="button"
+                aria-label="Remove file"
+                onClick={(e) => { e.stopPropagation(); setShowConfirm(true); }}
+                className="text-gray-400 hover:text-red-400 shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-red-300"
+              ><X size={14} /></button></>
+          ) : (
+            <><Upload size={18} className="text-gray-400 shrink-0" />
+              <span className="text-sm text-gray-500">Click to upload · JPG, PNG or PDF · max 5MB</span></>
+          )}
+        </div>
+        <AnimatePresence>
+          {showConfirm && (
+            <motion.div
+              ref={confirmRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Confirm file removal"
+              initial={{ opacity: 0, y: -6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-[#C8D8D0] rounded-xl shadow-lg px-4 py-3 flex flex-col gap-3 min-w-[200px] outline-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-sm font-semibold text-gray-700">Remove this file?</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowConfirm(false); onUploaded(""); setFname(""); }}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-bold text-white transition-colors"
+                  style={{ background: "#DC2626" }}
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(false)}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-[#E6F0EA]"
+                  style={{ borderColor: "#C8D8D0", color: EMERALD }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </Field>
   );

@@ -847,7 +847,7 @@ router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any
     const myProductIdSet = new Set(myProducts.map((p) => p.id));
 
     await db.transaction(async (tx) => {
-      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).for("update").limit(1);
       if (!order) throw Object.assign(new Error("Order not found"), { status: 404 });
 
       const items = (order.items as any[]) ?? [];
@@ -918,7 +918,7 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
     const myProductIdSet = new Set(myProducts.map((p) => p.id));
 
     await db.transaction(async (tx) => {
-      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).for("update").limit(1);
       if (!order) throw Object.assign(new Error("Order not found"), { status: 404 });
 
       const items = (order.items as any[]) ?? [];

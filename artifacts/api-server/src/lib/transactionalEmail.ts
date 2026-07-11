@@ -25,6 +25,7 @@ async function getUserEmail(userId: string): Promise<string | null> {
 
 export type TransactionalEmailType =
   | "order_cancelled"
+  | "order_packed"
   | "return_requested"
   | "refund_requested"
   | "return_approved"
@@ -53,11 +54,17 @@ function buildEmailContent(
   const itemLabel = `<strong>${itemName}${extra}</strong>`;
 
   switch (type) {
+    case "order_packed":
+      return {
+        subject: `Your ${APP_NAME} order is being prepared`,
+        html: `<p>Good news! Your order for ${itemLabel} has been <strong>accepted by your seller</strong> and is now being packed for dispatch.</p>
+               <p>You'll receive another email as soon as your order ships.</p>`,
+      };
     case "order_cancelled":
       return {
         subject: `Your ${APP_NAME} order has been cancelled`,
         html: `<p>We wanted to let you know that your order for ${itemLabel} has been <strong>cancelled</strong>.</p>
-               <p>If you did not request this cancellation or have questions, please contact our support team.</p>`,
+               <p>If a refund is applicable, it will be processed automatically. If you have questions, please contact our support team.</p>`,
       };
     case "return_requested":
       return {

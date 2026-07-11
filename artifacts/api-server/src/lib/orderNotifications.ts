@@ -11,6 +11,7 @@ type OrderNotifType =
   | "refund_requested"
   | "payment_successful"
   | "order_packed"
+  | "vendor_item_rejected"
   | "out_for_delivery";
 
 const EMAIL_TYPES = new Set<OrderNotifType>([
@@ -69,6 +70,11 @@ function buildNotifContent(
       return {
         title: "Order packed",
         body: `${itemName}${extra} has been packed and will ship soon.`,
+      };
+    case "vendor_item_rejected":
+      return {
+        title: "Item(s) unavailable",
+        body: `A seller has notified us that ${itemName}${extra} cannot be fulfilled. Your order has been updated.`,
       };
     case "out_for_delivery":
       return {

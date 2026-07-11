@@ -1002,6 +1002,15 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
           updatedAt: new Date(),
         };
 
+        await insertOrderStatusNotification({
+          tx,
+          userId: order.userId,
+          type: "vendor_item_rejected",
+          orderId: order.id,
+          itemName: (items[0] as any)?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
+        });
+
         if (allRespondedNow && anyAcceptedNow) {
           history.push({ status: "processing", timestamp: new Date().toISOString(), note: "Some vendors accepted — order proceeding with accepted items" });
           partialUpdates.status = "processing";

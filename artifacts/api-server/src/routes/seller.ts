@@ -1047,72 +1047,6 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
   }
 });
 
-router.post("/seller/settlements/payout-request", requireVendorAuth, async (req: any, res: any): Promise<void> => {
-  const vendorId = req.vendorId as string;
-
-  try {
-    const result = await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ id: vendorSettlementsTable.id })
-        .from(vendorSettlementsTable)
-        .where(and(
-          eq(vendorSettlementsTable.vendorId, vendorId),
-          eq(vendorSettlementsTable.type, "payout"),
-          eq(vendorSettlementsTable.status, "pending"),
-        ))
-        .limit(1);
-
-      if (existing) {
-        return { conflict: true } as const;
-      }
-
-      const processing = await tx
-        .select()
-        .from(vendorSettlementsTable)
-        .where(and(
-          eq(vendorSettlementsTable.vendorId, vendorId),
-          eq(vendorSettlementsTable.status, "processing"),
-        ));
-
-      if (processing.length === 0) {
-        return { empty: true } as const;
-      }
-
-      const sourceIds = processing.map((s) => s.id);
-      const totalAmount = processing.reduce((s, x) => s + (x.netPayout ?? x.amount), 0);
-
-      await tx
-        .update(vendorSettlementsTable)
-        .set({ status: "approved", reviewedAt: new Date() })
-        .where(inArray(vendorSettlementsTable.id, sourceIds));
-
-      const [payout] = await tx.insert(vendorSettlementsTable).values({
-        vendorId,
-        amount: totalAmount,
-        type: "payout",
-        status: "pending",
-        note: `Payout request for ${processing.length} settlement(s). Source IDs: ${sourceIds.join(",")}`,
-      }).returning();
-
-      return { payout, settlementsIncluded: processing.length, totalAmount };
-    });
-
-    if ("conflict" in result) {
-      res.status(409).json({ error: "A payout request is already pending review. Please wait for admin to process it before submitting another." });
-      return;
-    }
-    if ("empty" in result) {
-      res.status(400).json({ error: "No settlements in 'processing' status to request a payout for." });
-      return;
-    }
-
-    res.status(201).json(result);
-  } catch (err: any) {
-    req.log?.error({ err }, "seller/settlements/payout-request failed");
-    res.status(500).json({ error: "Failed to create payout request" });
-  }
-});
-
 router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) => {
   const vendorId = req.vendorId;
   const statusFilter = (req.query.status as string | undefined)?.trim();
@@ -1132,16 +1066,12 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
     let totalEarnedThisMonth = 0;
     let totalPending = 0;
     let totalPaid = 0;
-    let processingCount = 0;
-    let hasPendingPayoutRequest = false;
 
     for (const s of all) {
       const net = s.netPayout ?? s.amount;
       if (new Date(s.createdAt) >= monthStart) totalEarnedThisMonth += net;
       if (s.status === "processing" || s.status === "pending" || s.status === "approved") totalPending += net;
       if (s.status === "paid" || s.status === "completed") totalPaid += net;
-      if (s.status === "processing" && s.type !== "payout") processingCount++;
-      if (s.type === "payout" && s.status === "pending") hasPendingPayoutRequest = true;
     }
 
     const filtered = statusFilter && statusFilter !== "all" ? all.filter((s) => s.status === statusFilter) : all;
@@ -1153,7 +1083,7 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
       total,
       page,
       totalPages: Math.ceil(total / limit),
-      summary: { totalEarnedThisMonth, totalPending, totalPaid, processingCount, hasPendingPayoutRequest },
+      summary: { totalEarnedThisMonth, totalPending, totalPaid },
     });
   } catch (err: any) {
     req.log?.error({ err }, "seller/settlements failed");

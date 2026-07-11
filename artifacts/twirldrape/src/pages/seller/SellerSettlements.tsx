@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { IndianRupee, Clock, CheckCircle2, TrendingUp, Package, X, SendHorizonal, AlertTriangle } from "lucide-react";
+import { IndianRupee, Clock, CheckCircle2, TrendingUp, Package, ChevronDown, ChevronUp, X } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
-import { useSellerContext } from "@/components/SellerGuard";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -157,17 +156,12 @@ const STATUS_FILTERS = [
 ];
 
 export default function SellerSettlements() {
-  const { vendor } = useSellerContext();
   const [data, setData] = useState<SettlementsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedSettlement, setSelectedSettlement] = useState<Settlement | null>(null);
-  const [payoutRequesting, setPayoutRequesting] = useState(false);
-  const [payoutError, setPayoutError] = useState("");
-  const [payoutSuccess, setPayoutSuccess] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -182,36 +176,7 @@ export default function SellerSettlements() {
       .then((d) => { setData(d); setError(""); })
       .catch(() => setError("Could not load settlements. Please try again."))
       .finally(() => setLoading(false));
-  }, [statusFilter, page, refreshKey]);
-
-  async function requestPayout() {
-    setPayoutRequesting(true);
-    setPayoutError("");
-    setPayoutSuccess(false);
-    try {
-      const res = await fetch(getApiUrl("/api/seller/settlements/payout-request"), {
-        method: "POST",
-        credentials: "include",
-      });
-      const responseData = await res.json();
-      if (!res.ok) {
-        setPayoutError(responseData.error ?? "Failed to request payout.");
-        return;
-      }
-      setPayoutSuccess(true);
-      setStatusFilter("all");
-      setPage(1);
-      setRefreshKey((k) => k + 1);
-    } catch {
-      setPayoutError("Network error. Please try again.");
-    } finally {
-      setPayoutRequesting(false);
-    }
-  }
-
-  const hasNoBankDetails = vendor && !(vendor as any).bankAccount && !(vendor as any).upiId;
-  const processingCount = data?.summary.processingCount ?? 0;
-  const hasPendingPayoutRequest = data?.summary.hasPendingPayoutRequest ?? false;
+  }, [statusFilter, page]);
 
   const summary = data?.summary;
   const summaryCards = [
@@ -243,50 +208,10 @@ export default function SellerSettlements() {
   return (
     <SellerLayout title="Settlements">
       <div className="max-w-5xl mx-auto space-y-8">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Settlements</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Full fee breakdown and payout status for your delivered orders</p>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <button
-              onClick={requestPayout}
-              disabled={payoutRequesting || loading || processingCount === 0 || hasPendingPayoutRequest}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-opacity disabled:opacity-50"
-              style={{ background: MAROON, color: "#fff" }}
-            >
-              <SendHorizonal size={15} />
-              {payoutRequesting ? "Submitting…" : "Request Payout"}
-            </button>
-            {!loading && processingCount === 0 && (
-              <p className="text-[11px] text-gray-400">No processing settlements to request payout for</p>
-            )}
-            {!loading && hasPendingPayoutRequest && processingCount > 0 && (
-              <p className="text-[11px] text-amber-600">A payout request is already pending</p>
-            )}
-          </div>
+        <div>
+          <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Settlements</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Full fee breakdown and payout status for your delivered orders</p>
         </div>
-
-        {hasNoBankDetails && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <div>
-              <span className="font-semibold">Bank details not saved. </span>
-              Admin won't know where to transfer your payout.{" "}
-              <a href="/seller/profile" className="underline font-semibold hover:text-amber-900">Add bank details in your profile →</a>
-            </div>
-          </div>
-        )}
-
-        {payoutError && (
-          <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{payoutError}</div>
-        )}
-
-        {payoutSuccess && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
-            <CheckCircle2 size={15} /> Payout request submitted! Admin will process it shortly.
-          </div>
-        )}
 
         {error && (
           <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>

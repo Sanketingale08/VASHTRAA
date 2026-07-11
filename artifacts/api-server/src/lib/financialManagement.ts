@@ -261,34 +261,26 @@ export async function listSettlements(status?: string, vendorIdFilter?: string) 
   const vendors = await db.select().from(vendorsTable);
   const vendorById = new Map(vendors.map(v => [v.id, v]));
 
-  return filtered.map(s => {
-    const vendor = vendorById.get(s.vendorId);
-    return {
-      id: s.id,
-      vendorId: s.vendorId,
-      vendorName: vendor?.name ?? "Unknown",
-      amount: s.amount,
-      type: s.type,
-      status: s.status,
-      paymentMethod: s.paymentMethod,
-      transactionId: s.transactionId,
-      utrNumber: s.utrNumber,
-      note: s.note,
-      createdAt: s.createdAt,
-      reviewedAt: s.reviewedAt,
-      paidAt: s.paidAt,
-      orderId: s.orderId,
-      productAmount: s.productAmount,
-      commission: s.commission,
-      commissionRate: s.commissionRate,
-      shippingCharge: s.shippingCharge,
-      settlementTax: s.settlementTax,
-      netPayout: s.netPayout,
-      vendorBankHolder: vendor?.bankHolder ?? null,
-      vendorBankName: vendor?.bankName ?? null,
-      vendorBankAccount: vendor?.bankAccount ?? null,
-      vendorBankIfsc: vendor?.bankIfsc ?? null,
-      vendorUpiId: vendor?.upiId ?? null,
-    };
-  });
+  return filtered.map(s => ({
+    id: s.id,
+    vendorId: s.vendorId,
+    vendorName: vendorById.get(s.vendorId)?.name ?? "Unknown",
+    amount: s.amount,
+    type: s.type,
+    status: s.status,
+    paymentMethod: s.paymentMethod,
+    transactionId: s.transactionId,
+    utrNumber: s.utrNumber,
+    note: s.note,
+    createdAt: s.createdAt,
+    reviewedAt: s.reviewedAt,
+    paidAt: s.paidAt,
+    orderId: s.orderId,
+    productAmount: s.productAmount,
+    commission: s.commission,
+    commissionRate: s.commissionRate,
+    shippingCharge: s.shippingCharge,
+    settlementTax: s.settlementTax,
+    netPayout: s.netPayout,
+  }));
 }

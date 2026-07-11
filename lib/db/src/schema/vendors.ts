@@ -30,7 +30,6 @@ export const vendorsTable = pgTable("vendors", {
   bankName: text("bank_name"),
   bankAccount: text("bank_account"),
   bankIfsc: text("bank_ifsc"),
-  upiId: text("upi_id"),
   shopStreet: text("shop_street"),
   shopCity: text("shop_city"),
   shopState: text("shop_state"),

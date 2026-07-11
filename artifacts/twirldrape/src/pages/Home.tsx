@@ -19,7 +19,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { ProductSection } from "@/components/ProductSection";
 import { VendorCard } from "@/components/VendorCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
-import { HeroSection } from "@/components/HeroSection";
+import { StatsBar } from "@/components/StatsBar";
 import { useListProducts, getListProductsQueryKey, useListVendors } from "@workspace/api-client-react";
 import type { ProductSummary, VendorSummary } from "@workspace/api-client-react";
 
@@ -29,6 +29,12 @@ const MAROON = "#1E6B5A";
 const IVORY = "#F3F8F5";
 const CREAM = "#E6F0EA";
 
+// Hero section premium palette
+const H_WINE = "#4D0B35";
+const H_PRIMARY = "#6A0D45";
+const H_GOLD = "#D4AF37";
+const H_CREAM = "#FFF9F4";
+const H_BEIGE = "#F8EFE7";
 
 const PAITHANI_DESIGNER_TABS = [
   { label: "Paithani", category: "paithani" as const },
@@ -320,8 +326,311 @@ export default function Home() {
 
   return (
     <Layout>
-      {/* ── HERO + STATS ─────────────────────────────────── */}
-      <HeroSection />
+      {/* ── HERO ─────────────────────────────────────────── */}
+      <section className="relative" style={{ background: "#F5E8DC", paddingTop: "28px", paddingBottom: "0" }}>
+        <div className="mx-auto px-4 md:px-6" style={{ maxWidth: "1400px" }}>
+          {/* Hero Card */}
+          <div className="relative overflow-hidden" style={{
+            borderRadius: "30px",
+            background: H_CREAM,
+            boxShadow: "0 24px 80px rgba(77,11,53,0.13), 0 4px 24px rgba(212,175,55,0.10)",
+            minHeight: "640px",
+          }}>
+
+            {/* ── Decorative background SVGs ── */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none select-none" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style={{ opacity: 0.07 }}>
+              {/* large mandala top-right */}
+              <circle cx="85%" cy="-5%" r="220" fill="none" stroke={H_GOLD} strokeWidth="1.5" />
+              <circle cx="85%" cy="-5%" r="180" fill="none" stroke={H_GOLD} strokeWidth="1" />
+              <circle cx="85%" cy="-5%" r="140" fill="none" stroke={H_WINE} strokeWidth="0.8" />
+              <circle cx="85%" cy="-5%" r="100" fill="none" stroke={H_WINE} strokeWidth="0.6" />
+              {/* mandala bottom-left */}
+              <circle cx="4%" cy="108%" r="200" fill="none" stroke={H_GOLD} strokeWidth="1.5" />
+              <circle cx="4%" cy="108%" r="160" fill="none" stroke={H_WINE} strokeWidth="1" />
+              <circle cx="4%" cy="108%" r="120" fill="none" stroke={H_GOLD} strokeWidth="0.7" />
+              {/* paisley arcs */}
+              <path d="M50,80 Q120,20 200,90 Q280,160 240,230 Q200,300 120,260 Q40,220 50,80Z" fill={H_GOLD} opacity="0.4" transform="translate(820,40) scale(0.7) rotate(-20)" />
+              <path d="M50,80 Q120,20 200,90 Q280,160 240,230 Q200,300 120,260 Q40,220 50,80Z" fill={H_WINE} opacity="0.3" transform="translate(-30,350) scale(0.6) rotate(30)" />
+              {/* floral dots */}
+              {[0,60,120,180,240,300].map((deg, i) => {
+                const rad = (deg * Math.PI) / 180;
+                return <circle key={i} cx={`calc(85% + ${Math.cos(rad) * 220}px)`} cy={`calc(-5% + ${Math.sin(rad) * 220}px)`} r="4" fill={H_GOLD} />;
+              })}
+            </svg>
+
+            {/* ── Three-column layout ── */}
+            <div className="relative z-10 flex flex-col lg:flex-row" style={{ minHeight: "640px" }}>
+
+              {/* ── LEFT: Content ── */}
+              <motion.div
+                className="flex flex-col justify-center px-8 md:px-12 py-12"
+                style={{ flex: "0 0 38%", maxWidth: "38%" }}
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.85, ease: "easeOut" }}
+              >
+                {/* Premium badge */}
+                <div className="flex items-center gap-3 mb-5">
+                  <span className="h-px w-8" style={{ background: H_GOLD }} />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: H_GOLD }}>
+                    Celebrate Tradition. Embrace Elegance.
+                  </p>
+                  <span className="h-px w-8" style={{ background: H_GOLD }} />
+                </div>
+
+                {/* Heading */}
+                <h1 className="font-serif font-bold leading-[1.1] mb-5" style={{ fontSize: "clamp(36px,4vw,56px)", color: H_WINE }}>
+                  Authentic Paithani &amp;<br />
+                  <span style={{ color: H_WINE }}>Designer Sarees</span>
+                </h1>
+
+                {/* Description */}
+                <p className="mb-7 leading-relaxed" style={{ color: "#6B5B5B", fontSize: "15px", maxWidth: "420px" }}>
+                  Discover handcrafted Paithani sarees and premium designer collections from trusted vendors across India.
+                </p>
+
+                {/* Trust feature cards */}
+                <div className="flex flex-col gap-2.5 mb-8">
+                  {[
+                    { icon: <BadgeCheck size={16} />, title: "Authenticity Assured", desc: "Verified directly from master weavers" },
+                    { icon: <Store size={16} />, title: "Trusted Vendors", desc: "Rigorously vetted artisan partners" },
+                    { icon: <ShieldCheck size={16} />, title: "Secure Shipping", desc: "Pan India delivery with real-time tracking" },
+                  ].map((f) => (
+                    <div
+                      key={f.title}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                      style={{ background: "white", border: `1px solid ${H_GOLD}33`, boxShadow: "0 2px 8px rgba(77,11,53,0.06)" }}
+                    >
+                      <span className="flex-shrink-0 p-1.5 rounded-lg" style={{ background: H_GOLD + "18", color: H_GOLD }}>{f.icon}</span>
+                      <div>
+                        <p className="text-xs font-bold" style={{ color: H_WINE }}>{f.title}</p>
+                        <p className="text-[11px]" style={{ color: "#9B8888" }}>{f.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* CTA Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link
+                    href="/paithani"
+                    className="inline-flex items-center justify-center gap-2 font-bold text-sm tracking-wide rounded-full transition-all hover:opacity-90 hover:shadow-lg"
+                    style={{ background: `linear-gradient(135deg, ${H_PRIMARY}, ${H_WINE})`, color: "white", padding: "13px 24px" }}
+                  >
+                    Explore Paithani Sarees →
+                  </Link>
+                  <Link
+                    href="/designer"
+                    className="inline-flex items-center justify-center gap-2 font-bold text-sm tracking-wide rounded-full transition-all hover:shadow-md"
+                    style={{ background: "white", border: `2px solid ${H_WINE}`, color: H_WINE, padding: "11px 22px" }}
+                  >
+                    Explore Designer Sarees <span style={{ color: H_GOLD }}>→</span>
+                  </Link>
+                </div>
+              </motion.div>
+
+              {/* ── CENTER: Floating Model Image ── */}
+              <div
+                className="hidden lg:flex flex-col items-center justify-end relative"
+                style={{ flex: "0 0 34%", maxWidth: "34%", zIndex: 20 }}
+              >
+                {/* Radial glow behind image */}
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: `radial-gradient(ellipse 70% 80% at 50% 70%, ${H_GOLD}22 0%, transparent 70%)`,
+                }} />
+
+                {/* Decorative floral ring */}
+                <svg className="absolute pointer-events-none" style={{ width: "320px", height: "320px", top: "50%", left: "50%", transform: "translate(-50%,-50%)", opacity: 0.08 }} viewBox="0 0 320 320" aria-hidden="true">
+                  <circle cx="160" cy="160" r="155" fill="none" stroke={H_GOLD} strokeWidth="1.5" strokeDasharray="8 6" />
+                  <circle cx="160" cy="160" r="130" fill="none" stroke={H_WINE} strokeWidth="1" />
+                  {[0,45,90,135,180,225,270,315].map((deg, i) => {
+                    const rad = (deg * Math.PI) / 180;
+                    const x = 160 + Math.cos(rad) * 155;
+                    const y = 160 + Math.sin(rad) * 155;
+                    return <circle key={i} cx={x} cy={y} r="5" fill={H_GOLD} />;
+                  })}
+                  {[22.5,67.5,112.5,157.5,202.5,247.5,292.5,337.5].map((deg, i) => {
+                    const rad = (deg * Math.PI) / 180;
+                    const x = 160 + Math.cos(rad) * 155;
+                    const y = 160 + Math.sin(rad) * 155;
+                    return <circle key={i} cx={x} cy={y} r="3" fill={H_WINE} />;
+                  })}
+                </svg>
+
+                <motion.img
+                  src="/images/home-paithani.png"
+                  alt="Authentic Paithani Saree model"
+                  className="relative"
+                  style={{
+                    height: "660px",
+                    width: "auto",
+                    objectFit: "cover",
+                    objectPosition: "top center",
+                    filter: "drop-shadow(0 20px 40px rgba(77,11,53,0.25))",
+                    marginBottom: "-2px",
+                  }}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+                />
+
+                <motion.div
+                  className="absolute"
+                  style={{ bottom: "80px", right: "50px" }}
+                  animate={{ y: [0, -10, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-full text-white text-xs font-semibold shadow-lg"
+                    style={{ background: `linear-gradient(135deg, ${H_PRIMARY}, ${H_WINE})`, backdropFilter: "blur(8px)" }}>
+                    <span style={{ color: H_GOLD }}>★</span> 50K+ Happy Customers
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* ── RIGHT: Branding Panel ── */}
+              <motion.div
+                className="hidden lg:flex flex-col items-center justify-center px-6 py-10"
+                style={{ flex: "0 0 28%", maxWidth: "28%" }}
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.85, ease: "easeOut", delay: 0.15 }}
+              >
+                <div
+                  className="relative flex flex-col items-center justify-center text-center overflow-hidden w-full"
+                  style={{
+                    background: H_BEIGE,
+                    borderRadius: "24px",
+                    border: `1px solid ${H_GOLD}44`,
+                    boxShadow: "0 8px 32px rgba(77,11,53,0.10)",
+                    padding: "40px 28px",
+                    minHeight: "500px",
+                  }}
+                >
+                  {/* Mandala decoration inside panel */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true" style={{ opacity: 0.08 }} preserveAspectRatio="xMidYMid slice">
+                    <circle cx="50%" cy="50%" r="200" fill="none" stroke={H_GOLD} strokeWidth="1.5" />
+                    <circle cx="50%" cy="50%" r="160" fill="none" stroke={H_WINE} strokeWidth="1" />
+                    <circle cx="50%" cy="50%" r="120" fill="none" stroke={H_GOLD} strokeWidth="0.8" />
+                    <circle cx="50%" cy="50%" r="80" fill="none" stroke={H_WINE} strokeWidth="0.6" />
+                    {[0,30,60,90,120,150,180,210,240,270,300,330].map((deg, i) => {
+                      const rad = (deg * Math.PI) / 180;
+                      return (
+                        <line key={i}
+                          x1={`calc(50% + ${Math.cos(rad) * 80}px)`}
+                          y1={`calc(50% + ${Math.sin(rad) * 80}px)`}
+                          x2={`calc(50% + ${Math.cos(rad) * 200}px)`}
+                          y2={`calc(50% + ${Math.sin(rad) * 200}px)`}
+                          stroke={H_GOLD} strokeWidth="0.5" opacity="0.5"
+                        />
+                      );
+                    })}
+                  </svg>
+
+                  <div className="relative z-10 flex flex-col items-center gap-4">
+                    {/* Large T initial */}
+                    <div className="font-serif font-bold leading-none select-none" style={{
+                      fontSize: "100px",
+                      color: H_WINE,
+                      opacity: 0.12,
+                      position: "absolute",
+                      top: "20px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      pointerEvents: "none",
+                    }}>T</div>
+
+                    {/* Peacock Illustration */}
+                    <svg width="110" height="130" viewBox="0 0 110 130" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      {/* Body */}
+                      <ellipse cx="55" cy="100" rx="14" ry="18" fill={H_WINE} />
+                      {/* Neck */}
+                      <path d="M55 82 Q52 65 53 52" stroke={H_WINE} strokeWidth="5" strokeLinecap="round" />
+                      {/* Head */}
+                      <circle cx="53" cy="46" r="9" fill={H_WINE} />
+                      {/* Crest feathers */}
+                      <path d="M50 38 Q46 26 48 20" stroke={H_GOLD} strokeWidth="2" strokeLinecap="round" />
+                      <path d="M53 37 Q51 24 53 18" stroke={H_GOLD} strokeWidth="2" strokeLinecap="round" />
+                      <path d="M56 38 Q59 26 58 20" stroke={H_GOLD} strokeWidth="2" strokeLinecap="round" />
+                      <circle cx="48" cy="19" r="3" fill={H_GOLD} />
+                      <circle cx="53" cy="17" r="3" fill={H_GOLD} />
+                      <circle cx="58" cy="19" r="3" fill={H_GOLD} />
+                      {/* Eye */}
+                      <circle cx="57" cy="43" r="2.5" fill="white" />
+                      <circle cx="57.5" cy="43" r="1.2" fill={H_WINE} />
+                      {/* Tail feathers - fan */}
+                      {[[-40,-22],[-25,-28],[-10,-30],[5,-28],[20,-22],[35,-14],[48,-5]].map(([dx, dy], i) => (
+                        <path key={i}
+                          d={`M55 85 Q${55 + (dx ?? 0) * 0.4} ${85 + (dy ?? 0) * 0.5} ${55 + (dx ?? 0)} ${85 + (dy ?? 0)}`}
+                          stroke={H_GOLD} strokeWidth="1.8" strokeLinecap="round" opacity="0.85"
+                        />
+                      ))}
+                      {/* Tail eye spots */}
+                      {[[-40,-22],[-25,-28],[-10,-30],[5,-28],[20,-22],[35,-14],[48,-5]].map(([dx, dy], i) => (
+                        <g key={i}>
+                          <circle cx={55 + (dx ?? 0)} cy={85 + (dy ?? 0)} r="7" fill={H_GOLD} opacity="0.25" />
+                          <circle cx={55 + (dx ?? 0)} cy={85 + (dy ?? 0)} r="4.5" fill={H_WINE} opacity="0.4" />
+                          <circle cx={55 + (dx ?? 0)} cy={85 + (dy ?? 0)} r="2.5" fill={H_GOLD} opacity="0.7" />
+                        </g>
+                      ))}
+                    </svg>
+
+                    {/* Brand name */}
+                    <div>
+                      <p className="font-serif font-bold tracking-[0.18em]" style={{ fontSize: "26px", color: H_WINE, lineHeight: 1 }}>
+                        TWIRLDRAPE
+                      </p>
+                      <div className="w-full h-px my-2" style={{ background: `linear-gradient(to right, transparent, ${H_GOLD}, transparent)` }} />
+                      <p className="font-semibold tracking-[0.12em] uppercase" style={{ fontSize: "11px", color: H_WINE, opacity: 0.75, lineHeight: "1.7" }}>
+                        Paithani &amp;<br />Designer Sarees
+                      </p>
+                    </div>
+
+                    {/* Gold ornament */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="h-px w-10" style={{ background: H_GOLD + "88" }} />
+                      <span className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: H_GOLD }}>Since 2024</span>
+                      <span className="h-px w-10" style={{ background: H_GOLD + "88" }} />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Mobile-only simplified layout */}
+              <div className="flex lg:hidden flex-col items-center gap-6 px-6 py-10">
+                <div className="text-center">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] mb-3" style={{ color: H_GOLD }}>
+                    Celebrate Tradition. Embrace Elegance.
+                  </p>
+                  <h1 className="font-serif font-bold leading-tight mb-4" style={{ fontSize: "36px", color: H_WINE }}>
+                    Authentic Paithani &amp;<br />Designer Sarees
+                  </h1>
+                  <p className="mb-6 leading-relaxed text-sm" style={{ color: "#6B5B5B" }}>
+                    Discover handcrafted Paithani sarees and premium designer collections from trusted vendors across India.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Link href="/paithani" className="inline-flex items-center justify-center font-bold text-sm rounded-full py-3 px-6"
+                      style={{ background: `linear-gradient(135deg, ${H_PRIMARY}, ${H_WINE})`, color: "white" }}>
+                      Explore Paithani →
+                    </Link>
+                    <Link href="/designer" className="inline-flex items-center justify-center font-bold text-sm rounded-full py-3 px-6 border-2"
+                      style={{ border: `2px solid ${H_WINE}`, color: H_WINE }}>
+                      Explore Designer →
+                    </Link>
+                  </div>
+                </div>
+                <img src="/images/home-paithani.png" alt="Authentic Paithani Saree model"
+                  className="rounded-2xl w-full max-w-xs object-cover shadow-xl"
+                  style={{ maxHeight: "380px", objectPosition: "top center" }}
+                />
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── STATS ────────────────────────────────────────── */}
+      <StatsBar />
 
       {/* ── SHOP BY CATEGORY ─────────────────────────────── */}
       <section className="py-16 md:py-20 bg-white">

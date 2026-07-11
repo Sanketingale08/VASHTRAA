@@ -47,6 +47,8 @@ type Order = {
   returnReason: string | null;
   refundStatus: string | null;
   refundMethod: string | null;
+  refundProcessedAt: string | null;
+  refundReference: string | null;
   deliveredAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -522,15 +524,37 @@ function OrderActions({
 
       {/* Refund status banner */}
       {order.refundStatus && (
-        <div className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700">
-          <RefreshCw size={16} className="text-blue-500 mt-0.5 shrink-0" />
+        <div className={`mt-3 flex items-start gap-3 p-3 rounded-lg border ${
+          order.refundStatus === "processed"
+            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700"
+            : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700"
+        }`}>
+          {order.refundStatus === "processed"
+            ? <CheckCircle2 size={16} className="text-green-500 mt-0.5 shrink-0" />
+            : <RefreshCw size={16} className="text-blue-500 mt-0.5 shrink-0" />}
           <div>
-            <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-              Refund {order.refundStatus === "pending" ? "Requested — processing in 5–7 business days" : order.refundStatus}
+            <p className={`text-sm font-semibold ${order.refundStatus === "processed" ? "text-green-700 dark:text-green-300" : "text-blue-700 dark:text-blue-300"}`}>
+              {order.refundStatus === "processed"
+                ? "Refund Paid Out"
+                : order.refundStatus === "pending"
+                  ? "Refund Requested — processing in 5–7 business days"
+                  : order.refundStatus === "approved"
+                    ? "Refund Approved — payout in progress"
+                    : `Refund ${order.refundStatus}`}
             </p>
             {order.refundMethod && (
-              <p className="text-xs text-blue-500 mt-0.5">
+              <p className={`text-xs mt-0.5 ${order.refundStatus === "processed" ? "text-green-600 dark:text-green-400" : "text-blue-500"}`}>
                 Method: {order.refundMethod === "store_credit" ? "Store Credit" : "Original Payment Method"}
+              </p>
+            )}
+            {order.refundStatus === "processed" && order.refundProcessedAt && (
+              <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                Paid out on {new Date(order.refundProcessedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+              </p>
+            )}
+            {order.refundStatus === "processed" && order.refundReference && (
+              <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                Reference: {order.refundReference}
               </p>
             )}
           </div>

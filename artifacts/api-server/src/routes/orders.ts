@@ -1352,4 +1352,90 @@ router.post("/admin/orders/:orderId/refund", requireAdminKey, async (req: any, r
   }
 });
 
+// POST /admin/orders/:orderId/refund/process — mark an approved refund as processed/paid out
+router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { orderId } = req.params;
+  const { reference } = req.body;
+
+  try {
+    let updatedOrder: any;
+    try {
+      updatedOrder = await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            refundStatus: ordersTable.refundStatus,
+            statusHistory: ordersTable.statusHistory,
+            items: ordersTable.items,
+          })
+          .from(ordersTable)
+          .where(eq(ordersTable.id, orderId))
+          .for("update")
+          .limit(1);
+
+        if (!order) {
+          throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        if (order.refundStatus !== "approved") {
+          throw Object.assign(
+            new Error(`Only approved refunds can be marked as processed. Current status: "${order.refundStatus ?? "none"}".`),
+            { status: 400 }
+          );
+        }
+
+        const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        const historyEntry: { status: string; timestamp: string; reference?: string } = {
+          status: "refund_processed",
+          timestamp: new Date().toISOString(),
+        };
+        if (reference) historyEntry.reference = String(reference).trim();
+        history.push(historyEntry);
+
+        const now = new Date();
+        const [updated] = await tx
+          .update(ordersTable)
+          .set({
+            refundStatus: "processed",
+            refundProcessedAt: now,
+            refundReference: reference ? String(reference).trim() : undefined,
+            statusHistory: history,
+            updatedAt: now,
+          })
+          .where(eq(ordersTable.id, orderId))
+          .returning();
+
+        const notifItems = order.items as Array<{ name: string }>;
+        const firstItemName = notifItems?.[0]?.name ?? "your order";
+        const extra = notifItems.length > 1 ? ` and ${notifItems.length - 1} more item(s)` : "";
+        await tx.insert(notificationsTable).values({
+          userId: order.userId,
+          type: "refund_processed",
+          title: "Refund processed",
+          body: `Your refund for ${firstItemName}${extra} has been paid out.${reference ? ` Reference: ${String(reference).trim()}` : ""}`,
+          metadata: { orderId: order.id },
+        });
+
+        return updated;
+      });
+    } catch (txErr: any) {
+      if (txErr.status === 404) {
+        res.status(404).json({ error: txErr.message });
+        return;
+      }
+      if (txErr.status === 400) {
+        res.status(400).json({ error: txErr.message });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ order: updatedOrder });
+  } catch (err) {
+    req.log.error({ err }, "Failed to process refund payout");
+    res.status(500).json({ error: "Failed to process refund payout" });
+  }
+});
+
 export default router;

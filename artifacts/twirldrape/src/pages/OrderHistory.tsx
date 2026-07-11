@@ -23,6 +23,9 @@ type Order = {
   total: number;
   status: string;
   createdAt: string;
+  refundStatus?: string | null;
+  refundProcessedAt?: string | null;
+  refundReference?: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -151,6 +154,23 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                             <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full capitalize ${statusClass}`}>
                               {order.status.replace(/_/g, " ")}
                             </span>
+                            {order.refundStatus === "processed" && (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
+                                Refund paid out
+                                {order.refundProcessedAt && (
+                                  <> · {new Date(order.refundProcessedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</>
+                                )}
+                              </span>
+                            )}
+                            {order.refundStatus && order.refundStatus !== "processed" && (
+                              <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${
+                                order.refundStatus === "approved" ? "bg-green-100 text-green-700" :
+                                order.refundStatus === "rejected" ? "bg-red-100 text-red-700" :
+                                "bg-orange-100 text-orange-700"
+                              }`}>
+                                Refund {order.refundStatus}
+                              </span>
+                            )}
                             <span className="text-xs text-gray-400">
                               {placedAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                             </span>

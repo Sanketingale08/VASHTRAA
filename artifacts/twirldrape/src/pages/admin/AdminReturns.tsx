@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee } from "lucide-react";
+import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -20,6 +20,8 @@ interface AdminOrder {
   status: string;
   refundStatus: string | null;
   refundMethod: string | null;
+  refundProcessedAt: string | null;
+  refundReference: string | null;
   returnReason: string | null;
   updatedAt: string;
   createdAt: string;
@@ -57,6 +59,7 @@ function returnTone(status: string): "orange" | "green" | "red" | "gray" {
 function refundTone(status: string | null): "orange" | "green" | "red" | "gray" {
   if (status === "pending") return "orange";
   if (status === "approved") return "green";
+  if (status === "processed") return "green";
   if (status === "rejected") return "red";
   return "gray";
 }
@@ -135,6 +138,31 @@ function ReturnsContent() {
       }
     } catch {
       setError("Failed to update refund status");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function processRefund(orderId: string) {
+    const key = orderId + "refundprocess";
+    setActionLoading(key);
+    try {
+      const res = await fetch(`${basePath}/api/admin/orders/${orderId}/refund/process`, {
+        method: "POST",
+        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reference: noteDrafts[orderId] || undefined }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? data.order : o)));
+        setNoteDrafts((p) => { const n = { ...p }; delete n[orderId]; return n; });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setError(err.error || "Failed to mark refund as processed");
+      }
+    } catch {
+      setError("Failed to mark refund as processed");
     } finally {
       setActionLoading(null);
     }
@@ -223,7 +251,7 @@ function ReturnsContent() {
                       <input
                         value={noteDrafts[o.id] ?? ""}
                         onChange={(e) => setNoteDrafts((p) => ({ ...p, [o.id]: e.target.value }))}
-                        placeholder="Optional note…"
+                        placeholder={o.refundStatus === "approved" ? "Payout reference (optional)…" : "Optional note…"}
                         className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 outline-none focus:border-blue-300"
                       />
                       <div className="flex flex-wrap gap-1.5">
@@ -263,12 +291,32 @@ function ReturnsContent() {
                             />
                           </>
                         )}
-                        {o.status !== "return_requested" && o.refundStatus !== "pending" && (
+                        {o.refundStatus === "approved" && (
+                          <ActionBtn
+                            icon={<BadgeCheck size={12} />}
+                            label="Mark payout done"
+                            color="#1d4ed8" bg="#eff6ff"
+                            loading={actionLoading === o.id + "refundprocess"}
+                            onClick={() => processRefund(o.id)}
+                          />
+                        )}
+                        {o.status !== "return_requested" && o.refundStatus !== "pending" && o.refundStatus !== "approved" && (
                           <span className="inline-flex items-center gap-1 text-xs text-gray-400">
                             <Clock size={11} /> No action needed
                           </span>
                         )}
                       </div>
+                      {o.refundStatus === "processed" && (
+                        <div className="text-xs text-blue-700 bg-blue-50 rounded-lg px-2.5 py-1.5">
+                          <span className="font-semibold">Paid out</span>
+                          {o.refundProcessedAt && (
+                            <> · {new Date(o.refundProcessedAt).toLocaleString("en-IN")}</>
+                          )}
+                          {o.refundReference && (
+                            <div className="mt-0.5 text-blue-600">Ref: {o.refundReference}</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search } from "lucide-react";
+import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -198,13 +198,48 @@ function ReturnsContent() {
     refunds: orders.filter((o) => !!o.refundStatus).length,
   }), [orders]);
 
+  function exportCSV() {
+    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Updated Date"];
+    const rows = filtered.map((o) => [
+      o.id,
+      o.address?.name ?? "",
+      o.items.map((i) => i.name).join("; "),
+      (o.total / 100).toFixed(2),
+      o.status.replace(/_/g, " "),
+      o.refundStatus ? o.refundStatus.replace(/_/g, " ") : "",
+      new Date(o.updatedAt).toLocaleString("en-IN"),
+    ]);
+
+    const escape = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const tabLabel = tab === "all" ? "all" : tab;
+    a.download = `returns-${tabLabel}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-serif font-bold flex items-center gap-2" style={{ color: NAVY }}>
-          <RotateCcw size={18} /> Returns & Refunds
-        </h1>
-        <p className="text-sm text-gray-400 mt-0.5">Review and act on customer return and refund requests</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-serif font-bold flex items-center gap-2" style={{ color: NAVY }}>
+            <RotateCcw size={18} /> Returns & Refunds
+          </h1>
+          <p className="text-sm text-gray-400 mt-0.5">Review and act on customer return and refund requests</p>
+        </div>
+        <button
+          onClick={exportCSV}
+          disabled={filtered.length === 0}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          style={{ color: NAVY }}
+          title="Export current view to CSV"
+        >
+          <Download size={13} /> Export CSV
+        </button>
       </div>
 
       {error && (

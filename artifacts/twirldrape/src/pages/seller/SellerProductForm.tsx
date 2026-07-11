@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X, Upload } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
 
@@ -64,7 +64,7 @@ export function emptyFormData(): ProductFormData {
     originalPrice: "",
     stock: "10",
     lowStockThreshold: "5",
-    images: ["", "", "", ""],
+    images: [],
     videos: [""],
     variants: [],
     specifications: [],
@@ -113,117 +113,323 @@ function Section({ icon: Icon, title, children }: SectionProps) {
   );
 }
 
-interface ImageSlotProps {
-  idx: number;
+interface ImageEntry {
+  id: string;
   url: string;
-  isMain: boolean;
-  onChange: (url: string) => void;
+  progress: number;
+  uploading: boolean;
+  error: string;
 }
 
-function ImageSlot({ idx, url, isMain, onChange }: ImageSlotProps) {
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+let _imgId = 0;
+function makeEntry(url: string): ImageEntry {
+  return { id: `img-${++_imgId}`, url, progress: 0, uploading: false, error: "" };
+}
 
-  async function uploadFile(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Please select an image file");
-      return;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+function uploadWithProgress(file: File, onProgress: (p: number) => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const { publicRelPath } = JSON.parse(xhr.responseText);
+          resolve(getApiUrl(publicRelPath));
+        } catch {
+          reject(new Error("Invalid response"));
+        }
+      } else {
+        reject(new Error(`Upload failed (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.open("POST", getApiUrl("/api/seller/upload/product-image"));
+    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.withCredentials = true;
+    xhr.send(file);
+  });
+}
+
+interface ImageCardProps {
+  entry: ImageEntry;
+  isMain: boolean;
+  isDragSrc: boolean;
+  isDragTarget: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onRemove: () => void;
+  onReplace: (file: File) => void;
+}
+
+function ImageCard({ entry, isMain, isDragSrc, isDragTarget, onDragStart, onDragOver, onDrop, onDragEnd, onRemove, onReplace }: ImageCardProps) {
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const circ = 2 * Math.PI * 18;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-xl select-none"
+      style={{
+        aspectRatio: "1 / 1",
+        opacity: isDragSrc ? 0.35 : 1,
+        outline: isDragTarget ? `2.5px solid ${MAROON}` : "2.5px solid transparent",
+        background: "#EDE3D8",
+        cursor: entry.url && !entry.uploading && !entry.error ? "grab" : "default",
+        transition: "opacity 0.15s, outline-color 0.1s",
+      }}
+      draggable={Boolean(entry.url) && !entry.uploading && !entry.error}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {entry.url && (
+        <img
+          src={entry.url} alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.25"; }}
+        />
+      )}
+
+      {entry.uploading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5"
+          style={{ background: "rgba(237,227,216,0.90)" }}>
+          <svg width="48" height="48" viewBox="0 0 44 44">
+            <circle cx="22" cy="22" r="18" fill="none" stroke="#D6C9BA" strokeWidth="3.5" />
+            <circle
+              cx="22" cy="22" r="18"
+              fill="none" stroke={MAROON} strokeWidth="3.5" strokeLinecap="round"
+              strokeDasharray={circ}
+              strokeDashoffset={circ * (1 - entry.progress / 100)}
+              transform="rotate(-90 22 22)"
+              style={{ transition: "stroke-dashoffset 0.15s linear" }}
+            />
+          </svg>
+          <span className="text-xs font-bold tabular-nums" style={{ color: MAROON }}>{entry.progress}%</span>
+        </div>
+      )}
+
+      {entry.error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-2.5 text-center"
+          style={{ background: "rgba(254,242,242,0.96)" }}>
+          <X size={20} className="text-red-400 shrink-0" />
+          <p className="text-[10px] text-red-500 leading-tight">{entry.error}</p>
+        </div>
+      )}
+
+      {isMain && entry.url && !entry.uploading && !entry.error && (
+        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider z-10"
+          style={{ background: MAROON, color: "#fff" }}>
+          Main
+        </span>
+      )}
+
+      {hovered && entry.url && !entry.uploading && !entry.error && (
+        <div
+          className="absolute inset-0 flex items-end justify-between p-2"
+          style={{ background: "linear-gradient(to top,rgba(0,0,0,0.65) 0%,transparent 55%)" }}
+        >
+          <button
+            type="button"
+            title="Replace image"
+            className="p-1.5 rounded-lg text-white transition-colors"
+            style={{ background: "rgba(255,255,255,0.18)" }}
+            onClick={(e) => { e.stopPropagation(); replaceRef.current?.click(); }}
+          >
+            <RotateCcw size={14} />
+          </button>
+          <button
+            type="button"
+            title="Remove image"
+            className="p-1.5 rounded-lg text-white transition-colors"
+            style={{ background: "rgba(200,30,30,0.50)" }}
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <input
+        ref={replaceRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onReplace(f); e.target.value = ""; }}
+      />
+    </div>
+  );
+}
+
+interface ImageUploadGalleryProps {
+  images: string[];
+  onImagesChange: (urls: string[]) => void;
+}
+
+function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps) {
+  const entriesRef = useRef<ImageEntry[]>(images.filter(Boolean).map(makeEntry));
+  const [, rerender] = useState(0);
+  const [zoneDragOver, setZoneDragOver] = useState(false);
+  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const browseRef = useRef<HTMLInputElement>(null);
+  const onChangeRef = useRef(onImagesChange);
+  useEffect(() => { onChangeRef.current = onImagesChange; });
+
+  const lastSyncSig = useRef(JSON.stringify(images.filter(Boolean)));
+  useEffect(() => {
+    const incoming = images.filter(Boolean);
+    const sig = JSON.stringify(incoming);
+    if (sig === lastSyncSig.current) return;
+    const currentUrls = entriesRef.current.filter(e => e.url && !e.uploading).map(e => e.url);
+    if (JSON.stringify(currentUrls) !== sig) {
+      lastSyncSig.current = sig;
+      entriesRef.current = incoming.map(makeEntry);
+      rerender(n => n + 1);
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError("Image must be under 10 MB");
-      return;
+  }, [images]);
+
+  function refresh(next: ImageEntry[]) {
+    entriesRef.current = next;
+    rerender(n => n + 1);
+  }
+
+  function refreshEmit(next: ImageEntry[]) {
+    const urls = next.filter(e => e.url && !e.uploading).map(e => e.url);
+    lastSyncSig.current = JSON.stringify(urls);
+    entriesRef.current = next;
+    rerender(n => n + 1);
+    onChangeRef.current(urls);
+  }
+
+  function processFiles(files: File[]) {
+    const accepted: Array<{ file: File; id: string }> = [];
+    const rejected: ImageEntry[] = [];
+    for (const file of files) {
+      const id = `img-${++_imgId}`;
+      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+        rejected.push({ id, url: "", progress: 0, uploading: false, error: `${file.name}: use JPG, PNG, or WEBP` });
+      } else if (file.size > MAX_IMAGE_BYTES) {
+        rejected.push({ id, url: "", progress: 0, uploading: false, error: `${file.name}: max 10 MB` });
+      } else {
+        accepted.push({ file, id });
+      }
     }
-    setUploading(true);
-    setUploadError("");
-    try {
-      const res = await fetch(getApiUrl("/api/seller/upload/product-image"), {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        credentials: "include",
-        body: file,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { publicRelPath } = await res.json();
-      onChange(getApiUrl(publicRelPath));
-    } catch {
-      setUploadError("Upload failed — try pasting a URL instead");
-    } finally {
-      setUploading(false);
+    const pending: ImageEntry[] = accepted.map(({ id }) => ({ id, url: "", progress: 0, uploading: true, error: "" }));
+    refresh([...entriesRef.current, ...pending, ...rejected]);
+
+    if (rejected.length > 0) {
+      const ids = new Set(rejected.map(r => r.id));
+      setTimeout(() => refresh(entriesRef.current.filter(e => !ids.has(e.id))), 3500);
+    }
+
+    for (const { file, id } of accepted) {
+      uploadWithProgress(file, (p) => refresh(entriesRef.current.map(e => e.id === id ? { ...e, progress: p } : e)))
+        .then((url) => refreshEmit(entriesRef.current.map(e => e.id === id ? { ...e, url, uploading: false, progress: 100 } : e)))
+        .catch(() => {
+          refresh(entriesRef.current.map(e => e.id === id ? { id, url: "", progress: 0, uploading: false, error: `${file.name}: upload failed` } : e));
+          setTimeout(() => refresh(entriesRef.current.filter(e => e.id !== id)), 3500);
+        });
     }
   }
 
-  const hasImage = Boolean(url);
+  function removeEntry(id: string) {
+    refreshEmit(entriesRef.current.filter(e => e.id !== id));
+  }
+
+  function replaceEntry(id: string, file: File) {
+    refresh(entriesRef.current.map(e => e.id === id ? { ...e, url: "", progress: 0, uploading: true, error: "" } : e));
+    uploadWithProgress(file, (p) => refresh(entriesRef.current.map(e => e.id === id ? { ...e, progress: p } : e)))
+      .then((url) => refreshEmit(entriesRef.current.map(e => e.id === id ? { ...e, url, uploading: false, progress: 100 } : e)))
+      .catch(() => {
+        refresh(entriesRef.current.map(e => e.id === id ? { ...e, uploading: false, error: "Replace failed. Try again." } : e));
+        setTimeout(() => refresh(entriesRef.current.map(e => e.id === id ? { ...e, error: "" } : e)), 3500);
+      });
+  }
+
+  const entries = entriesRef.current;
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="space-y-4">
       <div
         role="button"
         tabIndex={0}
-        className="relative shrink-0 w-16 h-16 rounded-xl overflow-hidden transition-all cursor-pointer"
+        className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-all cursor-pointer py-10 px-6 text-center"
         style={{
-          border: `2px dashed ${dragOver ? MAROON : hasImage ? "transparent" : "#D6C9BA"}`,
-          background: hasImage ? "transparent" : CREAM,
-          boxShadow: dragOver ? `0 0 0 3px ${MAROON}22` : undefined,
+          borderColor: zoneDragOver ? MAROON : "#D6C9BA",
+          background: zoneDragOver ? `${MAROON}0A` : CREAM,
         }}
-        title="Drop image or click to browse"
-        onClick={() => !uploading && fileRef.current?.click()}
-        onKeyDown={(e) => e.key === "Enter" && !uploading && fileRef.current?.click()}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) uploadFile(f); }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setZoneDragOver(false); processFiles(Array.from(e.dataTransfer.files)); }}
+        onDragOver={(e) => { e.preventDefault(); setZoneDragOver(true); }}
+        onDragEnter={(e) => { e.preventDefault(); setZoneDragOver(true); }}
+        onDragLeave={() => setZoneDragOver(false)}
+        onClick={() => browseRef.current?.click()}
+        onKeyDown={(e) => e.key === "Enter" && browseRef.current?.click()}
       >
-        {uploading ? (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: `${MAROON}44`, borderTopColor: MAROON }} />
-          </div>
-        ) : hasImage ? (
-          <img src={url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.2"; }} />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
-            <Upload size={13} style={{ color: "#B0A090" }} />
-            <span className="text-[9px]" style={{ color: "#C8B8A8" }}>{isMain ? "Main" : `#${idx + 1}`}</span>
-          </div>
-        )}
-        {dragOver && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-xl" style={{ background: `${MAROON}18` }}>
-            <Upload size={16} style={{ color: MAROON }} />
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 space-y-1">
-        <div className="flex items-center gap-2">
-          <input
-            className={inputClass + " flex-1"}
-            style={inputStyle}
-            value={url}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={isMain ? "Drop image or paste URL (main photo)" : "Drop image or paste URL (optional)"}
-          />
-          {hasImage && (
-            <button
-              type="button"
-              onClick={() => onChange("")}
-              className="p-1.5 rounded-lg hover:bg-red-50 shrink-0 transition-colors"
-              title="Remove"
-            >
-              <X size={12} className="text-red-400" />
-            </button>
-          )}
+        <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: `${MAROON}14` }}>
+          <Upload size={24} style={{ color: MAROON }} />
         </div>
-        {uploadError && <p className="text-[11px] text-red-400">{uploadError}</p>}
+        <div>
+          <p className="text-sm font-semibold" style={{ color: "#2d1f14" }}>Drag & Drop Images Here</p>
+          <p className="text-xs mt-0.5" style={{ color: "#9a8070" }}>
+            or <span className="font-semibold" style={{ color: MAROON }}>Click to Browse</span>
+          </p>
+        </div>
+        <p className="text-[11px]" style={{ color: "#B8A898" }}>
+          JPG &nbsp;·&nbsp; PNG &nbsp;·&nbsp; WEBP &nbsp;&nbsp;|&nbsp;&nbsp; Max 10 MB per image &nbsp;&nbsp;|&nbsp;&nbsp; Multiple at once
+        </p>
+        <input
+          ref={browseRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+          onChange={(e) => { processFiles(Array.from(e.target.files || [])); e.target.value = ""; }}
+        />
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }}
-      />
+      {entries.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {entries.map((entry, idx) => (
+            <ImageCard
+              key={entry.id}
+              entry={entry}
+              isMain={idx === 0}
+              isDragSrc={dragSrcIdx === idx}
+              isDragTarget={dragOverIdx === idx}
+              onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDragSrcIdx(idx); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragSrcIdx !== null && dragSrcIdx !== idx) setDragOverIdx(idx);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragSrcIdx !== null && dragSrcIdx !== idx) {
+                  const next = [...entriesRef.current];
+                  const [moved] = next.splice(dragSrcIdx, 1);
+                  next.splice(idx, 0, moved);
+                  refreshEmit(next);
+                }
+                setDragSrcIdx(null);
+                setDragOverIdx(null);
+              }}
+              onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+              onRemove={() => removeEntry(entry.id)}
+              onReplace={(file) => replaceEntry(entry.id, file)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -232,7 +438,6 @@ interface ProductFormProps {
   data: ProductFormData;
   errors: Partial<Record<keyof ProductFormData, string>>;
   onChange: (field: keyof ProductFormData, value: any) => void;
-  onImageChange: (idx: number, value: string) => void;
   submitting: boolean;
   submitLabel: string;
   onSubmit: (e: React.FormEvent) => void;
@@ -243,7 +448,6 @@ export default function ProductForm({
   data,
   errors,
   onChange,
-  onImageChange,
   submitting,
   submitLabel,
   onSubmit,
@@ -434,28 +638,10 @@ export default function ProductForm({
       </Section>
 
       <Section icon={Image} title="Images">
-        <p className="text-xs text-gray-400 -mt-2">
-          Drag & drop images onto the thumbnails, click to browse, or paste URLs. First image is the main product photo.
-        </p>
-        <div className="space-y-2.5">
-          {data.images.map((url, idx) => (
-            <ImageSlot
-              key={idx}
-              idx={idx}
-              url={url}
-              isMain={idx === 0}
-              onChange={(newUrl) => onImageChange(idx, newUrl)}
-            />
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => onChange("images", [...data.images, ""])}
-          className="text-xs font-semibold flex items-center gap-1.5 transition-opacity hover:opacity-70"
-          style={{ color: MAROON }}
-        >
-          <Plus size={13} /> Add image
-        </button>
+        <ImageUploadGallery
+          images={data.images}
+          onImagesChange={(urls) => onChange("images", urls)}
+        />
       </Section>
 
       <Section icon={Video} title="Product Videos">

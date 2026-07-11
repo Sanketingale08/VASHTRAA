@@ -33,14 +33,6 @@ export default function SellerProductNew() {
     setApiError("");
   }
 
-  function handleImageChange(idx: number, value: string) {
-    setForm((prev) => {
-      const images = [...prev.images];
-      images[idx] = value;
-      return { ...prev, images };
-    });
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate(form);
@@ -139,7 +131,6 @@ export default function SellerProductNew() {
           data={form}
           errors={errors}
           onChange={handleChange}
-          onImageChange={handleImageChange}
           submitting={submitting}
           submitLabel="Create Product"
           onSubmit={handleSubmit}

@@ -37,7 +37,6 @@ export default function SellerProductEdit() {
         if (!res.ok) throw new Error("Product not found");
         const p = await res.json();
         const images = Array.isArray(p.images) ? p.images : [];
-        const paddedImages = [...images, "", "", "", ""].slice(0, 4);
         const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : [""];
         const variants = Array.isArray(p.variants)
           ? p.variants.map((v: any) => ({
@@ -65,7 +64,7 @@ export default function SellerProductEdit() {
           originalPrice: p.originalPrice != null ? String(p.originalPrice) : "",
           stock: p.stock != null ? String(p.stock) : "0",
           lowStockThreshold: p.lowStockThreshold != null ? String(p.lowStockThreshold) : "5",
-          images: paddedImages,
+          images: images,
           videos,
           variants,
           specifications,
@@ -86,14 +85,6 @@ export default function SellerProductEdit() {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
     setApiError("");
-  }
-
-  function handleImageChange(idx: number, value: string) {
-    setForm((prev) => {
-      const images = [...prev.images];
-      images[idx] = value;
-      return { ...prev, images };
-    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -215,7 +206,6 @@ export default function SellerProductEdit() {
           data={form}
           errors={errors}
           onChange={handleChange}
-          onImageChange={handleImageChange}
           submitting={submitting}
           submitLabel="Save Changes"
           onSubmit={handleSubmit}

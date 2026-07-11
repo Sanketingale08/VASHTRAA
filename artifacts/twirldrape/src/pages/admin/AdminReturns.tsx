@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
@@ -84,6 +84,7 @@ function ReturnsContent() {
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const processingInFlight = useRef<Set<string>>(new Set());
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadOrders() {
@@ -170,6 +171,8 @@ function ReturnsContent() {
 
   async function processRefund(orderId: string) {
     const key = orderId + "refundprocess";
+    if (processingInFlight.current.has(key)) return;
+    processingInFlight.current.add(key);
     setActionLoading(key);
     try {
       const res = await fetch(`${basePath}/api/admin/orders/${orderId}/refund/process`, {
@@ -189,6 +192,7 @@ function ReturnsContent() {
     } catch {
       setError("Failed to mark refund as processed");
     } finally {
+      processingInFlight.current.delete(key);
       setActionLoading(null);
     }
   }

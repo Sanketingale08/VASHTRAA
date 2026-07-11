@@ -191,6 +191,50 @@ test.describe("Admin Returns & Refunds panel — approve → process payout", ()
   });
 });
 
+test.describe("Double-click guard on Mark payout done", () => {
+  test("rapid double-click only fires one POST request", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    const ADMIN_KEY = process.env.ADMIN_API_KEY || "test-e2e-admin-key";
+
+    await page.addInitScript((key) => {
+      sessionStorage.setItem("td_admin_key", key);
+    }, ADMIN_KEY);
+
+    await page.route("**/api/admin/returns", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ orders: [approvedOrder] }),
+      });
+    });
+
+    let processCallCount = 0;
+
+    await page.route(`**/api/admin/orders/${ORDER_ID}/refund/process`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      processCallCount++;
+      await new Promise((r) => setTimeout(r, 300));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: processedOrder }),
+      });
+    });
+
+    await page.goto("/admin/returns");
+
+    const markPayoutBtn = page.locator("button", { hasText: /Mark payout done/i }).first();
+    await expect(markPayoutBtn).toBeVisible({ timeout: 20_000 });
+
+    await markPayoutBtn.dblclick();
+
+    await expect(page.locator("div", { hasText: /Paid out/i }).first()).toBeVisible({ timeout: 10_000 });
+
+    expect(processCallCount).toBe(1);
+  });
+});
+
 test.describe("Customer order history — Refund paid out badge", () => {
   test("order history shows Refund paid out badge for a processed refund", async ({
     page,

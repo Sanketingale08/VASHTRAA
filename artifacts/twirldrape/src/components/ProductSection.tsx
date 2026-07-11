@@ -30,12 +30,12 @@ export interface ProductSectionProps {
 
 function SkeletonCard() {
   return (
-    <div className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)] rounded-lg overflow-hidden bg-[#E6F0EA] dark:bg-[#2A2E35] animate-pulse">
-      <div className="aspect-square bg-gray-200 dark:bg-[#3A3E45]" />
-      <div className="p-4 space-y-2">
-        <div className="h-3 bg-gray-200 dark:bg-[#3A3E45] rounded w-3/4" />
-        <div className="h-4 bg-gray-200 dark:bg-[#3A3E45] rounded" />
-        <div className="h-3 bg-gray-200 dark:bg-[#3A3E45] rounded w-1/2" />
+    <div className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)] rounded-xl overflow-hidden bg-white border border-[#C9A84C]/15 shadow-sm animate-pulse">
+      <div className="aspect-square bg-[#F5F0E8]" />
+      <div className="p-4 space-y-2 bg-white">
+        <div className="h-3 bg-[#EDE8DF] rounded w-3/4" />
+        <div className="h-4 bg-[#EDE8DF] rounded" />
+        <div className="h-3 bg-[#EDE8DF] rounded w-1/2" />
       </div>
     </div>
   );

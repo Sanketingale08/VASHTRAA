@@ -99,28 +99,29 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3) }}
-        className="group relative bg-[#E6F0EA] dark:bg-[#2A2E35] rounded-lg overflow-hidden border border-[#C9A84C]/10 hover:border-[#C9A84C] transition-all duration-300 hover:shadow-[0_0_15px_rgba(201,168,76,0.3)] cursor-pointer"
+        className="group relative bg-white rounded-xl overflow-hidden border border-[#C9A84C]/20 shadow-sm hover:border-[#C9A84C]/55 hover:shadow-lg transition-all duration-300 cursor-pointer"
+        style={{ boxShadow: "0 1px 4px rgba(201,168,76,0.07), 0 0 0 1px rgba(201,168,76,0.12)" }}
         data-testid={`card-product-${product.id}`}
       >
         {/* Badges */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
           {product.stock === 0 && (
-            <span className="bg-gray-700 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+            <span className="bg-gray-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               Sold Out
             </span>
           )}
           {product.stock !== 0 && product.isBestSeller && (
-            <span className="bg-[#C9A84C] text-[#1E6B5A] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+            <span className="bg-[#C9A84C] text-[#1E6B5A] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               Best Seller
             </span>
           )}
           {product.stock !== 0 && product.isNewArrival && (
-            <span className="bg-[#1E6B5A] text-[#F3F8F5] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+            <span className="bg-[#1E6B5A] text-[#F3F8F5] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               New Arrival
             </span>
           )}
           {product.stock !== 0 && discount > 0 && (
-            <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+            <span className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               {discount}% Off
             </span>
           )}
@@ -130,21 +131,21 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         <button
           onClick={handleWishlistClick}
           title={isSignedIn ? (isWishlisted ? "Remove from wishlist" : "Add to wishlist") : "Sign in to save"}
-          className="absolute top-2 right-2 z-10 p-2 bg-white/80 dark:bg-black/40 backdrop-blur rounded-full hover:bg-white transition-colors"
+          className="absolute top-2 right-2 z-10 p-1.5 bg-white/90 backdrop-blur-sm border border-[#C9A84C]/20 rounded-full hover:bg-white hover:border-[#C9A84C]/50 transition-all shadow-sm"
         >
           <Heart
-            size={18}
+            size={16}
             className={cn(
               "transition-colors",
               isWishlisted
                 ? "fill-[#1E6B5A] text-[#1E6B5A]"
-                : "text-gray-600 dark:text-gray-300",
+                : "text-gray-400",
             )}
           />
         </button>
 
         {/* Image */}
-        <div className="relative aspect-square overflow-hidden bg-gray-100">
+        <div className="relative aspect-square overflow-hidden bg-[#FAF7F2]">
           <img
             src={image}
             alt={product.name}
@@ -161,7 +162,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
           )}
 
           {/* Hover Overlay */}
-          <div className="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/80 to-transparent flex gap-2">
+          <div className="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/75 via-black/30 to-transparent flex gap-2">
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -181,10 +182,10 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
               }}
               disabled={(product.stock ?? 1) === 0}
               className={cn(
-                "flex-1 font-semibold py-2 text-xs transition-colors rounded",
+                "flex-1 font-bold py-2 text-xs tracking-wider uppercase rounded-md transition-colors",
                 (product.stock ?? 1) === 0
-                  ? "bg-gray-500 text-white cursor-not-allowed opacity-80"
-                  : "bg-[#C9A84C] hover:bg-[#b59539] text-[#1E6B5A]"
+                  ? "bg-gray-400 text-white cursor-not-allowed opacity-80"
+                  : "bg-[#C9A84C] hover:bg-[#b59539] text-[#1E3A2A]"
               )}
             >
               {(product.stock ?? 1) === 0 ? "Sold Out" : "Add to Cart"}
@@ -193,7 +194,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
               <button
                 onClick={handleQuickView}
                 title="Quick View"
-                className="p-2 bg-white/20 hover:bg-white/40 text-white rounded transition-colors"
+                className="p-2 bg-white/20 hover:bg-white/40 text-white rounded-md transition-colors"
               >
                 <Eye size={16} />
               </button>
@@ -202,30 +203,28 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         </div>
 
         {/* Content */}
-        <div className="p-4">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{vendorLabel}</p>
-          <h3 className="font-serif text-base leading-tight mb-2 line-clamp-2 min-h-[2.6rem] text-[#1E6B5A] dark:text-[#F3F8F5]">
+        <div className="p-4 bg-white">
+          <p className="text-[11px] text-gray-400 mb-1 font-medium tracking-wide uppercase">{vendorLabel}</p>
+          <h3 className="font-serif text-base leading-snug mb-2 line-clamp-2 min-h-[2.5rem] text-[#2D1B1B]">
             {product.name}
           </h3>
 
-          <div className="flex items-center gap-1 mb-2">
-            <div className="flex text-[#C9A84C]">
-              <Star size={13} className="fill-current" />
-            </div>
-            <span className="text-xs font-semibold">{product.rating}</span>
-            <span className="text-xs text-gray-400">({reviewCount})</span>
+          <div className="flex items-center gap-1 mb-3">
+            <Star size={12} className="fill-[#C9A84C] text-[#C9A84C]" />
+            <span className="text-xs font-semibold text-[#2D1B1B]">{product.rating}</span>
+            <span className="text-xs text-gray-300">({reviewCount})</span>
           </div>
 
-          <div className="flex items-end gap-2 flex-wrap">
-            <span className="font-bold text-base text-[#1E6B5A] dark:text-[#C9A84C]">
+          <div className="flex items-end gap-2 flex-wrap border-t border-[#C9A84C]/10 pt-3">
+            <span className="font-bold text-[15px] text-[#1E6B5A]">
               ₹{product.price.toLocaleString("en-IN")}
             </span>
             {product.originalPrice && (
               <>
-                <span className="text-xs text-gray-400 line-through mb-0.5">
+                <span className="text-xs text-gray-300 line-through mb-0.5">
                   ₹{product.originalPrice.toLocaleString("en-IN")}
                 </span>
-                <span className="text-xs font-bold text-green-600 mb-0.5">{discount}% off</span>
+                <span className="text-[11px] font-bold text-emerald-600 mb-0.5">{discount}% off</span>
               </>
             )}
           </div>

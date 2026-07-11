@@ -374,14 +374,14 @@ export default function Home() {
               <Link
                 href="/paithani"
                 className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:opacity-90 hover:shadow-lg"
-                style={{ background: H_WINE, color: "white", padding: "14px 28px", borderRadius: "4px" }}
+                style={{ background: "#0F5C54", color: "white", padding: "14px 28px", borderRadius: "4px" }}
               >
                 Explore Paithani Sarees &nbsp;→
               </Link>
               <Link
                 href="/designer"
                 className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/40"
-                style={{ border: `2px solid ${H_WINE}`, color: H_WINE, padding: "12px 26px", borderRadius: "4px" }}
+                style={{ border: "2px solid #0F5C54", color: "#0F5C54", padding: "12px 26px", borderRadius: "4px" }}
               >
                 Explore Designer Sarees &nbsp;→
               </Link>

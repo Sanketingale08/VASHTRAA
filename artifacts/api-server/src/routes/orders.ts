@@ -962,6 +962,7 @@ router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): 
             status: ordersTable.status,
             deliveredAt: ordersTable.deliveredAt,
             updatedAt: ordersTable.updatedAt,
+            statusHistory: ordersTable.statusHistory,
             items: ordersTable.items,
           })
           .from(ordersTable)
@@ -999,11 +1000,15 @@ router.post("/orders/:orderId/return", requireAuth, async (req: any, res: any): 
           itemNotes: itemNotes && typeof itemNotes === "object" ? itemNotes : undefined,
         };
 
+        const returnHistory = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        returnHistory.push({ status: "return_requested", timestamp: new Date().toISOString() });
+
         await tx
           .update(ordersTable)
           .set({
             status: "return_requested",
             returnReason: JSON.stringify(returnData),
+            statusHistory: returnHistory,
           })
           .where(eq(ordersTable.id, orderId));
 
@@ -1076,6 +1081,7 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
             userId: ordersTable.userId,
             status: ordersTable.status,
             refundStatus: ordersTable.refundStatus,
+            statusHistory: ordersTable.statusHistory,
             items: ordersTable.items,
           })
           .from(ordersTable)
@@ -1102,11 +1108,15 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
           );
         }
 
+        const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+        history.push({ status: "refund_requested", timestamp: new Date().toISOString() });
+
         await tx
           .update(ordersTable)
           .set({
             refundStatus: "pending",
             refundMethod: method,
+            statusHistory: history,
             updatedAt: new Date(),
           })
           .where(eq(ordersTable.id, orderId));
@@ -1181,6 +1191,13 @@ router.get("/admin/orders", requireAdminKey, async (req: any, res: any): Promise
   }
 });
 
+function deriveReturnRequestedAt(order: { statusHistory: unknown; createdAt: string | Date }): string {
+  const history = Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [];
+  const entry = history.find((h: any) => h.status === "return_requested" || h.status === "refund_requested");
+  const raw = entry?.timestamp ?? order.createdAt;
+  return typeof raw === "string" ? raw : (raw as Date).toISOString();
+}
+
 // GET /admin/returns — list orders pending return/refund review
 router.get("/admin/returns", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
@@ -1192,7 +1209,9 @@ router.get("/admin/returns", requireAdminKey, async (req: any, res: any): Promis
       )
       .orderBy(desc(ordersTable.updatedAt));
 
-    res.json({ orders: rows });
+    const orders = rows.map((order) => ({ ...order, returnRequestedAt: deriveReturnRequestedAt(order) }));
+
+    res.json({ orders });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch return/refund requests");
     res.status(500).json({ error: "Failed to fetch return/refund requests" });
@@ -1332,7 +1351,7 @@ router.post("/admin/orders/:orderId/return", requireAdminKey, async (req: any, r
       });
     }
 
-    res.json({ order: updatedOrder });
+    res.json({ order: updatedOrder ? { ...updatedOrder, returnRequestedAt: deriveReturnRequestedAt(updatedOrder) } : updatedOrder });
   } catch (err) {
     req.log.error({ err }, "Failed to review return request");
     res.status(500).json({ error: "Failed to review return request" });
@@ -1437,7 +1456,7 @@ router.post("/admin/orders/:orderId/refund", requireAdminKey, async (req: any, r
       });
     }
 
-    res.json({ order: updatedOrder });
+    res.json({ order: updatedOrder ? { ...updatedOrder, returnRequestedAt: deriveReturnRequestedAt(updatedOrder) } : updatedOrder });
   } catch (err) {
     req.log.error({ err }, "Failed to review refund");
     res.status(500).json({ error: "Failed to review refund" });
@@ -1537,7 +1556,7 @@ router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req
       });
     }
 
-    res.json({ order: updatedOrder });
+    res.json({ order: updatedOrder ? { ...updatedOrder, returnRequestedAt: deriveReturnRequestedAt(updatedOrder) } : updatedOrder });
   } catch (err) {
     req.log.error({ err }, "Failed to process refund payout");
     res.status(500).json({ error: "Failed to process refund payout" });

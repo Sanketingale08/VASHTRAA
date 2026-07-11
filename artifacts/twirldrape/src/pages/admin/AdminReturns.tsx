@@ -34,6 +34,7 @@ interface AdminOrder {
   returnReason: string | null;
   updatedAt: string;
   createdAt: string;
+  returnRequestedAt: string;
 }
 
 function fmtMoney(paise: number) {
@@ -199,7 +200,7 @@ function ReturnsContent() {
   }), [orders]);
 
   function exportCSV() {
-    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Updated Date"];
+    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Requested Date", "Updated Date"];
     const rows = filtered.map((o) => [
       o.id,
       o.address?.name ?? "",
@@ -207,6 +208,7 @@ function ReturnsContent() {
       (o.total / 100).toFixed(2),
       o.status.replace(/_/g, " "),
       o.refundStatus ? o.refundStatus.replace(/_/g, " ") : "",
+      new Date(o.returnRequestedAt).toLocaleString("en-IN"),
       new Date(o.updatedAt).toLocaleString("en-IN"),
     ]);
 
@@ -310,7 +312,7 @@ function ReturnsContent() {
                         {o.items?.[0]?.name}{o.items.length > 1 ? ` + ${o.items.length - 1} more` : ""}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        Total {fmtMoney(o.total)} · Updated {new Date(o.updatedAt).toLocaleString("en-IN")}
+                        Total {fmtMoney(o.total)} · <span className="text-amber-600 font-medium">Requested {new Date(o.returnRequestedAt).toLocaleString("en-IN")}</span> · Updated {new Date(o.updatedAt).toLocaleString("en-IN")}
                       </div>
                       {returnData?.reason && (
                         <div className="text-xs text-gray-500 mt-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5 max-w-md">

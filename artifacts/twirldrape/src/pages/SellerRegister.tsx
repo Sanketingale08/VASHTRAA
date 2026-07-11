@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useUser } from "@clerk/react";
 import { useSignUp } from "@clerk/react/legacy";
 import { useLocation } from "wouter";
@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Store, ChevronRight, ChevronLeft, Check, Eye, EyeOff,
   Upload, Phone, Building2, FileText, Landmark, MapPin, ShieldCheck,
-  Loader2, AlertCircle, CheckCircle2, X,
+  Loader2, AlertCircle, CheckCircle2, X, Save,
 } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
 
@@ -211,9 +211,10 @@ function OTPBox({ value, onChange }: { value: string; onChange: (v: string) => v
   );
 }
 
-function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "pan" }: {
+function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "pan", onUploadStart, onUploadEnd }: {
   label: string; objectPath: string; onUploaded: (path: string) => void;
   accept?: string; helper?: string; docType?: "pan" | "gst";
+  onUploadStart?: () => void; onUploadEnd?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -225,12 +226,13 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
     if (!f) return;
     if (f.size > 5 * 1024 * 1024) { setErr("File must be under 5MB"); return; }
     setBusy(true); setErr("");
+    onUploadStart?.();
     try {
       const path = await uploadKycFile(f, docType);
       setFname(f.name);
       onUploaded(path);
     } catch { setErr("Upload failed. Please try again."); }
-    finally { setBusy(false); if (ref.current) ref.current.value = ""; }
+    finally { setBusy(false); onUploadEnd?.(); if (ref.current) ref.current.value = ""; }
   }
 
   return (
@@ -306,6 +308,13 @@ export default function SellerRegister() {
   const [phoneSent, setPhoneSent] = useState(false);
   const [phoneCode, setPhoneCode] = useState("");
 
+  const [uploadCount, setUploadCount] = useState(0);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onUploadStart = useCallback(() => setUploadCount((n) => n + 1), []);
+  const onUploadEnd = useCallback(() => setUploadCount((n) => Math.max(0, n - 1)), []);
+
   const set = (k: keyof WizardData) => (v: string | boolean) =>
     setData((d) => ({ ...d, [k]: v }));
   const e = (k: keyof WizardData) => errs[k];
@@ -334,6 +343,25 @@ export default function SellerRegister() {
     if (step === 0 || done) return;
     saveDraft(data, step);
   }, [data, step, done]);
+
+  useEffect(() => {
+    if (step <= 1 || done) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    setDraftSaved(true);
+    draftTimerRef.current = setTimeout(() => setDraftSaved(false), 2500);
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+  }, [step]);
+
+  useEffect(() => {
+    if (uploadCount === 0) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "A file upload is in progress. If you leave now, the upload will be lost.";
+      return e.returnValue;
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [uploadCount]);
 
   function startOver() {
     clearDraft();
@@ -540,6 +568,22 @@ export default function SellerRegister() {
 
         <div className="w-full max-w-lg bg-white rounded-2xl border border-[#C8D8D0] p-7 shadow-sm">
           <ProgressBar step={step} />
+          <AnimatePresence>
+            {draftSaved && (
+              <motion.div
+                key="draft-saved"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center gap-1.5 text-xs font-medium mb-3 -mt-2"
+                style={{ color: EMERALD }}
+              >
+                <Save size={11} />
+                Draft saved
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {step > (isSignedIn ? 2 : 1) && (
             <div className="flex justify-end -mt-4 mb-4">
@@ -661,7 +705,8 @@ export default function SellerRegister() {
                 </Field>
                 <FileUpload label="PAN Card Photo / Scan *" objectPath={data.panCardUrl} onUploaded={set("panCardUrl")}
                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                  helper="Clear photo or scan of front side of PAN card" />
+                  helper="Clear photo or scan of front side of PAN card"
+                  onUploadStart={onUploadStart} onUploadEnd={onUploadEnd} />
                 {e("panCardUrl") && (
                   <p className="text-xs text-red-500 -mt-2 flex items-center gap-1">
                     <AlertCircle size={11} />{e("panCardUrl")}
@@ -670,7 +715,8 @@ export default function SellerRegister() {
                 <FileUpload label="GST Certificate (Optional)" objectPath={data.gstCertUrl} onUploaded={set("gstCertUrl")}
                   accept="image/jpeg,image/png,application/pdf"
                   helper="Upload your GST registration certificate if applicable"
-                  docType="gst" />
+                  docType="gst"
+                  onUploadStart={onUploadStart} onUploadEnd={onUploadEnd} />
               </StepShell>
             )}
 

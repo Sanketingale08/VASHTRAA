@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const navItems = [
+const navItems: { href: string; icon: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>; label: string; exact?: boolean }[] = [
   { href: "/account/overview", icon: LayoutDashboard, label: "Overview" },
   { href: "/account/profile", icon: User, label: "Profile" },
   { href: "/account/orders", icon: Package, label: "My Orders" },

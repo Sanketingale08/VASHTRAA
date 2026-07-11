@@ -74,7 +74,7 @@ function usePincodeCheck(pincode: string, base: string) {
 }
 
 function useGoogleAutocomplete(
-  inputRef: React.RefObject<HTMLInputElement>,
+  inputRef: React.RefObject<HTMLInputElement | null>,
   enabled: boolean,
   onSelect: (data: { city?: string; state?: string; pincode?: string }) => void
 ) {

@@ -51,7 +51,7 @@ export function CartPage() {
 
   const { data: recentData } = useListProducts(
     { ids: recentIds.join(","), limit: 8 } as any,
-    { query: { enabled: recentIds.length > 0 } }
+    { query: { enabled: recentIds.length > 0 } as any }
   );
 
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);

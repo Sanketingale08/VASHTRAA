@@ -16,7 +16,7 @@ const fadeUp = {
   visible: (i = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, delay: i * 0.08, ease: "easeOut" },
+    transition: { duration: 0.6, delay: i * 0.08, ease: "easeOut" as const },
   }),
 };
 
@@ -33,7 +33,18 @@ const CATEGORIES = [
   "Complaint",
 ];
 
-const CONTACT_CARDS = [
+interface ContactCard {
+  icon: React.ReactNode;
+  title: string;
+  color: string;
+  border: string;
+  iconBg: string;
+  items: { icon: React.ReactNode; label: string; value: string }[];
+  social?: { icon: React.ReactNode; label: string; href: string; color: string }[];
+  cta?: { href: string; label: string };
+}
+
+const CONTACT_CARDS: ContactCard[] = [
   {
     icon: <HeadphonesIcon size={24} />,
     title: "Customer Support",

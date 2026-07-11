@@ -53,7 +53,7 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
 
   const { data: recentData } = useListProducts(
     { ids: recentIds.join(","), limit: 8 } as any,
-    { query: { enabled: recentIds.length > 0 } }
+    { query: { enabled: recentIds.length > 0 } as any }
   );
 
   if (!isLoaded) {

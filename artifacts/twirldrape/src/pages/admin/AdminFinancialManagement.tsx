@@ -166,7 +166,7 @@ function SettlementsPanel() {
     XLSX.writeFile(wb, `settlements-${Date.now()}.xlsx`);
   }
 
-  async function review(id: string, decision: "approve" | "reject" | "complete" | "paid") {
+  async function review(id: string, decision: "approve" | "reject" | "complete" | "paid" | "process") {
     setBusyId(id);
     try {
       await fetch(`${basePath}/api/admin/financial/settlements/${id}/review`, {

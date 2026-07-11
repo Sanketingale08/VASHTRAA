@@ -1,31 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Sparkles, Heart, Star } from "lucide-react";
+import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
+import { ProductCard } from "@/components/ProductCard";
+import { QuickViewModal } from "@/components/QuickViewModal";
+import { useListProducts } from "@workspace/api-client-react";
+import type { ProductSummary } from "@workspace/api-client-react";
 
 const GOLD = "#C9A84C";
 const GREEN = "#1E6B5A";
 
-const HIGHLIGHTS = [
-  {
-    title: "Paithani Bridal Sarees",
-    desc: "Hand-woven silk Paithani sarees with intricate peacock and lotus motifs — the quintessential Maharashtrian bridal choice.",
-    link: "/paithani/shop",
-    badge: "Most Loved",
-  },
-  {
-    title: "Designer Bridal Sarees",
-    desc: "Contemporary designer sarees with hand-embroidered borders, zari work, and exclusive prints crafted for the modern bride.",
-    link: "/designer/shop",
-    badge: "New Season",
-  },
-  {
-    title: "All Collections",
-    desc: "Browse our full range of sarees across every style, weave, and price point to find the one made for your day.",
-    link: "/collections",
-    badge: "Browse All",
-  },
-];
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: (i = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, delay: i * 0.1, ease: "easeOut" as const },
+  }),
+};
 
 const FEATURES = [
   { icon: <Star className="w-6 h-6" style={{ color: GOLD }} />, title: "Curated for Brides", desc: "Every piece in our bridal edit is hand-picked by our curation team for richness of weave and elegance of drape." },
@@ -33,7 +26,31 @@ const FEATURES = [
   { icon: <Sparkles className="w-6 h-6" style={{ color: GOLD }} />, title: "Styling Assistance", desc: "Not sure which saree suits your skin tone or lehenga palette? Reach out to our styling team for personalised guidance." },
 ];
 
+function SkeletonCard() {
+  return (
+    <div className="rounded-xl overflow-hidden bg-[#E6F0EA] animate-pulse">
+      <div className="aspect-[3/4] bg-gray-200" />
+      <div className="p-4 space-y-2">
+        <div className="h-3 bg-gray-200 rounded w-3/4" />
+        <div className="h-4 bg-gray-200 rounded" />
+        <div className="h-3 bg-gray-200 rounded w-1/2" />
+      </div>
+    </div>
+  );
+}
+
 export default function BridalCollection() {
+  const [quickViewProduct, setQuickViewProduct] = useState<ProductSummary | null>(null);
+
+  const { data, isLoading } = useListProducts({
+    occasion: "bridal",
+    sort: "rating_desc",
+    limit: 12,
+  });
+
+  const products = data?.products ?? [];
+  const totalCount = data?.total ?? 0;
+
   return (
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
@@ -55,39 +72,95 @@ export default function BridalCollection() {
               Discover sarees worthy of your most important day. Each piece is chosen for its weave quality,
               richness of colour, and the story it carries from the loom to you.
             </p>
-            <Link
-              href="/collections"
-              className="inline-flex items-center gap-2 bg-[#C9A84C] text-[#1E6B5A] px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-white transition-colors"
-            >
-              Shop Bridal Sarees <ArrowRight size={16} />
-            </Link>
           </div>
         </section>
 
-        {/* Category Cards */}
+        {/* Product Grid */}
         <section className="container mx-auto px-4 py-16 md:py-24">
-          <div className="text-center mb-12">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Browse By Style</p>
-            <h2 className="font-serif text-2xl md:text-3xl text-[#1E6B5A] font-bold">
-              Find Your Perfect Bridal Saree
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {HIGHLIGHTS.map((item) => (
-              <Link key={item.title} href={item.link}>
-                <div className="group bg-white border border-[#C9A84C]/20 rounded-2xl p-8 hover:shadow-lg hover:border-[#C9A84C]/50 transition-all duration-300 cursor-pointer h-full flex flex-col">
-                  <span className="inline-block text-xs font-bold uppercase tracking-wider bg-[#1E6B5A]/10 text-[#1E6B5A] px-3 py-1 rounded-full mb-4 self-start">
-                    {item.badge}
-                  </span>
-                  <h3 className="font-serif text-xl text-[#3D1515] font-bold mb-3">{item.title}</h3>
-                  <p className="text-sm text-[#7a5f4e] leading-relaxed flex-1 mb-6">{item.desc}</p>
-                  <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-[#1E6B5A] group-hover:text-[#C9A84C] transition-colors">
-                    Explore <ArrowRight size={12} />
-                  </span>
+          <motion.div
+            custom={0}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeUp}
+            className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10"
+          >
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] mb-2" style={{ color: GOLD }}>
+                Bridal Sarees
+              </p>
+              <div className="flex items-center gap-4">
+                <span className="flex-none h-px w-12" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+                <h2 className="font-serif text-3xl md:text-4xl font-bold" style={{ color: GREEN }}>
+                  Shop Bridal Collection
+                </h2>
+              </div>
+              {!isLoading && totalCount > 0 && (
+                <p className="mt-2 text-sm text-gray-500">
+                  Showing {products.length} of {totalCount} bridal sarees
+                </p>
+              )}
+            </div>
+            <Link
+              href="/collections?occasion=bridal"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors hover:opacity-80"
+              style={{ color: GREEN }}
+            >
+              View All <ArrowRight size={12} />
+            </Link>
+          </motion.div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+            {isLoading
+              ? Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
+              : products.length === 0
+              ? (
+                <div className="col-span-full py-20 text-center">
+                  <p className="font-serif text-xl text-[#1E6B5A] font-semibold mb-3">No bridal sarees yet</p>
+                  <p className="text-sm text-[#7a5f4e] mb-6 max-w-sm mx-auto">
+                    Our bridal edit is being curated. In the meantime, explore our full collection to find a saree worthy of your day.
+                  </p>
+                  <Link
+                    href="/collections"
+                    className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-3 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
+                  >
+                    Browse All Sarees <ArrowRight size={16} />
+                  </Link>
                 </div>
-              </Link>
-            ))}
+              )
+              : products.map((product, i) => (
+                <motion.div
+                  key={product.id}
+                  custom={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                >
+                  <ProductCard product={product} index={i} onQuickView={setQuickViewProduct} />
+                </motion.div>
+              ))
+            }
           </div>
+
+          {!isLoading && products.length > 0 && (
+            <motion.div
+              custom={5}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mt-12 flex justify-center"
+            >
+              <Link
+                href="/collections?occasion=bridal"
+                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                style={{ borderColor: GREEN, color: GREEN }}
+              >
+                View All Bridal Sarees <ArrowRight size={14} />
+              </Link>
+            </motion.div>
+          )}
         </section>
 
         {/* Features */}
@@ -123,7 +196,7 @@ export default function BridalCollection() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               href="/collections"
-              className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+              className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
             >
               Browse All Sarees <ArrowRight size={16} />
             </Link>
@@ -136,6 +209,10 @@ export default function BridalCollection() {
           </div>
         </section>
       </div>
+
+      {quickViewProduct && (
+        <QuickViewModal product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
+      )}
     </Layout>
   );
 }

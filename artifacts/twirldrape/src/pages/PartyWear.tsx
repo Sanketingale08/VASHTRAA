@@ -1,30 +1,25 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Sparkles, Zap, Star } from "lucide-react";
+import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
+import { ProductCard } from "@/components/ProductCard";
+import { QuickViewModal } from "@/components/QuickViewModal";
+import { useListProducts } from "@workspace/api-client-react";
+import type { ProductSummary } from "@workspace/api-client-react";
 
 const GOLD = "#C9A84C";
+const GREEN = "#1E6B5A";
+const MAROON = "#3D1515";
 
-const CATEGORIES = [
-  {
-    title: "Designer Party Sarees",
-    desc: "Bold prints, contemporary silhouettes, and rich embellishments — perfect for cocktail evenings, receptions, and festivals.",
-    link: "/designer/shop",
-    badge: "Trending",
-  },
-  {
-    title: "Paithani Festive Sarees",
-    desc: "Vibrant Paithani silks with traditional motifs that command attention at any celebration or cultural event.",
-    link: "/paithani/shop",
-    badge: "Bestsellers",
-  },
-  {
-    title: "Explore All",
-    desc: "Discover every style we carry — filter by fabric, occasion, price, and colour to find your perfect party look.",
-    link: "/collections",
-    badge: "Full Range",
-  },
-];
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: (i = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, delay: i * 0.1, ease: "easeOut" as const },
+  }),
+};
 
 const FEATURES = [
   {
@@ -44,7 +39,31 @@ const FEATURES = [
   },
 ];
 
+function SkeletonCard() {
+  return (
+    <div className="rounded-xl overflow-hidden bg-[#E6F0EA] animate-pulse">
+      <div className="aspect-[3/4] bg-gray-200" />
+      <div className="p-4 space-y-2">
+        <div className="h-3 bg-gray-200 rounded w-3/4" />
+        <div className="h-4 bg-gray-200 rounded" />
+        <div className="h-3 bg-gray-200 rounded w-1/2" />
+      </div>
+    </div>
+  );
+}
+
 export default function PartyWear() {
+  const [quickViewProduct, setQuickViewProduct] = useState<ProductSummary | null>(null);
+
+  const { data, isLoading } = useListProducts({
+    occasion: "party",
+    sort: "rating_desc",
+    limit: 12,
+  });
+
+  const products = data?.products ?? [];
+  const totalCount = data?.total ?? 0;
+
   return (
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
@@ -66,39 +85,95 @@ export default function PartyWear() {
               Sarees that are made for celebrations. Vibrant colours, rich textures, and statement weaves
               that ensure you're the best-dressed person in the room.
             </p>
-            <Link
-              href="/collections"
-              className="inline-flex items-center gap-2 bg-[#C9A84C] text-[#3D1515] px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-white transition-colors"
-            >
-              Shop Party Wear <ArrowRight size={16} />
-            </Link>
           </div>
         </section>
 
-        {/* Category Cards */}
+        {/* Product Grid */}
         <section className="container mx-auto px-4 py-16 md:py-24">
-          <div className="text-center mb-12">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Curated For You</p>
-            <h2 className="font-serif text-2xl md:text-3xl text-[#1E6B5A] font-bold">
-              Pick Your Party Look
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {CATEGORIES.map((item) => (
-              <Link key={item.title} href={item.link}>
-                <div className="group bg-white border border-[#C9A84C]/20 rounded-2xl p-8 hover:shadow-lg hover:border-[#C9A84C]/50 transition-all duration-300 cursor-pointer h-full flex flex-col">
-                  <span className="inline-block text-xs font-bold uppercase tracking-wider bg-[#3D1515]/10 text-[#3D1515] px-3 py-1 rounded-full mb-4 self-start">
-                    {item.badge}
-                  </span>
-                  <h3 className="font-serif text-xl text-[#3D1515] font-bold mb-3">{item.title}</h3>
-                  <p className="text-sm text-[#7a5f4e] leading-relaxed flex-1 mb-6">{item.desc}</p>
-                  <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-[#1E6B5A] group-hover:text-[#C9A84C] transition-colors">
-                    Explore <ArrowRight size={12} />
-                  </span>
+          <motion.div
+            custom={0}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeUp}
+            className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10"
+          >
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] mb-2" style={{ color: GOLD }}>
+                Party &amp; Festive Sarees
+              </p>
+              <div className="flex items-center gap-4">
+                <span className="flex-none h-px w-12" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+                <h2 className="font-serif text-3xl md:text-4xl font-bold" style={{ color: GREEN }}>
+                  Shop Party Wear
+                </h2>
+              </div>
+              {!isLoading && totalCount > 0 && (
+                <p className="mt-2 text-sm text-gray-500">
+                  Showing {products.length} of {totalCount} party-wear sarees
+                </p>
+              )}
+            </div>
+            <Link
+              href="/collections?occasion=party"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors hover:opacity-80"
+              style={{ color: GREEN }}
+            >
+              View All <ArrowRight size={12} />
+            </Link>
+          </motion.div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+            {isLoading
+              ? Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
+              : products.length === 0
+              ? (
+                <div className="col-span-full py-20 text-center">
+                  <p className="font-serif text-xl text-[#1E6B5A] font-semibold mb-3">No party-wear sarees yet</p>
+                  <p className="text-sm text-[#7a5f4e] mb-6 max-w-sm mx-auto">
+                    Our party edit is being curated. In the meantime, explore our full collection to find a saree for your next celebration.
+                  </p>
+                  <Link
+                    href="/collections"
+                    className="inline-flex items-center gap-2 bg-[#3D1515] text-white px-8 py-3 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#2e0f0f] transition-colors"
+                  >
+                    Browse All Sarees <ArrowRight size={16} />
+                  </Link>
                 </div>
-              </Link>
-            ))}
+              )
+              : products.map((product, i) => (
+                <motion.div
+                  key={product.id}
+                  custom={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                >
+                  <ProductCard product={product} index={i} onQuickView={setQuickViewProduct} />
+                </motion.div>
+              ))
+            }
           </div>
+
+          {!isLoading && products.length > 0 && (
+            <motion.div
+              custom={5}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mt-12 flex justify-center"
+            >
+              <Link
+                href="/collections?occasion=party"
+                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#3D1515]/5"
+                style={{ borderColor: MAROON, color: MAROON }}
+              >
+                View All Party Wear <ArrowRight size={14} />
+              </Link>
+            </motion.div>
+          )}
         </section>
 
         {/* Features */}
@@ -133,12 +208,16 @@ export default function PartyWear() {
           </p>
           <Link
             href="/collections"
-            className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+            className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
           >
             Browse All Sarees <ArrowRight size={16} />
           </Link>
         </section>
       </div>
+
+      {quickViewProduct && (
+        <QuickViewModal product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
+      )}
     </Layout>
   );
 }

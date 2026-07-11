@@ -150,6 +150,7 @@ function FeeBreakdownModal({ settlement, onClose }: { settlement: Settlement; on
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
   { value: "processing", label: "Processing" },
   { value: "paid", label: "Paid" },
 ];

@@ -57,8 +57,8 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
   try {
     const { id } = req.params;
     const { decision, paymentMethod, transactionId, utrNumber } = req.body ?? {};
-    if (!["approve", "reject", "complete", "paid"].includes(decision)) {
-      res.status(400).json({ error: "decision must be approve, reject, complete, or paid" });
+    if (!["approve", "reject", "complete", "paid", "process"].includes(decision)) {
+      res.status(400).json({ error: "decision must be approve, reject, complete, paid, or process" });
       return;
     }
     const [existing] = await db.select().from(vendorSettlementsTable).where(eq(vendorSettlementsTable.id, id)).limit(1);
@@ -66,7 +66,11 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
       res.status(404).json({ error: "Settlement not found" });
       return;
     }
-    const newStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : decision === "paid" ? "paid" : "completed";
+    const newStatus = decision === "approve" ? "approved"
+      : decision === "reject" ? "rejected"
+      : decision === "paid" ? "paid"
+      : decision === "process" ? "processing"
+      : "completed";
     const isSettled = newStatus === "completed" || newStatus === "paid";
     const [updated] = await db.update(vendorSettlementsTable)
       .set({

@@ -266,7 +266,14 @@ function SettlementsPanel() {
                     </td>
                     <td className="px-4 py-3.5 text-xs text-gray-400">{new Date(s.createdAt).toLocaleDateString("en-IN")}</td>
                     <td className="px-4 py-3.5">
-                      {s.status === "pending" && (
+                      {s.status === "pending" && s.type === "order_settlement" && (
+                        <div className="flex justify-end">
+                          <button disabled={busyId === s.id} onClick={() => review(s.id, "process")} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
+                            <Clock size={12} /> Mark Processing
+                          </button>
+                        </div>
+                      )}
+                      {s.status === "pending" && s.type !== "order_settlement" && (
                         <div className="flex justify-end gap-1.5">
                           <button disabled={busyId === s.id} onClick={() => review(s.id, "approve")} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
                             <CheckCircle size={12} /> Approve

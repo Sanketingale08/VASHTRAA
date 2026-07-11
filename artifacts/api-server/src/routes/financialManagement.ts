@@ -4,7 +4,7 @@ import {
   vendorSettlementsTable, commissionRulesTable, vendorsTable, reportSchedulesTable,
   REPORT_TYPES, REPORT_FREQUENCIES,
 } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import {
   computeRevenueReport, computePaymentReport, computeRefundReport, computeProfitAnalysis,
@@ -13,6 +13,13 @@ import {
 import type { Period } from "../lib/businessIntelligence";
 
 const router = Router();
+
+function parseSourceIds(note: string | null | undefined): string[] {
+  if (!note) return [];
+  const match = note.match(/Source IDs:\s*([^\n]+)/);
+  if (!match) return [];
+  return match[1].split(",").map((s) => s.trim()).filter(Boolean);
+}
 
 const requireAdminKey = (req: any, res: any, next: any) => {
   const adminKey = process.env.ADMIN_API_KEY;
@@ -72,17 +79,37 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
       : decision === "process" ? "processing"
       : "completed";
     const isSettled = newStatus === "completed" || newStatus === "paid";
-    const [updated] = await db.update(vendorSettlementsTable)
-      .set({
-        status: newStatus,
-        paymentMethod: paymentMethod ?? existing.paymentMethod,
-        transactionId: transactionId ?? existing.transactionId,
-        utrNumber: utrNumber ?? existing.utrNumber,
-        paidAt: isSettled ? new Date() : existing.paidAt,
-        reviewedAt: new Date(),
-      })
-      .where(eq(vendorSettlementsTable.id, id))
-      .returning();
+
+    const [updated] = await db.transaction(async (tx) => {
+      const [row] = await tx.update(vendorSettlementsTable)
+        .set({
+          status: newStatus,
+          paymentMethod: paymentMethod ?? existing.paymentMethod,
+          transactionId: transactionId ?? existing.transactionId,
+          utrNumber: utrNumber ?? existing.utrNumber,
+          paidAt: isSettled ? new Date() : existing.paidAt,
+          reviewedAt: new Date(),
+        })
+        .where(eq(vendorSettlementsTable.id, id))
+        .returning();
+
+      if (existing.type === "payout") {
+        const sourceIds = parseSourceIds(existing.note);
+        if (sourceIds.length > 0) {
+          if (isSettled) {
+            await tx.update(vendorSettlementsTable)
+              .set({ status: "paid", paidAt: new Date(), utrNumber: utrNumber ?? null })
+              .where(inArray(vendorSettlementsTable.id, sourceIds));
+          } else if (newStatus === "rejected") {
+            await tx.update(vendorSettlementsTable)
+              .set({ status: "processing" })
+              .where(inArray(vendorSettlementsTable.id, sourceIds));
+          }
+        }
+      }
+
+      return [row];
+    });
 
     if (isSettled) {
       const payAmount = existing.netPayout ?? existing.amount;

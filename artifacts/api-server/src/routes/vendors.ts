@@ -75,6 +75,11 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
       gstin: v.gstin ?? null,
       status: v.status,
       ownerId: v.ownerId,
+      bankHolder: v.bankHolder ?? null,
+      bankName: v.bankName ?? null,
+      bankAccount: v.bankAccount ?? null,
+      bankIfsc: v.bankIfsc ?? null,
+      upiId: v.upiId ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch vendor profile");
@@ -304,7 +309,7 @@ router.post("/seller/claim/:vendorId", requireAuth, async (req: any, res: any) =
 
 router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { name, location, bio, gstin, contactEmail, tagline, avatar } = req.body;
+  const { name, location, bio, gstin, contactEmail, tagline, avatar, bankHolder, bankName, bankAccount, bankIfsc, upiId } = req.body;
 
   try {
     const rows = await db
@@ -328,6 +333,11 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
     if (contactEmail !== undefined) updates.contactEmail = String(contactEmail).trim() || null;
     if (tagline !== undefined) updates.tagline = String(tagline).trim() || null;
     if (avatar !== undefined) updates.avatar = String(avatar).trim() || null;
+    if (bankHolder !== undefined) updates.bankHolder = String(bankHolder).trim() || null;
+    if (bankName !== undefined) updates.bankName = String(bankName).trim() || null;
+    if (bankAccount !== undefined) updates.bankAccount = String(bankAccount).trim() || null;
+    if (bankIfsc !== undefined) updates.bankIfsc = String(bankIfsc).trim().toUpperCase() || null;
+    if (upiId !== undefined) updates.upiId = String(upiId).trim() || null;
 
     const [updated] = await db
       .update(vendorsTable)
@@ -345,6 +355,11 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
       gstin: updated.gstin,
       avatar: updated.avatar,
       status: updated.status,
+      bankHolder: updated.bankHolder ?? null,
+      bankName: updated.bankName ?? null,
+      bankAccount: updated.bankAccount ?? null,
+      bankIfsc: updated.bankIfsc ?? null,
+      upiId: updated.upiId ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to update vendor");

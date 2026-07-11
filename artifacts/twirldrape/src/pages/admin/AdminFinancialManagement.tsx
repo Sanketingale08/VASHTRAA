@@ -42,6 +42,9 @@ interface Settlement {
   orderId: string | null; productAmount: number | null; commission: number | null;
   commissionRate: number | null; shippingCharge: number | null;
   settlementTax: number | null; netPayout: number | null;
+  vendorBankHolder: string | null; vendorBankName: string | null;
+  vendorBankAccount: string | null; vendorBankIfsc: string | null;
+  vendorUpiId: string | null;
 }
 
 interface CommissionRule {
@@ -273,7 +276,39 @@ function SettlementsPanel() {
                           </button>
                         </div>
                       )}
-                      {s.status === "pending" && s.type !== "order_settlement" && (
+                      {s.status === "pending" && s.type === "payout" && reviewingId !== s.id && (
+                        <div className="flex justify-end gap-1.5">
+                          <button disabled={busyId === s.id} onClick={() => setReviewingId(s.id)} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                            <CheckCircle size={12} /> Mark Paid
+                          </button>
+                          <button disabled={busyId === s.id} onClick={() => review(s.id, "reject")} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50">
+                            <XCircle size={12} /> Reject
+                          </button>
+                        </div>
+                      )}
+                      {s.status === "pending" && s.type === "payout" && reviewingId === s.id && (
+                        <div className="flex flex-col items-end gap-1.5">
+                          {(s.vendorBankAccount || s.vendorUpiId) && (
+                            <div className="text-right text-[10px] text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5 space-y-0.5 w-48">
+                              {s.vendorBankHolder && <div className="font-semibold text-gray-700">{s.vendorBankHolder}</div>}
+                              {s.vendorBankName && <div>{s.vendorBankName}</div>}
+                              {s.vendorBankAccount && <div className="font-mono">{s.vendorBankAccount}</div>}
+                              {s.vendorBankIfsc && <div className="font-mono">{s.vendorBankIfsc}</div>}
+                              {s.vendorUpiId && <div className="font-mono">UPI: {s.vendorUpiId}</div>}
+                            </div>
+                          )}
+                          {!s.vendorBankAccount && !s.vendorUpiId && (
+                            <div className="text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1 w-48 text-right">No bank details on file</div>
+                          )}
+                          <input placeholder="UTR Number *" value={reviewMeta.utrNumber} onChange={(e) => setReviewMeta((m) => ({ ...m, utrNumber: e.target.value }))} className="text-xs px-2 py-1 rounded border border-gray-200 w-48" />
+                          <input placeholder="Payment method" value={reviewMeta.paymentMethod} onChange={(e) => setReviewMeta((m) => ({ ...m, paymentMethod: e.target.value }))} className="text-xs px-2 py-1 rounded border border-gray-200 w-48" />
+                          <div className="flex gap-1">
+                            <button disabled={busyId === s.id || !reviewMeta.utrNumber} onClick={() => review(s.id, "paid")} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">Mark Paid</button>
+                            <button onClick={() => setReviewingId(null)} className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-gray-200">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                      {s.status === "pending" && s.type !== "order_settlement" && s.type !== "payout" && (
                         <div className="flex justify-end gap-1.5">
                           <button disabled={busyId === s.id} onClick={() => review(s.id, "approve")} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
                             <CheckCircle size={12} /> Approve

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, Camera, AlertCircle, CheckCircle } from "lucide-react";
+import { Save, Camera, AlertCircle, CheckCircle, Building2 } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -16,12 +16,18 @@ interface FormState {
   gstin: string;
   contactEmail: string;
   avatar: string;
+  bankHolder: string;
+  bankName: string;
+  bankAccount: string;
+  bankIfsc: string;
+  upiId: string;
 }
 
 export default function SellerProfile() {
   const { vendor, refresh } = useSellerContext();
   const [form, setForm] = useState<FormState>({
     name: "", tagline: "", bio: "", location: "", gstin: "", contactEmail: "", avatar: "",
+    bankHolder: "", bankName: "", bankAccount: "", bankIfsc: "", upiId: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +43,11 @@ export default function SellerProfile() {
         gstin: vendor.gstin ?? "",
         contactEmail: vendor.contactEmail ?? "",
         avatar: vendor.avatar ?? "",
+        bankHolder: (vendor as any).bankHolder ?? "",
+        bankName: (vendor as any).bankName ?? "",
+        bankAccount: (vendor as any).bankAccount ?? "",
+        bankIfsc: (vendor as any).bankIfsc ?? "",
+        upiId: (vendor as any).upiId ?? "",
       });
     }
   }, [vendor]);
@@ -77,6 +88,11 @@ export default function SellerProfile() {
           gstin: form.gstin.trim() || null,
           contactEmail: form.contactEmail.trim() || null,
           avatar: form.avatar.trim() || null,
+          bankHolder: form.bankHolder.trim() || null,
+          bankName: form.bankName.trim() || null,
+          bankAccount: form.bankAccount.trim() || null,
+          bankIfsc: form.bankIfsc.trim() || null,
+          upiId: form.upiId.trim() || null,
         }),
       });
 
@@ -97,6 +113,7 @@ export default function SellerProfile() {
 
   const inputClass = "w-full px-4 py-2.5 rounded-lg border text-sm outline-none transition focus:ring-2 focus:ring-[#C9A84C]/40";
   const inputStyle = { background: CREAM, borderColor: "#C9A84C44", color: "#3D1515" };
+  const monoInputStyle = { ...inputStyle, fontFamily: "monospace" };
   const labelClass = "block text-xs font-bold uppercase tracking-wider mb-1.5";
   const labelStyle = { color: "#5a3e3e" };
 
@@ -217,7 +234,7 @@ export default function SellerProfile() {
                 placeholder="22AAAAA0000A1Z5"
                 maxLength={15}
                 className={inputClass}
-                style={{ ...inputStyle, fontFamily: "monospace" }}
+                style={monoInputStyle}
               />
             </div>
 
@@ -232,6 +249,86 @@ export default function SellerProfile() {
                 className={inputClass}
                 style={inputStyle}
               />
+            </div>
+          </div>
+
+          {/* Bank & Payout Details */}
+          <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Building2 size={16} style={{ color: MAROON }} />
+              <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Bank & Payout Details</h3>
+            </div>
+            <p className="text-xs text-gray-400 -mt-2">These details are used by admin when processing your payouts.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass} style={labelStyle}>Account Holder Name</label>
+                <input
+                  type="text"
+                  name="bankHolder"
+                  value={form.bankHolder}
+                  onChange={handleChange}
+                  placeholder="Full name on bank account"
+                  className={inputClass}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass} style={labelStyle}>Bank Name</label>
+                <input
+                  type="text"
+                  name="bankName"
+                  value={form.bankName}
+                  onChange={handleChange}
+                  placeholder="e.g. State Bank of India"
+                  className={inputClass}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass} style={labelStyle}>Account Number</label>
+                <input
+                  type="text"
+                  name="bankAccount"
+                  value={form.bankAccount}
+                  onChange={handleChange}
+                  placeholder="Your account number"
+                  className={inputClass}
+                  style={monoInputStyle}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass} style={labelStyle}>IFSC Code</label>
+                <input
+                  type="text"
+                  name="bankIfsc"
+                  value={form.bankIfsc}
+                  onChange={handleChange}
+                  placeholder="e.g. SBIN0001234"
+                  maxLength={11}
+                  className={inputClass}
+                  style={monoInputStyle}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass} style={labelStyle}>UPI ID <span className="font-normal text-gray-400 normal-case">(optional alternative)</span></label>
+              <input
+                type="text"
+                name="upiId"
+                value={form.upiId}
+                onChange={handleChange}
+                placeholder="yourname@upi"
+                className={inputClass}
+                style={monoInputStyle}
+              />
+              <p className="text-xs text-gray-400 mt-1.5">You can provide either bank details or a UPI ID (or both).</p>
             </div>
           </div>
 

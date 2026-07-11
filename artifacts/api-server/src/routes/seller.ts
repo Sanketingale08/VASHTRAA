@@ -694,7 +694,12 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
           .where(inArray(productsTable.id, allProductIdsInOrder))
       : [];
 
-    const allVendorIdsInOrder = new Set(allOrderProducts.map((p) => p.vendorId).filter(Boolean));
+    const orderAcceptancesMap = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
+    const allVendorIdsInOrder = new Set<string>(
+      allOrderProducts
+        .map((p) => p.vendorId)
+        .filter((vid): vid is string => !!vid && orderAcceptancesMap[vid]?.status === "accepted")
+    );
 
     const dispatchedVendorIds = new Set(
       history.filter((h) => h.status === "vendor_dispatched").map((h) => h.vendorId)
@@ -857,13 +862,16 @@ router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any
         ? await tx.select({ vendorId: productsTable.vendorId }).from(productsTable).where(inArray(productsTable.id, allProductIds))
         : [];
       const allVendorIds = [...new Set(allOrderProducts.map((p) => p.vendorId).filter(Boolean))] as string[];
-      const allAccepted = allVendorIds.length > 0 && allVendorIds.every((vid) => acceptances[vid]?.status === "accepted");
+      const allResponded = allVendorIds.length > 0 && allVendorIds.every(
+        (vid) => acceptances[vid]?.status === "accepted" || acceptances[vid]?.status === "rejected"
+      );
+      const anyAccepted = allVendorIds.some((vid) => acceptances[vid]?.status === "accepted");
 
       const history = [...(Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [])];
       const updates: Record<string, any> = { vendorAcceptances: acceptances, updatedAt: new Date() };
 
-      if (allAccepted) {
-        history.push({ status: "processing", timestamp: new Date().toISOString(), note: "All vendors accepted — order is being prepared" });
+      if (allResponded && anyAccepted) {
+        history.push({ status: "processing", timestamp: new Date().toISOString(), note: "All vendors responded — order is being prepared" });
         updates.status = "processing";
         updates.statusHistory = history;
 
@@ -980,11 +988,41 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
       } else {
         history.push({ vendorId, timestamp: new Date().toISOString(), note: `Vendor rejected their portion: ${reason}` });
 
-        await tx.update(ordersTable).set({
+        const allRespondedNow = allVendorIds.length > 0 && allVendorIds.every(
+          (vid) => acceptances[vid]?.status === "accepted" || acceptances[vid]?.status === "rejected"
+        );
+        const anyAcceptedNow = allVendorIds.some((vid) => acceptances[vid]?.status === "accepted");
+
+        const partialUpdates: Record<string, any> = {
           vendorAcceptances: acceptances,
           statusHistory: history,
           updatedAt: new Date(),
-        } as any).where(eq(ordersTable.id, orderId));
+        };
+
+        if (allRespondedNow && anyAcceptedNow) {
+          history.push({ status: "processing", timestamp: new Date().toISOString(), note: "Some vendors accepted — order proceeding with accepted items" });
+          partialUpdates.status = "processing";
+          partialUpdates.statusHistory = history;
+
+          await insertOrderStatusNotification({
+            tx,
+            userId: order.userId,
+            type: "order_packed",
+            orderId: order.id,
+            itemName: (items[0] as any)?.name ?? "your order",
+            extraItemCount: items.length > 1 ? items.length - 1 : 0,
+          });
+        }
+
+        await tx.update(ordersTable).set(partialUpdates as any).where(eq(ordersTable.id, orderId));
+
+        await insertAdminNotification({
+          tx,
+          type: "system_error_alert",
+          title: "Vendor rejected items in an order",
+          body: `Vendor rejected their portion of order #${order.id.slice(0, 8).toUpperCase()}. Reason: ${reason}`,
+          metadata: { orderId: order.id, vendorId },
+        });
       }
     });
 

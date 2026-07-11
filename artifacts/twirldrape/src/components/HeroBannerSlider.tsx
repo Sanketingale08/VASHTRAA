@@ -14,19 +14,6 @@ interface HeroBannerSliderProps {
   style?: React.CSSProperties;
 }
 
-const KENBURNS_CSS = `
-@keyframes td-kb-a {
-  0%   { transform: scale(1.0) translate(0%, 0%); }
-  50%  { transform: scale(1.09) translate(-2%, -1.5%); }
-  100% { transform: scale(1.0) translate(0%, 0%); }
-}
-@keyframes td-kb-b {
-  0%   { transform: scale(1.0) translate(0%, 0%); }
-  50%  { transform: scale(1.09) translate(2%, 1.5%); }
-  100% { transform: scale(1.0) translate(0%, 0%); }
-}
-`;
-
 export function HeroBannerSlider({
   banners,
   fallbackSrc = "/images/home-paithani.png",
@@ -61,40 +48,30 @@ export function HeroBannerSlider({
     }
   }, [activeIndex, images]);
 
-  const kbAnim = activeIndex % 2 === 0 ? "td-kb-a" : "td-kb-b";
-  const kbDuration = Math.max(3000, images[activeIndex]?.slideIntervalMs ?? 6000);
-
   return (
-    <>
-      <style>{KENBURNS_CSS}</style>
-      <div
-        className={`relative w-full h-full overflow-hidden ${className}`}
-        style={style}
-      >
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={images[activeIndex]?.id ?? activeIndex}
-            className="absolute inset-0"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.85, ease: "easeInOut" }}
-            style={{ zIndex: 1 }}
-          >
-            <img
-              src={images[activeIndex]?.imageUrl}
-              alt="Hero banner"
-              loading={activeIndex === 0 ? "eager" : "lazy"}
-              className="w-full h-full object-cover"
-              style={{
-                objectPosition: "top center",
-                animation: `${kbAnim} ${kbDuration}ms ease-in-out infinite`,
-                willChange: "transform",
-              }}
-            />
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </>
+    <div
+      className={`relative w-full h-full overflow-hidden ${className}`}
+      style={style}
+    >
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={images[activeIndex]?.id ?? activeIndex}
+          className="absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.2, ease: "easeInOut" }}
+          style={{ zIndex: 1 }}
+        >
+          <img
+            src={images[activeIndex]?.imageUrl}
+            alt="Hero banner"
+            loading={activeIndex === 0 ? "eager" : "lazy"}
+            className="w-full h-full object-cover"
+            style={{ objectPosition: "top center" }}
+          />
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }

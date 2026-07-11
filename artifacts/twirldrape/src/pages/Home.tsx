@@ -342,111 +342,117 @@ export default function Home() {
   return (
     <Layout>
       {/* ── HERO ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden" style={{ background: "#F5E8DC" }}>
-        <div className="flex flex-col lg:flex-row" style={{ minHeight: "580px" }}>
+      <section className="relative overflow-hidden" style={{ minHeight: "580px" }}>
 
-          {/* ── LEFT: Content Panel ── */}
-          <motion.div
-            className="flex flex-col justify-center px-10 md:px-16 lg:px-20 py-16 lg:py-20"
-            style={{ flex: "0 0 60%", maxWidth: "60%" }}
-            initial={{ opacity: 0, x: -40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          >
-            {/* Eyebrow */}
-            <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-6" style={{ color: GOLD }}>
+        {/* Full-bleed background slider */}
+        <HeroBannerSlider
+          banners={heroBanners}
+          fallbackSrc="/images/home-paithani.png"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+        />
+
+        {/* Gradient overlay — left heavy so text stays readable */}
+        <div
+          className="absolute inset-0 z-10"
+          style={{
+            background:
+              "linear-gradient(to right, rgba(245,232,220,0.96) 0%, rgba(245,232,220,0.88) 38%, rgba(245,232,220,0.55) 62%, rgba(245,232,220,0.08) 100%)",
+          }}
+        />
+
+        {/* Circular customer badge — pinned top-right */}
+        <motion.div
+          className="absolute top-6 right-6 z-20 flex flex-col items-center justify-center rounded-full font-bold text-center text-white shadow-lg"
+          style={{ width: "82px", height: "82px", background: H_WINE }}
+          animate={{ y: [0, -6, 0] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <p className="font-serif leading-none" style={{ fontSize: "18px", color: GOLD }}>50K+</p>
+          <p className="uppercase leading-tight mt-0.5" style={{ fontSize: "8px", letterSpacing: "0.08em" }}>Happy<br />Customers</p>
+        </motion.div>
+
+        {/* ── Content (desktop) ── */}
+        <motion.div
+          className="hidden lg:flex flex-col justify-center relative z-20 px-10 md:px-16 lg:px-20 py-16 lg:py-20"
+          style={{ minHeight: "580px", maxWidth: "660px" }}
+          initial={{ opacity: 0, x: -40 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          {/* Eyebrow */}
+          <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-6" style={{ color: GOLD }}>
+            Celebrate Tradition. Embrace Elegance.
+          </p>
+
+          {/* Heading */}
+          <h1 className="font-serif font-bold leading-[1.1] mb-6" style={{ fontSize: "clamp(38px, 4.5vw, 66px)" }}>
+            <span style={{ color: MAROON }}>Authentic Paithani &amp;</span><br />
+            <span style={{ color: GOLD }}>Designer Sarees</span>
+          </h1>
+
+          {/* Description */}
+          <p className="mb-8 leading-relaxed" style={{ color: "#5A4E4E", fontSize: "15px", maxWidth: "480px" }}>
+            Handpicked from master weavers across India — discover sarees that tell a story of heritage, craftsmanship, and timeless beauty.
+          </p>
+
+          {/* Trust Indicators */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-10">
+            {[
+              { icon: <BadgeCheck size={15} />, label: "Authenticity Assured" },
+              { icon: <Store size={15} />, label: "Trusted Vendors" },
+              { icon: <ShieldCheck size={15} />, label: "Secure Shopping" },
+              { icon: <Truck size={15} />, label: "Pan India Delivery" },
+            ].map((t) => (
+              <span key={t.label} className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#4A4040" }}>
+                <span style={{ color: GOLD }}>{t.icon}</span>
+                {t.label}
+              </span>
+            ))}
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Link
+              href="/paithani"
+              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:opacity-90 hover:shadow-lg"
+              style={{ background: "#0F5C54", color: "white", padding: "14px 28px", borderRadius: "4px" }}
+            >
+              Explore Paithani Sarees &nbsp;→
+            </Link>
+            <Link
+              href="/designer"
+              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/40"
+              style={{ border: "2px solid #0F5C54", color: "#0F5C54", padding: "12px 26px", borderRadius: "4px" }}
+            >
+              Explore Designer Sarees &nbsp;→
+            </Link>
+          </div>
+        </motion.div>
+
+        {/* ── Mobile layout ── */}
+        <div className="flex lg:hidden flex-col relative z-20 px-6 py-10 gap-6" style={{ minHeight: "480px" }}>
+          {/* mobile gradient — top-heavy so image peeks through at bottom */}
+          <div
+            className="absolute inset-0"
+            style={{ background: "rgba(245,232,220,0.91)", zIndex: -1 }}
+          />
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-4" style={{ color: GOLD }}>
               Celebrate Tradition. Embrace Elegance.
             </p>
-
-            {/* Heading */}
-            <h1 className="font-serif font-bold leading-[1.1] mb-6" style={{ fontSize: "clamp(38px, 4.5vw, 66px)" }}>
+            <h1 className="font-serif font-bold leading-tight mb-4" style={{ fontSize: "36px" }}>
               <span style={{ color: MAROON }}>Authentic Paithani &amp;</span><br />
               <span style={{ color: GOLD }}>Designer Sarees</span>
             </h1>
-
-            {/* Description */}
-            <p className="mb-8 leading-relaxed" style={{ color: "#5A4E4E", fontSize: "15px", maxWidth: "480px" }}>
+            <p className="mb-5 leading-relaxed text-sm" style={{ color: "#5A4E4E" }}>
               Handpicked from master weavers across India — discover sarees that tell a story of heritage, craftsmanship, and timeless beauty.
             </p>
-
-            {/* Trust Indicators — inline */}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-10">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-6">
               {[
-                { icon: <BadgeCheck size={15} />, label: "Authenticity Assured" },
-                { icon: <Store size={15} />, label: "Trusted Vendors" },
-                { icon: <ShieldCheck size={15} />, label: "Secure Shopping" },
-                { icon: <Truck size={15} />, label: "Pan India Delivery" },
-              ].map((t) => (
-                <span key={t.label} className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#4A4040" }}>
-                  <span style={{ color: GOLD }}>{t.icon}</span>
-                  {t.label}
-                </span>
-              ))}
-            </div>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                href="/paithani"
-                className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:opacity-90 hover:shadow-lg"
-                style={{ background: "#0F5C54", color: "white", padding: "14px 28px", borderRadius: "4px" }}
-              >
-                Explore Paithani Sarees &nbsp;→
-              </Link>
-              <Link
-                href="/designer"
-                className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/40"
-                style={{ border: "2px solid #0F5C54", color: "#0F5C54", padding: "12px 26px", borderRadius: "4px" }}
-              >
-                Explore Designer Sarees &nbsp;→
-              </Link>
-            </div>
-          </motion.div>
-
-          {/* ── RIGHT: Model Image Panel ── */}
-          <motion.div
-            className="hidden lg:block relative"
-            style={{ flex: "0 0 40%", maxWidth: "40%" }}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.15 }}
-          >
-            <HeroBannerSlider
-              banners={heroBanners}
-              fallbackSrc="/images/home-paithani.png"
-              style={{ minHeight: "580px" }}
-            />
-            {/* Circular customer badge — top right */}
-            <motion.div
-              className="absolute top-6 right-6 flex flex-col items-center justify-center rounded-full font-bold text-center text-white shadow-lg"
-              style={{ width: "82px", height: "82px", background: H_WINE, zIndex: 10 }}
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <p className="font-serif leading-none" style={{ fontSize: "18px", color: GOLD }}>50K+</p>
-              <p className="uppercase leading-tight mt-0.5" style={{ fontSize: "8px", letterSpacing: "0.08em" }}>Happy<br />Customers</p>
-            </motion.div>
-          </motion.div>
-
-          {/* Mobile layout */}
-          <div className="flex lg:hidden flex-col px-6 py-10 gap-6">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-4" style={{ color: GOLD }}>
-                Celebrate Tradition. Embrace Elegance.
-              </p>
-              <h1 className="font-serif font-bold leading-tight mb-4" style={{ fontSize: "36px" }}>
-                <span style={{ color: MAROON }}>Authentic Paithani &amp;</span><br />
-                <span style={{ color: GOLD }}>Designer Sarees</span>
-              </h1>
-              <p className="mb-5 leading-relaxed text-sm" style={{ color: "#5A4E4E" }}>
-                Handpicked from master weavers across India — discover sarees that tell a story of heritage, craftsmanship, and timeless beauty.
-              </p>
-              <div className="flex flex-wrap gap-x-4 gap-y-2 mb-6">
-                {[
-                  { icon: <BadgeCheck size={13} />, label: "Authenticity Assured" },
-                  { icon: <Store size={13} />, label: "Trusted Vendors" },
-                  { icon: <ShieldCheck size={13} />, label: "Secure Shopping" },
-                  { icon: <Truck size={13} />, label: "Pan India Delivery" },
+                { icon: <BadgeCheck size={13} />, label: "Authenticity Assured" },
+                { icon: <Store size={13} />, label: "Trusted Vendors" },
+                { icon: <ShieldCheck size={13} />, label: "Secure Shopping" },
+                { icon: <Truck size={13} />, label: "Pan India Delivery" },
                 ].map((t) => (
                   <span key={t.label} className="flex items-center gap-1 text-xs font-medium" style={{ color: "#4A4040" }}>
                     <span style={{ color: GOLD }}>{t.icon}</span>
@@ -465,13 +471,7 @@ export default function Home() {
                 </Link>
               </div>
             </div>
-            <img src="/images/home-paithani.png" alt="Authentic Paithani Saree model"
-              className="w-full object-cover rounded-xl shadow-lg"
-              style={{ maxHeight: "340px", objectPosition: "top center" }}
-            />
           </div>
-
-        </div>
       </section>
 
       {/* ── STATS ────────────────────────────────────────── */}

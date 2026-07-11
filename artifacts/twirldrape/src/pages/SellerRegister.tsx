@@ -310,6 +310,10 @@ export default function SellerRegister() {
   const [done, setDone] = useState(false);
   const [already, setAlready] = useState(false);
 
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const leaveResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const isDirtyRef = useRef(false);
+
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailCode, setEmailCode] = useState("");
   const [phoneObj, setPhoneObj] = useState<any>(null);
@@ -370,6 +374,41 @@ export default function SellerRegister() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [uploadCount]);
+
+  const isDirty = !done && step >= 1 && (step > 1 || data.email.trim() !== "" || data.password !== "");
+  isDirtyRef.current = isDirty;
+
+  function askLeave(): Promise<boolean> {
+    return new Promise((resolve) => {
+      leaveResolveRef.current = resolve;
+      setShowLeaveModal(true);
+    });
+  }
+
+  function resolveLeave(ok: boolean) {
+    setShowLeaveModal(false);
+    leaveResolveRef.current?.(ok);
+    leaveResolveRef.current = null;
+  }
+
+  useEffect(() => {
+    history.pushState({ sellerRegGuard: true }, "");
+
+    async function onPopState() {
+      history.pushState({ sellerRegGuard: true }, "");
+      if (!isDirtyRef.current) {
+        history.go(-2);
+        return;
+      }
+      const ok = await askLeave();
+      if (ok) {
+        history.go(-2);
+      }
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   function startOver() {
     clearDraft();
@@ -626,7 +665,18 @@ export default function SellerRegister() {
                     </Field>
                     <p className="text-xs text-gray-400">
                       Already have an account?{" "}
-                      <a href={`${BASE}/seller/login`} className="underline" style={{ color: EMERALD }}>Sign in here</a>
+                      <a
+                        href={`${BASE}/seller/login`}
+                        className="underline"
+                        style={{ color: EMERALD }}
+                        onClick={async (ev) => {
+                          if (isDirtyRef.current) {
+                            ev.preventDefault();
+                            const ok = await askLeave();
+                            if (ok) navigate(`${BASE}/seller/login`);
+                          }
+                        }}
+                      >Sign in here</a>
                     </p>
                   </>
                 ) : (
@@ -834,6 +884,40 @@ export default function SellerRegister() {
           <a href="mailto:sellers@twirldrape.com" className="underline">sellers@twirldrape.com</a>
         </p>
       </div>
+
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl border border-[#C8D8D0] p-6 max-w-sm w-full shadow-xl"
+          >
+            <h3 className="text-base font-bold mb-2" style={{ color: EMERALD }}>
+              Leave registration?
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">
+              You have unsaved progress. Your draft has been saved and you can continue later, but
+              your registration won't be complete until all steps are finished.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => resolveLeave(false)}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E6F0EA]"
+                style={{ borderColor: "#C8D8D0", color: EMERALD }}
+              >
+                Stay
+              </button>
+              <button
+                onClick={() => resolveLeave(true)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90"
+                style={{ background: EMERALD }}
+              >
+                Leave anyway
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

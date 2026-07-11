@@ -228,6 +228,23 @@ export class ObjectStorageService {
     await file.save(data, { contentType, resumable: false });
     return { publicRelPath: `/api/storage/public-objects/${relativeImagePath}` };
   }
+
+  async uploadPublicHeroImage(
+    data: Buffer,
+    ext: string,
+    contentType: string,
+  ): Promise<{ publicRelPath: string }> {
+    const searchPaths = this.getPublicObjectSearchPaths();
+    const firstPublicPath = searchPaths[0];
+    const imageId = randomUUID();
+    const relativeImagePath = `hero-banners/${imageId}.${ext}`;
+    const fullPath = `${firstPublicPath}/${relativeImagePath}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    await file.save(data, { contentType, resumable: false });
+    return { publicRelPath: `/api/storage/public-objects/${relativeImagePath}` };
+  }
 }
 
 function parseObjectPath(path: string): {

@@ -20,8 +20,15 @@ import { ProductSection } from "@/components/ProductSection";
 import { VendorCard } from "@/components/VendorCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { StatsBar } from "@/components/StatsBar";
+import { HeroBannerSlider } from "@/components/HeroBannerSlider";
 import { useListProducts, getListProductsQueryKey, useListVendors } from "@workspace/api-client-react";
 import type { ProductSummary, VendorSummary } from "@workspace/api-client-react";
+
+interface HeroBanner {
+  id: string;
+  imageUrl: string;
+  slideIntervalMs: number;
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const GOLD = "#C9A84C";
@@ -323,6 +330,14 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
 
 export default function Home() {
   const [quickViewProduct, setQuickViewProduct] = useState<ProductSummary | null>(null);
+  const [heroBanners, setHeroBanners] = useState<HeroBanner[]>([]);
+
+  useEffect(() => {
+    fetch(`${BASE}/api/hero-banners`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: HeroBanner[]) => { if (Array.isArray(data) && data.length > 0) setHeroBanners(data); })
+      .catch(() => {});
+  }, []);
 
   return (
     <Layout>
@@ -396,16 +411,15 @@ export default function Home() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.9, ease: "easeOut", delay: 0.15 }}
           >
-            <img
-              src="/images/home-paithani.png"
-              alt="Authentic Paithani Saree model"
-              className="w-full h-full object-cover"
-              style={{ minHeight: "580px", objectPosition: "top center" }}
+            <HeroBannerSlider
+              banners={heroBanners}
+              fallbackSrc="/images/home-paithani.png"
+              style={{ minHeight: "580px" }}
             />
             {/* Circular customer badge — top right */}
             <motion.div
               className="absolute top-6 right-6 flex flex-col items-center justify-center rounded-full font-bold text-center text-white shadow-lg"
-              style={{ width: "82px", height: "82px", background: H_WINE }}
+              style={{ width: "82px", height: "82px", background: H_WINE, zIndex: 10 }}
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
             >

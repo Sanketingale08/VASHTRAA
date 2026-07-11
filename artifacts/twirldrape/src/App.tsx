@@ -50,6 +50,7 @@ import AdminNotifications from "@/pages/admin/AdminNotifications";
 import AdminBusinessIntelligence from "@/pages/admin/AdminBusinessIntelligence";
 import AdminFinancialManagement from "@/pages/admin/AdminFinancialManagement";
 import AdminAboutContent from "@/pages/admin/AdminAboutContent";
+import AdminHeroBanners from "@/pages/admin/AdminHeroBanners";
 import SellerSupport from "@/pages/seller/SellerSupport";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
@@ -268,6 +269,7 @@ function Router() {
       <Route path="/admin/business-intelligence" component={AdminBusinessIntelligence} />
       <Route path="/admin/financial" component={AdminFinancialManagement} />
       <Route path="/admin/about-content" component={AdminAboutContent} />
+      <Route path="/admin/hero-banners" component={AdminHeroBanners} />
       <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
       <Route path="/seller/claim" component={SellerClaimStore} />

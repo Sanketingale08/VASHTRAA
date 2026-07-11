@@ -26,7 +26,6 @@ export function HeroSlider({ slides }: HeroSliderProps) {
     if (emblaApi) emblaApi.scrollNext();
   }, [emblaApi]);
 
-  // Auto-play could be added with a plugin, omitting for brevity or using a simple interval
   React.useEffect(() => {
     if (!emblaApi) return;
     const interval = setInterval(() => {
@@ -39,19 +38,16 @@ export function HeroSlider({ slides }: HeroSliderProps) {
     <div className="relative overflow-hidden w-full h-[60vh] md:h-[80vh] group">
       <div className="embla h-full" ref={emblaRef}>
         <div className="embla__container h-full flex">
-          {slides.map((slide, index) => (
+          {slides.map((slide) => (
             <div className="embla__slide flex-[0_0_100%] min-w-0 h-full relative" key={slide.id}>
-              {/* Image */}
               <div className="absolute inset-0">
-                <img 
-                  src={slide.image} 
-                  alt={slide.title} 
+                <img
+                  src={slide.image}
+                  alt={slide.title}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-black/40"></div>
               </div>
-              
-              {/* Content */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
                 <motion.div
                   initial={{ opacity: 0, y: 30 }}
@@ -75,14 +71,13 @@ export function HeroSlider({ slides }: HeroSliderProps) {
         </div>
       </div>
 
-      {/* Navigation */}
-      <button 
+      <button
         className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white backdrop-blur bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#C9A84C] hover:text-[#1E6B5A] hover:border-[#C9A84C]"
         onClick={scrollPrev}
       >
         <ChevronLeft size={24} />
       </button>
-      <button 
+      <button
         className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white backdrop-blur bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#C9A84C] hover:text-[#1E6B5A] hover:border-[#C9A84C]"
         onClick={scrollNext}
       >

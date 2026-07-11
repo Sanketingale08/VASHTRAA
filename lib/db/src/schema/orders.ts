@@ -16,6 +16,8 @@ export const ordersTable = pgTable("orders", {
   status: text("status").notNull().default("confirmed"),
   statusHistory: jsonb("status_history").notNull().default([]),
   cancelReason: text("cancel_reason"),
+  vendorRejectionReason: text("vendor_rejection_reason"),
+  vendorAcceptances: jsonb("vendor_acceptances").notNull().default({}),
   returnReason: text("return_reason"),
   refundStatus: text("refund_status"),
   refundMethod: text("refund_method"),

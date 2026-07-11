@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { ordersTable, productsTable, stockHistoryTable, CATEGORIES, FABRICS, OCCASIONS, COLORS } from "@workspace/db";
-import { eq, desc, asc, inArray, and } from "drizzle-orm";
+import { eq, desc, asc, inArray, and, sql } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
+import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
@@ -464,11 +465,16 @@ router.get("/seller/orders", requireVendorAuth, async (req: any, res: any) => {
       if (vendorItems.length === 0) continue;
 
       const address = (order.address as any) ?? {};
+      const orderAcceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
+      const myOrderAcceptance = orderAcceptances[vendorId];
+      const needsAcceptance = order.status === "confirmed" && !myOrderAcceptance;
+
       vendorOrders.push({
         id: order.id,
         createdAt: order.createdAt,
         status: order.status,
         customerName: String(address.name ?? "Customer").split(" ")[0],
+        needsAcceptance,
         vendorItems: vendorItems.map((i) => ({
           productId: i.productId,
           name: i.name,
@@ -525,6 +531,12 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
     }
 
     const address = (order.address as any) ?? {};
+    const acceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
+    const myAcceptance = acceptances[vendorId];
+    const vendorAcceptanceStatus: "accepted" | "rejected" | "pending" =
+      myAcceptance?.status === "accepted" ? "accepted" :
+      myAcceptance?.status === "rejected" ? "rejected" : "pending";
+
     res.json({
       id: order.id,
       createdAt: order.createdAt,
@@ -535,6 +547,7 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
       shippingState: address.state ?? "",
       deliveryMethod: order.deliveryMethod,
       paymentMethod: order.paymentMethod,
+      vendorAcceptanceStatus,
       vendorItems: vendorItems.map((i) => ({
         productId: i.productId,
         name: i.name,
@@ -806,6 +819,154 @@ router.get("/seller/analytics", requireVendorAuth, async (req: any, res: any) =>
   } catch (err: any) {
     req.log?.error({ err }, "seller/analytics failed");
     res.status(500).json({ error: "Failed to load analytics" });
+  }
+});
+
+router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId as string;
+  const { orderId } = req.params;
+
+  try {
+    const myProducts = await db.select({ id: productsTable.id })
+      .from(productsTable)
+      .where(eq(productsTable.vendorId, vendorId));
+    const myProductIdSet = new Set(myProducts.map((p) => p.id));
+
+    await db.transaction(async (tx) => {
+      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+      if (!order) throw Object.assign(new Error("Order not found"), { status: 404 });
+
+      const items = (order.items as any[]) ?? [];
+      const myItems = items.filter((i) => myProductIdSet.has(i.productId));
+      if (myItems.length === 0) throw Object.assign(new Error("You don't have items in this order"), { status: 403 });
+      if (order.status !== "confirmed") throw Object.assign(new Error("Order cannot be accepted in its current state"), { status: 400 });
+
+      const acceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
+      if (acceptances[vendorId]) throw Object.assign(new Error("You have already responded to this order"), { status: 400 });
+
+      acceptances[vendorId] = { status: "accepted", at: new Date().toISOString() };
+
+      const allProductIds = items.map((i: any) => i.productId).filter(Boolean) as string[];
+      const allOrderProducts = allProductIds.length > 0
+        ? await tx.select({ vendorId: productsTable.vendorId }).from(productsTable).where(inArray(productsTable.id, allProductIds))
+        : [];
+      const allVendorIds = [...new Set(allOrderProducts.map((p) => p.vendorId).filter(Boolean))] as string[];
+      const allAccepted = allVendorIds.length > 0 && allVendorIds.every((vid) => acceptances[vid]?.status === "accepted");
+
+      const history = [...(Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [])];
+      const updates: Record<string, any> = { vendorAcceptances: acceptances, updatedAt: new Date() };
+
+      if (allAccepted) {
+        history.push({ status: "processing", timestamp: new Date().toISOString(), note: "All vendors accepted — order is being prepared" });
+        updates.status = "processing";
+        updates.statusHistory = history;
+
+        await insertOrderStatusNotification({
+          tx,
+          userId: order.userId,
+          type: "order_packed",
+          orderId: order.id,
+          itemName: (items[0] as any)?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
+        });
+      } else {
+        history.push({ vendorId, timestamp: new Date().toISOString(), note: "Vendor accepted their portion" });
+        updates.statusHistory = history;
+      }
+
+      await tx.update(ordersTable).set(updates).where(eq(ordersTable.id, orderId));
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    req.log?.error({ err }, "seller/orders/accept failed");
+    res.status(500).json({ error: "Failed to accept order" });
+  }
+});
+
+router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId as string;
+  const { orderId } = req.params;
+  const reason = String(req.body?.reason ?? "").trim();
+
+  if (!reason) {
+    return res.status(400).json({ error: "A rejection reason is required" });
+  }
+
+  try {
+    const myProducts = await db.select({ id: productsTable.id })
+      .from(productsTable)
+      .where(eq(productsTable.vendorId, vendorId));
+    const myProductIdSet = new Set(myProducts.map((p) => p.id));
+
+    await db.transaction(async (tx) => {
+      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+      if (!order) throw Object.assign(new Error("Order not found"), { status: 404 });
+
+      const items = (order.items as any[]) ?? [];
+      const myItems = items.filter((i) => myProductIdSet.has(i.productId));
+      if (myItems.length === 0) throw Object.assign(new Error("You don't have items in this order"), { status: 403 });
+      if (order.status !== "confirmed") throw Object.assign(new Error("Order cannot be rejected in its current state"), { status: 400 });
+
+      const acceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
+      if (acceptances[vendorId]) throw Object.assign(new Error("You have already responded to this order"), { status: 400 });
+
+      acceptances[vendorId] = { status: "rejected", reason, at: new Date().toISOString() };
+
+      const history = [...(Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [])];
+      history.push({ status: "cancelled", timestamp: new Date().toISOString(), note: `Vendor rejected: ${reason}` });
+
+      for (const item of items as Array<{ productId: string; quantity: number }>) {
+        const [prod] = await tx.select({ stock: productsTable.stock, vendorId: productsTable.vendorId })
+          .from(productsTable).where(eq(productsTable.id, item.productId)).limit(1);
+        await tx.update(productsTable)
+          .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
+          .where(eq(productsTable.id, item.productId));
+        await recordStockChange({
+          tx,
+          productId: item.productId,
+          vendorId: prod?.vendorId ?? null,
+          previousStock: prod?.stock ?? 0,
+          newStock: (prod?.stock ?? 0) + item.quantity,
+          source: "cancel",
+          reason: `Vendor rejection: ${reason}`,
+          orderId: order.id,
+        });
+      }
+
+      await tx.update(ordersTable).set({
+        status: "cancelled",
+        statusHistory: history,
+        cancelReason: `Vendor rejected: ${reason}`,
+        vendorRejectionReason: reason,
+        vendorAcceptances: acceptances,
+        updatedAt: new Date(),
+      } as any).where(eq(ordersTable.id, orderId));
+
+      await insertOrderStatusNotification({
+        tx,
+        userId: order.userId,
+        type: "order_cancelled",
+        orderId: order.id,
+        itemName: (items[0] as any)?.name ?? "your order",
+        extraItemCount: items.length > 1 ? items.length - 1 : 0,
+      });
+
+      await insertAdminNotification({
+        tx,
+        type: "system_error_alert",
+        title: "Vendor rejected an order",
+        body: `Vendor rejected order #${order.id.slice(0, 8).toUpperCase()}. Reason: ${reason}`,
+        metadata: { orderId: order.id, vendorId },
+      });
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    req.log?.error({ err }, "seller/orders/reject failed");
+    res.status(500).json({ error: "Failed to reject order" });
   }
 });
 

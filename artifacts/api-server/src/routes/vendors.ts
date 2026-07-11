@@ -775,6 +775,7 @@ router.get("/admin/stats", requireAdminKey, async (req: any, res: any) => {
       cancelledOrders: sql<number>`count(*) filter (where ${ordersTable.status} = 'cancelled')::int`,
       returnedOrders: sql<number>`count(*) filter (where ${ordersTable.status} = 'returned')::int`,
       confirmedOrders: sql<number>`count(*) filter (where ${ordersTable.status} = 'confirmed')::int`,
+      lateAcceptanceOrders: sql<number>`count(*) filter (where ${ordersTable.status} = 'confirmed' and ${ordersTable.createdAt} < now() - interval '24 hours')::int`,
       dispatchedOrders: sql<number>`count(*) filter (where ${ordersTable.status} = 'dispatched')::int`,
       refundedRevenue: sql<number>`coalesce(sum(${ordersTable.total}) filter (where ${ordersTable.refundStatus} = 'processed'), 0)::bigint`,
     }).from(ordersTable);
@@ -819,6 +820,7 @@ router.get("/admin/stats", requireAdminKey, async (req: any, res: any) => {
       cancelledOrders: Number(orderStats.cancelledOrders),
       returnedOrders: Number(orderStats.returnedOrders),
       confirmedOrders: Number(orderStats.confirmedOrders),
+      lateAcceptanceOrders: Number(orderStats.lateAcceptanceOrders),
       dispatchedOrders: Number(orderStats.dispatchedOrders),
       refundedRevenue: Number(orderStats.refundedRevenue),
       totalProducts: Number(productStats.totalProducts),

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Search, ChevronRight, Package } from "lucide-react";
+import { Search, ChevronRight, Package, AlertCircle } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
@@ -51,6 +51,7 @@ interface SellerOrder {
   createdAt: string;
   status: string;
   customerName: string;
+  needsAcceptance: boolean;
   vendorItems: { name: string; price: number; quantity: number }[];
   vendorTotal: number;
   itemCount: number;
@@ -93,6 +94,7 @@ export default function SellerOrders() {
     setAppliedSearch(searchInput.trim());
   }
 
+  const pendingCount = orders.filter((o) => o.needsAcceptance).length;
   const totalPages = Math.max(1, Math.ceil(orders.length / PER_PAGE));
   const paged = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
@@ -105,9 +107,17 @@ export default function SellerOrders() {
             <p className="text-sm text-gray-500 mt-0.5">Orders that contain your products</p>
           </div>
           {!loading && (
-            <span className="text-sm font-semibold px-3 py-1.5 rounded-full" style={{ background: CREAM, color: MAROON }}>
-              {orders.length} order{orders.length !== 1 ? "s" : ""}
-            </span>
+            <div className="flex items-center gap-2">
+              {pendingCount > 0 && (
+                <span className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full bg-amber-100 text-amber-700">
+                  <AlertCircle size={13} />
+                  {pendingCount} need{pendingCount === 1 ? "s" : ""} action
+                </span>
+              )}
+              <span className="text-sm font-semibold px-3 py-1.5 rounded-full" style={{ background: CREAM, color: MAROON }}>
+                {orders.length} order{orders.length !== 1 ? "s" : ""}
+              </span>
+            </div>
           )}
         </div>
 
@@ -170,9 +180,11 @@ export default function SellerOrders() {
                 <tbody>
                   {paged.map((order, i) => {
                     const c = statusColors(order.status);
+                    const isLate = order.needsAcceptance && (Date.now() - new Date(order.createdAt).getTime()) > 24 * 60 * 60 * 1000;
                     return (
                       <motion.tr key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                        className="border-b last:border-b-0 hover:bg-[#F3F8F5]/60 transition-colors" style={{ borderColor: "#F3F4F6" }}>
+                        className={`border-b last:border-b-0 transition-colors ${order.needsAcceptance ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-[#F3F8F5]/60"}`}
+                        style={{ borderColor: "#F3F4F6" }}>
                         <td className="px-4 py-3.5 font-mono text-xs text-gray-500">
                           #{order.id.slice(0, 8).toUpperCase()}
                         </td>
@@ -186,9 +198,16 @@ export default function SellerOrders() {
                         </td>
                         <td className="px-4 py-3.5 text-gray-500 text-xs">{formatDate(order.createdAt)}</td>
                         <td className="px-4 py-3.5">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: c.bg, color: c.text }}>
-                            {statusLabel(order.status)}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold w-fit" style={{ background: c.bg, color: c.text }}>
+                              {statusLabel(order.status)}
+                            </span>
+                            {order.needsAcceptance && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold w-fit ${isLate ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
+                                {isLate ? "Overdue" : "Action Required"}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <Link href={`/seller/orders/${order.id}`}

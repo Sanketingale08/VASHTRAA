@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Truck, Check, X, AlertCircle } from "lucide-react";
+import { ArrowLeft, Truck, Check, X, AlertCircle, ThumbsUp, ThumbsDown, Clock } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { OrderTrackingTimeline } from "@/components/OrderTrackingTimeline";
 import { getApiUrl } from "@/lib/api";
@@ -42,6 +42,7 @@ interface OrderDetail {
   paymentMethod: string;
   vendorItems: { productId: string; name: string; price: number; quantity: number; images: string[] }[];
   vendorTotal: number;
+  vendorAcceptanceStatus: "accepted" | "rejected" | "pending";
 }
 
 export default function SellerOrderDetail() {
@@ -57,6 +58,12 @@ export default function SellerOrderDetail() {
   const [dispatching, setDispatching] = useState(false);
   const [dispatchError, setDispatchError] = useState("");
   const [dispatchSuccess, setDispatchSuccess] = useState(false);
+
+  const [accepting, setAccepting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [acceptRejectError, setAcceptRejectError] = useState("");
 
   async function fetchOrder() {
     setLoading(true);
@@ -78,6 +85,49 @@ export default function SellerOrderDetail() {
   }
 
   useEffect(() => { fetchOrder(); }, [orderId]);
+
+  async function handleAccept() {
+    setAccepting(true);
+    setAcceptRejectError("");
+    try {
+      const res = await fetch(getApiUrl(`/api/seller/orders/${orderId}/accept`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) { setAcceptRejectError(data.error ?? "Failed to accept order"); return; }
+      await fetchOrder();
+    } catch {
+      setAcceptRejectError("Failed to accept order. Please try again.");
+    } finally {
+      setAccepting(false);
+    }
+  }
+
+  async function handleReject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rejectionReason.trim()) { setAcceptRejectError("Please provide a reason for rejection"); return; }
+    setRejecting(true);
+    setAcceptRejectError("");
+    try {
+      const res = await fetch(getApiUrl(`/api/seller/orders/${orderId}/reject`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: rejectionReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAcceptRejectError(data.error ?? "Failed to reject order"); return; }
+      setShowRejectForm(false);
+      setRejectionReason("");
+      await fetchOrder();
+    } catch {
+      setAcceptRejectError("Failed to reject order. Please try again.");
+    } finally {
+      setRejecting(false);
+    }
+  }
 
   async function handleDispatch(e: React.FormEvent) {
     e.preventDefault();
@@ -105,7 +155,8 @@ export default function SellerOrderDetail() {
     }
   }
 
-  const canDispatch = order && !["dispatched", "out_for_delivery", "delivered", "cancelled"].includes(order.status);
+  const isLate = order && order.status === "confirmed" && (Date.now() - new Date(order.createdAt).getTime()) > 24 * 60 * 60 * 1000;
+  const canDispatch = order && !["dispatched", "out_for_delivery", "delivered", "cancelled"].includes(order.status) && order.vendorAcceptanceStatus === "accepted";
 
   return (
     <SellerLayout title="Order Detail">
@@ -123,6 +174,7 @@ export default function SellerOrderDetail() {
         ) : order ? (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
             className="space-y-5">
+
             {/* Header */}
             <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -146,6 +198,94 @@ export default function SellerOrderDetail() {
                 </div>
               </div>
             </div>
+
+            {/* Accept / Reject Panel */}
+            {order.status === "confirmed" && order.vendorAcceptanceStatus === "pending" && (
+              <div className="bg-white rounded-xl border-2 border-amber-300 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock size={16} className="text-amber-500" />
+                  <h3 className="font-serif text-base font-bold text-amber-700">Action Required</h3>
+                  {isLate && (
+                    <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                      Overdue
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Please confirm whether you can fulfil this order. Accepting will move it to preparation. Rejecting will automatically cancel the order and refund the customer.
+                </p>
+
+                {acceptRejectError && (
+                  <div className="flex items-center gap-1.5 text-red-500 text-xs mb-3">
+                    <AlertCircle size={12} /> {acceptRejectError}
+                  </div>
+                )}
+
+                <AnimatePresence mode="wait">
+                  {!showRejectForm ? (
+                    <motion.div key="buttons" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      className="flex gap-3">
+                      <button onClick={handleAccept} disabled={accepting}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60"
+                        style={{ background: MAROON, color: IVORY }}>
+                        <ThumbsUp size={14} />
+                        {accepting ? "Accepting…" : "Accept Order"}
+                      </button>
+                      <button onClick={() => { setShowRejectForm(true); setAcceptRejectError(""); }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg border-2 transition-colors"
+                        style={{ borderColor: "#EF4444", color: "#EF4444" }}>
+                        <ThumbsDown size={14} />
+                        Reject Order
+                      </button>
+                    </motion.div>
+                  ) : (
+                    <motion.form key="reject-form" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      onSubmit={handleReject} className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-red-700">
+                          Reason for rejection *
+                        </label>
+                        <textarea
+                          value={rejectionReason}
+                          onChange={(e) => { setRejectionReason(e.target.value); setAcceptRejectError(""); }}
+                          placeholder="e.g. Item is out of stock, damaged inventory…"
+                          rows={3}
+                          className="w-full px-3 py-2.5 text-sm rounded-lg border outline-none transition resize-none"
+                          style={{ borderColor: "#fca5a5", background: "#fff5f5" }}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={rejecting}
+                          className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60"
+                          style={{ background: "#EF4444", color: "white" }}>
+                          {rejecting ? "Rejecting…" : "Confirm Rejection"}
+                        </button>
+                        <button type="button" onClick={() => { setShowRejectForm(false); setAcceptRejectError(""); setRejectionReason(""); }}
+                          className="px-4 py-2.5 text-sm rounded-lg border" style={{ borderColor: "#e5e7eb" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </motion.form>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Already-accepted confirmation */}
+            {order.status !== "cancelled" && order.vendorAcceptanceStatus === "accepted" && (
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                <Check size={15} className="text-green-600 shrink-0" />
+                <span className="text-sm text-green-700 font-medium">You accepted this order — please prepare it for dispatch.</span>
+              </div>
+            )}
+
+            {/* Rejected banner */}
+            {order.vendorAcceptanceStatus === "rejected" && order.status === "cancelled" && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <X size={15} className="text-red-500 shrink-0" />
+                <span className="text-sm text-red-600 font-medium">You rejected this order. The customer has been notified and refund initiated.</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Items */}
@@ -195,7 +335,7 @@ export default function SellerOrderDetail() {
                   )}
                 </div>
 
-                {/* Dispatch panel */}
+                {/* Dispatch panel — only after acceptance */}
                 {canDispatch && (
                   <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
                     <div className="flex items-center gap-2 mb-4">

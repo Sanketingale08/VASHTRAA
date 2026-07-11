@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   TrendingUp, ShoppingBag, Package, Users, Store,
-  CheckCircle, XCircle, RotateCcw, Clock, IndianRupee,
+  CheckCircle, XCircle, RotateCcw, Clock, IndianRupee, AlertTriangle,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -21,6 +21,7 @@ interface Stats {
   cancelledOrders: number;
   returnedOrders: number;
   confirmedOrders: number;
+  lateAcceptanceOrders: number;
   dispatchedOrders: number;
   refundedRevenue: number;
   totalProducts: number;
@@ -50,11 +51,12 @@ interface MetricCardProps {
   iconBg: string;
   iconColor: string;
   sub?: string;
+  alert?: boolean;
 }
 
-function MetricCard({ label, value, icon: Icon, iconBg, iconColor, sub }: MetricCardProps) {
+function MetricCard({ label, value, icon: Icon, iconBg, iconColor, sub, alert }: MetricCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+    <div className={`bg-white rounded-2xl border p-5 shadow-sm ${alert ? "border-amber-300" : "border-gray-200"}`}>
       <div className="flex items-start justify-between mb-4">
         <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: iconBg }}>
@@ -86,7 +88,7 @@ function DashboardContent() {
 
   const orderStatusData = stats
     ? [
-        { name: "Confirmed", value: stats.confirmedOrders, color: "#3B82F6" },
+        { name: "Awaiting", value: stats.confirmedOrders, color: "#F59E0B" },
         { name: "Dispatched", value: stats.dispatchedOrders, color: GOLD },
         { name: "Delivered", value: stats.deliveredOrders, color: "#10B981" },
         { name: "Cancelled", value: stats.cancelledOrders, color: "#EF4444" },
@@ -127,8 +129,10 @@ function DashboardContent() {
               iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} sub={`${stats.totalVendors} total`} />
             <MetricCard label="Pending Approval" value={stats.pendingVendors} icon={Clock}
               iconBg="rgba(245,158,11,0.1)" iconColor="#D97706" sub="Awaiting review" />
-            <MetricCard label="Shipped" value={stats.dispatchedOrders} icon={CheckCircle}
-              iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" sub="Dispatched orders" />
+            <MetricCard label="Awaiting Acceptance" value={stats.confirmedOrders} icon={AlertTriangle}
+              iconBg="rgba(245,158,11,0.1)" iconColor="#D97706"
+              sub={stats.lateAcceptanceOrders > 0 ? `${stats.lateAcceptanceOrders} overdue >24h` : "Pending vendor action"}
+              alert={stats.lateAcceptanceOrders > 0} />
             <MetricCard label="Revenue Growth" value={`${stats.growthPct > 0 ? "+" : ""}${stats.growthPct}%`}
               icon={TrendingUp} iconBg={stats.growthPct >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)"}
               iconColor={stats.growthPct >= 0 ? "#10B981" : "#EF4444"}

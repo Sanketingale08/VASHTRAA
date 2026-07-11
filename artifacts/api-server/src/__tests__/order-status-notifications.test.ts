@@ -74,6 +74,10 @@ vi.mock("@workspace/db", () => {
         return makeSelectChain(() => [state.vendor]);
       case "notificationPreferences":
         return makeSelectChain(() => []); // no row -> defaults to enabled
+      case "commissionRules":
+        return makeSelectChain(() => []); // no rules -> default commission rate
+      case "vendorSettlements":
+        return makeSelectChain(() => []); // not already settled
       case "notifications": {
         // Handles both unread-count (count aggregate) and list queries.
         return {
@@ -163,6 +167,8 @@ vi.mock("@workspace/db", () => {
     notificationsTable: tag("notifications", ["id", "userId", "vendorId", "type", "title", "body", "metadata", "read", "createdAt"]),
     notificationPreferencesTable: tag("notificationPreferences", ["userId", "orderUpdates"]),
     stockHistoryTable: tag("stockHistory", ["id", "productId", "vendorId", "previousStock", "newStock", "source", "reason", "orderId"]),
+    commissionRulesTable: tag("commissionRules", ["id", "active", "scope", "vendorId", "category", "rate", "effectiveFrom", "effectiveTo"]),
+    vendorSettlementsTable: tag("vendorSettlements", ["id", "orderId", "vendorId", "type", "status", "amount", "productAmount", "commission", "commissionRate", "shippingCharge", "settlementTax", "netPayout"]),
   };
 });
 

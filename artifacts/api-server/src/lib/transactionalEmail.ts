@@ -1,7 +1,6 @@
 import { clerkClient } from "@clerk/express";
 import { Resend } from "resend";
-import { db } from "@workspace/db";
-import { emailOutboxTable } from "@workspace/db/schema";
+import { db, emailOutboxTable } from "@workspace/db";
 import { eq, and, lte, lt, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 

@@ -134,6 +134,13 @@
       "when": 1752537600000,
       "tag": "0020_add_vendor_upi_id",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1752624000000,
+      "tag": "0021_add_settlement_unique_constraint",
+      "breakpoints": true
     }
   ]
 }

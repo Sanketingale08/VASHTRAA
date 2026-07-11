@@ -1,4 +1,5 @@
-import { pgTable, text, uuid, integer, real, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, integer, real, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { vendorsTable } from "./vendors";
 
 export const VENDOR_SETTLEMENT_TYPES = ["release", "payout", "order_settlement"] as const;
@@ -25,7 +26,11 @@ export const vendorSettlementsTable = pgTable("vendor_settlements", {
   netPayout: integer("net_payout"),
   paidAt: timestamp("paid_at"),
   utrNumber: text("utr_number"),
-});
+}, (table) => [
+  uniqueIndex("vendor_settlements_order_vendor_type_uidx")
+    .on(table.orderId, table.vendorId, table.type)
+    .where(sql`${table.orderId} IS NOT NULL`),
+]);
 
 export type VendorSettlement = typeof vendorSettlementsTable.$inferSelect;
 

@@ -797,6 +797,30 @@ export function OrderConfirmationPage() {
                   <p className="text-sm text-gray-600 dark:text-gray-300">{order.returnReason}</p>
                 </div>
               )}
+              {order.refundStatus === "processed" && (
+                <div className="mt-3 pt-3 border-t border-[#C9A84C]/10 flex items-start gap-2.5">
+                  <CheckCircle2 size={15} className="text-green-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-0.5">Refund Payout</p>
+                    <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                      Refund paid out
+                      {order.refundProcessedAt && (
+                        <> on {new Date(order.refundProcessedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</>
+                      )}
+                    </p>
+                    {order.refundMethod && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Via: {order.refundMethod === "store_credit" ? "Store Credit" : "Original Payment Method"}
+                      </p>
+                    )}
+                    {order.refundReference && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Reference: <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">{order.refundReference}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
 
             {/* Tracking Timeline */}

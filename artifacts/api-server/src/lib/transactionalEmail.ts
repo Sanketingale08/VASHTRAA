@@ -24,8 +24,11 @@ async function getUserEmail(userId: string): Promise<string | null> {
 }
 
 export type TransactionalEmailType =
-  | "order_cancelled"
   | "order_packed"
+  | "order_shipped"
+  | "out_for_delivery"
+  | "order_delivered"
+  | "order_cancelled"
   | "vendor_item_rejected"
   | "return_requested"
   | "refund_requested"
@@ -60,6 +63,27 @@ function buildEmailContent(
         subject: `Your ${APP_NAME} order is being prepared`,
         html: `<p>Good news! Your order for ${itemLabel} has been <strong>accepted by your seller</strong> and is now being packed for dispatch.</p>
                <p>You'll receive another email as soon as your order ships.</p>`,
+      };
+    case "order_shipped":
+      return {
+        subject: `Your ${APP_NAME} order has been shipped`,
+        html: `<p>Great news! Your order for ${itemLabel} has been <strong>dispatched</strong> and is on its way to you.</p>
+               ${reference ? `<p>Tracking reference: <code>${reference}</code></p>` : ""}
+               <p>You'll receive another update when your order is out for delivery.</p>`,
+      };
+    case "out_for_delivery":
+      return {
+        subject: `Your ${APP_NAME} order is out for delivery`,
+        html: `<p>Your order for ${itemLabel} is <strong>out for delivery</strong> today and should arrive shortly.</p>
+               ${reference ? `<p>Tracking reference: <code>${reference}</code></p>` : ""}
+               <p>Please ensure someone is available to receive the package.</p>`,
+      };
+    case "order_delivered":
+      return {
+        subject: `Your ${APP_NAME} order has been delivered`,
+        html: `<p>Your order for ${itemLabel} has been <strong>delivered</strong>. We hope you love it!</p>
+               ${reference ? `<p>Tracking reference: <code>${reference}</code></p>` : ""}
+               <p>If you have any issues with your order, please reach out to our support team.</p>`,
       };
     case "vendor_item_rejected":
       return {

@@ -732,6 +732,7 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
         orderId: order.id,
         itemName: allItems?.[0]?.name ?? "your order",
         extraItemCount: allItems.length > 1 ? allItems.length - 1 : 0,
+        trackingNumber: String(trackingNumber).trim(),
       });
     }
 

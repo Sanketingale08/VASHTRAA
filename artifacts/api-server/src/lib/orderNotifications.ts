@@ -15,8 +15,11 @@ type OrderNotifType =
   | "out_for_delivery";
 
 const EMAIL_TYPES = new Set<OrderNotifType>([
-  "order_cancelled",
   "order_packed",
+  "order_shipped",
+  "out_for_delivery",
+  "order_delivered",
+  "order_cancelled",
   "vendor_item_rejected",
   "return_requested",
   "refund_requested",
@@ -29,6 +32,7 @@ interface InsertOrderNotificationOpts {
   orderId: string;
   itemName: string;
   extraItemCount: number;
+  trackingNumber?: string;
 }
 
 function buildNotifContent(
@@ -88,7 +92,7 @@ function buildNotifContent(
 export async function insertOrderStatusNotification(
   opts: InsertOrderNotificationOpts
 ): Promise<void> {
-  const { userId, type, orderId, itemName, extraItemCount } = opts;
+  const { userId, type, orderId, itemName, extraItemCount, trackingNumber } = opts;
   const client = opts.tx ?? db;
 
   const prefs = await client
@@ -118,6 +122,7 @@ export async function insertOrderStatusNotification(
       orderId,
       itemName,
       extraItemCount,
+      reference: trackingNumber,
     });
   }
 }

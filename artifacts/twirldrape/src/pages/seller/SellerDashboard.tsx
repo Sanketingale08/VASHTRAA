@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell } from "lucide-react";
+import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -29,6 +29,7 @@ const NAV_LINKS = [
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/seller/profile", label: "Store Profile", icon: User },
   { href: "/seller/payouts", label: "Payouts", icon: CreditCard, group: "/seller/payouts" },
+  { href: "/seller/settlements", label: "Settlements", icon: Landmark, group: "/seller/settlements" },
   { href: "/seller/support", label: "Support", icon: HelpCircle, group: "/seller/support" },
 ];
 

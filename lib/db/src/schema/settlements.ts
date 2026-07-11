@@ -1,8 +1,8 @@
 import { pgTable, text, uuid, integer, real, boolean, timestamp } from "drizzle-orm/pg-core";
 import { vendorsTable } from "./vendors";
 
-export const VENDOR_SETTLEMENT_TYPES = ["release", "payout"] as const;
-export const VENDOR_SETTLEMENT_STATUSES = ["pending", "approved", "rejected", "completed", "failed"] as const;
+export const VENDOR_SETTLEMENT_TYPES = ["release", "payout", "order_settlement"] as const;
+export const VENDOR_SETTLEMENT_STATUSES = ["pending", "approved", "rejected", "completed", "failed", "processing", "paid"] as const;
 export const SETTLEMENT_PAYMENT_METHODS = ["bank_transfer", "upi", "cheque", "other"] as const;
 
 export const vendorSettlementsTable = pgTable("vendor_settlements", {
@@ -16,6 +16,15 @@ export const vendorSettlementsTable = pgTable("vendor_settlements", {
   note: text("note"),
   reviewedAt: timestamp("reviewed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  orderId: text("order_id"),
+  productAmount: integer("product_amount"),
+  commission: integer("commission"),
+  commissionRate: real("commission_rate"),
+  shippingCharge: integer("shipping_charge"),
+  settlementTax: integer("settlement_tax"),
+  netPayout: integer("net_payout"),
+  paidAt: timestamp("paid_at"),
+  utrNumber: text("utr_number"),
 });
 
 export type VendorSettlement = typeof vendorSettlementsTable.$inferSelect;

@@ -63,6 +63,7 @@ import SellerCustomers from "@/pages/seller/SellerCustomers";
 import SellerNotifications from "@/pages/seller/SellerNotifications";
 import SellerAnalytics from "@/pages/seller/SellerAnalytics";
 import SellerPayouts from "@/pages/seller/SellerPayouts";
+import SellerSettlements from "@/pages/seller/SellerSettlements";
 import SellerLogin from "@/pages/seller/SellerLogin";
 import SellerClaimStore from "@/pages/seller/SellerClaimStore";
 import VendorStore from "@/pages/VendorStore";
@@ -285,6 +286,9 @@ function Router() {
       )} />
       <Route path="/seller/payouts" component={() => (
         <SellerGuard><SellerPayouts /></SellerGuard>
+      )} />
+      <Route path="/seller/settlements" component={() => (
+        <SellerGuard><SellerSettlements /></SellerGuard>
       )} />
       <Route path="/seller/support" component={() => (
         <SellerGuard><SellerSupport /></SellerGuard>

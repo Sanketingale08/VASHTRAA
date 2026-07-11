@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, productsTable, stockHistoryTable, CATEGORIES, FABRICS, OCCASIONS, COLORS } from "@workspace/db";
+import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS } from "@workspace/db";
 import { eq, desc, asc, inArray, and, sql } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
@@ -1043,6 +1043,75 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
     if (err.status) return res.status(err.status).json({ error: err.message });
     req.log?.error({ err }, "seller/orders/reject failed");
     res.status(500).json({ error: "Failed to reject order" });
+  }
+});
+
+router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const statusFilter = (req.query.status as string | undefined)?.trim();
+  const page = Math.max(1, parseInt((req.query.page as string) || "1"));
+  const limit = 20;
+  const offset = (page - 1) * limit;
+
+  try {
+    const all = await db
+      .select()
+      .from(vendorSettlementsTable)
+      .where(eq(vendorSettlementsTable.vendorId, vendorId))
+      .orderBy(desc(vendorSettlementsTable.createdAt));
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    let totalEarnedThisMonth = 0;
+    let totalPending = 0;
+    let totalPaid = 0;
+
+    for (const s of all) {
+      const net = s.netPayout ?? s.amount;
+      if (new Date(s.createdAt) >= monthStart) totalEarnedThisMonth += net;
+      if (s.status === "processing" || s.status === "pending" || s.status === "approved") totalPending += net;
+      if (s.status === "paid" || s.status === "completed") totalPaid += net;
+    }
+
+    const filtered = statusFilter && statusFilter !== "all" ? all.filter((s) => s.status === statusFilter) : all;
+    const total = filtered.length;
+    const settlements = filtered.slice(offset, offset + limit);
+
+    res.json({
+      settlements,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      summary: { totalEarnedThisMonth, totalPending, totalPaid },
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/settlements failed");
+    res.status(500).json({ error: "Failed to load settlements" });
+  }
+});
+
+router.get("/seller/settlements/:settlementId", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  const { settlementId } = req.params;
+
+  try {
+    const [settlement] = await db
+      .select()
+      .from(vendorSettlementsTable)
+      .where(and(
+        eq(vendorSettlementsTable.id, settlementId),
+        eq(vendorSettlementsTable.vendorId, vendorId),
+      ))
+      .limit(1);
+
+    if (!settlement) {
+      return res.status(404).json({ error: "Settlement not found" });
+    }
+
+    res.json({ settlement });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/settlements/:id failed");
+    res.status(500).json({ error: "Failed to load settlement" });
   }
 });
 

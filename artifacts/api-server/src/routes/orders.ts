@@ -5,9 +5,10 @@ import {
   ordersTable, cartItemsTable, productsTable, couponsTable,
   couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
   notificationsTable, notificationPreferencesTable,
-  supportTicketsTable, vendorsTable,
+  supportTicketsTable, vendorsTable, vendorSettlementsTable,
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { loadActiveCommissionRules, effectiveRateFromRules } from "../lib/commission";
 import { isValidPaymentMethod } from "@workspace/api-zod";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
 import { insertSellerNotification, insertSellerNotificationForVendors } from "../lib/sellerNotifications";
@@ -540,6 +541,7 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
             status: ordersTable.status,
             statusHistory: ordersTable.statusHistory,
             items: ordersTable.items,
+            shipping: ordersTable.shipping,
           })
           .from(ordersTable)
           .where(eq(ordersTable.id, orderId))
@@ -570,6 +572,54 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
 
         if (status === "delivered") {
           updates.deliveredAt = new Date();
+
+          const orderItems = (order.items as Array<{ productId: string; price: number; quantity: number }>) ?? [];
+          const productIds = orderItems.map((i: any) => i.productId).filter(Boolean) as string[];
+          if (productIds.length > 0) {
+            const orderProducts = await tx
+              .select({ id: productsTable.id, vendorId: productsTable.vendorId, category: productsTable.category })
+              .from(productsTable)
+              .where(inArray(productsTable.id, productIds));
+
+            const productMap = new Map(orderProducts.map((p) => [p.id, p]));
+            const vendorItemGroups = new Map<string, Array<{ price: number; quantity: number; category: string | null }>>();
+            for (const item of orderItems) {
+              const p = productMap.get((item as any).productId);
+              if (!p?.vendorId) continue;
+              const group = vendorItemGroups.get(p.vendorId) ?? [];
+              group.push({ price: (item as any).price ?? 0, quantity: (item as any).quantity ?? 1, category: p.category });
+              vendorItemGroups.set(p.vendorId, group);
+            }
+
+            const orderSubtotal = orderItems.reduce((s: number, i: any) => s + (i.price ?? 0) * (i.quantity ?? 1), 0);
+            const orderShipping = (order as any).shipping ?? 0;
+            const commissionRules = await loadActiveCommissionRules();
+
+            for (const [vid, vItems] of vendorItemGroups) {
+              const productAmount = vItems.reduce((s, i) => s + i.price * i.quantity, 0);
+              if (productAmount <= 0) continue;
+              const primaryCategory = vItems[0]?.category ?? null;
+              const commissionRate = effectiveRateFromRules(commissionRules, vid, primaryCategory);
+              const commission = Math.round(productAmount * commissionRate);
+              const shippingCharge = orderSubtotal > 0 ? Math.round(orderShipping * productAmount / orderSubtotal) : 0;
+              const settlementTax = Math.round(commission * 0.18);
+              const netPayout = Math.max(0, productAmount - commission - shippingCharge - settlementTax);
+
+              await tx.insert(vendorSettlementsTable).values({
+                vendorId: vid,
+                amount: netPayout,
+                type: "order_settlement",
+                status: "processing",
+                orderId: order.id,
+                productAmount,
+                commission,
+                commissionRate,
+                shippingCharge,
+                settlementTax,
+                netPayout,
+              });
+            }
+          }
         }
 
         if (status === "cancelled") {

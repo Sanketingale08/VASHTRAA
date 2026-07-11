@@ -37,7 +37,11 @@ function PrintButton({ disabled }: { disabled?: boolean }) {
 interface Settlement {
   id: string; vendorId: string; vendorName: string; amount: number; type: string;
   status: string; paymentMethod: string | null; transactionId: string | null;
-  note: string | null; createdAt: string; reviewedAt: string | null;
+  utrNumber: string | null; note: string | null; createdAt: string;
+  reviewedAt: string | null; paidAt: string | null;
+  orderId: string | null; productAmount: number | null; commission: number | null;
+  commissionRate: number | null; shippingCharge: number | null;
+  settlementTax: number | null; netPayout: number | null;
 }
 
 interface CommissionRule {
@@ -95,6 +99,9 @@ function StatusPill({ status }: { status: string }) {
     approved: { bg: "#eff6ff", color: "#1d4ed8" },
     rejected: { bg: "#fef2f2", color: "#b91c1c" },
     completed: { bg: "#f0fdf4", color: "#15803d" },
+    processing: { bg: "#f0f9ff", color: "#0369a1" },
+    paid: { bg: "#f0fdf4", color: "#15803d" },
+    failed: { bg: "#fef2f2", color: "#b91c1c" },
   };
   const s = map[status] ?? { bg: "#f3f4f6", color: "#6b7280" };
   return (
@@ -125,7 +132,7 @@ function SettlementsPanel() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [reviewMeta, setReviewMeta] = useState<{ paymentMethod: string; transactionId: string }>({ paymentMethod: "", transactionId: "" });
+  const [reviewMeta, setReviewMeta] = useState<{ paymentMethod: string; transactionId: string; utrNumber: string }>({ paymentMethod: "", transactionId: "", utrNumber: "" });
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   function load() {
@@ -159,7 +166,7 @@ function SettlementsPanel() {
     XLSX.writeFile(wb, `settlements-${Date.now()}.xlsx`);
   }
 
-  async function review(id: string, decision: "approve" | "reject" | "complete") {
+  async function review(id: string, decision: "approve" | "reject" | "complete" | "paid") {
     setBusyId(id);
     try {
       await fetch(`${basePath}/api/admin/financial/settlements/${id}/review`, {
@@ -170,10 +177,11 @@ function SettlementsPanel() {
           decision,
           paymentMethod: reviewMeta.paymentMethod || undefined,
           transactionId: reviewMeta.transactionId || undefined,
+          utrNumber: reviewMeta.utrNumber || undefined,
         }),
       });
       setReviewingId(null);
-      setReviewMeta({ paymentMethod: "", transactionId: "" });
+      setReviewMeta({ paymentMethod: "", transactionId: "", utrNumber: "" });
       load();
     } finally {
       setBusyId(null);
@@ -206,9 +214,11 @@ function SettlementsPanel() {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-xs px-2 py-2 rounded-lg border border-gray-200">
               <option value="all">All statuses</option>
               <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
               <option value="completed">Completed</option>
+              <option value="paid">Paid</option>
             </select>
             <button onClick={exportPdf} disabled={settlements.length === 0} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
               <Download size={13} /> PDF
@@ -227,8 +237,10 @@ function SettlementsPanel() {
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Vendor</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Type</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Amount</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Order / Type</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Gross</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Commission</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Net Payout</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Date</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Actions</th>
@@ -238,9 +250,20 @@ function SettlementsPanel() {
                 {settlements.map((s) => (
                   <tr key={s.id} className="hover:bg-gray-50/60">
                     <td className="px-4 py-3.5 font-semibold" style={{ color: NAVY }}>{s.vendorName}</td>
-                    <td className="px-4 py-3.5 text-xs capitalize text-gray-500">{s.type}</td>
-                    <td className="px-4 py-3.5 text-right font-semibold" style={{ color: NAVY }}>{fmt(s.amount)}</td>
-                    <td className="px-4 py-3.5"><StatusPill status={s.status} /></td>
+                    <td className="px-4 py-3.5">
+                      {s.orderId ? (
+                        <span className="font-mono text-xs text-gray-500">#{s.orderId.slice(0, 8).toUpperCase()}</span>
+                      ) : (
+                        <span className="text-xs capitalize text-gray-400">{s.type}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right text-xs text-gray-600">{s.productAmount != null ? fmt(s.productAmount) : fmt(s.amount)}</td>
+                    <td className="px-4 py-3.5 text-right text-xs text-red-500">{s.commission != null ? `-${fmt(s.commission)}` : "—"}</td>
+                    <td className="px-4 py-3.5 text-right font-semibold" style={{ color: NAVY }}>{fmt(s.netPayout ?? s.amount)}</td>
+                    <td className="px-4 py-3.5">
+                      <StatusPill status={s.status} />
+                      {s.utrNumber && <div className="text-[10px] text-gray-400 mt-0.5">UTR: {s.utrNumber}</div>}
+                    </td>
                     <td className="px-4 py-3.5 text-xs text-gray-400">{new Date(s.createdAt).toLocaleDateString("en-IN")}</td>
                     <td className="px-4 py-3.5">
                       {s.status === "pending" && (
@@ -266,6 +289,23 @@ function SettlementsPanel() {
                           <input placeholder="Transaction ID" value={reviewMeta.transactionId} onChange={(e) => setReviewMeta((m) => ({ ...m, transactionId: e.target.value }))} className="text-xs px-2 py-1 rounded border border-gray-200 w-36" />
                           <div className="flex gap-1">
                             <button disabled={busyId === s.id} onClick={() => review(s.id, "complete")} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">Confirm</button>
+                            <button onClick={() => setReviewingId(null)} className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-gray-200">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                      {s.status === "processing" && reviewingId !== s.id && (
+                        <div className="flex justify-end">
+                          <button onClick={() => setReviewingId(s.id)} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100">
+                            <Clock size={12} /> Mark Paid
+                          </button>
+                        </div>
+                      )}
+                      {s.status === "processing" && reviewingId === s.id && (
+                        <div className="flex flex-col items-end gap-1.5">
+                          <input placeholder="UTR Number *" value={reviewMeta.utrNumber} onChange={(e) => setReviewMeta((m) => ({ ...m, utrNumber: e.target.value }))} className="text-xs px-2 py-1 rounded border border-gray-200 w-36" />
+                          <input placeholder="Payment method" value={reviewMeta.paymentMethod} onChange={(e) => setReviewMeta((m) => ({ ...m, paymentMethod: e.target.value }))} className="text-xs px-2 py-1 rounded border border-gray-200 w-36" />
+                          <div className="flex gap-1">
+                            <button disabled={busyId === s.id || !reviewMeta.utrNumber} onClick={() => review(s.id, "paid")} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">Confirm</button>
                             <button onClick={() => setReviewingId(null)} className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-gray-200">Cancel</button>
                           </div>
                         </div>

@@ -25,10 +25,10 @@ const requireAdminKey = (req: any, res: any, next: any) => {
 
 router.get("/admin/financial/settlements", requireAdminKey, async (req: any, res: any) => {
   try {
-    const { status } = req.query as Record<string, string>;
-    const settlements = await listSettlements(status);
-    const pendingTotal = settlements.filter(s => s.status === "pending").reduce((s, x) => s + x.amount, 0);
-    const completedTotal = settlements.filter(s => s.status === "completed").reduce((s, x) => s + x.amount, 0);
+    const { status, vendorId } = req.query as Record<string, string>;
+    const settlements = await listSettlements(status, vendorId);
+    const pendingTotal = settlements.filter(s => ["pending", "processing"].includes(s.status)).reduce((s, x) => s + x.amount, 0);
+    const completedTotal = settlements.filter(s => ["completed", "paid"].includes(s.status)).reduce((s, x) => s + x.amount, 0);
     res.json({ settlements, summary: { pendingTotal, completedTotal, count: settlements.length } });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch settlements");
@@ -56,9 +56,9 @@ router.post("/admin/financial/settlements", requireAdminKey, async (req: any, re
 router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
     const { id } = req.params;
-    const { decision, paymentMethod, transactionId } = req.body ?? {};
-    if (!["approve", "reject", "complete"].includes(decision)) {
-      res.status(400).json({ error: "decision must be approve, reject, or complete" });
+    const { decision, paymentMethod, transactionId, utrNumber } = req.body ?? {};
+    if (!["approve", "reject", "complete", "paid"].includes(decision)) {
+      res.status(400).json({ error: "decision must be approve, reject, complete, or paid" });
       return;
     }
     const [existing] = await db.select().from(vendorSettlementsTable).where(eq(vendorSettlementsTable.id, id)).limit(1);
@@ -66,24 +66,28 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
       res.status(404).json({ error: "Settlement not found" });
       return;
     }
-    const newStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "completed";
+    const newStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : decision === "paid" ? "paid" : "completed";
+    const isSettled = newStatus === "completed" || newStatus === "paid";
     const [updated] = await db.update(vendorSettlementsTable)
       .set({
         status: newStatus,
         paymentMethod: paymentMethod ?? existing.paymentMethod,
         transactionId: transactionId ?? existing.transactionId,
+        utrNumber: utrNumber ?? existing.utrNumber,
+        paidAt: isSettled ? new Date() : existing.paidAt,
         reviewedAt: new Date(),
       })
       .where(eq(vendorSettlementsTable.id, id))
       .returning();
 
-    if (newStatus === "completed") {
+    if (isSettled) {
+      const payAmount = existing.netPayout ?? existing.amount;
       await insertSellerNotification({
         vendorId: existing.vendorId,
         type: existing.type === "payout" ? "payout_successful" : "settlement_released",
-        title: existing.type === "payout" ? "Payout successful" : "Settlement released",
-        body: `Your ${existing.type} of ₹${existing.amount.toLocaleString("en-IN")} has been ${newStatus}.`,
-        metadata: { settlementId: id },
+        title: existing.type === "payout" ? "Payout successful" : "Settlement paid",
+        body: `Your settlement of ₹${payAmount.toLocaleString("en-IN")} has been transferred.${utrNumber ? ` UTR: ${utrNumber}` : ""}`,
+        metadata: { settlementId: id, utrNumber: utrNumber ?? null },
       });
     }
 

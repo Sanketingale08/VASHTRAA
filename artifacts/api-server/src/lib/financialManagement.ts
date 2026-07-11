@@ -254,9 +254,10 @@ export async function computeProfitAnalysis(period: Period, from?: string, to?: 
   };
 }
 
-export async function listSettlements(status?: string) {
+export async function listSettlements(status?: string, vendorIdFilter?: string) {
   const rows = await db.select().from(vendorSettlementsTable).orderBy(desc(vendorSettlementsTable.createdAt));
-  const filtered = status ? rows.filter(r => r.status === status) : rows;
+  let filtered = status ? rows.filter(r => r.status === status) : rows;
+  if (vendorIdFilter) filtered = filtered.filter(r => r.vendorId === vendorIdFilter);
   const vendors = await db.select().from(vendorsTable);
   const vendorById = new Map(vendors.map(v => [v.id, v]));
 
@@ -269,8 +270,17 @@ export async function listSettlements(status?: string) {
     status: s.status,
     paymentMethod: s.paymentMethod,
     transactionId: s.transactionId,
+    utrNumber: s.utrNumber,
     note: s.note,
     createdAt: s.createdAt,
     reviewedAt: s.reviewedAt,
+    paidAt: s.paidAt,
+    orderId: s.orderId,
+    productAmount: s.productAmount,
+    commission: s.commission,
+    commissionRate: s.commissionRate,
+    shippingCharge: s.shippingCharge,
+    settlementTax: s.settlementTax,
+    netPayout: s.netPayout,
   }));
 }

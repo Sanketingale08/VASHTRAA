@@ -85,6 +85,37 @@ router.post(
 );
 
 /**
+ * POST /seller/upload/avatar
+ * Upload a vendor store avatar — requires Clerk auth.
+ * Accepts raw binary image body, stores under vendor-avatars/ prefix.
+ */
+router.post(
+  "/seller/upload/avatar",
+  requireClerkAuth,
+  express.raw({ type: "image/*", limit: "5mb" }),
+  async (req: Request, res: Response) => {
+    try {
+      const rawContentType = (req.headers["content-type"] || "image/jpeg").split(";")[0].trim();
+      if (!rawContentType.startsWith("image/")) {
+        res.status(400).json({ error: "Only image files are allowed" });
+        return;
+      }
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        res.status(400).json({ error: "No image data received" });
+        return;
+      }
+      const rawExt = rawContentType.split("/")[1] || "jpg";
+      const ext = rawExt === "jpeg" ? "jpg" : ["jpg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
+      const { publicRelPath } = await objectStorageService.uploadPublicAvatarImage(req.body, ext, rawContentType);
+      res.json({ publicRelPath });
+    } catch (err) {
+      req.log.error({ err }, "Failed to upload avatar image");
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  },
+);
+
+/**
  * POST /seller/upload/pan
  * Dedicated endpoint for PAN card upload — requires Clerk auth (seller).
  */

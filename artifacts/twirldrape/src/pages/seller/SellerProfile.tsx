@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Save, Camera, AlertCircle, CheckCircle } from "lucide-react";
+import { Save, Camera, AlertCircle, CheckCircle, Upload, X, ImagePlus, Loader2 } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
+
 const MAROON = "#1E6B5A";
 const IVORY = "#F3F8F5";
 const CREAM = "#E6F0EA";
+const GOLD = "#C9A84C";
 
 interface FormState {
   name: string;
@@ -16,6 +18,248 @@ interface FormState {
   gstin: string;
   contactEmail: string;
   avatar: string;
+}
+
+interface UploadedImage {
+  id: string;
+  previewUrl: string;
+  publicRelPath: string | null;
+  uploading: boolean;
+  error: string | null;
+}
+
+function AvatarUploader({
+  currentAvatar,
+  onAvatarChange,
+}: {
+  currentAvatar: string;
+  onAvatarChange: (url: string) => void;
+}) {
+  const [images, setImages] = useState<UploadedImage[]>(() =>
+    currentAvatar
+      ? [{ id: "existing", previewUrl: currentAvatar, publicRelPath: currentAvatar, uploading: false, error: null }]
+      : [],
+  );
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (currentAvatar && images.length === 0) {
+      setImages([{ id: "existing", previewUrl: currentAvatar, publicRelPath: currentAvatar, uploading: false, error: null }]);
+    }
+  }, [currentAvatar]);
+
+  async function uploadFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    const localId = crypto.randomUUID();
+    const previewUrl = URL.createObjectURL(file);
+    const entry: UploadedImage = { id: localId, previewUrl, publicRelPath: null, uploading: true, error: null };
+    setImages((prev) => [...prev, entry]);
+
+    try {
+      const res = await fetch(getApiUrl("/api/seller/upload/avatar"), {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setImages((prev) =>
+          prev.map((img) => img.id === localId ? { ...img, uploading: false, error: err.error || "Upload failed" } : img),
+        );
+        return;
+      }
+      const { publicRelPath } = await res.json();
+      const fullUrl = getApiUrl(publicRelPath);
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === localId ? { ...img, uploading: false, publicRelPath: fullUrl, previewUrl: fullUrl } : img,
+        ),
+      );
+      onAvatarChange(fullUrl);
+    } catch {
+      setImages((prev) =>
+        prev.map((img) => img.id === localId ? { ...img, uploading: false, error: "Network error" } : img),
+      );
+    }
+  }
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return;
+    Array.from(files).forEach(uploadFile);
+  }
+
+  function removeImage(id: string) {
+    setImages((prev) => {
+      const remaining = prev.filter((img) => img.id !== id);
+      const last = remaining.filter((img) => img.publicRelPath)[remaining.filter((img) => img.publicRelPath).length - 1];
+      onAvatarChange(last?.publicRelPath ?? "");
+      return remaining;
+    });
+  }
+
+  function selectAsAvatar(url: string) {
+    onAvatarChange(url);
+  }
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    handleFiles(e.dataTransfer.files);
+  }, []);
+
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragging(true); }, []);
+  const onDragLeave = useCallback(() => setDragging(false), []);
+
+  const activeAvatar = images.filter((img) => img.publicRelPath).slice(-1)[0]?.publicRelPath ?? "";
+
+  return (
+    <div className="space-y-4">
+      {/* Current avatar preview */}
+      <div className="flex items-center gap-4">
+        <div
+          className="w-20 h-20 rounded-2xl border-2 overflow-hidden shrink-0 flex items-center justify-center"
+          style={{ borderColor: `${GOLD}50`, background: CREAM }}
+        >
+          {activeAvatar ? (
+            <img
+              src={activeAvatar}
+              alt="Store avatar"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).src = "/images/artisan-1.png"; }}
+            />
+          ) : (
+            <Camera size={28} style={{ color: GOLD }} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold" style={{ color: MAROON }}>Store Avatar</p>
+          <p className="text-xs text-gray-400 mt-0.5">Square image, min 200×200px recommended.</p>
+        </div>
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onClick={() => fileRef.current?.click()}
+        className="relative rounded-xl border-2 border-dashed cursor-pointer transition-all flex flex-col items-center justify-center gap-2 py-7 px-4 text-center select-none"
+        style={{
+          borderColor: dragging ? GOLD : `${GOLD}55`,
+          background: dragging ? `${GOLD}10` : CREAM,
+        }}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files)}
+        />
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center mb-1"
+          style={{ background: `${GOLD}20` }}
+        >
+          <ImagePlus size={20} style={{ color: GOLD }} />
+        </div>
+        <p className="text-sm font-semibold" style={{ color: MAROON }}>
+          {dragging ? "Drop image here" : "Drag & drop or click to browse"}
+        </p>
+        <p className="text-xs text-gray-400">PNG, JPG, WebP · max 5 MB</p>
+      </div>
+
+      {/* Image grid — previews */}
+      {images.length > 0 && (
+        <div className="grid grid-cols-4 gap-3">
+          {images.map((img) => {
+            const isActive = img.publicRelPath === activeAvatar;
+            return (
+              <div
+                key={img.id}
+                className="relative group rounded-xl overflow-hidden aspect-square"
+                style={{
+                  background: CREAM,
+                  outline: isActive ? `2.5px solid ${GOLD}` : "2.5px solid transparent",
+                }}
+              >
+                <img
+                  src={img.previewUrl}
+                  alt="Avatar preview"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).src = "/images/artisan-1.png"; }}
+                />
+
+                {/* Uploading overlay */}
+                {img.uploading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 size={22} className="animate-spin text-white" />
+                  </div>
+                )}
+
+                {/* Error overlay */}
+                {img.error && (
+                  <div className="absolute inset-0 bg-red-900/70 flex flex-col items-center justify-center gap-1 p-1">
+                    <AlertCircle size={16} className="text-white" />
+                    <p className="text-[10px] text-white text-center leading-tight">{img.error}</p>
+                  </div>
+                )}
+
+                {/* Hover controls */}
+                {!img.uploading && !img.error && (
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
+                    {!isActive && img.publicRelPath && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); selectAsAvatar(img.publicRelPath!); }}
+                        className="text-[10px] font-bold text-white bg-green-600 rounded px-2 py-0.5"
+                      >
+                        Use this
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Active badge */}
+                {isActive && !img.uploading && (
+                  <div
+                    className="absolute bottom-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: GOLD, color: "#1a1a1a" }}
+                  >
+                    ACTIVE
+                  </div>
+                )}
+
+                {/* Remove button */}
+                {!img.uploading && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeImage(img.id); }}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-red-600"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Add more tile */}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="rounded-xl aspect-square border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-colors hover:border-[#C9A84C]"
+            style={{ borderColor: `${GOLD}40`, background: CREAM }}
+          >
+            <Upload size={16} style={{ color: GOLD }} />
+            <span className="text-[10px] font-semibold" style={{ color: GOLD }}>Add</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function SellerProfile() {
@@ -113,33 +357,14 @@ export default function SellerProfile() {
           {/* Avatar */}
           <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
             <h3 className="font-serif font-bold text-base mb-4" style={{ color: MAROON }}>Shop Avatar</h3>
-            <div className="flex items-center gap-5">
-              <div className="w-20 h-20 rounded-2xl border-2 border-[#C9A84C]/30 overflow-hidden bg-[#E6F0EA] shrink-0 flex items-center justify-center">
-                {form.avatar ? (
-                  <img
-                    src={form.avatar}
-                    alt="Store avatar"
-                    className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).src = "/images/artisan-1.png"; }}
-                  />
-                ) : (
-                  <Camera size={28} style={{ color: "#C9A84C" }} />
-                )}
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={labelStyle}>Avatar URL</label>
-                <input
-                  type="url"
-                  name="avatar"
-                  value={form.avatar}
-                  onChange={handleChange}
-                  placeholder="https://example.com/your-shop-logo.jpg"
-                  className={inputClass}
-                  style={inputStyle}
-                />
-                <p className="text-xs text-gray-400 mt-1.5">Paste a publicly accessible image URL for your store avatar.</p>
-              </div>
-            </div>
+            <AvatarUploader
+              currentAvatar={form.avatar}
+              onAvatarChange={(url) => {
+                setForm((prev) => ({ ...prev, avatar: url }));
+                setError("");
+                setSuccess(false);
+              }}
+            />
           </div>
 
           {/* Basic Info */}

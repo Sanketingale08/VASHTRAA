@@ -172,10 +172,10 @@ export default function SellerSettlements() {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
       })
-      .then((d) => setData(d))
+      .then((d) => { setData(d); setError(""); })
       .catch(() => setError("Could not load settlements. Please try again."))
       .finally(() => setLoading(false));
-  }, [statusFilter]);
+  }, [statusFilter, page]);
 
   const summary = data?.summary;
   const summaryCards = [

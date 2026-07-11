@@ -93,10 +93,10 @@ const TEAM = [
 ];
 
 const STATS = [
-  { label: "Weaver Partners", value: "150+" },
-  { label: "Sarees Delivered", value: "25,000+" },
-  { label: "Cities Served", value: "500+" },
-  { label: "Years of Trust", value: "8+" },
+  { label: "Weaver Partners", value: "40+" },
+  { label: "Sarees Delivered", value: "2,800+" },
+  { label: "Cities Served", value: "180+" },
+  { label: "Years of Trust", value: "3+" },
 ];
 
 export default function About() {
@@ -129,7 +129,7 @@ export default function About() {
               variants={fadeUp}
               className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold mb-6 leading-tight"
             >
-              Weaving Tradition Into<br className="hidden md:block" /> Every Drape
+              Handwoven in India.<br className="hidden md:block" /> Delivered to Your Door.
             </motion.h1>
             <motion.p
               initial="hidden"
@@ -138,9 +138,9 @@ export default function About() {
               variants={fadeUp}
               className="text-[#E6F0EA] max-w-2xl mx-auto text-base md:text-lg leading-relaxed"
             >
-              TwirlDrape was born from a simple belief — that India's handloom heritage deserves a home
-              where craftsmanship, authenticity, and beauty come together. We connect skilled artisans
-              directly with shoppers who value the story behind every thread.
+              TwirlDrape started with a single question: why is it so hard to find a genuinely handwoven
+              saree without travelling to the source? We set out to fix that — building a marketplace
+              where India's weavers sell directly, and every saree arrives with its full story intact.
             </motion.p>
           </div>
         </section>
@@ -178,18 +178,18 @@ export default function About() {
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Founding Mission</p>
               <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold mb-5">
-                From a Single Loom to a Nationwide Community
+                Born in Paithan. Built for Every Indian Wardrobe.
               </h2>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-4">
-                TwirlDrape started in a small workshop in Maharashtra, where our founder watched
-                generations-old Paithani weaving techniques struggle to find the audience they deserved.
-                What began as a promise to a handful of weaver families has grown into a marketplace
-                connecting artisans across the country with shoppers who cherish handwoven craft.
+                In 2022, our founder Anjali Deshmukh visited a Paithani weaver co-operative in Paithan,
+                Maharashtra, and found master weavers selling centuries-old work through local middlemen
+                for a fraction of what buyers paid. She came back with twelve sarees and a resolve: give
+                these artisans a direct channel to the people who would truly value their craft.
               </p>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed">
-                Today, every saree on TwirlDrape carries a story — of the hands that wove it, the region
-                it comes from, and the tradition it keeps alive. We built this platform so that story
-                never gets lost between the loom and your wardrobe.
+                TwirlDrape launched with those twelve pieces and has grown steadily — never chasing
+                volume, always vetting every seller personally. Today, every listing carries the weaver's
+                name, their region, and the technique behind the cloth. That transparency is the product.
               </p>
             </motion.div>
             <motion.div
@@ -265,17 +265,18 @@ export default function About() {
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Our Weavers</p>
               <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold mb-5">
-                A Network of 150+ Master Artisans
+                Forty Families. Dozens of Traditions.
               </h2>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-4">
-                Behind every TwirlDrape saree is a weaver who has spent years — sometimes decades —
-                perfecting their craft. We partner directly with artisan collectives in Paithan, Yeola,
-                Kanchipuram, and beyond, ensuring fair wages and long-term relationships instead of
-                one-off transactions.
+                Every seller on TwirlDrape is admitted by hand — Anjali or Rohan visits the workshop,
+                speaks with the weavers, and photographs the process before a single listing goes live.
+                Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from
+                Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.
               </p>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-6">
-                Our vendor vetting process looks beyond price — we assess technique, material quality,
-                and the story each weaver brings to their work, so you can shop with complete confidence.
+                We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee
+                structures. If a weaver raises a concern, it goes directly to Rohan's phone. That
+                accountability is what lets us promise you a saree made with genuine care.
               </p>
               <Link
                 href="/seller/register"

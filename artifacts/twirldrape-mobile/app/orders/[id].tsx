@@ -25,6 +25,10 @@ type Order = {
   deliveryMethod: "standard" | "express"; paymentMethod: "upi" | "card" | "cod";
   couponCode: string | null; subtotal: number; discount: number; shipping: number; tax: number; total: number;
   status: string; createdAt: string;
+  refundStatus?: string | null;
+  refundProcessedAt?: string | null;
+  refundReference?: string | null;
+  refundMethod?: string | null;
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -337,6 +341,34 @@ export default function OrderDetailScreen() {
             <Text style={s.totalValue}>₹{order.total.toLocaleString("en-IN")}</Text>
           </View>
         </View>
+
+        {order.refundStatus === "processed" && (
+          <View style={[s.card, { borderColor: "#22A66A55", backgroundColor: "#F0FBF5" }]}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+              <Ionicons name="checkmark-circle" size={18} color="#22A66A" style={{ marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardLabel, { color: "#22A66A", marginBottom: 4 }]}>Refund Payout</Text>
+                <Text style={{ fontFamily: "DMSans_700Bold", fontSize: 14, color: "#1A7A50" }}>
+                  {"Refund paid out"}
+                  {order.refundProcessedAt
+                    ? ` on ${new Date(order.refundProcessedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`
+                    : ""}
+                </Text>
+                {order.refundMethod && (
+                  <Text style={{ fontFamily: "DMSans_400Regular", fontSize: 12, color: "#3A9468", marginTop: 3 }}>
+                    Via: {order.refundMethod === "store_credit" ? "Store Credit" : "Original Payment Method"}
+                  </Text>
+                )}
+                {order.refundReference && (
+                  <Text style={{ fontFamily: "DMSans_400Regular", fontSize: 12, color: "#3A9468", marginTop: 2 }}>
+                    {"Reference: "}
+                    <Text style={{ fontFamily: "DMSans_700Bold" }}>{order.refundReference}</Text>
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
 
         <View style={s.card}>
           <Text style={s.cardLabel}>Shipping Address</Text>

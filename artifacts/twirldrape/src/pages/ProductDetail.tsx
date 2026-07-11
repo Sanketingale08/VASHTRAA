@@ -850,12 +850,22 @@ export default function ProductDetail() {
                       <p className="font-bold text-sm truncate">{product.vendorName}</p>
                     </div>
                   </div>
-                  <Link
-                    href={shopPath}
-                    className="flex items-center gap-1 text-xs font-bold text-[#C9A84C] hover:opacity-80 transition-opacity whitespace-nowrap"
-                  >
-                    Visit Shop <ExternalLink size={11} />
-                  </Link>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {product.vendorId && (
+                      <Link
+                        href={`/weavers/${product.vendorId}`}
+                        className="flex items-center gap-1 text-xs font-bold text-[#1E6B5A] hover:opacity-80 transition-opacity whitespace-nowrap"
+                      >
+                        Weaver Profile <ExternalLink size={11} />
+                      </Link>
+                    )}
+                    <Link
+                      href={shopPath}
+                      className="flex items-center gap-1 text-xs font-bold text-[#C9A84C] hover:opacity-80 transition-opacity whitespace-nowrap"
+                    >
+                      Visit Shop <ExternalLink size={11} />
+                    </Link>
+                  </div>
                 </div>
 
                 {/* Rating */}

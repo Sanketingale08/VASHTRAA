@@ -303,12 +303,20 @@ export default function About() {
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-6">
                 {content.weaversParagraph2}
               </p>
-              <Link
-                href="/seller/register"
-                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E6B5A] hover:text-[#C9A84C] transition-colors border-b border-[#1E6B5A]/30 hover:border-[#C9A84C] pb-0.5"
-              >
-                Join as a Weaver Partner <ArrowRight size={13} />
-              </Link>
+              <div className="flex flex-wrap items-center gap-4">
+                <Link
+                  href="/weavers"
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E6B5A] hover:text-[#C9A84C] transition-colors border-b border-[#1E6B5A]/30 hover:border-[#C9A84C] pb-0.5"
+                >
+                  Meet Our Weavers <ArrowRight size={13} />
+                </Link>
+                <Link
+                  href="/seller/register"
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#7a5f4e] hover:text-[#C9A84C] transition-colors border-b border-[#7a5f4e]/30 hover:border-[#C9A84C] pb-0.5"
+                >
+                  Join as a Weaver Partner <ArrowRight size={13} />
+                </Link>
+              </div>
             </motion.div>
           </div>
         </section>

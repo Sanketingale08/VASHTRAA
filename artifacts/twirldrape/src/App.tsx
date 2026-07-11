@@ -68,6 +68,8 @@ import SellerSettlements from "@/pages/seller/SellerSettlements";
 import SellerLogin from "@/pages/seller/SellerLogin";
 import SellerClaimStore from "@/pages/seller/SellerClaimStore";
 import VendorStore from "@/pages/VendorStore";
+import Weavers from "@/pages/Weavers";
+import WeaverProfile from "@/pages/WeaverProfile";
 import BridalCollection from "@/pages/BridalCollection";
 import PartyWear from "@/pages/PartyWear";
 import FAQs from "@/pages/FAQs";
@@ -312,6 +314,8 @@ function Router() {
         <SellerGuard><SellerSupport /></SellerGuard>
       )} />
       <Route path="/stores/:vendorId" component={VendorStore} />
+      <Route path="/weavers/:id" component={WeaverProfile} />
+      <Route path="/weavers" component={Weavers} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

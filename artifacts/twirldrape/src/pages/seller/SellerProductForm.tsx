@@ -1,5 +1,6 @@
-import React, { useCallback } from "react";
-import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X } from "lucide-react";
+import React, { useCallback, useState, useRef } from "react";
+import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X, Upload } from "lucide-react";
+import { getApiUrl } from "@/lib/api";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -108,6 +109,121 @@ function Section({ icon: Icon, title, children }: SectionProps) {
         <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: "#7a5f4e" }}>{title}</h3>
       </div>
       {children}
+    </div>
+  );
+}
+
+interface ImageSlotProps {
+  idx: number;
+  url: string;
+  isMain: boolean;
+  onChange: (url: string) => void;
+}
+
+function ImageSlot({ idx, url, isMain, onChange }: ImageSlotProps) {
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function uploadFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please select an image file");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("Image must be under 10 MB");
+      return;
+    }
+    setUploading(true);
+    setUploadError("");
+    try {
+      const res = await fetch(getApiUrl("/api/seller/upload/product-image"), {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        credentials: "include",
+        body: file,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { publicRelPath } = await res.json();
+      onChange(getApiUrl(publicRelPath));
+    } catch {
+      setUploadError("Upload failed — try pasting a URL instead");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const hasImage = Boolean(url);
+
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        role="button"
+        tabIndex={0}
+        className="relative shrink-0 w-16 h-16 rounded-xl overflow-hidden transition-all cursor-pointer"
+        style={{
+          border: `2px dashed ${dragOver ? MAROON : hasImage ? "transparent" : "#D6C9BA"}`,
+          background: hasImage ? "transparent" : CREAM,
+          boxShadow: dragOver ? `0 0 0 3px ${MAROON}22` : undefined,
+        }}
+        title="Drop image or click to browse"
+        onClick={() => !uploading && fileRef.current?.click()}
+        onKeyDown={(e) => e.key === "Enter" && !uploading && fileRef.current?.click()}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) uploadFile(f); }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+      >
+        {uploading ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: `${MAROON}44`, borderTopColor: MAROON }} />
+          </div>
+        ) : hasImage ? (
+          <img src={url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.2"; }} />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
+            <Upload size={13} style={{ color: "#B0A090" }} />
+            <span className="text-[9px]" style={{ color: "#C8B8A8" }}>{isMain ? "Main" : `#${idx + 1}`}</span>
+          </div>
+        )}
+        {dragOver && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-xl" style={{ background: `${MAROON}18` }}>
+            <Upload size={16} style={{ color: MAROON }} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <input
+            className={inputClass + " flex-1"}
+            style={inputStyle}
+            value={url}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={isMain ? "Drop image or paste URL (main photo)" : "Drop image or paste URL (optional)"}
+          />
+          {hasImage && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="p-1.5 rounded-lg hover:bg-red-50 shrink-0 transition-colors"
+              title="Remove"
+            >
+              <X size={12} className="text-red-400" />
+            </button>
+          )}
+        </div>
+        {uploadError && <p className="text-[11px] text-red-400">{uploadError}</p>}
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }}
+      />
     </div>
   );
 }
@@ -318,27 +434,28 @@ export default function ProductForm({
       </Section>
 
       <Section icon={Image} title="Images">
-        <p className="text-xs text-gray-400 -mt-2">Enter image URLs (at least one recommended). Use direct .jpg/.webp/.png links.</p>
+        <p className="text-xs text-gray-400 -mt-2">
+          Drag & drop images onto the thumbnails, click to browse, or paste URLs. First image is the main product photo.
+        </p>
         <div className="space-y-2.5">
           {data.images.map((url, idx) => (
-            <div key={idx} className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0" style={{ background: CREAM }}>
-                {url ? (
-                  <img src={url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0"; }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-300">{idx + 1}</div>
-                )}
-              </div>
-              <input
-                className={inputClass + " flex-1"}
-                style={inputStyle}
-                value={url}
-                onChange={(e) => onImageChange(idx, e.target.value)}
-                placeholder={`Image ${idx + 1} URL${idx === 0 ? " (main photo)" : " (optional)"}`}
-              />
-            </div>
+            <ImageSlot
+              key={idx}
+              idx={idx}
+              url={url}
+              isMain={idx === 0}
+              onChange={(newUrl) => onImageChange(idx, newUrl)}
+            />
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => onChange("images", [...data.images, ""])}
+          className="text-xs font-semibold flex items-center gap-1.5 transition-opacity hover:opacity-70"
+          style={{ color: MAROON }}
+        >
+          <Plus size={13} /> Add image
+        </button>
       </Section>
 
       <Section icon={Video} title="Product Videos">

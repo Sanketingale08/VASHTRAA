@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import express, { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { getAuth } from "@clerk/express";
 import {
@@ -56,6 +56,33 @@ async function issueUploadUrl(req: Request, res: Response) {
  * Generic presigned upload URL — requires Clerk auth.
  */
 router.post("/storage/uploads/request-url", requireClerkAuth, issueUploadUrl);
+
+/**
+ * POST /seller/upload/product-image
+ * Server-side product image upload — receives raw binary body (Content-Type: image/*),
+ * writes to the public GCS path, returns the publicly accessible relative path.
+ */
+router.post(
+  "/seller/upload/product-image",
+  requireClerkAuth,
+  express.raw({ type: "image/*", limit: "10mb" }),
+  async (req: Request, res: Response) => {
+    try {
+      const rawContentType = (req.headers["content-type"] || "image/jpeg").split(";")[0].trim();
+      const rawExt = rawContentType.split("/")[1] || "jpg";
+      const ext = rawExt === "jpeg" ? "jpg" : ["jpg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        res.status(400).json({ error: "No image data received" });
+        return;
+      }
+      const { publicRelPath } = await objectStorageService.uploadPublicProductImage(req.body, ext, rawContentType);
+      res.json({ publicRelPath });
+    } catch (err) {
+      req.log.error({ err }, "Failed to upload product image");
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  },
+);
 
 /**
  * POST /seller/upload/pan

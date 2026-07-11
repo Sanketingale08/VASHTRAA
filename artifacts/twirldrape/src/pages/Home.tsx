@@ -20,7 +20,7 @@ import { ProductSection } from "@/components/ProductSection";
 import { VendorCard } from "@/components/VendorCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { StatsBar } from "@/components/StatsBar";
-import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useListProducts, getListProductsQueryKey, useListVendors } from "@workspace/api-client-react";
 import type { ProductSummary, VendorSummary } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -102,20 +102,43 @@ function PeacockIcon({ size = 40 }: { size?: number }) {
   );
 }
 
-function FeaturedShopsSection() {
-  const [vendors, setVendors] = useState<VendorSummary[]>([]);
-  const [scrollIdx, setScrollIdx] = useState(0);
+function FeaturedShopsSkeleton() {
+  return (
+    <section className="py-16 md:py-20 bg-white">
+      <div className="container mx-auto px-4">
+        <div className="flex items-end justify-between mb-8 md:mb-10">
+          <div>
+            <div className="flex items-center gap-4 mb-2">
+              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+              <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#1E6B5A]">
+                Featured Shops
+              </h2>
+              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
+            </div>
+            <p className="text-center text-sm text-gray-500">Discover our most trusted weaver collectives and artisan studios</p>
+          </div>
+        </div>
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex-none w-[200px] h-[220px] rounded-2xl bg-gray-100 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-  useEffect(() => {
-    fetch(`${BASE}/api/vendors`, { credentials: "include" })
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setVendors(Array.isArray(data) ? data : []))
-      .catch(() => {});
-  }, []);
+function FeaturedShopsSection() {
+  const [scrollIdx, setScrollIdx] = useState(0);
+  const { data: vendors, isLoading, isError } = useListVendors();
+
+  if (isLoading || isError) return <FeaturedShopsSkeleton />;
+
+  const vendorList: VendorSummary[] = Array.isArray(vendors) ? vendors : [];
 
   const visibleCount = 4;
   const canPrev = scrollIdx > 0;
-  const canNext = scrollIdx + visibleCount < vendors.length;
+  const canNext = scrollIdx + visibleCount < vendorList.length;
 
   return (
     <section className="py-16 md:py-20 bg-white">
@@ -145,7 +168,7 @@ function FeaturedShopsSection() {
           )}
           {canNext && (
             <button
-              onClick={() => setScrollIdx(i => Math.min(vendors.length - visibleCount, i + 1))}
+              onClick={() => setScrollIdx(i => Math.min(vendorList.length - visibleCount, i + 1))}
               className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border"
               style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}
             >
@@ -157,12 +180,12 @@ function FeaturedShopsSection() {
               className="flex gap-4 transition-transform duration-500"
               style={{ transform: `translateX(calc(-${scrollIdx} * (220px + 16px)))` }}
             >
-              {vendors.map(v => (
+              {vendorList.map(v => (
                 <div key={v.id} className="flex-none">
                   <VendorCard vendor={v} />
                 </div>
               ))}
-              {vendors.length === 0 && (
+              {vendorList.length === 0 && (
                 Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="flex-none w-[200px] h-[220px] rounded-2xl bg-gray-100 animate-pulse" />
                 ))

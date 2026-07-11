@@ -72,6 +72,9 @@ vi.mock("@workspace/db", () => {
     rewardPointsLogTable: { _t: "rewardPointsLog", userId: "userId", points: "points", type: "type", description: "description", orderId: "orderId" },
     notificationsTable: { _t: "notifications", userId: "userId", type: "type", title: "title", body: "body", metadata: "metadata", id: "id" },
     notificationPreferencesTable: { _t: "notificationPreferences", userId: "userId", orderUpdates: "orderUpdates", offerAlerts: "offerAlerts" },
+    stockHistoryTable: { _t: "stockHistory", productId: "productId", delta: "delta", previousStock: "previousStock", newStock: "newStock", source: "source", reason: "reason", orderId: "orderId", vendorId: "vendorId", actorId: "actorId" },
+    vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId" },
+    supportTicketsTable: { _t: "supportTickets", id: "id", userId: "userId" },
   };
 });
 

@@ -102,6 +102,45 @@ function clearDraft() {
   }
 }
 
+async function loadServerDraft(): Promise<{ data: Partial<Omit<WizardData, "password">>; step: number } | null> {
+  try {
+    const res = await fetch(getApiUrl("/api/seller/registration-draft"), {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json || typeof json.step !== "number" || typeof json.data !== "object") return null;
+    return { data: json.data as Partial<Omit<WizardData, "password">>, step: json.step };
+  } catch {
+    return null;
+  }
+}
+
+async function saveServerDraft(data: WizardData, step: number): Promise<void> {
+  try {
+    const { password, ...rest } = data;
+    await fetch(getApiUrl("/api/seller/registration-draft"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ data: rest, step }),
+    });
+  } catch {
+    // fail silently — localStorage is the fallback
+  }
+}
+
+async function clearServerDraft(): Promise<void> {
+  try {
+    await fetch(getApiUrl("/api/seller/registration-draft"), {
+      method: "DELETE",
+      credentials: "include",
+    });
+  } catch {
+    // ignore
+  }
+}
+
 async function uploadKycFile(file: File, docType: "pan" | "gst" = "pan"): Promise<string> {
   const endpoint = docType === "gst" ? "/api/seller/upload/gst" : "/api/seller/upload/pan";
   const metaRes = await fetch(getApiUrl(endpoint), {
@@ -333,19 +372,27 @@ export default function SellerRegister() {
 
   useEffect(() => {
     if (!userLoaded || !signUpLoaded || step !== 0) return;
-    const draft = loadDraft();
+
     if (isSignedIn) {
       const email = user?.primaryEmailAddress?.emailAddress ?? "";
-      if (draft && draft.step >= 2) {
-        setData((d) => ({ ...d, ...draft.data, contactEmail: draft.data.contactEmail || email }));
-        setStep(draft.step);
-      } else {
-        setStep(2);
-        if (email) setData((d) => ({ ...d, contactEmail: email }));
-      }
+      // Try server draft first; fall back to localStorage
+      loadServerDraft().then((serverDraft) => {
+        const localDraft = loadDraft();
+        // Pick the most advanced / most recent draft available
+        const best = serverDraft ??
+          (localDraft && localDraft.step >= 2 ? localDraft : null);
+        if (best && best.step >= 2) {
+          setData((d) => ({ ...d, ...best.data, contactEmail: best.data.contactEmail || email }));
+          setStep(best.step);
+        } else {
+          setStep(2);
+          if (email) setData((d) => ({ ...d, contactEmail: email }));
+        }
+      });
     } else {
       // Any account-creation progress from a prior session is unverified, so always
       // restart at step 1 — but keep whatever downstream fields were already filled in.
+      const draft = loadDraft();
       if (draft && draft.data) setData((d) => ({ ...d, ...draft.data, email: "", password: "" }));
       setStep(1);
     }
@@ -354,7 +401,10 @@ export default function SellerRegister() {
   useEffect(() => {
     if (step === 0 || done) return;
     saveDraft(data, step);
-  }, [data, step, done]);
+    if (isSignedIn && step >= 2) {
+      saveServerDraft(data, step);
+    }
+  }, [data, step, done, isSignedIn]);
 
   useEffect(() => {
     if (step <= 1 || done) return;
@@ -412,6 +462,7 @@ export default function SellerRegister() {
 
   function startOver() {
     clearDraft();
+    if (isSignedIn) clearServerDraft();
     setErrs({}); setApiErr("");
     setEmailOtpSent(false); setEmailCode("");
     setPhoneObj(null); setPhoneSent(false); setPhoneCode("");
@@ -599,6 +650,7 @@ export default function SellerRegister() {
       const json = await res.json();
       if (!res.ok) { if (res.status === 409) { setAlready(true); return; } setApiErr(json.error || "Submission failed."); return; }
       clearDraft();
+      clearServerDraft();
       setDone(true);
     } catch { setApiErr("Network error. Please check your connection."); }
     finally { setLoading(false); }

@@ -23,6 +23,7 @@ import reviewsRouter from "./reviews";
 import vendorAnalyticsRouter from "./vendorAnalytics";
 import businessIntelligenceRouter from "./businessIntelligence";
 import financialManagementRouter from "./financialManagement";
+import sellerRegistrationDraftRouter from "./sellerRegistrationDraft";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(reviewsRouter);
 router.use(vendorAnalyticsRouter);
 router.use(businessIntelligenceRouter);
 router.use(financialManagementRouter);
+router.use(sellerRegistrationDraftRouter);
 
 export default router;

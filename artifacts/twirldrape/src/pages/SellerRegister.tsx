@@ -60,9 +60,12 @@ const DEFAULT_DATA: WizardData = {
 
 const DRAFT_KEY = "twirldrape_seller_registration_draft_v1";
 
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 interface WizardDraft {
   data: Partial<Omit<WizardData, "password">>;
   step: number;
+  savedAt: number;
 }
 
 function loadDraft(): WizardDraft | null {
@@ -71,6 +74,11 @@ function loadDraft(): WizardDraft | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.step !== "number" || typeof parsed.data !== "object") return null;
+    const savedAt = typeof parsed.savedAt === "number" ? parsed.savedAt : 0;
+    if (Date.now() - savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
     return parsed as WizardDraft;
   } catch {
     return null;
@@ -80,7 +88,7 @@ function loadDraft(): WizardDraft | null {
 function saveDraft(data: WizardData, step: number) {
   try {
     const { password, ...rest } = data;
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: rest, step }));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: rest, step, savedAt: Date.now() }));
   } catch {
     // localStorage unavailable (e.g. private browsing) — fail silently, wizard still works in-session
   }

@@ -657,6 +657,12 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
       return res.status(403).json({ error: "You don't have any items in this order" });
     }
 
+    const dispatchAcceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
+    const myDispatchAcceptance = dispatchAcceptances[vendorId];
+    if (!myDispatchAcceptance || myDispatchAcceptance.status !== "accepted") {
+      return res.status(400).json({ error: "You must accept this order before marking it as dispatched" });
+    }
+
     if (order.status === "cancelled") {
       return res.status(400).json({ error: "Cannot dispatch a cancelled order" });
     }
@@ -914,52 +920,72 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
 
       acceptances[vendorId] = { status: "rejected", reason, at: new Date().toISOString() };
 
+      const allProductIds = items.map((i: any) => i.productId).filter(Boolean) as string[];
+      const allOrderProducts = allProductIds.length > 0
+        ? await tx.select({ vendorId: productsTable.vendorId }).from(productsTable).where(inArray(productsTable.id, allProductIds))
+        : [];
+      const allVendorIds = [...new Set(allOrderProducts.map((p) => p.vendorId).filter(Boolean))] as string[];
+      const allRejected = allVendorIds.length > 0 && allVendorIds.every((vid) => acceptances[vid]?.status === "rejected");
+
       const history = [...(Array.isArray(order.statusHistory) ? (order.statusHistory as any[]) : [])];
-      history.push({ status: "cancelled", timestamp: new Date().toISOString(), note: `Vendor rejected: ${reason}` });
 
-      for (const item of items as Array<{ productId: string; quantity: number }>) {
-        const [prod] = await tx.select({ stock: productsTable.stock, vendorId: productsTable.vendorId })
-          .from(productsTable).where(eq(productsTable.id, item.productId)).limit(1);
-        await tx.update(productsTable)
-          .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
-          .where(eq(productsTable.id, item.productId));
-        await recordStockChange({
+      if (allRejected) {
+        history.push({ status: "cancelled", timestamp: new Date().toISOString(), note: `All vendors rejected. Last reason: ${reason}` });
+
+        for (const item of items as Array<{ productId: string; quantity: number }>) {
+          const [prod] = await tx.select({ stock: productsTable.stock, vendorId: productsTable.vendorId })
+            .from(productsTable).where(eq(productsTable.id, item.productId)).limit(1);
+          await tx.update(productsTable)
+            .set({ stock: sql`${productsTable.stock} + ${item.quantity}` })
+            .where(eq(productsTable.id, item.productId));
+          await recordStockChange({
+            tx,
+            productId: item.productId,
+            vendorId: prod?.vendorId ?? null,
+            previousStock: prod?.stock ?? 0,
+            newStock: (prod?.stock ?? 0) + item.quantity,
+            source: "cancel",
+            reason: `Vendor rejection: ${reason}`,
+            orderId: order.id,
+          });
+        }
+
+        await tx.update(ordersTable).set({
+          status: "cancelled",
+          statusHistory: history,
+          cancelReason: `Vendor(s) rejected: ${reason}`,
+          vendorRejectionReason: reason,
+          vendorAcceptances: acceptances,
+          refundStatus: "pending",
+          refundMethod: (order as any).paymentMethod,
+          updatedAt: new Date(),
+        } as any).where(eq(ordersTable.id, orderId));
+
+        await insertOrderStatusNotification({
           tx,
-          productId: item.productId,
-          vendorId: prod?.vendorId ?? null,
-          previousStock: prod?.stock ?? 0,
-          newStock: (prod?.stock ?? 0) + item.quantity,
-          source: "cancel",
-          reason: `Vendor rejection: ${reason}`,
+          userId: order.userId,
+          type: "order_cancelled",
           orderId: order.id,
+          itemName: (items[0] as any)?.name ?? "your order",
+          extraItemCount: items.length > 1 ? items.length - 1 : 0,
         });
+
+        await insertAdminNotification({
+          tx,
+          type: "system_error_alert",
+          title: "Vendor rejected an order — order cancelled",
+          body: `All vendor(s) rejected order #${order.id.slice(0, 8).toUpperCase()}. Last reason: ${reason}`,
+          metadata: { orderId: order.id, vendorId },
+        });
+      } else {
+        history.push({ vendorId, timestamp: new Date().toISOString(), note: `Vendor rejected their portion: ${reason}` });
+
+        await tx.update(ordersTable).set({
+          vendorAcceptances: acceptances,
+          statusHistory: history,
+          updatedAt: new Date(),
+        } as any).where(eq(ordersTable.id, orderId));
       }
-
-      await tx.update(ordersTable).set({
-        status: "cancelled",
-        statusHistory: history,
-        cancelReason: `Vendor rejected: ${reason}`,
-        vendorRejectionReason: reason,
-        vendorAcceptances: acceptances,
-        updatedAt: new Date(),
-      } as any).where(eq(ordersTable.id, orderId));
-
-      await insertOrderStatusNotification({
-        tx,
-        userId: order.userId,
-        type: "order_cancelled",
-        orderId: order.id,
-        itemName: (items[0] as any)?.name ?? "your order",
-        extraItemCount: items.length > 1 ? items.length - 1 : 0,
-      });
-
-      await insertAdminNotification({
-        tx,
-        type: "system_error_alert",
-        title: "Vendor rejected an order",
-        body: `Vendor rejected order #${order.id.slice(0, 8).toUpperCase()}. Reason: ${reason}`,
-        metadata: { orderId: order.id, vendorId },
-      });
     });
 
     res.json({ success: true });

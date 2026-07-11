@@ -15,6 +15,7 @@ type OrderNotifType =
 
 const EMAIL_TYPES = new Set<OrderNotifType>([
   "order_cancelled",
+  "order_packed",
   "return_requested",
   "refund_requested",
 ]);

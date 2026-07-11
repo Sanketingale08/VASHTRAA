@@ -663,6 +663,9 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
       return res.status(400).json({ error: "You must accept this order before marking it as dispatched" });
     }
 
+    if (order.status === "confirmed") {
+      return res.status(400).json({ error: "All vendors must respond before dispatching — order is not yet in processing" });
+    }
     if (order.status === "cancelled") {
       return res.status(400).json({ error: "Cannot dispatch a cancelled order" });
     }

@@ -7,6 +7,7 @@ import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { insertAdminNotification } from "../lib/adminNotifications";
 import { insertSellerNotification } from "../lib/sellerNotifications";
+import { sendVendorApprovalEmail } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -410,13 +411,44 @@ router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res:
       .update(vendorsTable)
       .set({ status: "approved" })
       .where(eq(vendorsTable.id, id))
-      .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status });
+      .returning({
+        id: vendorsTable.id,
+        name: vendorsTable.name,
+        status: vendorsTable.status,
+        ownerId: vendorsTable.ownerId,
+        contactEmail: vendorsTable.contactEmail,
+      });
 
     if (!updated) {
       return res.status(404).json({ error: "Vendor not found" });
     }
 
-    res.json({ vendor: updated });
+    await insertSellerNotification({
+      vendorId: updated.id,
+      type: "store_approved",
+      title: "Your store has been approved",
+      body: `Congratulations! Your store "${updated.name}" has been approved. You can now start listing your products.`,
+      metadata: { vendorId: updated.id },
+    });
+
+    if (updated.contactEmail) {
+      sendVendorApprovalEmail({
+        toEmail: updated.contactEmail,
+        vendorName: updated.name,
+      }).catch((err) => req.log.error({ err }, "Failed to send vendor approval email"));
+    } else if (updated.ownerId) {
+      const { clerkClient } = await import("@clerk/express");
+      clerkClient.users.getUser(updated.ownerId).then((user) => {
+        const email =
+          user.primaryEmailAddress?.emailAddress ??
+          user.emailAddresses?.[0]?.emailAddress ??
+          null;
+        if (!email) return;
+        return sendVendorApprovalEmail({ toEmail: email, vendorName: updated.name });
+      }).catch((err) => req.log.error({ err }, "Failed to send vendor approval email via Clerk email"));
+    }
+
+    res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status } });
   } catch (err) {
     req.log.error({ err }, "Failed to approve vendor");
     res.status(500).json({ error: "Failed to approve vendor" });

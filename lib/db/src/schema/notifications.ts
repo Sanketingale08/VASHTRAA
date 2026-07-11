@@ -18,7 +18,8 @@ export type SellerNotificationType =
   | "payout_successful"
   | "new_customer_query"
   | "kyc_verified"
-  | "kyc_resubmission_requested";
+  | "kyc_resubmission_requested"
+  | "store_approved";
 
 export type AdminNotificationType =
   | "new_seller_registration"

@@ -273,6 +273,45 @@ export async function sendTransactionalEmail(payload: EmailPayload): Promise<voi
   await attemptSend(resend, { ...entry, orderId: payload.orderId, userId: payload.userId });
 }
 
+export async function sendVendorApprovalEmail(opts: {
+  toEmail: string;
+  vendorName: string;
+  dashboardUrl?: string;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn("[transactionalEmail] RESEND_API_KEY not set — skipping vendor approval email");
+    return;
+  }
+
+  const { toEmail, vendorName, dashboardUrl = "https://twirldrape.com/seller/dashboard" } = opts;
+  const subject = `Your TwirlDrape store is live — Welcome aboard!`;
+  const body = `
+    <p>Congratulations! Your store <strong>${vendorName}</strong> has been <strong>approved</strong> by the TwirlDrape team.</p>
+    <p>Your store is now live and you can start listing your sarees right away.</p>
+    <p style="margin:24px 0;">
+      <a href="${dashboardUrl}"
+         style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+        Go to Seller Dashboard
+      </a>
+    </p>
+    <p>If you have any questions, our support team is here to help.</p>
+    <p>Welcome to the TwirlDrape family!</p>
+  `;
+
+  try {
+    await resend.emails.send({
+      from: `${APP_NAME} <${FROM_ADDRESS}>`,
+      to: [toEmail],
+      subject,
+      html: wrapInTemplate(subject, body),
+    });
+    logger.info({ toEmail, vendorName }, "[transactionalEmail] Vendor approval email sent");
+  } catch (err) {
+    logger.error({ err, toEmail, vendorName }, "[transactionalEmail] Failed to send vendor approval email");
+  }
+}
+
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
   logger.info("[emailOutbox] Starting outbox retry worker");
 

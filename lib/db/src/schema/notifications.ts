@@ -67,6 +67,7 @@ export const notificationPreferencesTable = pgTable("notification_preferences", 
   orderUpdates: boolean("order_updates").notNull().default(true),
   offerAlerts: boolean("offer_alerts").notNull().default(true),
   stockAlerts: boolean("stock_alerts").notNull().default(true),
+  emailOrderUpdates: boolean("email_order_updates").notNull().default(true),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

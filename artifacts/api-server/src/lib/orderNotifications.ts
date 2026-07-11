@@ -96,13 +96,18 @@ export async function insertOrderStatusNotification(
   const client = opts.tx ?? db;
 
   const prefs = await client
-    .select({ orderUpdates: notificationPreferencesTable.orderUpdates })
+    .select({
+      orderUpdates: notificationPreferencesTable.orderUpdates,
+      emailOrderUpdates: notificationPreferencesTable.emailOrderUpdates,
+    })
     .from(notificationPreferencesTable)
     .where(eq(notificationPreferencesTable.userId, userId))
     .limit(1);
 
   const wantsOrderUpdates = prefs.length === 0 || prefs[0].orderUpdates;
   if (!wantsOrderUpdates) return;
+
+  const wantsEmailOrderUpdates = prefs.length === 0 || prefs[0].emailOrderUpdates;
 
   const extra = extraItemCount > 0 ? ` and ${extraItemCount} more item(s)` : "";
   const { title, body } = buildNotifContent(type, itemName, extra);
@@ -115,7 +120,7 @@ export async function insertOrderStatusNotification(
     metadata: { orderId },
   });
 
-  if (EMAIL_TYPES.has(type)) {
+  if (EMAIL_TYPES.has(type) && wantsEmailOrderUpdates) {
     void sendTransactionalEmail({
       userId,
       type: type as TransactionalEmailType,

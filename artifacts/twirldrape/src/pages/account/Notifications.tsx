@@ -34,6 +34,7 @@ interface Preferences {
   orderUpdates: boolean;
   offerAlerts: boolean;
   stockAlerts: boolean;
+  emailOrderUpdates: boolean;
 }
 
 function typeIcon(type: string, size = 16) {
@@ -411,7 +412,7 @@ export function AccountNotificationsPage() {
         {/* Notification Preferences */}
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden shadow-sm">
           <div className="px-4 py-3 border-b border-[#C9A84C]/10 bg-[#F3F8F5]">
-            <h3 className="text-sm font-bold text-[#1E6B5A]">Notification Preferences</h3>
+            <h3 className="text-sm font-bold text-[#1E6B5A]">In-App Notification Preferences</h3>
             <p className="text-xs text-gray-400 mt-0.5">Choose which notifications you'd like to receive in-app.</p>
           </div>
           {prefsLoading ? (
@@ -459,6 +460,53 @@ export function AccountNotificationsPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Email Notification Preferences */}
+        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden shadow-sm">
+          <div className="px-4 py-3 border-b border-[#C9A84C]/10 bg-[#F3F8F5]">
+            <h3 className="text-sm font-bold text-[#1E6B5A]">Email Notification Preferences</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Control which transactional emails you receive from us.</p>
+          </div>
+          {prefsLoading ? (
+            <div className="p-4 animate-pulse">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1.5">
+                  <div className="h-3.5 bg-gray-100 rounded w-32" />
+                  <div className="h-3 bg-gray-100 rounded w-48" />
+                </div>
+                <div className="w-10 h-6 bg-gray-100 rounded-full" />
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              <div className="flex items-center justify-between px-4 py-4">
+                <div>
+                  <p className="text-sm font-medium text-[#3D1A1A]">Order email updates</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Emails for shipping, delivery, returns, and refund status</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={prefs?.emailOrderUpdates ?? true}
+                  onClick={() =>
+                    updatePrefs.mutate({ emailOrderUpdates: !(prefs?.emailOrderUpdates ?? true) })
+                  }
+                  disabled={updatePrefs.isPending}
+                  className={cn(
+                    "relative w-10 h-6 rounded-full transition-colors focus:outline-none disabled:opacity-50",
+                    (prefs?.emailOrderUpdates ?? true) ? "bg-[#1E6B5A]" : "bg-gray-200"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                      (prefs?.emailOrderUpdates ?? true) ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
             </div>
           )}
         </div>

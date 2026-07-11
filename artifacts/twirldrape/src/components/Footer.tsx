@@ -43,9 +43,9 @@ export function Footer() {
             <ul className="space-y-3 text-sm text-gray-400">
               <li><Link href="/paithani" className="hover:text-white transition-colors">Paithani Sarees</Link></li>
               <li><Link href="/designer" className="hover:text-white transition-colors">Designer Sarees</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Bridal Collection</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Party Wear</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">New Arrivals</Link></li>
+              <li><Link href="/bridal" className="hover:text-white transition-colors">Bridal Collection</Link></li>
+              <li><Link href="/party-wear" className="hover:text-white transition-colors">Party Wear</Link></li>
+              <li><Link href="/new-arrivals" className="hover:text-white transition-colors">New Arrivals</Link></li>
             </ul>
           </div>
 
@@ -53,11 +53,11 @@ export function Footer() {
           <div>
             <h4 className="font-serif text-lg text-[#C9A84C] font-semibold mb-6">Customer Service</h4>
             <ul className="space-y-3 text-sm text-gray-400">
-              <li><Link href="#" className="hover:text-white transition-colors">Track Order</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Returns & Exchanges</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Shipping Info</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">Size Guide</Link></li>
-              <li><Link href="#" className="hover:text-white transition-colors">FAQs</Link></li>
+              <li><Link href="/account/orders" className="hover:text-white transition-colors">Track Order</Link></li>
+              <li><Link href="/returns" className="hover:text-white transition-colors">Returns & Exchanges</Link></li>
+              <li><Link href="/shipping-info" className="hover:text-white transition-colors">Shipping Info</Link></li>
+              <li><Link href="/size-guide" className="hover:text-white transition-colors">Size Guide</Link></li>
+              <li><Link href="/faqs" className="hover:text-white transition-colors">FAQs</Link></li>
             </ul>
           </div>
 
@@ -88,8 +88,8 @@ export function Footer() {
             &copy; {new Date().getFullYear()} TwirlDrape. All rights reserved.
           </p>
           <div className="flex gap-4 text-xs text-gray-500">
-            <Link href="#" className="hover:text-white">Privacy Policy</Link>
-            <Link href="#" className="hover:text-white">Terms of Service</Link>
+            <Link href="/privacy-policy" className="hover:text-white">Privacy Policy</Link>
+            <Link href="/terms-of-service" className="hover:text-white">Terms of Service</Link>
           </div>
         </div>
       </div>

@@ -67,6 +67,14 @@ import SellerSettlements from "@/pages/seller/SellerSettlements";
 import SellerLogin from "@/pages/seller/SellerLogin";
 import SellerClaimStore from "@/pages/seller/SellerClaimStore";
 import VendorStore from "@/pages/VendorStore";
+import BridalCollection from "@/pages/BridalCollection";
+import PartyWear from "@/pages/PartyWear";
+import FAQs from "@/pages/FAQs";
+import ShippingInfo from "@/pages/ShippingInfo";
+import SizeGuide from "@/pages/SizeGuide";
+import Returns from "@/pages/Returns";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import TermsOfService from "@/pages/TermsOfService";
 import { SellerGuard } from "@/components/SellerGuard";
 
 const queryClient = new QueryClient();
@@ -233,6 +241,14 @@ function Router() {
       <Route path="/account/notifications" component={AccountNotificationsPage} />
       <Route path="/account/support" component={AccountSupportPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
+      <Route path="/bridal" component={BridalCollection} />
+      <Route path="/party-wear" component={PartyWear} />
+      <Route path="/faqs" component={FAQs} />
+      <Route path="/shipping-info" component={ShippingInfo} />
+      <Route path="/size-guide" component={SizeGuide} />
+      <Route path="/returns" component={Returns} />
+      <Route path="/privacy-policy" component={PrivacyPolicy} />
+      <Route path="/terms-of-service" component={TermsOfService} />
       <Route path="/contact" component={Contact} />
       <Route path="/about" component={About} />
       <Route path="/admin/login" component={AdminLogin} />

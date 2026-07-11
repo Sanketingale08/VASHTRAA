@@ -159,11 +159,13 @@ export default function SellerSettlements() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [selectedSettlement, setSelectedSettlement] = useState<Settlement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
+    params.set("page", String(page));
     setLoading(true);
     fetch(getApiUrl(`/api/seller/settlements?${params}`), { credentials: "include" })
       .then((r) => {
@@ -249,7 +251,7 @@ export default function SellerSettlements() {
               {STATUS_FILTERS.map((f) => (
                 <button
                   key={f.value}
-                  onClick={() => setStatusFilter(f.value)}
+                  onClick={() => { setStatusFilter(f.value); setPage(1); }}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                   style={statusFilter === f.value ? { background: MAROON, color: "#fff" } : { background: "#F3F8F5", color: "#6B7280" }}
                 >
@@ -324,8 +326,22 @@ export default function SellerSettlements() {
         </div>
 
         {data && data.totalPages > 1 && (
-          <div className="flex justify-center gap-2">
-            <p className="text-xs text-gray-400">Page {data.page} of {data.totalPages}</p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => p - 1)}
+              className="text-xs font-semibold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              ← Previous
+            </button>
+            <span className="text-xs text-gray-400">Page {data.page} of {data.totalPages}</span>
+            <button
+              disabled={page >= data.totalPages || loading}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-xs font-semibold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              Next →
+            </button>
           </div>
         )}
       </div>

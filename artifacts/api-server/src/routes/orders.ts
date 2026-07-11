@@ -598,6 +598,19 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
             for (const [vid, vItems] of vendorItemGroups) {
               const productAmount = vItems.reduce((s, i) => s + i.price * i.quantity, 0);
               if (productAmount <= 0) continue;
+
+              const alreadySettled = await tx
+                .select({ id: vendorSettlementsTable.id })
+                .from(vendorSettlementsTable)
+                .where(and(
+                  eq(vendorSettlementsTable.orderId, order.id),
+                  eq(vendorSettlementsTable.vendorId, vid),
+                  eq(vendorSettlementsTable.type, "order_settlement"),
+                ))
+                .limit(1);
+
+              if (alreadySettled.length > 0) continue;
+
               const primaryCategory = vItems[0]?.category ?? null;
               const commissionRate = effectiveRateFromRules(commissionRules, vid, primaryCategory);
               const commission = Math.round(productAmount * commissionRate);

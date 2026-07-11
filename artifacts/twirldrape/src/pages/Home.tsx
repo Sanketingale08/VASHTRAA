@@ -136,6 +136,23 @@ function FeaturedShopsSection() {
 
   const vendorList: VendorSummary[] = Array.isArray(vendors) ? vendors : [];
 
+  if (vendorList.length === 0) {
+    return (
+      <section className="py-16 md:py-20 bg-white">
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+            <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#1E6B5A]">
+              Featured Shops
+            </h2>
+            <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
+          </div>
+          <p className="text-sm text-gray-400 mt-4">More shops coming soon — check back shortly!</p>
+        </div>
+      </section>
+    );
+  }
+
   const visibleCount = 4;
   const canPrev = scrollIdx > 0;
   const canNext = scrollIdx + visibleCount < vendorList.length;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, Store } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, Store, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk, Show } from "@clerk/react";
@@ -18,9 +18,11 @@ export function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [collectionsDropdownOpen, setCollectionsDropdownOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const collectionsDropdownRef = useRef<HTMLDivElement>(null);
 
   const { user } = useUser();
   const { signOut } = useClerk();
@@ -63,6 +65,16 @@ export function Navbar() {
     if (userMenuOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [userMenuOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (collectionsDropdownRef.current && !collectionsDropdownRef.current.contains(e.target as Node)) {
+        setCollectionsDropdownOpen(false);
+      }
+    };
+    if (collectionsDropdownOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [collectionsDropdownOpen]);
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -144,6 +156,55 @@ export function Navbar() {
             {/* ── Desktop nav (centred) ── */}
             <div className="hidden lg:flex flex-1 items-center justify-center gap-1">
               {navLinks.map(({ href, label }) => {
+                if (label === "Collections") {
+                  const active = location.startsWith("/collections") || location.startsWith("/bridal") || location.startsWith("/party-wear");
+                  return (
+                    <div key={label} ref={collectionsDropdownRef} className="relative">
+                      <button
+                        onClick={() => setCollectionsDropdownOpen(!collectionsDropdownOpen)}
+                        className={cn(
+                          "relative flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest transition-colors rounded-sm",
+                          active
+                            ? "text-[#C9A84C]"
+                            : isDark || isDesignerDark
+                              ? "text-[#F3F8F5]/80 hover:text-[#C9A84C]"
+                              : "text-[#3D1515]/75 hover:text-[#1E6B5A]",
+                          "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C9A84C] after:rounded-full after:transition-opacity",
+                          active ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-40"
+                        )}
+                      >
+                        {label}
+                        <ChevronDown size={11} className={cn("transition-transform", collectionsDropdownOpen ? "rotate-180" : "")} />
+                      </button>
+                      {collectionsDropdownOpen && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-52 bg-white text-gray-800 shadow-2xl border border-gray-100 rounded-xl py-1.5 z-50">
+                          <Link
+                            href="/collections"
+                            onClick={() => setCollectionsDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
+                          >
+                            All Collections
+                          </Link>
+                          <div className="border-t border-gray-100 my-1" />
+                          <Link
+                            href="/bridal"
+                            onClick={() => setCollectionsDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
+                          >
+                            Bridal Collection
+                          </Link>
+                          <Link
+                            href="/party-wear"
+                            onClick={() => setCollectionsDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
+                          >
+                            Party Wear
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 const active =
                   href === "/" ? location === "/" : location.startsWith(href) && href !== "#";
                 return (
@@ -438,19 +499,48 @@ export function Navbar() {
               {navLinks.map(({ href, label }) => {
                 const active = href === "/" ? location === "/" : location.startsWith(href) && href !== "#";
                 return (
-                  <Link
-                    key={label}
-                    href={href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "flex items-center px-3 py-3 rounded-lg text-sm font-semibold uppercase tracking-widest transition-colors",
-                      active
-                        ? "bg-[#C9A84C]/20 text-[#C9A84C]"
-                        : "hover:bg-white/10 text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
+                  <React.Fragment key={label}>
+                    <Link
+                      href={href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex items-center px-3 py-3 rounded-lg text-sm font-semibold uppercase tracking-widest transition-colors",
+                        active
+                          ? "bg-[#C9A84C]/20 text-[#C9A84C]"
+                          : "hover:bg-white/10 text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
+                      )}
+                    >
+                      {label}
+                    </Link>
+                    {label === "Collections" && (
+                      <>
+                        <Link
+                          href="/bridal"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "flex items-center pl-7 pr-3 py-2.5 rounded-lg text-sm transition-colors",
+                            location.startsWith("/bridal")
+                              ? "bg-[#C9A84C]/20 text-[#C9A84C] font-semibold"
+                              : "hover:bg-white/10 text-[#F3F8F5]/70 hover:text-[#F3F8F5]"
+                          )}
+                        >
+                          ↳ Bridal Collection
+                        </Link>
+                        <Link
+                          href="/party-wear"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "flex items-center pl-7 pr-3 py-2.5 rounded-lg text-sm transition-colors",
+                            location.startsWith("/party-wear")
+                              ? "bg-[#C9A84C]/20 text-[#C9A84C] font-semibold"
+                              : "hover:bg-white/10 text-[#F3F8F5]/70 hover:text-[#F3F8F5]"
+                          )}
+                        >
+                          ↳ Party Wear
+                        </Link>
+                      </>
                     )}
-                  >
-                    {label}
-                  </Link>
+                  </React.Fragment>
                 );
               })}
 

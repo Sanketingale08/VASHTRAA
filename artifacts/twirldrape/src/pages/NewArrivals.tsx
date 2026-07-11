@@ -7,7 +7,6 @@ import { ProductCard } from "@/components/ProductCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
-import { cn } from "@/lib/utils";
 
 const GOLD = "#C9A84C";
 const MAROON = "#1E6B5A";
@@ -23,7 +22,18 @@ const fadeUp = {
   }),
 };
 
-const CATEGORY_CARDS = [
+type CategoryId = "paithani" | "designer";
+
+const CATEGORY_CARDS: Array<{
+  id: CategoryId;
+  label: string;
+  tagline: string;
+  description: string;
+  image: string;
+  fallback: string;
+  bg: string;
+  chipLabel: string;
+}> = [
   {
     id: "paithani",
     label: "Paithani Sarees",
@@ -32,8 +42,6 @@ const CATEGORY_CARDS = [
       "Discover the latest arrivals from Yeola's master weavers — vibrant zari borders, peacock motifs, and timeless craftsmanship for every celebration.",
     image: "/images/hero-paithani-1.png",
     fallback: "/images/product-1.png",
-    href: "/paithani/shop?newArrival=true",
-    accentColor: MAROON,
     bg: MAROON,
     chipLabel: "New Paithani",
   },
@@ -45,14 +53,22 @@ const CATEGORY_CARDS = [
       "Fresh contemporary styles and modern silhouettes — just landed this season. Bold prints, luxurious fabrics, and designs made for the modern woman.",
     image: "/images/hero-designer-1.png",
     fallback: "/images/product-2.png",
-    href: "/designer/shop?newArrival=true",
-    accentColor: "#B8860B",
     bg: "#1E2329",
     chipLabel: "New Designer",
   },
 ];
 
-function CategoryCard({ card, index }: { card: typeof CATEGORY_CARDS[0]; index: number }) {
+function CategoryCard({
+  card,
+  index,
+  isActive,
+  onSelect,
+}: {
+  card: typeof CATEGORY_CARDS[0];
+  index: number;
+  isActive: boolean;
+  onSelect: (id: CategoryId) => void;
+}) {
   return (
     <motion.div
       custom={index}
@@ -63,7 +79,11 @@ function CategoryCard({ card, index }: { card: typeof CATEGORY_CARDS[0]; index: 
       whileHover={{ y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       className="relative group rounded-2xl overflow-hidden min-h-[240px] md:min-h-[280px] flex flex-col justify-end cursor-pointer shadow-lg hover:shadow-2xl transition-shadow duration-500"
-      style={{ background: card.bg }}
+      style={{
+        background: card.bg,
+        outline: isActive ? `3px solid ${GOLD}` : "3px solid transparent",
+        outlineOffset: "2px",
+      }}
     >
       <img
         src={card.image}
@@ -74,8 +94,10 @@ function CategoryCard({ card, index }: { card: typeof CATEGORY_CARDS[0]; index: 
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
       <div className="relative z-10 p-7 md:p-9">
-        <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] mb-4 border"
-          style={{ color: GOLD, borderColor: GOLD + "55", background: GOLD + "15" }}>
+        <span
+          className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] mb-4 border"
+          style={{ color: GOLD, borderColor: GOLD + "55", background: GOLD + "15" }}
+        >
           ✨ {card.chipLabel}
         </span>
         <p className="text-xs font-bold uppercase tracking-[0.2em] mb-2" style={{ color: GOLD }}>
@@ -87,13 +109,14 @@ function CategoryCard({ card, index }: { card: typeof CATEGORY_CARDS[0]; index: 
         <p className="text-white/65 text-sm mb-6 leading-relaxed max-w-sm">
           {card.description}
         </p>
-        <Link
-          href={card.href}
+        <button
+          type="button"
+          onClick={() => onSelect(card.id)}
           className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-6 py-3 rounded-sm transition-all duration-300 group-hover:gap-3"
           style={{ background: GOLD, color: MAROON }}
         >
-          Shop Now <ArrowRight size={14} />
-        </Link>
+          {isActive ? "Showing Below" : "Shop Now"} <ArrowRight size={14} />
+        </button>
       </div>
     </motion.div>
   );
@@ -114,15 +137,29 @@ function SkeletonCard() {
 
 export default function NewArrivals() {
   const [quickViewProduct, setQuickViewProduct] = useState<ProductSummary | null>(null);
+  const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
 
   const { data, isLoading } = useListProducts({
     newArrival: true,
     sort: "newest",
     limit: 12,
+    ...(activeCategory ? { category: activeCategory } : {}),
   });
 
   const allProducts = data?.products ?? [];
   const totalCount = data?.total ?? 0;
+
+  const activeCard = CATEGORY_CARDS.find((c) => c.id === activeCategory);
+
+  function handleSelect(id: CategoryId) {
+    setActiveCategory((prev) => (prev === id ? null : id));
+  }
+
+  const shopAllHref = activeCategory === "paithani"
+    ? "/paithani/shop?newArrival=true"
+    : activeCategory === "designer"
+    ? "/designer/shop?newArrival=true"
+    : null;
 
   return (
     <Layout>
@@ -131,13 +168,41 @@ export default function NewArrivals() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
             {CATEGORY_CARDS.map((card, i) => (
-              <CategoryCard key={card.id} card={card} index={i} />
+              <CategoryCard
+                key={card.id}
+                card={card}
+                index={i}
+                isActive={activeCategory === card.id}
+                onSelect={handleSelect}
+              />
             ))}
           </div>
+          {activeCategory && (
+            <motion.p
+              key={activeCategory}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 text-center text-xs text-gray-400"
+            >
+              Showing new arrivals for{" "}
+              <span className="font-semibold" style={{ color: MAROON }}>
+                {activeCard?.label}
+              </span>
+              {" "}·{" "}
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className="underline hover:no-underline"
+                style={{ color: GOLD }}
+              >
+                Show all
+              </button>
+            </motion.p>
+          )}
         </div>
       </section>
 
-      {/* ── Mixed Product Grid ─────────────────────────────────────── */}
+      {/* ── Product Grid ─────────────────────────────────────────────── */}
       <section className="py-16 md:py-20" style={{ background: CREAM }}>
         <div className="container mx-auto px-4">
           <motion.div
@@ -150,7 +215,7 @@ export default function NewArrivals() {
           >
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.3em] mb-2" style={{ color: GOLD }}>
-                All New Arrivals
+                {activeCategory ? activeCard?.label : "All New Arrivals"}
               </p>
               <div className="flex items-center gap-4">
                 <span className="flex-none h-px w-12" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
@@ -165,21 +230,23 @@ export default function NewArrivals() {
               )}
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link
-                href="/paithani/shop?newArrival=true"
+              <button
+                type="button"
+                onClick={() => handleSelect("paithani")}
                 className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors hover:opacity-80"
-                style={{ color: MAROON }}
+                style={{ color: activeCategory === "paithani" ? GOLD : MAROON }}
               >
                 All Paithani <ArrowRight size={12} />
-              </Link>
+              </button>
               <span className="text-gray-300">|</span>
-              <Link
-                href="/designer/shop?newArrival=true"
+              <button
+                type="button"
+                onClick={() => handleSelect("designer")}
                 className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-colors hover:opacity-80"
-                style={{ color: MAROON }}
+                style={{ color: activeCategory === "designer" ? GOLD : MAROON }}
               >
                 All Designer <ArrowRight size={12} />
-              </Link>
+              </button>
             </div>
           </motion.div>
 
@@ -216,20 +283,32 @@ export default function NewArrivals() {
               variants={fadeUp}
               className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4"
             >
-              <Link
-                href="/paithani/shop?newArrival=true"
-                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
-                style={{ borderColor: MAROON, color: MAROON }}
-              >
-                View All New Paithani →
-              </Link>
-              <Link
-                href="/designer/shop?newArrival=true"
-                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
-                style={{ borderColor: MAROON, color: MAROON }}
-              >
-                View All New Designer →
-              </Link>
+              {shopAllHref ? (
+                <Link
+                  href={shopAllHref}
+                  className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                  style={{ borderColor: MAROON, color: MAROON }}
+                >
+                  View All New {activeCard?.label} →
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/paithani/shop?newArrival=true"
+                    className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                    style={{ borderColor: MAROON, color: MAROON }}
+                  >
+                    View All New Paithani →
+                  </Link>
+                  <Link
+                    href="/designer/shop?newArrival=true"
+                    className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                    style={{ borderColor: MAROON, color: MAROON }}
+                  >
+                    View All New Designer →
+                  </Link>
+                </>
+              )}
             </motion.div>
           )}
         </div>

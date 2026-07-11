@@ -13,6 +13,7 @@ import { insertOrderStatusNotification } from "../lib/orderNotifications";
 import { insertSellerNotification, insertSellerNotificationForVendors } from "../lib/sellerNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
+import { sendTransactionalEmail } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -1254,6 +1255,20 @@ router.post("/admin/orders/:orderId/return", requireAdminKey, async (req: any, r
       throw txErr;
     }
 
+    if (updatedOrder) {
+      const notifItems = updatedOrder.items as Array<{ name: string }>;
+      const firstItemName = notifItems?.[0]?.name ?? "your order";
+      const extraCount = notifItems.length > 1 ? notifItems.length - 1 : 0;
+      void sendTransactionalEmail({
+        userId: updatedOrder.userId,
+        type: decision === "approved" ? "return_approved" : "return_rejected",
+        orderId: updatedOrder.id,
+        itemName: firstItemName,
+        extraItemCount: extraCount,
+        note: note ? String(note) : undefined,
+      });
+    }
+
     res.json({ order: updatedOrder });
   } catch (err) {
     req.log.error({ err }, "Failed to review return request");
@@ -1345,6 +1360,20 @@ router.post("/admin/orders/:orderId/refund", requireAdminKey, async (req: any, r
       throw txErr;
     }
 
+    if (updatedOrder) {
+      const notifItems = updatedOrder.items as Array<{ name: string }>;
+      const firstItemName = notifItems?.[0]?.name ?? "your order";
+      const extraCount = notifItems.length > 1 ? notifItems.length - 1 : 0;
+      void sendTransactionalEmail({
+        userId: updatedOrder.userId,
+        type: decision === "approved" ? "refund_approved" : "refund_rejected",
+        orderId: updatedOrder.id,
+        itemName: firstItemName,
+        extraItemCount: extraCount,
+        note: note ? String(note) : undefined,
+      });
+    }
+
     res.json({ order: updatedOrder });
   } catch (err) {
     req.log.error({ err }, "Failed to review refund");
@@ -1429,6 +1458,20 @@ router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req
         return;
       }
       throw txErr;
+    }
+
+    if (updatedOrder) {
+      const notifItems = updatedOrder.items as Array<{ name: string }>;
+      const firstItemName = notifItems?.[0]?.name ?? "your order";
+      const extraCount = notifItems.length > 1 ? notifItems.length - 1 : 0;
+      void sendTransactionalEmail({
+        userId: updatedOrder.userId,
+        type: "refund_processed",
+        orderId: updatedOrder.id,
+        itemName: firstItemName,
+        extraItemCount: extraCount,
+        reference: reference ? String(reference).trim() : undefined,
+      });
     }
 
     res.json({ order: updatedOrder });

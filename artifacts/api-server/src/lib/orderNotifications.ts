@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { sendTransactionalEmail, type TransactionalEmailType } from "./transactionalEmail";
 
 type OrderNotifType =
   | "order_shipped"
@@ -11,6 +12,12 @@ type OrderNotifType =
   | "payment_successful"
   | "order_packed"
   | "out_for_delivery";
+
+const EMAIL_TYPES = new Set<OrderNotifType>([
+  "order_cancelled",
+  "return_requested",
+  "refund_requested",
+]);
 
 interface InsertOrderNotificationOpts {
   tx?: any;
@@ -95,4 +102,14 @@ export async function insertOrderStatusNotification(
     body,
     metadata: { orderId },
   });
+
+  if (EMAIL_TYPES.has(type)) {
+    void sendTransactionalEmail({
+      userId,
+      type: type as TransactionalEmailType,
+      orderId,
+      itemName,
+      extraItemCount,
+    });
+  }
 }

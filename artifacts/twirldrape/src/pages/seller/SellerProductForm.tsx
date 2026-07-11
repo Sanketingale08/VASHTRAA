@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X } from "lucide-react";
 
 const MAROON = "#1E6B5A";
@@ -99,6 +99,19 @@ const inputStyle = { borderColor: "#D6C9BA", background: IVORY };
 
 const selectClass = inputClass + " appearance-none cursor-pointer";
 
+interface SectionProps { icon: React.ElementType; title: string; children: React.ReactNode; }
+function Section({ icon: Icon, title, children }: SectionProps) {
+  return (
+    <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "#E2D9CC", background: "#FDFBF8" }}>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon size={15} style={{ color: GOLD }} />
+        <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: "#7a5f4e" }}>{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 interface ProductFormProps {
   data: ProductFormData;
   errors: Partial<Record<keyof ProductFormData, string>>;
@@ -120,57 +133,59 @@ export default function ProductForm({
   onSubmit,
   onCancel,
 }: ProductFormProps) {
-  function input(field: keyof ProductFormData) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-      onChange(field, e.target.value);
-    };
-  }
+  const input = useCallback(
+    (field: keyof ProductFormData) =>
+      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        onChange(field, e.target.value);
+      },
+    [onChange],
+  );
 
-  function updateVideo(idx: number, value: string) {
-    const videos = [...data.videos];
-    videos[idx] = value;
-    onChange("videos", videos);
-  }
-  function addVideo() {
-    onChange("videos", [...data.videos, ""]);
-  }
-  function removeVideo(idx: number) {
-    onChange("videos", data.videos.filter((_, i) => i !== idx));
-  }
+  const updateVideo = useCallback(
+    (idx: number, value: string) => {
+      const videos = [...data.videos];
+      videos[idx] = value;
+      onChange("videos", videos);
+    },
+    [data.videos, onChange],
+  );
+  const addVideo = useCallback(() => onChange("videos", [...data.videos, ""]), [data.videos, onChange]);
+  const removeVideo = useCallback(
+    (idx: number) => onChange("videos", data.videos.filter((_, i) => i !== idx)),
+    [data.videos, onChange],
+  );
 
-  function updateVariant(idx: number, field: keyof ProductVariantForm, value: string) {
-    const variants = data.variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v));
-    onChange("variants", variants);
-  }
-  function addVariant() {
-    onChange("variants", [...data.variants, { size: "", color: "", stock: "", price: "", sku: "" }]);
-  }
-  function removeVariant(idx: number) {
-    onChange("variants", data.variants.filter((_, i) => i !== idx));
-  }
+  const updateVariant = useCallback(
+    (idx: number, field: keyof ProductVariantForm, value: string) => {
+      const variants = data.variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v));
+      onChange("variants", variants);
+    },
+    [data.variants, onChange],
+  );
+  const addVariant = useCallback(
+    () => onChange("variants", [...data.variants, { size: "", color: "", stock: "", price: "", sku: "" }]),
+    [data.variants, onChange],
+  );
+  const removeVariant = useCallback(
+    (idx: number) => onChange("variants", data.variants.filter((_, i) => i !== idx)),
+    [data.variants, onChange],
+  );
 
-  function updateSpec(idx: number, field: keyof ProductSpecForm, value: string) {
-    const specs = data.specifications.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
-    onChange("specifications", specs);
-  }
-  function addSpec() {
-    onChange("specifications", [...data.specifications, { key: "", value: "" }]);
-  }
-  function removeSpec(idx: number) {
-    onChange("specifications", data.specifications.filter((_, i) => i !== idx));
-  }
-
-  function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
-    return (
-      <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "#E2D9CC", background: "#FDFBF8" }}>
-        <div className="flex items-center gap-2 mb-1">
-          <Icon size={15} style={{ color: GOLD }} />
-          <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: "#7a5f4e" }}>{title}</h3>
-        </div>
-        {children}
-      </div>
-    );
-  }
+  const updateSpec = useCallback(
+    (idx: number, field: keyof ProductSpecForm, value: string) => {
+      const specs = data.specifications.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
+      onChange("specifications", specs);
+    },
+    [data.specifications, onChange],
+  );
+  const addSpec = useCallback(
+    () => onChange("specifications", [...data.specifications, { key: "", value: "" }]),
+    [data.specifications, onChange],
+  );
+  const removeSpec = useCallback(
+    (idx: number) => onChange("specifications", data.specifications.filter((_, i) => i !== idx)),
+    [data.specifications, onChange],
+  );
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">

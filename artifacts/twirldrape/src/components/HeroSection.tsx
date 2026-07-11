@@ -94,19 +94,24 @@ export function HeroSection() {
   return (
     <>
       {/* ──────────────────── HERO ──────────────────── */}
-      <section
-        className="relative w-full overflow-hidden"
-        style={{ minHeight: "680px", display: "flex", flexDirection: "column" }}
-      >
-        <div className="flex flex-col lg:flex-row flex-1" style={{ minHeight: "680px" }}>
+      <section className="relative w-full overflow-hidden" style={{ minHeight: "680px" }}>
+        {/*
+          Layout grid:
+            Mobile  (<768px):   column — full-width wine left panel, then portrait strip below
+            Tablet  (768–1024): row — left 55% / right 45%
+            Desktop (≥1024px):  row — left 48% / right 52%
+        */}
+        <div className="flex flex-col md:flex-row" style={{ minHeight: "680px" }}>
 
-          {/* ── LEFT PANEL ── */}
+          {/* ── LEFT PANEL ──
+              Full-width on mobile; 55% tablet; 48% desktop
+          */}
           <div
-            className="relative flex flex-col justify-center overflow-hidden"
+            className="relative flex flex-col justify-center overflow-hidden w-full md:w-[55%] lg:w-[48%]"
             style={{
-              flex: "0 0 48%",
               background: `linear-gradient(145deg, ${PRIMARY} 0%, ${WINE} 55%, #3A0828 100%)`,
-              padding: "72px 56px 72px 60px",
+              padding: "64px 44px 64px 48px",
+              flexShrink: 0,
             }}
           >
             <MandalaTopLeft />
@@ -130,12 +135,12 @@ export function HeroSection() {
                 <span className="h-px flex-none" style={{ width: 32, background: GOLD }} />
               </motion.div>
 
-              {/* H1 */}
+              {/* H1 — two lines with editorial size difference */}
               <motion.h1
                 variants={itemVariants}
                 className="font-serif font-bold leading-[1.08]"
                 style={{
-                  fontSize: "clamp(40px, 4.8vw, 68px)",
+                  fontSize: "clamp(36px, 4.2vw, 68px)",
                   color: IVORY,
                   letterSpacing: "-0.01em",
                   marginBottom: "8px",
@@ -147,34 +152,25 @@ export function HeroSection() {
                 variants={itemVariants}
                 className="font-serif font-bold leading-[1.08]"
                 style={{
-                  fontSize: "clamp(44px, 5.2vw, 74px)",
+                  fontSize: "clamp(40px, 4.8vw, 74px)",
                   color: GOLD,
                   letterSpacing: "-0.01em",
-                  marginBottom: "28px",
+                  marginBottom: "24px",
                 }}
               >
                 &amp; Designer Sarees
               </motion.h1>
 
-              {/* Gold ornament divider */}
-              <motion.div variants={itemVariants} className="flex items-center gap-4 mb-6">
-                <span className="flex-1 h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD}88)` }} />
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M8 0L9.6 6.4L16 8L9.6 9.6L8 16L6.4 9.6L0 8L6.4 6.4Z" fill={GOLD} />
-                </svg>
-                <span className="flex-1 h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD}88)` }} />
-              </motion.div>
-
               {/* Description */}
               <motion.p
                 variants={itemVariants}
-                style={{ color: IVORY_DIM, fontSize: "15px", lineHeight: 1.75, maxWidth: "420px", marginBottom: "32px" }}
+                style={{ color: IVORY_DIM, fontSize: "15px", lineHeight: 1.75, maxWidth: "420px", marginBottom: "28px" }}
               >
                 Discover handcrafted Paithani sarees and premium designer collections from master weavers and trusted vendors across India.
               </motion.p>
 
-              {/* Trust badges — horizontal row */}
-              <motion.div variants={itemVariants} className="flex flex-wrap gap-3 mb-10">
+              {/* Trust badges — inline pill row */}
+              <motion.div variants={itemVariants} className="flex flex-wrap gap-3 mb-6">
                 {trustItems.map((t) => (
                   <div
                     key={t.label}
@@ -192,6 +188,15 @@ export function HeroSection() {
                     {t.label}
                   </div>
                 ))}
+              </motion.div>
+
+              {/* Gold ornament divider — between trust badges and CTAs */}
+              <motion.div variants={itemVariants} className="flex items-center gap-4 mb-8">
+                <span className="flex-1 h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD}88)` }} />
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 0L9.6 6.4L16 8L9.6 9.6L8 16L6.4 9.6L0 8L6.4 6.4Z" fill={GOLD} />
+                </svg>
+                <span className="flex-1 h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD}88)` }} />
               </motion.div>
 
               {/* CTA Buttons */}
@@ -227,10 +232,14 @@ export function HeroSection() {
             </motion.div>
           </div>
 
-          {/* ── RIGHT PANEL ── */}
+          {/*
+            RIGHT PANEL — tablet (md) and desktop (lg) only.
+            hidden on mobile so there is only one image (the strip below).
+            Tablet: 45% width. Desktop: 52% (flex-1 fills remaining space).
+          */}
           <motion.div
-            className="relative overflow-hidden"
-            style={{ flex: "1 1 52%", minHeight: "380px" }}
+            className="hidden md:relative md:block md:w-[45%] lg:flex-1 overflow-hidden"
+            style={{ minHeight: "680px" }}
             variants={rightVariants}
             initial="hidden"
             animate="visible"
@@ -270,7 +279,7 @@ export function HeroSection() {
               }}
             />
 
-            {/* Floating frosted-glass badge */}
+            {/* Floating frosted-glass badge — bottom-right */}
             <motion.div
               className="absolute flex items-center gap-2.5 rounded-2xl"
               style={{
@@ -315,10 +324,10 @@ export function HeroSection() {
 
         </div>
 
-        {/* Mobile-only model strip */}
+        {/* Mobile-only portrait strip — appears below left panel on < md */}
         <div
-          className="block lg:hidden relative overflow-hidden"
-          style={{ height: "340px", background: WINE }}
+          className="block md:hidden relative overflow-hidden"
+          style={{ height: "320px", background: WINE }}
         >
           <img
             src="/images/home-paithani.png"

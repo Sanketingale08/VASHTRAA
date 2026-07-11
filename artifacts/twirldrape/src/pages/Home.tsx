@@ -360,17 +360,6 @@ export default function Home() {
           }}
         />
 
-        {/* Circular customer badge — pinned top-right */}
-        <motion.div
-          className="absolute top-6 right-6 z-20 flex flex-col items-center justify-center rounded-full font-bold text-center text-white shadow-lg"
-          style={{ width: "82px", height: "82px", background: H_WINE }}
-          animate={{ y: [0, -6, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <p className="font-serif leading-none" style={{ fontSize: "18px", color: GOLD }}>50K+</p>
-          <p className="uppercase leading-tight mt-0.5" style={{ fontSize: "8px", letterSpacing: "0.08em" }}>Happy<br />Customers</p>
-        </motion.div>
-
         {/* ── Content (desktop) ── */}
         <motion.div
           className="hidden lg:flex flex-col justify-center relative z-20 px-10 md:px-16 lg:px-20 py-16 lg:py-20"

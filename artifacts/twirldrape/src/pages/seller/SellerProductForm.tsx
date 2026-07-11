@@ -279,8 +279,8 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
   const entriesRef = useRef<ImageEntry[]>(images.filter(Boolean).map(makeEntry));
   const [, rerender] = useState(0);
   const [zoneDragOver, setZoneDragOver] = useState(false);
-  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [dragSrcId, setDragSrcId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const browseRef = useRef<HTMLInputElement>(null);
   const onChangeRef = useRef(onImagesChange);
   useEffect(() => { onChangeRef.current = onImagesChange; });
@@ -358,6 +358,23 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
 
   const entries = entriesRef.current;
 
+  // Compute preview order for drag-over visual feedback
+  const displayEntries = (() => {
+    if (dragSrcId && dragOverId && dragSrcId !== dragOverId) {
+      const preview = [...entries];
+      const srcIdx = preview.findIndex(e => e.id === dragSrcId);
+      const tgtIdx = preview.findIndex(e => e.id === dragOverId);
+      if (srcIdx >= 0 && tgtIdx >= 0) {
+        const [moved] = preview.splice(srcIdx, 1);
+        preview.splice(tgtIdx, 0, moved);
+      }
+      return preview;
+    }
+    return entries;
+  })();
+
+  function clearDrag() { setDragSrcId(null); setDragOverId(null); }
+
   return (
     <div className="space-y-4">
       <div
@@ -397,39 +414,45 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
         />
       </div>
 
-      {entries.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {entries.map((entry, idx) => (
-            <ImageCard
-              key={entry.id}
-              entry={entry}
-              isMain={idx === 0}
-              isDragSrc={dragSrcIdx === idx}
-              isDragTarget={dragOverIdx === idx}
-              onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDragSrcIdx(idx); }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                if (dragSrcIdx !== null && dragSrcIdx !== idx) setDragOverIdx(idx);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragSrcIdx !== null && dragSrcIdx !== idx) {
-                  const next = [...entriesRef.current];
-                  const [moved] = next.splice(dragSrcIdx, 1);
-                  next.splice(idx, 0, moved);
-                  refreshEmit(next);
-                }
-                setDragSrcIdx(null);
-                setDragOverIdx(null);
-              }}
-              onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
-              onRemove={() => removeEntry(entry.id)}
-              onReplace={(file) => replaceEntry(entry.id, file)}
-            />
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {displayEntries.map((entry, idx) => (
+          <ImageCard
+            key={entry.id}
+            entry={entry}
+            isMain={idx === 0}
+            isDragSrc={entry.id === dragSrcId}
+            isDragTarget={entry.id === dragOverId}
+            onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDragSrcId(entry.id); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (dragSrcId && entry.id !== dragSrcId) setDragOverId(entry.id);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragSrcId && dragOverId && dragSrcId !== dragOverId) {
+                refreshEmit([...displayEntries]);
+              }
+              clearDrag();
+            }}
+            onDragEnd={clearDrag}
+            onRemove={() => removeEntry(entry.id)}
+            onReplace={(file) => replaceEntry(entry.id, file)}
+          />
+        ))}
+
+        {/* "Add more" tile — always visible as the last grid cell */}
+        <button
+          type="button"
+          className="relative overflow-hidden rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all hover:border-[#1E6B5A] hover:bg-[#1E6B5A08]"
+          style={{ aspectRatio: "1 / 1", borderColor: "#D6C9BA", background: CREAM, cursor: "pointer" }}
+          onClick={() => browseRef.current?.click()}
+          title="Add more images"
+        >
+          <Plus size={20} style={{ color: "#B0A090" }} />
+          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#B0A090" }}>Add more</span>
+        </button>
+      </div>
     </div>
   );
 }

@@ -220,6 +220,87 @@ async function handleSellerRegistration(req: any, res: any) {
 router.post("/vendors", requireAuth, handleSellerRegistration);
 router.post("/seller/register", requireAuth, handleSellerRegistration);
 
+router.get("/seller/claimable-stores", requireAuth, async (req: any, res: any) => {
+  try {
+    const existing = await db
+      .select({ id: vendorsTable.id })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.ownerId, req.userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return res.status(409).json({ error: "You already have a vendor account" });
+    }
+
+    const stores = await db
+      .select({
+        id: vendorsTable.id,
+        name: vendorsTable.name,
+        location: vendorsTable.location,
+        rating: vendorsTable.rating,
+        sareesCount: vendorsTable.sareesCount,
+        avatar: vendorsTable.avatar,
+        bio: vendorsTable.bio,
+        tagline: vendorsTable.tagline,
+      })
+      .from(vendorsTable)
+      .where(sql`${vendorsTable.ownerId} IS NULL`)
+      .orderBy(vendorsTable.name);
+
+    res.json({ stores });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch claimable stores");
+    res.status(500).json({ error: "Failed to fetch claimable stores" });
+  }
+});
+
+router.post("/seller/claim/:vendorId", requireAuth, async (req: any, res: any) => {
+  const { vendorId } = req.params;
+  try {
+    const existing = await db
+      .select({ id: vendorsTable.id })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.ownerId, req.userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return res.status(409).json({ error: "You already have a vendor account" });
+    }
+
+    const vendorExists = await db
+      .select({ id: vendorsTable.id })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, vendorId))
+      .limit(1);
+
+    if (vendorExists.length === 0) {
+      return res.status(404).json({ error: "Store not found" });
+    }
+
+    const updated = await db
+      .update(vendorsTable)
+      .set({ ownerId: req.userId, status: "pending" })
+      .where(sql`${vendorsTable.id} = ${vendorId} AND ${vendorsTable.ownerId} IS NULL`)
+      .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status });
+
+    if (updated.length === 0) {
+      return res.status(409).json({ error: "This store has already been claimed by another seller" });
+    }
+
+    await insertAdminNotification({
+      type: "new_seller_registration",
+      title: "Store claim submitted",
+      body: `A seller has claimed the store "${updated[0].name}" and is pending review.`,
+      metadata: { vendorId: updated[0].id },
+    });
+
+    res.json({ vendor: updated[0] });
+  } catch (err) {
+    req.log.error({ err }, "Failed to claim store");
+    res.status(500).json({ error: "Failed to claim store" });
+  }
+});
+
 router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
   const { id } = req.params;
   const { name, location, bio, gstin, contactEmail, tagline, avatar } = req.body;
@@ -407,6 +488,38 @@ router.post("/admin/vendors/:id/deactivate", requireAdminKey, async (req: any, r
   } catch (err) {
     req.log.error({ err }, "Failed to deactivate vendor");
     res.status(500).json({ error: "Failed to deactivate vendor" });
+  }
+});
+
+router.post("/admin/vendors/:id/assign-owner", requireAdminKey, async (req: any, res: any) => {
+  const { id } = req.params;
+  const { ownerId } = req.body ?? {};
+
+  if (!ownerId || typeof ownerId !== "string" || !ownerId.trim()) {
+    return res.status(400).json({ error: "ownerId is required" });
+  }
+
+  try {
+    const rows = await db
+      .select({ id: vendorsTable.id, name: vendorsTable.name })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id))
+      .limit(1);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Vendor not found" });
+    }
+
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({ ownerId: ownerId.trim() })
+      .where(eq(vendorsTable.id, id))
+      .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status, ownerId: vendorsTable.ownerId });
+
+    res.json({ vendor: updated });
+  } catch (err) {
+    req.log.error({ err }, "Failed to assign owner to vendor");
+    res.status(500).json({ error: "Failed to assign owner" });
   }
 });
 

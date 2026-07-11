@@ -202,11 +202,18 @@ export default function SellerLogin() {
                   <ArrowRight size={15} />
                 </a>
                 <a
-                  href={`${basePath}/seller/register`}
+                  href={`${basePath}/seller/claim`}
                   className="inline-flex items-center justify-center gap-2 py-3 px-6 font-bold text-sm uppercase tracking-widest rounded-sm border-2 transition-colors hover:bg-[#C9A84C]/10"
                   style={{ borderColor: GOLD, color: MAROON }}
                 >
-                  Register as Vendor
+                  Claim Existing Store
+                </a>
+                <a
+                  href={`${basePath}/seller/register`}
+                  className="inline-flex items-center justify-center gap-2 py-3 px-6 font-semibold text-sm rounded-sm transition-colors hover:bg-gray-50"
+                  style={{ color: "#6B7280", border: "1px solid #E5E7EB" }}
+                >
+                  Register New Store
                 </a>
               </div>
             </div>

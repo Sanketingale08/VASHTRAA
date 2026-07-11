@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -20,6 +20,8 @@ import {
   Linkedin,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const GOLD = "#C9A84C";
 const MAROON = "#1E6B5A";
@@ -92,14 +94,44 @@ const TEAM = [
   { name: "Meera Iyer", role: "Head of Design & Curation", avatar: "/images/team-meera.png", bio: "Curates every collection, ensuring each saree reflects timeless craftsmanship and contemporary taste." },
 ];
 
-const STATS = [
-  { label: "Weaver Partners", value: "40+" },
-  { label: "Sarees Delivered", value: "2,800+" },
-  { label: "Cities Served", value: "180+" },
-  { label: "Years of Trust", value: "3+" },
-];
+const DEFAULT_CONTENT = {
+  stats: [
+    { label: "Weaver Partners", value: "40+" },
+    { label: "Sarees Delivered", value: "2,800+" },
+    { label: "Cities Served", value: "180+" },
+    { label: "Years of Trust", value: "3+" },
+  ],
+  heroHeadline: "Handwoven in India.\nDelivered to Your Door.",
+  heroSubtext:
+    "TwirlDrape started with a single question: why is it so hard to find a genuinely handwoven saree without travelling to the source? We set out to fix that — building a marketplace where India's weavers sell directly, and every saree arrives with its full story intact.",
+  storyHeadline: "Born in Paithan. Built for Every Indian Wardrobe.",
+  storyParagraph1:
+    "In 2022, our founder Anjali Deshmukh visited a Paithani weaver co-operative in Paithan, Maharashtra, and found master weavers selling centuries-old work through local middlemen for a fraction of what buyers paid. She came back with twelve sarees and a resolve: give these artisans a direct channel to the people who would truly value their craft.",
+  storyParagraph2:
+    "TwirlDrape launched with those twelve pieces and has grown steadily — never chasing volume, always vetting every seller personally. Today, every listing carries the weaver's name, their region, and the technique behind the cloth. That transparency is the product.",
+  weaversHeadline: "Forty Families. Dozens of Traditions.",
+  weaversParagraph1:
+    "Every seller on TwirlDrape is admitted by hand — Anjali or Rohan visits the workshop, speaks with the weavers, and photographs the process before a single listing goes live. Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.",
+  weaversParagraph2:
+    "We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee structures. If a weaver raises a concern, it goes directly to Rohan's phone. That accountability is what lets us promise you a saree made with genuine care.",
+  ctaHeadline: "Discover the Craft. Wear the Story.",
+  ctaSubtext: "Explore our curated collections of handwoven sarees from India's finest artisans.",
+};
+
+type AboutContent = typeof DEFAULT_CONTENT;
 
 export default function About() {
+  const [content, setContent] = useState<AboutContent>(DEFAULT_CONTENT);
+
+  useEffect(() => {
+    fetch(`${basePath}/api/about-content`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: AboutContent) => setContent(data))
+      .catch(() => {});
+  }, []);
+
+  const heroLines = content.heroHeadline.split("\n");
+
   return (
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
@@ -129,7 +161,12 @@ export default function About() {
               variants={fadeUp}
               className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold mb-6 leading-tight"
             >
-              Handwoven in India.<br className="hidden md:block" /> Delivered to Your Door.
+              {heroLines.map((line, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <br className="hidden md:block" />}
+                  {line}
+                </React.Fragment>
+              ))}
             </motion.h1>
             <motion.p
               initial="hidden"
@@ -138,9 +175,7 @@ export default function About() {
               variants={fadeUp}
               className="text-[#E6F0EA] max-w-2xl mx-auto text-base md:text-lg leading-relaxed"
             >
-              TwirlDrape started with a single question: why is it so hard to find a genuinely handwoven
-              saree without travelling to the source? We set out to fix that — building a marketplace
-              where India's weavers sell directly, and every saree arrives with its full story intact.
+              {content.heroSubtext}
             </motion.p>
           </div>
         </section>
@@ -149,7 +184,7 @@ export default function About() {
         <section className="bg-white border-b border-[#C9A84C]/20 py-10">
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-              {STATS.map((s, i) => (
+              {content.stats.map((s, i) => (
                 <motion.div
                   key={s.label}
                   custom={i}
@@ -178,18 +213,13 @@ export default function About() {
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Founding Mission</p>
               <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold mb-5">
-                Born in Paithan. Built for Every Indian Wardrobe.
+                {content.storyHeadline}
               </h2>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-4">
-                In 2022, our founder Anjali Deshmukh visited a Paithani weaver co-operative in Paithan,
-                Maharashtra, and found master weavers selling centuries-old work through local middlemen
-                for a fraction of what buyers paid. She came back with twelve sarees and a resolve: give
-                these artisans a direct channel to the people who would truly value their craft.
+                {content.storyParagraph1}
               </p>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed">
-                TwirlDrape launched with those twelve pieces and has grown steadily — never chasing
-                volume, always vetting every seller personally. Today, every listing carries the weaver's
-                name, their region, and the technique behind the cloth. That transparency is the product.
+                {content.storyParagraph2}
               </p>
             </motion.div>
             <motion.div
@@ -265,18 +295,13 @@ export default function About() {
             >
               <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Our Weavers</p>
               <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold mb-5">
-                Forty Families. Dozens of Traditions.
+                {content.weaversHeadline}
               </h2>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-4">
-                Every seller on TwirlDrape is admitted by hand — Anjali or Rohan visits the workshop,
-                speaks with the weavers, and photographs the process before a single listing goes live.
-                Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from
-                Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.
+                {content.weaversParagraph1}
               </p>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-6">
-                We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee
-                structures. If a weaver raises a concern, it goes directly to Rohan's phone. That
-                accountability is what lets us promise you a saree made with genuine care.
+                {content.weaversParagraph2}
               </p>
               <Link
                 href="/seller/register"
@@ -362,10 +387,10 @@ export default function About() {
               variants={fadeUp}
             >
               <h2 className="font-serif text-2xl md:text-3xl text-[#1E6B5A] font-bold mb-4">
-                Discover the Craft. Wear the Story.
+                {content.ctaHeadline}
               </h2>
               <p className="text-[#7a5f4e] mb-8 max-w-lg mx-auto text-sm md:text-base">
-                Explore our curated collections of handwoven sarees from India's finest artisans.
+                {content.ctaSubtext}
               </p>
               <Link
                 href="/collections"

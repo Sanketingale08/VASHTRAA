@@ -127,6 +127,13 @@
       "when": 1752451200000,
       "tag": "0019_add_seller_registration_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1752537600000,
+      "tag": "0020_add_site_settings",
+      "breakpoints": true
     }
   ]
 }

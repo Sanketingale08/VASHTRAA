@@ -24,6 +24,7 @@ import vendorAnalyticsRouter from "./vendorAnalytics";
 import businessIntelligenceRouter from "./businessIntelligence";
 import financialManagementRouter from "./financialManagement";
 import sellerRegistrationDraftRouter from "./sellerRegistrationDraft";
+import aboutContentRouter from "./aboutContent";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(vendorAnalyticsRouter);
 router.use(businessIntelligenceRouter);
 router.use(financialManagementRouter);
 router.use(sellerRegistrationDraftRouter);
+router.use(aboutContentRouter);
 
 export default router;

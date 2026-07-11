@@ -13,3 +13,4 @@ export * from "./reviews";
 export * from "./settlements";
 export * from "./email_outbox";
 export * from "./seller_registration_drafts";
+export * from "./site_settings";

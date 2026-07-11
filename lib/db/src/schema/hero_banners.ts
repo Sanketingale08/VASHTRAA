@@ -6,6 +6,7 @@ export const heroBannersTable = pgTable("hero_banners", {
   title: text("title"),
   displayOrder: integer("display_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false),
   slideIntervalMs: integer("slide_interval_ms").notNull().default(6000),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

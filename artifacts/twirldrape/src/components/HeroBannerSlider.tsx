@@ -16,12 +16,14 @@ interface HeroBannerSliderProps {
 
 const KENBURNS_CSS = `
 @keyframes td-kb-a {
-  from { transform: scale(1.0) translate(0%, 0%); }
-  to   { transform: scale(1.09) translate(-2%, -1.5%); }
+  0%   { transform: scale(1.0) translate(0%, 0%); }
+  50%  { transform: scale(1.09) translate(-2%, -1.5%); }
+  100% { transform: scale(1.0) translate(0%, 0%); }
 }
 @keyframes td-kb-b {
-  from { transform: scale(1.0) translate(0%, 0%); }
-  to   { transform: scale(1.09) translate(2%, 1.5%); }
+  0%   { transform: scale(1.0) translate(0%, 0%); }
+  50%  { transform: scale(1.09) translate(2%, 1.5%); }
+  100% { transform: scale(1.0) translate(0%, 0%); }
 }
 `;
 
@@ -42,7 +44,7 @@ export function HeroBannerSlider({
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (images.length <= 1) return;
-    const ms = images[activeIndex]?.slideIntervalMs ?? 6000;
+    const ms = Math.max(3000, images[activeIndex]?.slideIntervalMs ?? 6000);
     timerRef.current = setTimeout(() => {
       setActiveIndex((prev) => (prev + 1) % images.length);
     }, ms);
@@ -60,6 +62,7 @@ export function HeroBannerSlider({
   }, [activeIndex, images]);
 
   const kbAnim = activeIndex % 2 === 0 ? "td-kb-a" : "td-kb-b";
+  const kbDuration = Math.max(3000, images[activeIndex]?.slideIntervalMs ?? 6000);
 
   return (
     <>
@@ -81,10 +84,11 @@ export function HeroBannerSlider({
             <img
               src={images[activeIndex]?.imageUrl}
               alt="Hero banner"
+              loading={activeIndex === 0 ? "eager" : "lazy"}
               className="w-full h-full object-cover"
               style={{
                 objectPosition: "top center",
-                animation: `${kbAnim} 9s ease-in-out forwards`,
+                animation: `${kbAnim} ${kbDuration}ms ease-in-out infinite`,
                 willChange: "transform",
               }}
             />

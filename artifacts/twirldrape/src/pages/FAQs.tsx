@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageCircle, Search, X } from "lucide-react";
 import { Layout } from "@/components/Layout";
 
 const GOLD = "#C9A84C";
@@ -129,8 +129,29 @@ const FAQ_SECTIONS: { section: string; items: FAQItem[] }[] = [
   },
 ];
 
-function FAQAccordion({ items }: { items: FAQItem[] }) {
+function highlight(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+  const parts = text.split(regex);
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark key={i} className="bg-[#C9A84C]/30 text-[#3D1515] rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    )
+  );
+}
+
+function FAQAccordion({ items, query }: { items: FAQItem[]; query: string }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (query.trim()) {
+      setOpenIndex(null);
+    }
+  }, [query]);
 
   return (
     <div className="space-y-3">
@@ -144,14 +165,16 @@ function FAQAccordion({ items }: { items: FAQItem[] }) {
             onClick={() => setOpenIndex(openIndex === i ? null : i)}
             aria-expanded={openIndex === i}
           >
-            <span className="font-medium text-[#3D1515] text-sm leading-snug">{item.question}</span>
+            <span className="font-medium text-[#3D1515] text-sm leading-snug">
+              {highlight(item.question, query)}
+            </span>
             {openIndex === i
               ? <ChevronUp size={18} className="shrink-0 text-[#C9A84C]" />
               : <ChevronDown size={18} className="shrink-0 text-[#7a5f4e]" />}
           </button>
           {openIndex === i && (
             <div className="px-5 pb-5 text-sm text-[#7a5f4e] leading-relaxed border-t border-[#C9A84C]/10 pt-4">
-              {item.answer}
+              {highlight(item.answer, query)}
             </div>
           )}
         </div>
@@ -161,6 +184,24 @@ function FAQAccordion({ items }: { items: FAQItem[] }) {
 }
 
 export default function FAQs() {
+  const [query, setQuery] = useState("");
+
+  const filteredSections = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return FAQ_SECTIONS;
+    return FAQ_SECTIONS.map((sec) => ({
+      ...sec,
+      items: sec.items.filter(
+        (item) =>
+          item.question.toLowerCase().includes(q) ||
+          item.answer.toLowerCase().includes(q)
+      ),
+    })).filter((sec) => sec.items.length > 0);
+  }, [query]);
+
+  const totalMatches = filteredSections.reduce((sum, sec) => sum + sec.items.length, 0);
+  const isSearching = query.trim().length > 0;
+
   return (
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
@@ -172,24 +213,73 @@ export default function FAQs() {
             <h1 className="font-serif text-4xl md:text-5xl text-[#F3F8F5] font-bold mb-4">
               Frequently Asked Questions
             </h1>
-            <p className="text-[#E6F0EA] max-w-xl mx-auto text-base leading-relaxed">
+            <p className="text-[#E6F0EA] max-w-xl mx-auto text-base leading-relaxed mb-8">
               Answers to the questions we hear most often. Can't find what you need? Our support team is happy to help.
             </p>
+
+            {/* Search input */}
+            <div className="max-w-lg mx-auto relative">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7a5f4e] pointer-events-none"
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search questions and answers…"
+                className="w-full pl-11 pr-10 py-3.5 rounded-xl bg-white text-[#3D1515] text-sm placeholder-[#b09a87] border border-transparent focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/60 shadow-sm"
+                aria-label="Search FAQs"
+              />
+              {isSearching && (
+                <button
+                  onClick={() => setQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a5f4e] hover:text-[#3D1515] transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
         </section>
 
         {/* FAQ Content */}
         <section className="container mx-auto px-4 py-14 md:py-20 max-w-3xl">
-          {FAQ_SECTIONS.map((sec) => (
-            <div key={sec.section} className="mb-12">
-              <h2 className="font-serif text-xl text-[#1E6B5A] font-bold mb-5 flex items-center gap-3">
-                <span className="h-px flex-1 bg-[#C9A84C]/30" />
-                {sec.section}
-                <span className="h-px flex-1 bg-[#C9A84C]/30" />
-              </h2>
-              <FAQAccordion items={sec.items} />
+          {isSearching && (
+            <p className="text-sm text-[#7a5f4e] mb-8 text-center">
+              {totalMatches === 0
+                ? "No results found for your search."
+                : `${totalMatches} result${totalMatches !== 1 ? "s" : ""} found`}
+            </p>
+          )}
+
+          {filteredSections.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-[#7a5f4e] text-base mb-2">No FAQs match your search.</p>
+              <p className="text-sm text-[#7a5f4e]/70">
+                Try different keywords or{" "}
+                <button
+                  onClick={() => setQuery("")}
+                  className="underline hover:text-[#1E6B5A] transition-colors"
+                >
+                  clear the search
+                </button>{" "}
+                to see all questions.
+              </p>
             </div>
-          ))}
+          ) : (
+            filteredSections.map((sec) => (
+              <div key={sec.section} className="mb-12">
+                <h2 className="font-serif text-xl text-[#1E6B5A] font-bold mb-5 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-[#C9A84C]/30" />
+                  {sec.section}
+                  <span className="h-px flex-1 bg-[#C9A84C]/30" />
+                </h2>
+                <FAQAccordion items={sec.items} query={query} />
+              </div>
+            ))
+          )}
         </section>
 
         {/* CTA */}

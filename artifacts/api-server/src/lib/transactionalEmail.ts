@@ -1,8 +1,15 @@
 import { clerkClient } from "@clerk/express";
 import { Resend } from "resend";
+import { db } from "@workspace/db";
+import { emailOutboxTable } from "@workspace/db/schema";
+import { eq, and, lte, lt, inArray } from "drizzle-orm";
+import { logger } from "./logger";
 
 const APP_NAME = "TwirlDrape";
 const FROM_ADDRESS = "orders@twirldrape.com";
+
+const MAX_ATTEMPTS = 3;
+const RETRY_BACKOFF_SECONDS = [60, 300];
 
 function getResendClient(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -183,10 +190,52 @@ function wrapInTemplate(subject: string, body: string): string {
 </html>`;
 }
 
+async function attemptSend(
+  resend: Resend,
+  entry: { id: string; toEmail: string; subject: string; html: string; attempts: number; orderId: string; userId: string }
+): Promise<void> {
+  const now = new Date();
+  const nextAttempt = entry.attempts + 1;
+
+  try {
+    await resend.emails.send({
+      from: `${APP_NAME} <${FROM_ADDRESS}>`,
+      to: [entry.toEmail],
+      subject: entry.subject,
+      html: entry.html,
+    });
+
+    await db
+      .update(emailOutboxTable)
+      .set({ status: "sent", attempts: nextAttempt, lastAttemptAt: now, errorMessage: null })
+      .where(eq(emailOutboxTable.id, entry.id));
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+
+    if (nextAttempt >= MAX_ATTEMPTS) {
+      logger.warn(
+        { orderId: entry.orderId, userId: entry.userId, attempts: nextAttempt, error: errMsg },
+        "[emailOutbox] Email permanently failed after max attempts — manual follow-up required"
+      );
+      await db
+        .update(emailOutboxTable)
+        .set({ status: "dead", attempts: nextAttempt, lastAttemptAt: now, errorMessage: errMsg })
+        .where(eq(emailOutboxTable.id, entry.id));
+    } else {
+      const backoffSeconds = RETRY_BACKOFF_SECONDS[nextAttempt - 1] ?? 300;
+      const nextRetryAt = new Date(now.getTime() + backoffSeconds * 1000);
+      await db
+        .update(emailOutboxTable)
+        .set({ status: "failed", attempts: nextAttempt, lastAttemptAt: now, nextRetryAt, errorMessage: errMsg })
+        .where(eq(emailOutboxTable.id, entry.id));
+    }
+  }
+}
+
 export async function sendTransactionalEmail(payload: EmailPayload): Promise<void> {
   const resend = getResendClient();
   if (!resend) {
-    console.warn("[transactionalEmail] RESEND_API_KEY not set — skipping email for", payload.type);
+    logger.warn({ type: payload.type }, "[transactionalEmail] RESEND_API_KEY not set — skipping email");
     return;
   }
 
@@ -198,21 +247,63 @@ export async function sendTransactionalEmail(payload: EmailPayload): Promise<voi
     payload.note,
     payload.reference
   );
+  const html = wrapInTemplate(subject, body);
 
   const toEmail = await getUserEmail(payload.userId);
   if (!toEmail) {
-    console.warn("[transactionalEmail] Could not resolve email for userId", payload.userId);
+    logger.warn({ userId: payload.userId, orderId: payload.orderId }, "[transactionalEmail] Could not resolve email for userId");
     return;
   }
 
-  try {
-    await resend.emails.send({
-      from: `${APP_NAME} <${FROM_ADDRESS}>`,
-      to: [toEmail],
+  const [entry] = await db
+    .insert(emailOutboxTable)
+    .values({
+      userId: payload.userId,
+      orderId: payload.orderId,
+      type: payload.type,
+      toEmail,
       subject,
-      html: wrapInTemplate(subject, body),
+      html,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: new Date(),
+    })
+    .returning();
+
+  await attemptSend(resend, { ...entry, orderId: payload.orderId, userId: payload.userId });
+}
+
+export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
+  logger.info("[emailOutbox] Starting outbox retry worker");
+
+  const tick = async () => {
+    const resend = getResendClient();
+    if (!resend) return;
+
+    const now = new Date();
+
+    const pending = await db
+      .select()
+      .from(emailOutboxTable)
+      .where(
+        and(
+          inArray(emailOutboxTable.status, ["pending", "failed"] as const),
+          lte(emailOutboxTable.nextRetryAt, now),
+          lt(emailOutboxTable.attempts, MAX_ATTEMPTS)
+        )
+      )
+      .limit(20);
+
+    for (const entry of pending) {
+      await attemptSend(resend, entry);
+    }
+  };
+
+  const handle = setInterval(() => {
+    tick().catch((err) => {
+      logger.error({ err }, "[emailOutbox] Error in outbox worker tick");
     });
-  } catch (err) {
-    console.error("[transactionalEmail] Failed to send email:", err);
-  }
+  }, intervalMs);
+
+  return handle;
 }

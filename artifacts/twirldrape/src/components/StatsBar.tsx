@@ -48,13 +48,13 @@ export function StatsBar() {
               </span>
               <p
                 className="font-serif font-bold leading-none mb-1"
-                style={{ fontSize: "18px", color: H_WINE }}
+                style={{ fontSize: "18px", color: "#0F5C54" }}
               >
                 {stat.number}
               </p>
               <p
                 className="text-[11px] font-medium tracking-wide"
-                style={{ color: "#9B8888" }}
+                style={{ color: "#0F5C54" }}
               >
                 {stat.label}
               </p>

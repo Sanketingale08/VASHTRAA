@@ -214,6 +214,21 @@ export default function AccountScreen() {
       paddingHorizontal: 36, paddingVertical: 14,
     },
     signInBtnText: { fontFamily: "DMSans_700Bold", fontSize: 14, color: colors.primaryForeground, letterSpacing: 0.5 },
+    sellerBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.card,
+      borderRadius: colors.radius,
+      borderWidth: 1,
+      borderColor: colors.border + "22",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginHorizontal: 16,
+      marginBottom: 16,
+    },
+    sellerBtnTitle: { fontFamily: "DMSans_700Bold", fontSize: 14, color: colors.foreground },
+    sellerBtnSub: { fontFamily: "DMSans_400Regular", fontSize: 12, color: colors.mutedForeground, marginTop: 1 },
   });
 
   if (!isLoaded) {
@@ -289,6 +304,18 @@ export default function AccountScreen() {
             <Ionicons name="log-out-outline" size={22} color={colors.mutedForeground} />
           </Pressable>
         </View>
+
+        <Pressable
+          style={s.sellerBtn}
+          onPress={() => router.push("/seller/products")}
+        >
+          <Ionicons name="storefront-outline" size={20} color={colors.secondary} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.sellerBtnTitle}>Seller Dashboard</Text>
+            <Text style={s.sellerBtnSub}>Manage your product listings</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+        </Pressable>
 
         <Text style={s.sectionTitle}>My Orders</Text>
 

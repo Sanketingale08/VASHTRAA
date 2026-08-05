@@ -109,13 +109,46 @@ export function AccountProfilePage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
+
+    // Client-side validation
+    if (form.phone && !/^\d{10}$/.test(form.phone)) {
+      setError("Mobile number must be exactly 10 digits.");
+      return;
+    }
+    if (form.alternateMobile && !/^\d{10}$/.test(form.alternateMobile)) {
+      setError("Alternate mobile must be exactly 10 digits.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
-      await user.update({
-        firstName: form.firstName.trim() || undefined,
-        lastName: form.lastName.trim() || undefined,
-      });
+      // Update name fields via Clerk client SDK.
+      // OAuth providers (e.g. Google) may control these — swallow provider
+      // restriction errors rather than aborting the whole save.
+      try {
+        await user.update({
+          firstName: form.firstName.trim() || undefined,
+          lastName: form.lastName.trim() || undefined,
+        });
+      } catch (nameErr: any) {
+        const code: string =
+          nameErr?.errors?.[0]?.code ??
+          nameErr?.errors?.[0]?.message ??
+          nameErr?.message ??
+          "";
+        // Only re-throw genuinely unexpected errors
+        if (
+          !code.includes("external") &&
+          !code.includes("provider") &&
+          !code.includes("form_param") &&
+          !code.includes("unverified") &&
+          !code.includes("managed")
+        ) {
+          throw nameErr;
+        }
+        // Provider-controlled name — skip silently and continue saving metadata
+      }
 
       const res = await fetch(`${BASE}/api/account/profile`, {
         method: "PATCH",
@@ -134,10 +167,18 @@ export function AccountProfilePage() {
         throw new Error(body.error ?? "Failed to save profile");
       }
 
+      // Reload Clerk's user object so publicMetadata changes propagate
+      // immediately to all useUser() consumers (dashboard header, overview, etc.)
+      await user.reload();
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
-      setError(err?.errors?.[0]?.message ?? err?.message ?? "Failed to save profile. Please try again.");
+      setError(
+        err?.errors?.[0]?.message ??
+          err?.message ??
+          "Failed to save profile. Please try again.",
+      );
     } finally {
       setSaving(false);
     }

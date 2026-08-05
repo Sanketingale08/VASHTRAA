@@ -330,6 +330,70 @@ export async function sendVendorApprovalEmail(opts: {
   }
 }
 
+export async function sendVendorSuspensionEmail(opts: {
+  toEmail: string;
+  vendorName: string;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn("[transactionalEmail] RESEND_API_KEY not set — skipping vendor suspension email");
+    return;
+  }
+
+  const { toEmail, vendorName } = opts;
+  const subject = `Your TwirlDrape store has been suspended`;
+  const body = `
+    <p>We regret to inform you that your store <strong>${vendorName}</strong> has been <strong>suspended</strong> by the TwirlDrape team.</p>
+    <p>Your store listings are no longer visible to shoppers while the suspension is in effect.</p>
+    <p>If you believe this is an error or would like to appeal, please contact our support team with your store details and we will review your case.</p>
+    <p>We appreciate your understanding and hope to resolve this as quickly as possible.</p>
+  `;
+
+  try {
+    await resend.emails.send({
+      from: `${APP_NAME} <${FROM_ADDRESS}>`,
+      to: [toEmail],
+      subject,
+      html: wrapInTemplate(subject, body),
+    });
+    logger.info({ toEmail, vendorName }, "[transactionalEmail] Vendor suspension email sent");
+  } catch (err) {
+    logger.error({ err, toEmail, vendorName }, "[transactionalEmail] Failed to send vendor suspension email");
+  }
+}
+
+export async function sendVendorRejectionEmail(opts: {
+  toEmail: string;
+  vendorName: string;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn("[transactionalEmail] RESEND_API_KEY not set — skipping vendor rejection email");
+    return;
+  }
+
+  const { toEmail, vendorName } = opts;
+  const subject = `Update on your TwirlDrape seller application`;
+  const body = `
+    <p>Thank you for your interest in selling on TwirlDrape.</p>
+    <p>After reviewing your application for <strong>${vendorName}</strong>, we are unable to approve your store at this time.</p>
+    <p>If you have questions about this decision or would like guidance on reapplying, please reach out to our support team — we are happy to help.</p>
+    <p>Thank you for your understanding.</p>
+  `;
+
+  try {
+    await resend.emails.send({
+      from: `${APP_NAME} <${FROM_ADDRESS}>`,
+      to: [toEmail],
+      subject,
+      html: wrapInTemplate(subject, body),
+    });
+    logger.info({ toEmail, vendorName }, "[transactionalEmail] Vendor rejection email sent");
+  } catch (err) {
+    logger.error({ err, toEmail, vendorName }, "[transactionalEmail] Failed to send vendor rejection email");
+  }
+}
+
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
   logger.info("[emailOutbox] Starting outbox retry worker");
 

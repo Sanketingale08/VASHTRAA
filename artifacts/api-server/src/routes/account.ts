@@ -12,11 +12,12 @@ const requireAuth = (req: any, res: any, next: any) => {
 };
 
 router.patch("/account/profile", requireAuth, async (req: any, res: any): Promise<void> => {
-  const { phone, dateOfBirth, gender, language } = req.body;
+  const { phone, alternateMobile, dateOfBirth, gender, language } = req.body;
   try {
     await clerkClient.users.updateUserMetadata(req.userId, {
       publicMetadata: {
         phone: phone ?? "",
+        alternateMobile: alternateMobile ?? "",
         dateOfBirth: dateOfBirth ?? "",
         gender: gender ?? "",
         language: language ?? "English",

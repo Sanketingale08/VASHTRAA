@@ -6,10 +6,7 @@ import {
   BadgeCheck,
   Star,
   Truck,
-  RefreshCcw,
-  CreditCard,
   Store,
-  Headphones,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -78,14 +75,6 @@ const categories = [
   { label: "New Arrivals", image: "/images/product-1.png", href: "/paithani/shop?newArrival=true" },
 ];
 
-const trustFeatures = [
-  { icon: <BadgeCheck className="w-8 h-8" style={{ color: GOLD }} />, title: "100% Authentic Products", desc: "Every saree is verified and sourced directly from trusted weavers and artisans." },
-  { icon: <ShieldCheck className="w-8 h-8" style={{ color: GOLD }} />, title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on TwirlDrape." },
-  { icon: <CreditCard className="w-8 h-8" style={{ color: GOLD }} />, title: "Secure Payments & Data Protection", desc: "Bank-grade encryption keeps your payment and personal data completely safe." },
-  { icon: <RefreshCcw className="w-8 h-8" style={{ color: GOLD }} />, title: "Easy Returns & Refunds", desc: "Hassle-free returns within 7 days — no questions asked, full refund guaranteed." },
-  { icon: <Truck className="w-8 h-8" style={{ color: GOLD }} />, title: "Fast & Reliable Pan India Delivery", desc: "Swift shipping across all states with real-time tracking on every order." },
-  { icon: <Headphones className="w-8 h-8" style={{ color: GOLD }} />, title: "Dedicated Support 24/7", desc: "Our saree experts are always available to help you find the perfect drape." },
-];
 
 const testimonials = [
   { name: "Priya Sharma", city: "Mumbai", rating: 5, quote: "The Paithani saree I ordered was absolutely stunning — the colors were exactly as shown and the quality is exceptional. Received so many compliments at the wedding!", avatar: "/images/artisan-1.png" },
@@ -514,27 +503,6 @@ export default function Home() {
                 <Link href="/designer" className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest self-start transition-opacity hover:opacity-80" style={{ color: MAROON }}>Explore Now →</Link>
               </div>
             </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── WHY SHOP ─────────────────────────────────────── */}
-      <section className="py-16 md:py-20 bg-white">
-        <div className="container mx-auto px-4">
-          <SectionTitle subtitle="Your trust is our highest priority at every step">
-            Why Shop With TwirlDrape?
-          </SectionTitle>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {trustFeatures.map((f, i) => (
-              <motion.div key={f.title} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i * 0.08 }}
-                className="flex flex-col items-start gap-4 p-6 rounded-xl border hover:shadow-md transition-shadow" style={{ borderColor: GOLD + "33", background: IVORY }}>
-                <div className="p-3 rounded-xl" style={{ background: MAROON + "11" }}>{f.icon}</div>
-                <div>
-                  <h4 className="font-serif text-lg font-semibold mb-1" style={{ color: MAROON }}>{f.title}</h4>
-                  <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
           </div>
         </div>
       </section>

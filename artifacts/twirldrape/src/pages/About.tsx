@@ -130,55 +130,9 @@ export default function About() {
       .catch(() => {});
   }, []);
 
-  const heroLines = content.heroHeadline.split("\n");
-
   return (
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
-
-        {/* ── Hero ─────────────────────────────────────────────── */}
-        <section className="relative bg-[#1E6B5A] py-24 md:py-32 overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-8"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            }}
-          />
-          <div className="relative z-10 container mx-auto px-4 text-center">
-            <motion.p
-              initial="hidden"
-              animate="visible"
-              custom={0}
-              variants={fadeUp}
-              className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-4"
-            >
-              Our Story
-            </motion.p>
-            <motion.h1
-              initial="hidden"
-              animate="visible"
-              custom={1}
-              variants={fadeUp}
-              className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold mb-6 leading-tight"
-            >
-              {heroLines.map((line, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <br className="hidden md:block" />}
-                  {line}
-                </React.Fragment>
-              ))}
-            </motion.h1>
-            <motion.p
-              initial="hidden"
-              animate="visible"
-              custom={2}
-              variants={fadeUp}
-              className="text-[#E6F0EA] max-w-2xl mx-auto text-base md:text-lg leading-relaxed"
-            >
-              {content.heroSubtext}
-            </motion.p>
-          </div>
-        </section>
 
         {/* ── Stats bar ────────────────────────────────────────── */}
         <section className="bg-white border-b border-[#C9A84C]/20 py-10">
@@ -238,6 +192,34 @@ export default function About() {
                 />
               </div>
             </motion.div>
+          </div>
+        </section>
+
+        {/* ── Why Shop With TwirlDrape ─────────────────────────── */}
+        <section className="bg-white py-16 md:py-24">
+          <div className="container mx-auto px-4">
+            <SectionTitle subtitle="Your trust is our highest priority at every step">
+              Why Shop With TwirlDrape?
+            </SectionTitle>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {TRUST_BADGES.map((f, i) => (
+                <motion.div
+                  key={f.title}
+                  custom={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                  className="flex flex-col items-start gap-4 p-6 rounded-2xl border border-[#C9A84C]/20 hover:shadow-md transition-shadow duration-300 bg-[#F3F8F5]"
+                >
+                  <div className="p-3 rounded-xl" style={{ background: MAROON + "15" }}>{f.icon}</div>
+                  <div>
+                    <h4 className="font-serif text-lg font-semibold mb-1" style={{ color: MAROON }}>{f.title}</h4>
+                    <p className="text-sm text-[#7a5f4e] leading-relaxed">{f.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -318,41 +300,6 @@ export default function About() {
                 </Link>
               </div>
             </motion.div>
-          </div>
-        </section>
-
-        {/* ── Why TwirlDrape (trust badges) ───────────────────── */}
-        <section className="bg-[#1E6B5A] py-16 md:py-24">
-          <div className="container mx-auto px-4">
-            <motion.div
-              custom={0}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-              className="text-center mb-12"
-            >
-              <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Why TwirlDrape</p>
-              <h2 className="font-serif text-3xl md:text-4xl text-[#F3F8F5] font-bold">A Promise You Can Trust</h2>
-            </motion.div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {TRUST_BADGES.map((f, i) => (
-                <motion.div
-                  key={f.title}
-                  custom={i}
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true }}
-                  variants={fadeUp}
-                  className="bg-white/5 border border-[#C9A84C]/20 rounded-2xl p-6 backdrop-blur-sm"
-                >
-                  <div className="mb-4">{f.icon}</div>
-                  <h3 className="font-semibold text-[#F3F8F5] text-base mb-2">{f.title}</h3>
-                  <p className="text-sm text-[#E6F0EA]/80 leading-relaxed">{f.desc}</p>
-                </motion.div>
-              ))}
-            </div>
           </div>
         </section>
 

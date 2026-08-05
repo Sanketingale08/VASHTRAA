@@ -333,12 +333,16 @@ export async function sendVendorApprovalEmail(opts: {
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
   logger.info("[emailOutbox] Starting outbox retry worker");
 
+  const SENT_RETENTION_DAYS = 30;
+  const DEAD_RETENTION_DAYS = 90;
+
   const tick = async () => {
     const resend = getResendClient();
     if (!resend) return;
 
     const now = new Date();
 
+    // Retry pending/failed emails that are due
     const pending = await db
       .select()
       .from(emailOutboxTable)
@@ -353,6 +357,38 @@ export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
 
     for (const entry of pending) {
       await attemptSend(resend, entry);
+    }
+
+    // Purge old "sent" rows (older than 30 days)
+    const sentCutoff = new Date(now.getTime() - SENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const sentDeleted = await db
+      .delete(emailOutboxTable)
+      .where(
+        and(
+          eq(emailOutboxTable.status, "sent"),
+          lt(emailOutboxTable.createdAt, sentCutoff)
+        )
+      )
+      .returning({ id: emailOutboxTable.id });
+
+    if (sentDeleted.length > 0) {
+      logger.info({ count: sentDeleted.length }, "[emailOutbox] Purged old sent entries");
+    }
+
+    // Purge old "dead" rows (older than 90 days — enough time for manual follow-up)
+    const deadCutoff = new Date(now.getTime() - DEAD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const deadDeleted = await db
+      .delete(emailOutboxTable)
+      .where(
+        and(
+          eq(emailOutboxTable.status, "dead"),
+          lt(emailOutboxTable.createdAt, deadCutoff)
+        )
+      )
+      .returning({ id: emailOutboxTable.id });
+
+    if (deadDeleted.length > 0) {
+      logger.info({ count: deadDeleted.length }, "[emailOutbox] Purged old dead entries");
     }
   };
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { notificationsTable, ADMIN_NOTIFICATION_USER_ID } from "@workspace/db";
+import { notificationsTable, ADMIN_NOTIFICATION_USER_ID, emailOutboxTable } from "@workspace/db";
 import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 
 const router = Router();
@@ -139,6 +139,44 @@ router.delete("/admin/notifications/:id", requireAdminKey, async (req: any, res:
   } catch (err: any) {
     req.log?.error({ err }, "admin/notifications/:id delete failed");
     res.status(500).json({ error: "Failed to delete notification" });
+  }
+});
+
+// Dead email outbox — lists emails that permanently failed delivery for manual follow-up
+router.get("/admin/email-outbox/dead", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
+    const offset = (page - 1) * limit;
+
+    const rows = await db
+      .select({
+        id: emailOutboxTable.id,
+        orderId: emailOutboxTable.orderId,
+        userId: emailOutboxTable.userId,
+        toEmail: emailOutboxTable.toEmail,
+        subject: emailOutboxTable.subject,
+        type: emailOutboxTable.type,
+        attempts: emailOutboxTable.attempts,
+        lastAttemptAt: emailOutboxTable.lastAttemptAt,
+        errorMessage: emailOutboxTable.errorMessage,
+        createdAt: emailOutboxTable.createdAt,
+      })
+      .from(emailOutboxTable)
+      .where(eq(emailOutboxTable.status, "dead"))
+      .orderBy(desc(emailOutboxTable.lastAttemptAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(emailOutboxTable)
+      .where(eq(emailOutboxTable.status, "dead"));
+
+    res.json({ entries: rows, total, page, limit });
+  } catch (err: any) {
+    req.log?.error({ err }, "admin/email-outbox/dead failed");
+    res.status(500).json({ error: "Failed to fetch dead email outbox" });
   }
 });
 

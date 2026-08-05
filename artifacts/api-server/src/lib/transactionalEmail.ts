@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { db, emailOutboxTable } from "@workspace/db";
 import { eq, and, lte, lt, inArray } from "drizzle-orm";
 import { logger } from "./logger";
+import { insertAdminNotification } from "./adminNotifications";
 
 const APP_NAME = "TwirlDrape";
 const FROM_ADDRESS = "orders@twirldrape.com";
@@ -220,6 +221,24 @@ async function attemptSend(
         .update(emailOutboxTable)
         .set({ status: "dead", attempts: nextAttempt, lastAttemptAt: now, errorMessage: errMsg })
         .where(eq(emailOutboxTable.id, entry.id));
+
+      // Alert admin so staff can follow up manually
+      insertAdminNotification({
+        type: "email_delivery_failed",
+        title: "Order email permanently failed",
+        body: `An email to customer (order ${entry.orderId}) could not be delivered after ${nextAttempt} attempts and requires manual follow-up.`,
+        metadata: {
+          outboxId: entry.id,
+          orderId: entry.orderId,
+          userId: entry.userId,
+          toEmail: entry.toEmail,
+          subject: entry.subject,
+          attempts: nextAttempt,
+          error: errMsg,
+        },
+      }).catch((notifErr) => {
+        logger.error({ notifErr, orderId: entry.orderId }, "[emailOutbox] Failed to insert admin notification for dead email");
+      });
     } else {
       const backoffSeconds = RETRY_BACKOFF_SECONDS[nextAttempt - 1] ?? 300;
       const nextRetryAt = new Date(now.getTime() + backoffSeconds * 1000);

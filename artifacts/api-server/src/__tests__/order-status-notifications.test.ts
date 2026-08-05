@@ -16,6 +16,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express, { type Express } from "express";
 
+const sendTransactionalEmailMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock("../lib/transactionalEmail", () => ({
+  sendTransactionalEmail: sendTransactionalEmailMock,
+}));
+
 const ADMIN_KEY = "test-admin-key";
 const USER_ID = "user-buyer-1";
 const ORDER_ID = "order-uuid-1";
@@ -108,6 +114,24 @@ vi.mock("@workspace/db", () => {
   const dbMock: any = {
     select: vi.fn((..._args: any[]) => ({
       from: vi.fn((table: any) => selectFor(table).from(table)),
+    })),
+
+    insert: vi.fn((table: any) => ({
+      values: vi.fn((vals: any) => {
+        if (table?._t === "notifications") {
+          state.notifIdCounter++;
+          state.notifications.push({
+            id: `notif-${state.notifIdCounter}`,
+            read: false,
+            createdAt: new Date(),
+            ...vals,
+          });
+        }
+        return {
+          returning: vi.fn(() => Promise.resolve([])),
+          onConflictDoNothing: vi.fn(() => Promise.resolve()),
+        };
+      }),
     })),
 
     transaction: vi.fn(async (cb: (tx: any) => Promise<unknown>) => {
@@ -207,6 +231,7 @@ describe("Order status updates reach the notification bell", () => {
     state.vendor = { id: VENDOR_ID, ownerId: "vendor-owner-1" };
     state.notifications = [];
     state.notifIdCounter = 0;
+    sendTransactionalEmailMock.mockClear();
     app = await buildApp();
   });
 
@@ -234,7 +259,7 @@ describe("Order status updates reach the notification bell", () => {
     const notif = list.body.notifications.find((n: any) => n.type === "order_shipped");
     expect(notif).toBeTruthy();
     expect(notif.title).toBe("Order shipped");
-    expect(notif.body).toMatch(/dispatched/i);
+    expect(notif.body).toMatch(/shipped/i);
     expect(notif.userId).toBe(USER_ID);
   });
 
@@ -286,5 +311,95 @@ describe("Order status updates reach the notification bell", () => {
       .send({ status: "dispatched" });
     expect(res.status).toBe(403);
     expect(state.notifications).toHaveLength(0);
+  });
+
+  it("calls sendTransactionalEmail with type order_shipped when an order is dispatched", async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${ORDER_ID}/status`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ status: "dispatched" });
+    expect(res.status).toBe(200);
+
+    // Allow the fire-and-forget void promise to settle
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_shipped", userId: USER_ID, orderId: ORDER_ID })
+    );
+  });
+
+  it("calls sendTransactionalEmail with type out_for_delivery when an order is out for delivery", async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${ORDER_ID}/status`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ status: "out_for_delivery" });
+    expect(res.status).toBe(200);
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "out_for_delivery", userId: USER_ID, orderId: ORDER_ID })
+    );
+  });
+
+  it("calls sendTransactionalEmail with type order_delivered when an order is marked delivered", async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${ORDER_ID}/status`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ status: "delivered" });
+    expect(res.status).toBe(200);
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_delivered", userId: USER_ID, orderId: ORDER_ID })
+    );
+  });
+});
+
+describe("insertOrderStatusNotification — tracking number passed as reference", () => {
+  beforeEach(() => {
+    sendTransactionalEmailMock.mockClear();
+  });
+
+  it("passes trackingNumber as reference to sendTransactionalEmail for order_shipped", async () => {
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+      trackingNumber: "TRK-12345",
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_shipped", reference: "TRK-12345" })
+    );
+  });
+
+  it("passes trackingNumber as reference to sendTransactionalEmail for order_delivered", async () => {
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_delivered",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+      trackingNumber: "TRK-67890",
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_delivered", reference: "TRK-67890" })
+    );
   });
 });

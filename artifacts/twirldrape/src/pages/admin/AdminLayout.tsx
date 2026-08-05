@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Users, Package, UserCircle, Settings,
   LogOut, Shield, Menu, X, RotateCcw, ShieldAlert, BadgePercent, HelpCircle, Bell, BarChart3,
-  LineChart, Receipt, FileText, Image,
+  LineChart, Receipt, FileText, Image, ShoppingBag,
 } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { label: "Vendor Analytics", href: "/admin/vendor-analytics", icon: BarChart3 },
   { label: "Business Intelligence", href: "/admin/business-intelligence", icon: LineChart },
   { label: "Financial Management", href: "/admin/financial", icon: Receipt },
+  { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Returns & Refunds", href: "/admin/returns", icon: RotateCcw },
   { label: "Seller Disputes", href: "/admin/disputes", icon: ShieldAlert },
   { label: "Coupons", href: "/admin/coupons", icon: BadgePercent },

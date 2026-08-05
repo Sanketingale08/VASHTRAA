@@ -1171,7 +1171,7 @@ router.post("/orders/:orderId/refund", requireAuth, async (req: any, res: any): 
   }
 });
 
-// GET /admin/orders — list all orders for admin management
+// GET /admin/orders — list all orders for admin management (capped at 500 for the UI table)
 router.get("/admin/orders", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
     const { status } = req.query;
@@ -1182,12 +1182,67 @@ router.get("/admin/orders", requireAdminKey, async (req: any, res: any): Promise
       .from(ordersTable)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(ordersTable.createdAt))
-      .limit(200);
+      .limit(500);
 
     res.json({ orders: rows });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch admin orders");
     res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
+
+// GET /admin/orders/export.csv — full order history export with no row cap
+router.get("/admin/orders/export.csv", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const { status, search } = req.query;
+    const conditions = status ? [eq(ordersTable.status, String(status) as any)] : [];
+
+    const rows = await db
+      .select()
+      .from(ordersTable)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(ordersTable.createdAt));
+
+    const escape = (val: string) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+
+    const headers = ["Order ID", "Customer Name", "Items", "Total (INR)", "Status", "Payment Method", "Created Date"];
+
+    let filtered = rows;
+    const q = search ? String(search).trim().toLowerCase() : "";
+    if (q) {
+      filtered = rows.filter((o: any) => {
+        if (String(o.id).toLowerCase().includes(q)) return true;
+        const addr = (o.address as any) ?? {};
+        if (String(addr.name ?? "").toLowerCase().includes(q)) return true;
+        const items: any[] = Array.isArray(o.items) ? o.items : [];
+        if (items.some((i: any) => String(i.name ?? "").toLowerCase().includes(q))) return true;
+        return false;
+      });
+    }
+
+    const csvRows = filtered.map((o: any) => {
+      const addr = (o.address as any) ?? {};
+      const items: any[] = Array.isArray(o.items) ? o.items : [];
+      return [
+        o.id,
+        addr.name ?? "",
+        items.map((i: any) => `${i.name} x${i.quantity}`).join("; "),
+        ((o.total ?? 0) / 100).toFixed(2),
+        String(o.status ?? "").replace(/_/g, " "),
+        String(o.paymentMethod ?? "").replace(/_/g, " "),
+        o.createdAt ? new Date(o.createdAt).toISOString() : "",
+      ];
+    });
+
+    const csv = [headers, ...csvRows].map((row) => row.map(escape).join(",")).join("\r\n");
+
+    const filename = `orders-${status || "all"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    req.log.error({ err }, "Failed to export admin orders CSV");
+    res.status(500).json({ error: "Failed to export orders" });
   }
 });
 

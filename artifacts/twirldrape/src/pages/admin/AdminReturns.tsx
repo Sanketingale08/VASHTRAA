@@ -216,8 +216,29 @@ function ReturnsContent() {
       new Date(o.updatedAt).toLocaleString("en-IN"),
     ]);
 
+    // Build summary row
+    const totalRefundAmount = filtered.reduce((sum, o) => sum + o.total, 0);
+    const statusCounts: Record<string, number> = {};
+    for (const o of filtered) {
+      const s = o.status.replace(/_/g, " ");
+      statusCounts[s] = (statusCounts[s] ?? 0) + 1;
+    }
+    const statusBreakdown = Object.entries(statusCounts)
+      .map(([s, c]) => `${s}: ${c}`)
+      .join("; ");
+    const summaryRow = [
+      "SUMMARY",
+      "",
+      `Total rows: ${filtered.length}`,
+      (totalRefundAmount / 100).toFixed(2),
+      statusBreakdown,
+      "",
+      "",
+      "",
+    ];
+
     const escape = (val: string) => `"${val.replace(/"/g, '""')}"`;
-    const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");
+    const csv = [headers, ...rows, summaryRow].map((row) => row.map(escape).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

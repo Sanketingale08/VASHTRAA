@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   HelpCircle, Plus, ChevronLeft, Send, Clock, CheckCircle2,
   AlertCircle, XCircle, Search, ChevronDown, ChevronUp, Ticket,
-  MessageSquare,
+  MessageSquare, Paperclip, FileText, X, ImageIcon,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ interface Message {
   body: string;
   isStaff: boolean;
   createdAt: string;
+  attachments?: string[];
 }
 
 interface TicketDetail extends Ticket {
@@ -111,6 +112,61 @@ function statusIcon(status: TicketStatus) {
   }
 }
 
+// ── File attachment helpers ───────────────────────────────────────────────────
+
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf", "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+const MAX_TOTAL_BYTES = 10 * 1024 * 1024; // 10 MB
+
+function FileChip({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/");
+  const [preview, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return;
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, isImage]);
+
+  return (
+    <div className="flex items-center gap-1.5 bg-[#F3F8F5] border border-[#C9A84C]/30 rounded-lg px-2 py-1.5 text-xs max-w-[160px]">
+      {preview
+        ? <img src={preview} alt="" className="w-5 h-5 rounded object-cover shrink-0" />
+        : <FileText size={13} className="text-[#1E6B5A] shrink-0" />}
+      <span className="truncate text-gray-700">{file.name}</span>
+      <button type="button" onClick={onRemove} className="shrink-0 text-gray-400 hover:text-red-500 transition-colors">
+        <X size={11} />
+      </button>
+    </div>
+  );
+}
+
+function AttachmentLinks({ attachments, base }: { attachments?: string[]; base: string }) {
+  if (!attachments?.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {attachments.map((path, i) => {
+        const isImage = /\.(jpg|jpeg|png)$/i.test(path);
+        const url = `${base}/api/storage${path}`;
+        const name = decodeURIComponent(path.split("/").pop() ?? `file-${i + 1}`);
+        return (
+          <a
+            key={i}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg border transition-colors bg-white/40 border-current/20 hover:bg-white/60"
+          >
+            {isImage ? <ImageIcon size={11} /> : <FileText size={11} />}
+            <span className="max-w-[100px] truncate">{name}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function relativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -141,6 +197,9 @@ export function AccountSupportPage() {
   const [mobileView, setMobileView] = useState<MobileView>("list");
 
   const [replyBody, setReplyBody] = useState("");
+  const [newTicketFiles, setNewTicketFiles] = useState<File[]>([]);
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [faqSearch, setFaqSearch] = useState("");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [form, setForm] = useState({ subject: "", category: "" as Category | "", description: "", orderId: "" });
@@ -196,7 +255,7 @@ export function AccountSupportPage() {
   });
 
   const createTicket = useMutation({
-    mutationFn: async (data: { subject: string; category: string; description: string; orderId?: string }) => {
+    mutationFn: async (data: { subject: string; category: string; description: string; orderId?: string; attachments?: string[] }) => {
       const r = await fetch(`${basePath}/api/support/tickets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -213,6 +272,7 @@ export function AccountSupportPage() {
       qc.invalidateQueries({ queryKey: ["support-tickets"] });
       qc.invalidateQueries({ queryKey: ["support-open-count"] });
       setForm({ subject: "", category: "", description: "", orderId: "" });
+      setNewTicketFiles([]);
       setFormError("");
       setSelectedId(ticket.id);
       setRightPanel("detail");
@@ -222,12 +282,12 @@ export function AccountSupportPage() {
   });
 
   const addReply = useMutation({
-    mutationFn: async (body: string) => {
+    mutationFn: async ({ body, attachments }: { body: string; attachments?: string[] }) => {
       const r = await fetch(`${basePath}/api/support/tickets/${selectedId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, attachments }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -239,6 +299,7 @@ export function AccountSupportPage() {
       qc.invalidateQueries({ queryKey: ["support-ticket", selectedId] });
       qc.invalidateQueries({ queryKey: ["support-tickets"] });
       setReplyBody("");
+      setReplyFiles([]);
     },
   });
 
@@ -287,30 +348,75 @@ export function AccountSupportPage() {
       item.a.toLowerCase().includes(faqSearch.toLowerCase())
   );
 
+  async function uploadFiles(files: File[]): Promise<string[]> {
+    return Promise.all(files.map(async (file) => {
+      const res = await fetch(`${basePath}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!res.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await res.json();
+      await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      return objectPath as string;
+    }));
+  }
+
   function selectTicket(id: string) {
     setSelectedId(id);
     setRightPanel("detail");
     setMobileView("detail");
   }
 
-  function handleSubmitTicket(e: React.FormEvent) {
+  async function handleSubmitTicket(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
     if (!form.subject.trim()) { setFormError("Subject is required"); return; }
     if (!form.category) { setFormError("Please select a category"); return; }
     if (!form.description.trim()) { setFormError("Description is required"); return; }
+    const totalSize = newTicketFiles.reduce((s, f) => s + f.size, 0);
+    if (totalSize > MAX_TOTAL_BYTES) { setFormError("Total attachment size must be under 10 MB"); return; }
+
+    let attachments: string[] = [];
+    if (newTicketFiles.length > 0) {
+      setUploadingFiles(true);
+      try {
+        attachments = await uploadFiles(newTicketFiles);
+      } catch {
+        setFormError("Failed to upload attachments — please try again.");
+        setUploadingFiles(false);
+        return;
+      }
+      setUploadingFiles(false);
+    }
     createTicket.mutate({
       subject: form.subject,
       category: form.category,
       description: form.description,
       orderId: form.orderId || undefined,
+      attachments,
     });
   }
 
-  function handleSendReply(e: React.FormEvent) {
+  async function handleSendReply(e: React.FormEvent) {
     e.preventDefault();
-    if (!replyBody.trim() || addReply.isPending) return;
-    addReply.mutate(replyBody.trim());
+    if (!replyBody.trim() || addReply.isPending || uploadingFiles) return;
+    const totalSize = replyFiles.reduce((s, f) => s + f.size, 0);
+    if (totalSize > MAX_TOTAL_BYTES) return;
+
+    let attachments: string[] = [];
+    if (replyFiles.length > 0) {
+      setUploadingFiles(true);
+      try {
+        attachments = await uploadFiles(replyFiles);
+      } catch {
+        setUploadingFiles(false);
+        return;
+      }
+      setUploadingFiles(false);
+    }
+    addReply.mutate({ body: replyBody.trim(), attachments });
   }
 
   const openCount = tickets.filter((t) => t.status === "Open" || t.status === "In Progress").length;
@@ -482,9 +588,33 @@ export function AccountSupportPage() {
             className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400 resize-none"
           />
         </div>
-        <p className="text-xs text-gray-400 italic">
-          Note: For file attachments (photos, screenshots), mention it in the description — our team will request them separately.
-        </p>
+        <div>
+          <label className="block text-xs font-semibold text-[#3D1A1A] mb-1.5 uppercase tracking-wide">
+            Attachments <span className="font-normal text-gray-400 normal-case">(optional · JPG, PNG, PDF, DOC — max 10 MB total)</span>
+          </label>
+          <label className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-[#C9A84C]/50 rounded-lg cursor-pointer hover:bg-[#F3F8F5] transition-colors">
+            <Paperclip size={14} className="text-[#1E6B5A] shrink-0" />
+            <span className="text-sm text-gray-400">Click to attach files…</span>
+            <input
+              type="file"
+              className="hidden"
+              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []).filter(f => ACCEPTED_TYPES.includes(f.type));
+                setNewTicketFiles(prev => [...prev, ...files]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {newTicketFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {newTicketFiles.map((f, i) => (
+                <FileChip key={i} file={f} onRemove={() => setNewTicketFiles(prev => prev.filter((_, j) => j !== i))} />
+              ))}
+            </div>
+          )}
+        </div>
         {formError && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {formError}
@@ -600,6 +730,7 @@ export function AccountSupportPage() {
                     </p>
                   )}
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                  <AttachmentLinks attachments={msg.attachments} base={basePath} />
                   <p className={cn("text-[10px] mt-1.5", msg.isStaff ? "text-gray-400" : "text-white/60")}>
                     {formatDateTime(msg.createdAt)}
                   </p>
@@ -610,28 +741,53 @@ export function AccountSupportPage() {
 
           {ticketDetail.status !== "Closed" && ticketDetail.status !== "Resolved" ? (
             <>
-              <form onSubmit={handleSendReply} className="border-t border-[#C9A84C]/15 p-3 flex gap-2">
-                <textarea
-                  value={replyBody}
-                  onChange={(e) => setReplyBody(e.target.value)}
-                  placeholder="Write a reply…"
-                  rows={2}
-                  className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B5A]/40 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (replyBody.trim()) addReply.mutate(replyBody.trim());
-                    }
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={!replyBody.trim() || addReply.isPending}
-                  className="self-end px-3 py-2 bg-[#1E6B5A] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
-                >
-                  <Send size={15} />
-                </button>
-              </form>
+              <div className="border-t border-[#C9A84C]/15 p-3 space-y-2">
+                <form onSubmit={handleSendReply} className="flex gap-2">
+                  <textarea
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
+                    placeholder="Write a reply…"
+                    rows={2}
+                    className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B5A]/40 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendReply(e as any);
+                      }
+                    }}
+                  />
+                  <div className="flex flex-col gap-1 shrink-0 self-end">
+                    <button
+                      type="submit"
+                      disabled={!replyBody.trim() || addReply.isPending || uploadingFiles}
+                      className="px-3 py-2 bg-[#1E6B5A] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
+                    >
+                      {uploadingFiles ? <span className="text-xs">…</span> : <Send size={15} />}
+                    </button>
+                    <label className="px-3 py-2 text-gray-400 hover:text-[#1E6B5A] cursor-pointer rounded-lg hover:bg-[#F3F8F5] transition-colors flex justify-center" title="Attach files">
+                      <Paperclip size={15} />
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files ?? []).filter(f => ACCEPTED_TYPES.includes(f.type));
+                          setReplyFiles(prev => [...prev, ...files]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                </form>
+                {replyFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {replyFiles.map((f, i) => (
+                      <FileChip key={i} file={f} onRemove={() => setReplyFiles(prev => prev.filter((_, j) => j !== i))} />
+                    ))}
+                  </div>
+                )}
+              </div>
               {ticketDetail.assignedTo === "seller" && !ticketDetail.escalated && (
                 <div className="border-t border-[#C9A84C]/15 p-3 flex items-center justify-between gap-2">
                   <p className="text-[11px] text-gray-400">Not hearing back from the seller?</p>
@@ -721,7 +877,7 @@ export function AccountSupportPage() {
                   : "border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#F3F8F5]"
               )}
             >
-              <Plus size={14} /> New Ticket
+              New Ticket
             </button>
             <button
               onClick={() => { setFaqSearch(""); setRightPanel("faq"); }}

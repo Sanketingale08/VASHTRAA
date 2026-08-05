@@ -33,6 +33,7 @@ interface Message {
   isStaff: boolean;
   internal: boolean;
   createdAt: string;
+  attachments?: string[];
 }
 
 interface TicketDetail extends Ticket {
@@ -320,6 +321,21 @@ function AdminSupportContent() {
                     >
                       {m.internal && <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">Internal note</p>}
                       <p className="leading-relaxed whitespace-pre-wrap">{m.body}</p>
+                      {m.attachments && m.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {m.attachments.map((path, ai) => {
+                            const isImg = /\.(jpg|jpeg|png)$/i.test(path);
+                            const url = `${basePath}/api/storage${path}`;
+                            const name = decodeURIComponent(path.split("/").pop() ?? `file-${ai + 1}`);
+                            return (
+                              <a key={ai} href={url} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded border transition-colors bg-white/30 hover:bg-white/50 border-current/20">
+                                {isImg ? "🖼" : "📎"} <span className="max-w-[90px] truncate">{name}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
                       <p className={cn("text-[10px] mt-1.5", m.isStaff && !m.internal ? "text-white/60" : "text-gray-400")}>{formatDateTime(m.createdAt)}</p>
                     </div>
                   </div>

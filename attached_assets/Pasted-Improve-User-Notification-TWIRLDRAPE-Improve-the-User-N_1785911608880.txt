@@ -1,0 +1,113 @@
+Improve User Notification (TWIRLDRAPE) 
+Improve the User Notification Module in the TWIRLDRAPE User Dashboard. Do not modify 
+any backend business logic, APIs, authentication, routing, or database relationships. Only 
+improve the UI/UX and fix the notification functionality. 
+1. Remove Unnecessary Text 
+ Remove the subtitle below the Notifications heading: 
+o "Stay up to date with your orders, offers, and stock alerts." 
+ Remove all unnecessary helper text and bullet points from the notification settings page 
+to create a cleaner interface. 
+2. Always Show Delete Button 
+ Display the Delete button/icon on every notification card at all times. 
+ Do not show it only on hover. 
+ Users should be able to delete individual notifications with a single click. 
+ Show a confirmation before permanently deleting a notification. 
+3. Improve Search Bar Visibility 
+ Make the notification search bar more visible. 
+ Add a proper border (1px solid) with rounded corners. 
+ Increase contrast between the search bar and background. 
+ Add a search icon inside the input. 
+ Improve padding and spacing. 
+ Ensure the placeholder text is clearly readable. 
+4. Update Notification Status Correctly 
+The notification status should always match the actual order status. 
+For example: 
+ Order Placed → "Your order has been placed successfully." 
+ Order Confirmed → "Your order has been confirmed." 
+ Processing → "Your order is being processed." 
+ Packed → "Your order has been packed." 
+ Shipped → "Your order has been shipped." 
+ Out for Delivery → "Your order is out for delivery." 
+ Delivered → "Your order has been delivered." 
+ Cancelled → "Your order has been cancelled." 
+ Returned → "Your return request has been approved." 
+ Refund Initiated → "Your refund has been initiated." 
+ Refund Completed → "Your refund has been completed." 
+Never display an incorrect or duplicate status message. 
+5. Fix Notification Preference Logic 
+The notification preference switches must work correctly. 
+If a user turns OFF a notification category, notifications from that category must not be 
+generated. 
+Examples: 
+ If Order Updates is OFF, do not generate order-related notifications. 
+ If Offers & Coupons is OFF, do not generate promotional notifications. 
+ If Stock Alerts is OFF, do not generate stock availability notifications. 
+ If Email Notifications are OFF, do not send email notifications for that category. 
+When the user turns a category back ON, only future notifications should be received. 
+Notifications should never ignore the user's selected preferences. 
+6. Display Notification Time Properly 
+Currently, the notification time is not visible. 
+Display the notification timestamp on every notification card. 
+Example formats: 
+ Just now 
+ 5 minutes ago 
+ 1 hour ago 
+ Today, 10:30 AM 
+ Yesterday, 6:45 PM 
+ 28 Jul 2026, 3:15 PM 
+The timestamp should be: 
+ Clearly visible 
+ Smaller than the title 
+ Properly aligned 
+ Easy to read 
+7. Improve Notification Cards 
+Redesign each notification card with: 
+ White background 
+ Soft border 
+ 16–20px border radius 
+ Better spacing 
+ Premium typography 
+ Clear hierarchy for title, message, and timestamp 
+ Proper alignment of icons, content, and actions 
+ Smooth hover effect 
+ Responsive layout 
+8. Maintain Existing Functionality 
+ Do not change backend logic. 
+ Do not modify APIs. 
+ Do not modify routing. 
+ Do not change database relationships. 
+ Preserve all existing notification functionality. 
+ Ensure notifications remain synchronized with the user's account and order data. 
+9. Separate User & Seller Notifications 
+ Ensure the User Dashboard displays only user-related notifications. 
+ Do not show any Seller Panel notifications on the User Dashboard, such as: 
+o Low Stock Alerts 
+o New Order Alerts for Sellers 
+o Product Approval/Rejection 
+o Inventory Updates 
+o Seller Verification Updates 
+o Payout Notifications 
+o Store Performance Alerts 
+o Product Review Moderation 
+o Any other seller-specific notifications 
+ Users should receive only notifications related to their own account, including: 
+o Order Updates 
+o Payment Updates 
+o Shipping & Delivery Updates 
+o Wishlist Updates 
+o Offers & Coupons 
+o Rewards 
+o Support Ticket Updates 
+o Account & Security Notifications 
+This ensures that seller notifications are completely isolated from the user notification system 
+and never appear on the user side. 
+Final Requirement 
+Test the complete notification system after implementation and ensure: 
+ Search bar is clearly visible. 
+ Delete button is always visible. 
+ Notification status matches the actual order status. 
+ Notification preferences work correctly. 
+ Disabled notification categories do not generate notifications. 
+ Notification timestamps are displayed correctly. 
+ The notification page has a clean, modern, premium, and consistent UI aligned with the 
+overall TWIRLDRAPE design. 

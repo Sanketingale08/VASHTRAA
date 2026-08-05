@@ -47,6 +47,8 @@ const state = vi.hoisted(() => ({
   },
   notifications: [] as any[],
   notifIdCounter: 0,
+  /** Override notification prefs rows returned by the mock. null = no row (use defaults). */
+  notifPrefs: null as null | { orderUpdates: boolean; emailOrderUpdates: boolean },
 }));
 
 vi.mock("@workspace/db", () => {
@@ -79,7 +81,9 @@ vi.mock("@workspace/db", () => {
       case "vendors":
         return makeSelectChain(() => [state.vendor]);
       case "notificationPreferences":
-        return makeSelectChain(() => []); // no row -> defaults to enabled
+        return makeSelectChain(() =>
+          state.notifPrefs === null ? [] : [state.notifPrefs]
+        ); // null -> no row -> defaults to enabled
       case "commissionRules":
         return makeSelectChain(() => []); // no rules -> default commission rate
       case "vendorSettlements":
@@ -189,7 +193,7 @@ vi.mock("@workspace/db", () => {
     rewardPointsLogTable: tag("rewardPointsLog", ["userId"]),
     supportTicketsTable: tag("supportTickets", ["id"]),
     notificationsTable: tag("notifications", ["id", "userId", "vendorId", "type", "title", "body", "metadata", "read", "createdAt"]),
-    notificationPreferencesTable: tag("notificationPreferences", ["userId", "orderUpdates"]),
+    notificationPreferencesTable: tag("notificationPreferences", ["userId", "orderUpdates", "emailOrderUpdates"]),
     stockHistoryTable: tag("stockHistory", ["id", "productId", "vendorId", "previousStock", "newStock", "source", "reason", "orderId"]),
     commissionRulesTable: tag("commissionRules", ["id", "active", "scope", "vendorId", "category", "rate", "effectiveFrom", "effectiveTo"]),
     vendorSettlementsTable: tag("vendorSettlements", ["id", "orderId", "vendorId", "type", "status", "amount", "productAmount", "commission", "commissionRate", "shippingCharge", "settlementTax", "netPayout"]),
@@ -231,6 +235,7 @@ describe("Order status updates reach the notification bell", () => {
     state.vendor = { id: VENDOR_ID, ownerId: "vendor-owner-1" };
     state.notifications = [];
     state.notifIdCounter = 0;
+    state.notifPrefs = null;
     sendTransactionalEmailMock.mockClear();
     app = await buildApp();
   });
@@ -401,5 +406,141 @@ describe("insertOrderStatusNotification — tracking number passed as reference"
     expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({ type: "order_delivered", reference: "TRK-67890" })
     );
+  });
+});
+
+describe("insertOrderStatusNotification — emailOrderUpdates opt-out gate", () => {
+  beforeEach(() => {
+    state.notifications = [];
+    state.notifIdCounter = 0;
+    state.notifPrefs = null;
+    sendTransactionalEmailMock.mockClear();
+  });
+
+  it("does NOT call sendTransactionalEmail when emailOrderUpdates is false", async () => {
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: false };
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("still inserts the in-app notification row when emailOrderUpdates is false", async () => {
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: false };
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    expect(state.notifications).toHaveLength(1);
+    expect(state.notifications[0].type).toBe("order_shipped");
+    expect(state.notifications[0].userId).toBe(USER_ID);
+  });
+
+  it("does NOT call sendTransactionalEmail for order_delivered when emailOrderUpdates is false", async () => {
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: false };
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_delivered",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT call sendTransactionalEmail for order_cancelled when emailOrderUpdates is false", async () => {
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: false };
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_cancelled",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("DOES call sendTransactionalEmail when no prefs row exists (new user defaults to opted-in)", async () => {
+    // state.notifPrefs = null means the mock returns [] — no row for this user
+    state.notifPrefs = null;
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_shipped", userId: USER_ID })
+    );
+  });
+
+  it("DOES call sendTransactionalEmail when emailOrderUpdates is explicitly true", async () => {
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: true };
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_confirmed",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_confirmed", userId: USER_ID })
+    );
+  });
+
+  it("returns early without inserting any notification when orderUpdates is false", async () => {
+    state.notifPrefs = { orderUpdates: false, emailOrderUpdates: true };
+
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+
+    await new Promise((r) => setImmediate(r));
+
+    expect(state.notifications).toHaveLength(0);
+    expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
   });
 });

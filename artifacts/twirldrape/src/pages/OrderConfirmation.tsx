@@ -117,7 +117,7 @@ function ActionForm({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   reasons?: string[];
   onSubmit: (reason: string) => Promise<void>;
   onClose: () => void;
@@ -156,7 +156,7 @@ function ActionForm({
       <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C9A84C]/20 space-y-3">
         <div>
           <p className="font-semibold text-sm text-gray-800 dark:text-gray-200">{title}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+          {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
         </div>
 
         {reasons && (
@@ -615,7 +615,6 @@ function OrderActions({
           <ActionForm
             key="cancel"
             title="Why do you want to cancel?"
-            description="Please select a reason. Cancellation is immediate and stock will be restored."
             reasons={CANCEL_REASONS}
             onSubmit={doCancel}
             onClose={() => setActiveForm(null)}

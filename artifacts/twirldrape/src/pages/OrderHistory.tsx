@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { motion } from "framer-motion";
-import { Package, ChevronRight, ShoppingBag } from "lucide-react";
+import { Package, ShoppingBag } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useOrdersContext } from "@/context/OrdersContext";
 
@@ -147,7 +147,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                   transition={{ delay: 0.05 * idx }}
                 >
                   <Link href={`/orders/${order.id}`}>
-                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/50 hover:shadow-md transition-all cursor-pointer group">
+                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/60 hover:shadow-lg hover:shadow-[#C9A84C]/8 hover:-translate-y-0.5 hover:bg-[#FDFAF5] dark:hover:bg-[#2F3540] transition-all duration-200 cursor-pointer">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -210,7 +210,6 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
 
                         <div className="flex flex-col items-end gap-2 shrink-0">
                           <p className="font-bold text-[#1E6B5A] text-base">₹{order.total.toLocaleString("en-IN")}</p>
-                          <ChevronRight size={16} className="text-gray-300 group-hover:text-[#C9A84C] transition-colors mt-auto" />
                         </div>
                       </div>
                     </div>

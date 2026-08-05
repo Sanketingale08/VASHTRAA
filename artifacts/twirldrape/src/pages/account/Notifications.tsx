@@ -495,7 +495,7 @@ export function AccountNotificationsPage() {
           </div>
           {prefsLoading ? (
             <div className="p-5 space-y-5 animate-pulse">
-              {[0, 1, 2].map((i) => (
+              {[0, 1].map((i) => (
                 <div key={i} className="flex items-center justify-between">
                   <div className="space-y-1.5">
                     <div className="h-3.5 bg-gray-100 rounded-full w-32" />
@@ -510,7 +510,6 @@ export function AccountNotificationsPage() {
               {[
                 { key: "orderUpdates" as const, label: "Order updates", desc: "Confirmations, shipping, and delivery status" },
                 { key: "offerAlerts" as const, label: "Offers & coupons", desc: "When coupons are about to expire" },
-                { key: "stockAlerts" as const, label: "Stock alerts", desc: "When wishlisted items come back in stock" },
               ].map(({ key, label, desc }) => (
                 <div key={key} className="flex items-center justify-between px-5 py-4">
                   <div>

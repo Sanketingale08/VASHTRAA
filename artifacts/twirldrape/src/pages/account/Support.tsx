@@ -570,7 +570,7 @@ export function AccountSupportPage() {
             <option value="">Not related to an order</option>
             {orders.map((o) => (
               <option key={o.id} value={o.id}>
-                #{o.id.slice(0, 8)} — {o.items?.[0]?.name ?? "Order"}{o.items && o.items.length > 1 ? ` +${o.items.length - 1} more` : ""}
+                #{o.id.startsWith("TD") ? o.id : o.id.replace(/-/g,"").slice(0,8).toUpperCase()} — {o.items?.[0]?.name ?? "Order"}{o.items && o.items.length > 1 ? ` +${o.items.length - 1} more` : ""}
               </option>
             ))}
           </select>

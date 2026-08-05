@@ -186,7 +186,7 @@ export default function SellerOrders() {
                         className={`border-b last:border-b-0 transition-colors ${order.needsAcceptance ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-[#F3F8F5]/60"}`}
                         style={{ borderColor: "#F3F4F6" }}>
                         <td className="px-4 py-3.5 font-mono text-xs text-gray-500">
-                          #{order.id.slice(0, 8).toUpperCase()}
+                          #{order.id.startsWith("TD") ? order.id : order.id.replace(/-/g,"").slice(0,8).toUpperCase()}
                         </td>
                         <td className="px-4 py-3.5 font-medium" style={{ color: MAROON }}>{order.customerName}</td>
                         <td className="px-4 py-3.5 text-gray-600 max-w-[180px]">

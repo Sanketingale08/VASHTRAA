@@ -8,6 +8,12 @@ export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue
 export const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"] as const;
 export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"] as const;
 
+/** Category → product ID prefix */
+export const CATEGORY_PREFIX: Record<typeof CATEGORIES[number], string> = {
+  paithani: "PS",
+  designer: "DS",
+};
+
 export type ProductVariant = {
   size?: string;
   color?: string;
@@ -22,7 +28,7 @@ export type ProductSpecification = {
 };
 
 export const productsTable = pgTable("products", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   price: integer("price").notNull(),

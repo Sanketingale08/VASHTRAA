@@ -1,11 +1,11 @@
-import { pgTable, text, uuid, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { productsTable } from "./products";
 
 export const wishlistsTable = pgTable(
   "wishlists",
   {
     userId: text("user_id").notNull(),
-    productId: uuid("product_id")
+    productId: text("product_id")
       .notNull()
       .references(() => productsTable.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),

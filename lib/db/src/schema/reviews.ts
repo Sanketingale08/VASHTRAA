@@ -4,9 +4,9 @@ import { vendorsTable } from "./vendors";
 
 export const productReviewsTable = pgTable("product_reviews", {
   id: uuid("id").defaultRandom().primaryKey(),
-  productId: uuid("product_id").notNull().references(() => productsTable.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => productsTable.id, { onDelete: "cascade" }),
   vendorId: uuid("vendor_id").references(() => vendorsTable.id),
-  orderId: uuid("order_id"),
+  orderId: text("order_id"),
   userId: text("user_id").notNull(),
   customerName: text("customer_name").notNull().default("Customer"),
   rating: integer("rating").notNull(),
@@ -22,7 +22,7 @@ export const PRODUCT_QUERY_STATUSES = ["Open", "In Progress", "Resolved"] as con
 
 export const productQueriesTable = pgTable("product_queries", {
   id: uuid("id").defaultRandom().primaryKey(),
-  productId: uuid("product_id").notNull().references(() => productsTable.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => productsTable.id, { onDelete: "cascade" }),
   vendorId: uuid("vendor_id").references(() => vendorsTable.id),
   userId: text("user_id").notNull(),
   customerName: text("customer_name").notNull().default("Customer"),

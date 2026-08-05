@@ -381,7 +381,7 @@ export function AccountRewardsPage() {
                               href={`/orders/${entry.orderId}`}
                               className="text-[10px] font-medium text-[#1E6B5A] bg-[#1E6B5A]/5 hover:bg-[#1E6B5A]/10 px-1.5 py-0.5 rounded transition-colors"
                             >
-                              Order #{entry.orderId.slice(0, 8).toUpperCase()}
+                              Order #{entry.orderId?.startsWith("TD") ? entry.orderId : entry.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()}
                             </a>
                           )}
                           {entry.type === "bonus" && (

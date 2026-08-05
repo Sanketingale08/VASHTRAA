@@ -446,9 +446,14 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
   if (!category) { res.status(400).json({ error: "Category is required" }); return; }
 
   try {
+    const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
+    const categoryPrefix = category === "paithani" ? "PS" : "DS";
+    const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
+
     const [product] = await db
       .insert(productsTable)
       .values({
+        id: newProductId,
         name: String(name).trim(),
         description: description ? String(description).trim() : "",
         category: category as any,
@@ -610,9 +615,14 @@ router.post("/products/:id/duplicate", requireVendorAuth, async (req: any, res: 
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
     if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
 
+    const dupSeq = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
+    const dupPrefix = existing.category === "paithani" ? "PS" : "DS";
+    const dupId = `${dupPrefix}${(dupSeq as any).rows[0].seq}`;
+
     const [copy] = await db
       .insert(productsTable)
       .values({
+        id: dupId,
         name: `${existing.name} (Copy)`,
         description: existing.description,
         category: existing.category,

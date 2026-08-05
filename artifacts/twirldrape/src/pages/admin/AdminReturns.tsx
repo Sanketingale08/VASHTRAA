@@ -145,7 +145,6 @@ function ReturnsContent() {
     if (q) {
       list = list.filter((o) => {
         if (o.id.toLowerCase().includes(q)) return true;
-        if (o.id.slice(0, 8).toLowerCase().includes(q)) return true;
         const customerName = o.address?.name ?? "";
         if (customerName.toLowerCase().includes(q)) return true;
         if (o.items.some((item) => item.name.toLowerCase().includes(q))) return true;
@@ -371,7 +370,7 @@ function ReturnsContent() {
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs text-gray-400">#{o.id.slice(0, 8)}</span>
+                        <span className="font-mono text-xs text-gray-400">#{o.id.startsWith("TD") ? o.id : o.id.replace(/-/g,"").slice(0,8).toUpperCase()}</span>
                         {o.address?.name && (
                           <span className="text-xs font-medium text-gray-600">{o.address.name}</span>
                         )}

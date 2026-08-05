@@ -85,7 +85,7 @@ function FeeBreakdownModal({ settlement, onClose }: { settlement: Settlement; on
           <div>
             <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Settlement Breakdown</h3>
             {settlement.orderId && (
-              <p className="text-xs text-gray-400 mt-0.5 font-mono">Order #{settlement.orderId.slice(0, 8).toUpperCase()}</p>
+              <p className="text-xs text-gray-400 mt-0.5 font-mono">Order #{settlement.orderId?.startsWith("TD") ? settlement.orderId : settlement.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()}</p>
             )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -297,7 +297,7 @@ export default function SellerSettlements() {
                     >
                       <td className="px-5 py-3.5">
                         {s.orderId ? (
-                          <span className="font-mono text-xs text-gray-500">#{s.orderId.slice(0, 8).toUpperCase()}</span>
+                          <span className="font-mono text-xs text-gray-500">#{s.orderId?.startsWith("TD") ? s.orderId : s.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()}</span>
                         ) : (
                           <span className="text-xs text-gray-400 capitalize">{s.type}</span>
                         )}

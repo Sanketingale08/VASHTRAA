@@ -175,7 +175,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                               {placedAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                             </span>
                           </div>
-                          <p className="font-mono text-xs text-gray-400 truncate mb-3">#{order.id}</p>
+                          <p className="font-mono text-xs text-gray-400 truncate mb-3">#{order.id.startsWith("TD") ? order.id : order.id.replace(/-/g,"").slice(0,8).toUpperCase()}</p>
 
                           <div className="flex items-center gap-2 mb-3">
                             {previewItems.map((item, i) => (

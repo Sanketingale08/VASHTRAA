@@ -5,7 +5,7 @@ export const STOCK_HISTORY_SOURCES = ["order", "cancel", "return", "manual", "bu
 
 export const stockHistoryTable = pgTable("stock_history", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull().references(() => productsTable.id),
+  productId: text("product_id").notNull().references(() => productsTable.id),
   vendorId: uuid("vendor_id"),
   delta: integer("delta").notNull(),
   previousStock: integer("previous_stock").notNull(),
@@ -13,7 +13,7 @@ export const stockHistoryTable = pgTable("stock_history", {
   source: text("source").$type<typeof STOCK_HISTORY_SOURCES[number]>().notNull(),
   reason: text("reason").notNull().default(""),
   actorId: text("actor_id"),
-  orderId: uuid("order_id"),
+  orderId: text("order_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

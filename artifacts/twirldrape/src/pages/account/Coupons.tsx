@@ -189,7 +189,7 @@ function RedemptionCard({ r, delay }: { r: Redemption; delay: number }) {
         </div>
         <p className="text-xs text-gray-500 line-clamp-1">{r.description}</p>
         <p className="text-[11px] text-gray-400 mt-0.5">
-          Order #{r.orderId.slice(0, 8).toUpperCase()} ·{" "}
+          Order #{r.orderId?.startsWith("TD") ? r.orderId : r.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()} ·{" "}
           {new Date(r.redeemedAt).toLocaleDateString("en-IN", {
             day: "numeric",
             month: "short",

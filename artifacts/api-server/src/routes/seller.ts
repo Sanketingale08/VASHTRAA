@@ -415,7 +415,10 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
     for (const item of toInsert) {
       const { _rowNum, ...values } = item;
       try {
-        const [product] = await db.insert(productsTable).values(values).returning({ id: productsTable.id, name: productsTable.name });
+        const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
+        const categoryPrefix = values.category === "paithani" ? "PS" : "DS";
+        const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
+        const [product] = await db.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
         results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
       } catch (insertErr: any) {
         results.push({ row: _rowNum, success: false, error: "Failed to save row" });
@@ -986,7 +989,7 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
           tx,
           type: "system_error_alert",
           title: "Vendor rejected an order — order cancelled",
-          body: `All vendor(s) rejected order #${order.id.slice(0, 8).toUpperCase()}. Last reason: ${reason}`,
+          body: `All vendor(s) rejected order ${order.id}. Last reason: ${reason}`,
           metadata: { orderId: order.id, vendorId },
         });
       } else {
@@ -1033,7 +1036,7 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
           tx,
           type: "system_error_alert",
           title: "Vendor rejected items in an order",
-          body: `Vendor rejected their portion of order #${order.id.slice(0, 8).toUpperCase()}. Reason: ${reason}`,
+          body: `Vendor rejected their portion of order ${order.id}. Reason: ${reason}`,
           metadata: { orderId: order.id, vendorId },
         });
       }

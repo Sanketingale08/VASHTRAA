@@ -230,10 +230,14 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
         const codFee = paymentMethod === "cod" ? 50 : 0;
         const total = afterDiscount + shipping + taxAmt + codFee;
 
+        const seqResult = await tx.execute(sql`SELECT nextval('order_id_seq') AS seq`);
+        const newOrderId = `TD${(seqResult as any).rows[0].seq}`;
+
         const nowIso = new Date().toISOString();
         const [order] = await tx
           .insert(ordersTable)
           .values({
+            id: newOrderId,
             userId: req.userId,
             items: resolvedItems,
             address,

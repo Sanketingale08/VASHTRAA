@@ -118,7 +118,6 @@ function OrdersContent() {
     if (!q) return orders;
     return orders.filter((o) => {
       if (o.id.toLowerCase().includes(q)) return true;
-      if (o.id.slice(0, 8).toLowerCase().includes(q)) return true;
       const customerName = o.address?.name ?? "";
       if (customerName.toLowerCase().includes(q)) return true;
       if (o.status.replace(/_/g, " ").includes(q)) return true;
@@ -275,8 +274,7 @@ function OrdersContent() {
                 {filtered.map((o) => (
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs text-gray-400 whitespace-nowrap">
-                      #{o.id.slice(0, 8)}
-                      <div className="text-[10px] text-gray-300 mt-0.5 truncate max-w-[80px]">{o.id}</div>
+                      #{o.id.startsWith("TD") ? o.id : o.id.replace(/-/g,"").slice(0,8).toUpperCase()}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">
                       <span className="text-sm font-medium" style={{ color: NAVY }}>

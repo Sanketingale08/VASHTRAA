@@ -68,7 +68,7 @@ async function seed() {
 
   console.log("Seeding products...");
 
-  await db.insert(productsTable).values([
+  const productRows = [
     // === PAITHANI CATEGORY ===
     {
       name: "Royal Peacock Paithani Saree",
@@ -646,7 +646,15 @@ async function seed() {
       reviewCount: 103,
       stock: 11,
     },
-  ]);
+  ];
+
+  const productsWithIds: any[] = [];
+  for (const row of productRows) {
+    const { rows } = await pool.query("SELECT nextval('product_id_seq') AS seq");
+    const prefix = row.category === "paithani" ? "PS" : "DS";
+    productsWithIds.push({ id: `${prefix}${rows[0].seq}`, ...row });
+  }
+  await db.insert(productsTable).values(productsWithIds);
 
   console.log("Seeding complete!");
   await pool.end();

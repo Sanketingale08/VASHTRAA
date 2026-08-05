@@ -16,7 +16,7 @@ export const rewardPointsLogTable = pgTable("reward_points_log", {
   points: integer("points").notNull(),
   type: text("type").$type<"earned" | "bonus" | "redeemed">().notNull(),
   description: text("description").notNull(),
-  orderId: uuid("order_id"),
+  orderId: text("order_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -24,7 +24,7 @@ export const referralsTable = pgTable("referrals", {
   id: uuid("id").defaultRandom().primaryKey(),
   referrerUserId: text("referrer_user_id").notNull().references(() => userProfilesTable.userId),
   referredUserId: text("referred_user_id").notNull().unique(),
-  firstOrderId: uuid("first_order_id"),
+  firstOrderId: text("first_order_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

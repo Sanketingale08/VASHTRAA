@@ -68,7 +68,13 @@ function fmt(n: number): string {
 }
 
 function invoiceNumber(orderId: string): string {
+  if (/^TD\d+$/.test(orderId)) return `INV-${orderId}`;
   return `INV-TD-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+function fmtOrderId(orderId: string): string {
+  if (/^TD\d+$/.test(orderId)) return orderId;
+  return orderId.replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 /** Resolve status → { label, badge color } */
@@ -175,7 +181,7 @@ export function generateInvoice(order: InvoiceOrder): void {
   // Order ID (smaller)
   doc.setFontSize(6.5);
   doc.setTextColor(200, 190, 170);
-  doc.text(`Order: #${order.id.slice(0, 8).toUpperCase()}`, W - MX, 32.5, { align: "right" });
+  doc.text(`Order: ${fmtOrderId(order.id)}`, W - MX, 32.5, { align: "right" });
 
   // ── 2. Status badge ───────────────────────────────────────────────────────
   const badge = statusBadge(order.status);

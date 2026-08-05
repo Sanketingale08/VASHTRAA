@@ -136,7 +136,7 @@ export default function SellerPayouts() {
                     style={{ borderColor: "#F3F4F6" }}
                   >
                     <td className="px-5 py-3.5 font-mono text-xs text-gray-500">
-                      #{payout.orderId.slice(0, 8).toUpperCase()}
+                      #{payout.orderId?.startsWith("TD") ? payout.orderId : payout.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()}
                     </td>
                     <td className="px-5 py-3.5 text-gray-500 text-xs">{formatDate(payout.deliveredAt)}</td>
                     <td className="px-5 py-3.5 text-gray-600">{payout.itemCount} item{payout.itemCount !== 1 ? "s" : ""}</td>

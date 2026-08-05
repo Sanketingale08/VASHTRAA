@@ -169,10 +169,10 @@ router.get("/notifications/preferences", requireAuth, async (req: any, res: any)
       .limit(1);
 
     if (rows.length === 0) {
-      res.json({ orderUpdates: true, offerAlerts: true, stockAlerts: true, emailOrderUpdates: true });
+      res.json({ orderUpdates: true, offerAlerts: true, stockAlerts: true, emailOrderUpdates: true, emailMarketingUpdates: true });
     } else {
-      const { orderUpdates, offerAlerts, stockAlerts, emailOrderUpdates } = rows[0];
-      res.json({ orderUpdates, offerAlerts, stockAlerts, emailOrderUpdates });
+      const { orderUpdates, offerAlerts, stockAlerts, emailOrderUpdates, emailMarketingUpdates } = rows[0];
+      res.json({ orderUpdates, offerAlerts, stockAlerts, emailOrderUpdates, emailMarketingUpdates });
     }
   } catch (err) {
     req.log.error({ err }, "Failed to fetch notification preferences");
@@ -182,12 +182,13 @@ router.get("/notifications/preferences", requireAuth, async (req: any, res: any)
 
 router.patch("/notifications/preferences", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
-    const { orderUpdates, offerAlerts, stockAlerts, emailOrderUpdates } = req.body;
+    const { orderUpdates, offerAlerts, stockAlerts, emailOrderUpdates, emailMarketingUpdates } = req.body;
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (typeof orderUpdates === "boolean") updates.orderUpdates = orderUpdates;
     if (typeof offerAlerts === "boolean") updates.offerAlerts = offerAlerts;
     if (typeof stockAlerts === "boolean") updates.stockAlerts = stockAlerts;
     if (typeof emailOrderUpdates === "boolean") updates.emailOrderUpdates = emailOrderUpdates;
+    if (typeof emailMarketingUpdates === "boolean") updates.emailMarketingUpdates = emailMarketingUpdates;
 
     await db
       .insert(notificationPreferencesTable)
@@ -197,6 +198,7 @@ router.patch("/notifications/preferences", requireAuth, async (req: any, res: an
         offerAlerts: typeof offerAlerts === "boolean" ? offerAlerts : true,
         stockAlerts: typeof stockAlerts === "boolean" ? stockAlerts : true,
         emailOrderUpdates: typeof emailOrderUpdates === "boolean" ? emailOrderUpdates : true,
+        emailMarketingUpdates: typeof emailMarketingUpdates === "boolean" ? emailMarketingUpdates : true,
       })
       .onConflictDoUpdate({
         target: notificationPreferencesTable.userId,

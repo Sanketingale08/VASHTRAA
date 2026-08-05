@@ -35,6 +35,7 @@ interface Preferences {
   offerAlerts: boolean;
   stockAlerts: boolean;
   emailOrderUpdates: boolean;
+  emailMarketingUpdates: boolean;
 }
 
 function typeIcon(type: string, size = 18) {
@@ -543,38 +544,45 @@ export function AccountNotificationsPage() {
             <h3 className="text-sm font-bold text-[#1E6B5A]">Email Notifications</h3>
           </div>
           {prefsLoading ? (
-            <div className="p-5 animate-pulse">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1.5">
-                  <div className="h-3.5 bg-gray-100 rounded-full w-32" />
-                  <div className="h-3 bg-gray-100 rounded-full w-48" />
+            <div className="p-5 space-y-5 animate-pulse">
+              {[0, 1].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 bg-gray-100 rounded-full w-32" />
+                    <div className="h-3 bg-gray-100 rounded-full w-48" />
+                  </div>
+                  <div className="w-10 h-6 bg-gray-100 rounded-full" />
                 </div>
-                <div className="w-10 h-6 bg-gray-100 rounded-full" />
-              </div>
+              ))}
             </div>
           ) : (
             <div className="divide-y divide-gray-50">
-              <div className="flex items-center justify-between px-5 py-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">Order email updates</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Emails for shipping, delivery, returns, and refund status</p>
+              {[
+                { key: "emailOrderUpdates" as const, label: "Order email updates", desc: "Emails for shipping, delivery, returns, and refund status" },
+                { key: "emailMarketingUpdates" as const, label: "Promotional emails", desc: "Flash sales, new arrivals, coupons, and special offers" },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between px-5 py-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{label}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={prefs?.[key] ?? true}
+                    onClick={() => updatePrefs.mutate({ [key]: !(prefs?.[key] ?? true) })}
+                    disabled={updatePrefs.isPending}
+                    className={cn(
+                      "relative w-10 h-6 rounded-full transition-colors focus:outline-none disabled:opacity-50",
+                      (prefs?.[key] ?? true) ? "bg-[#1E6B5A]" : "bg-gray-200"
+                    )}
+                  >
+                    <span className={cn(
+                      "absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                      (prefs?.[key] ?? true) ? "translate-x-4" : "translate-x-0"
+                    )} />
+                  </button>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={prefs?.emailOrderUpdates ?? true}
-                  onClick={() => updatePrefs.mutate({ emailOrderUpdates: !(prefs?.emailOrderUpdates ?? true) })}
-                  disabled={updatePrefs.isPending}
-                  className={cn(
-                    "relative w-10 h-6 rounded-full transition-colors focus:outline-none disabled:opacity-50",
-                    (prefs?.emailOrderUpdates ?? true) ? "bg-[#1E6B5A]" : "bg-gray-200"
-                  )}
-                >
-                  <span className={cn(
-                    "absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform",
-                    (prefs?.emailOrderUpdates ?? true) ? "translate-x-4" : "translate-x-0"
-                  )} />
-                </button>
-              </div>
+              ))}
             </div>
           )}
         </div>

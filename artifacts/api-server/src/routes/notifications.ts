@@ -42,7 +42,21 @@ router.get("/notifications", requireAuth, async (req: any, res: any): Promise<vo
       ? (Array.isArray(rawType) ? rawType : String(rawType).split(",")).map(String).filter(Boolean)
       : [];
 
-    const conditions: any[] = [eq(notificationsTable.userId, req.userId)];
+    // Seller-domain notification types must never appear in the user notification feed
+    const SELLER_TYPES = [
+      "low_stock", "new_order_seller", "new_order",
+      "payout_successful", "payout_failed", "payout_pending",
+      "product_approved", "product_rejected", "product_approval",
+      "inventory_update", "store_performance", "review_moderation",
+      "seller_verification", "store_verified", "store_rejected",
+      "customer_query",
+    ];
+
+    const conditions: any[] = [
+      eq(notificationsTable.userId, req.userId),
+      // Exclude any seller-domain types that may have been stored in the shared table
+      sql`${notificationsTable.type} NOT IN (${sql.join(SELLER_TYPES.map((t) => sql`${t}`), sql`, `)})`,
+    ];
     if (types.length === 1) conditions.push(eq(notificationsTable.type, types[0] as any));
     else if (types.length > 1) conditions.push(inArray(notificationsTable.type, types as any[]));
     if (search) {

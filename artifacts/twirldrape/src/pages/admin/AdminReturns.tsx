@@ -41,6 +41,40 @@ function fmtMoney(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+function getElapsedInfo(isoDate: string): { label: string; ageDays: number } {
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
+  let label: string;
+  if (diffMins < 60) label = diffMins <= 1 ? "just now" : `${diffMins} minutes ago`;
+  else if (diffHours < 24) label = diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+  else label = diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+  return { label, ageDays: diffDays };
+}
+
+function AgeBadge({ ageDays }: { ageDays: number }) {
+  if (ageDays >= 7) {
+    return (
+      <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full"
+        style={{ background: "#fef2f2", color: "#b91c1c" }}>
+        ⚠ {ageDays}d — overdue
+      </span>
+    );
+  }
+  if (ageDays >= 3) {
+    return (
+      <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full"
+        style={{ background: "#fffbeb", color: "#b45309" }}>
+        ⏳ {ageDays}d — aging
+      </span>
+    );
+  }
+  return null;
+}
+
 function StatusPill({ label, tone }: { label: string; tone: "orange" | "green" | "red" | "gray" }) {
   const map = {
     orange: { bg: "#fffbeb", color: "#b45309" },
@@ -352,8 +386,10 @@ function ReturnsContent() {
                       <div className="text-sm font-medium mt-1" style={{ color: NAVY }}>
                         {o.items?.[0]?.name}{o.items.length > 1 ? ` + ${o.items.length - 1} more` : ""}
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Total {fmtMoney(o.total)} · <span className="text-amber-600 font-medium">Requested {new Date(o.returnRequestedAt).toLocaleString("en-IN")}</span> · Updated {new Date(o.updatedAt).toLocaleString("en-IN")}
+                      <div className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                        Total {fmtMoney(o.total)} · <span className="text-amber-600 font-medium">Requested {new Date(o.returnRequestedAt).toLocaleString("en-IN")}</span>
+                        {(() => { const { label, ageDays } = getElapsedInfo(o.returnRequestedAt); return (<><span className="text-gray-500">({label})</span><AgeBadge ageDays={ageDays} /></>); })()}
+                        · Updated {new Date(o.updatedAt).toLocaleString("en-IN")}
                       </div>
                       {returnData?.reason && (
                         <div className="text-xs text-gray-500 mt-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5 max-w-md">

@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useUser, useClerk } from "@clerk/react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Save, Loader2, CheckCircle, ExternalLink,
   User, Phone, Mail, Calendar, Users, KeyRound, Settings,
   ChevronRight,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ChangePhoneModal } from "./ChangePhoneModal";
+import { ChangeEmailModal } from "./ChangeEmailModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -85,6 +87,8 @@ export function AccountProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -110,11 +114,7 @@ export function AccountProfilePage() {
     e.preventDefault();
     if (!user) return;
 
-    // Client-side validation
-    if (form.phone && !/^\d{10}$/.test(form.phone)) {
-      setError("Mobile number must be exactly 10 digits.");
-      return;
-    }
+    // Client-side validation (phone is read-only here; changes go through OTP modal)
     if (form.alternateMobile && !/^\d{10}$/.test(form.alternateMobile)) {
       setError("Alternate mobile must be exactly 10 digits.");
       return;
@@ -155,7 +155,6 @@ export function AccountProfilePage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: form.phone.trim(),
           alternateMobile: form.alternateMobile.trim(),
           dateOfBirth: form.dateOfBirth,
           gender: form.gender,
@@ -282,6 +281,18 @@ export function AccountProfilePage() {
               action: scrollToEditForm,
             },
             {
+              icon: <Phone size={16} className="text-[#1E6B5A]" />,
+              label: "Change Mobile Number",
+              desc: "Verify a new number via code sent to your email",
+              action: () => setShowPhoneModal(true),
+            },
+            {
+              icon: <Mail size={16} className="text-[#1E6B5A]" />,
+              label: "Change Email Address",
+              desc: "Receive a verification code on your new email",
+              action: () => setShowEmailModal(true),
+            },
+            {
               icon: <KeyRound size={16} className="text-[#1E6B5A]" />,
               label: "Change Password",
               desc: "Update your account password",
@@ -344,16 +355,21 @@ export function AccountProfilePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Phone is read-only here — changes require OTP verification */}
               <Field label="Mobile Number">
-                <input
-                  value={form.phone}
-                  onChange={(e) =>
-                    set("phone", e.target.value.replace(/\D/g, "").slice(0, 10))
-                  }
-                  placeholder="9876543210"
-                  type="tel"
-                  className={inputCls}
-                />
+                <div className="flex items-center border border-[#C9A84C]/20 rounded-lg bg-[#F9F9F9] px-3 py-2.5 gap-2">
+                  <span className="flex-1 text-sm text-gray-500 truncate">
+                    {form.phone ? `+91 ${form.phone}` : <span className="text-gray-300">Not set</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPhoneModal(true)}
+                    className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors whitespace-nowrap"
+                  >
+                    Change
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Mobile changes require OTP verification.</p>
               </Field>
               <Field label="Alternate Mobile (Optional)">
                 <input
@@ -457,6 +473,27 @@ export function AccountProfilePage() {
           </button>
         </motion.div>
       </div>
+
+      {/* ── Modals ────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showPhoneModal && (
+          <ChangePhoneModal
+            onClose={() => setShowPhoneModal(false)}
+            onSuccess={(newPhone) => {
+              setForm((f) => ({ ...f, phone: newPhone }));
+              setShowPhoneModal(false);
+            }}
+          />
+        )}
+        {showEmailModal && (
+          <ChangeEmailModal
+            onClose={() => setShowEmailModal(false)}
+            onSuccess={(_newEmail) => {
+              setShowEmailModal(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

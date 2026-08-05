@@ -1264,7 +1264,9 @@ router.get("/admin/returns", requireAdminKey, async (req: any, res: any): Promis
       )
       .orderBy(desc(ordersTable.updatedAt));
 
-    const orders = rows.map((order) => ({ ...order, returnRequestedAt: deriveReturnRequestedAt(order) }));
+    const orders = rows
+      .map((order) => ({ ...order, returnRequestedAt: deriveReturnRequestedAt(order) }))
+      .sort((a, b) => new Date(a.returnRequestedAt).getTime() - new Date(b.returnRequestedAt).getTime());
 
     res.json({ orders });
   } catch (err) {

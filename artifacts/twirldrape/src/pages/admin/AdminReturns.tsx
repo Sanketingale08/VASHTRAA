@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download } from "lucide-react";
+import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download, ArrowUpDown } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -82,6 +82,7 @@ function ReturnsContent() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number]>("all");
   const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState<"oldest" | "newest">("oldest");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const processingInFlight = useRef<Set<string>>(new Set());
@@ -118,8 +119,13 @@ function ReturnsContent() {
       });
     }
 
+    list = [...list].sort((a, b) => {
+      const diff = new Date(a.returnRequestedAt).getTime() - new Date(b.returnRequestedAt).getTime();
+      return sortOrder === "oldest" ? diff : -diff;
+    });
+
     return list;
-  }, [orders, tab, search]);
+  }, [orders, tab, search, sortOrder]);
 
   async function reviewReturn(orderId: string, decision: "approved" | "rejected") {
     const key = orderId + "return" + decision;
@@ -258,15 +264,25 @@ function ReturnsContent() {
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">Review and act on customer return and refund requests</p>
         </div>
-        <button
-          onClick={exportCSV}
-          disabled={filtered.length === 0}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          style={{ color: NAVY }}
-          title="Export current view to CSV"
-        >
-          <Download size={13} /> Export CSV
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setSortOrder((s) => s === "oldest" ? "newest" : "oldest")}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50"
+            style={{ color: NAVY }}
+            title="Toggle sort order"
+          >
+            <ArrowUpDown size={13} /> {sortOrder === "oldest" ? "Oldest first" : "Newest first"}
+          </button>
+          <button
+            onClick={exportCSV}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: NAVY }}
+            title="Export current view to CSV"
+          >
+            <Download size={13} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {error && (

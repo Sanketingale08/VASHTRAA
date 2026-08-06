@@ -162,6 +162,13 @@
       "when": 1754611200000,
       "tag": "0025_add_vendor_featured",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1754697600000,
+      "tag": "0026_add_seller_draft_nudge_sent_at",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { startEmailOutboxWorker } from "./lib/transactionalEmail";
 import { deleteExpiredRegistrationDrafts } from "./routes/sellerRegistrationDraft";
 import { bootstrapDatabase } from "./lib/bootstrapDatabase";
+import { startEmailOutboxWorker, startSellerRegistrationNudgeWorker } from "./lib/transactionalEmail";
 
 const rawPort = process.env["PORT"];
 
@@ -29,6 +29,7 @@ bootstrapDatabase()
       logger.info({ port }, "Server listening");
       startEmailOutboxWorker();
       startDraftExpiryWorker();
+      startSellerRegistrationNudgeWorker();
     });
   })
   .catch((err) => {

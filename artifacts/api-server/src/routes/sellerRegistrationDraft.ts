@@ -71,10 +71,12 @@ router.put("/seller/registration-draft", requireAuth, async (req: any, res: any)
   try {
     await db
       .insert(sellerRegistrationDraftsTable)
-      .values({ userId: req.userId, data, step, updatedAt: new Date() })
+      .values({ userId: req.userId, data, step, updatedAt: new Date(), nudgeSentAt: null })
       .onConflictDoUpdate({
         target: sellerRegistrationDraftsTable.userId,
-        set: { data, step, updatedAt: new Date() },
+        // Reset nudgeSentAt so an in-flight claim is invalidated and the draft
+        // becomes eligible again only if it goes stale a second time.
+        set: { data, step, updatedAt: new Date(), nudgeSentAt: null },
       });
 
     res.json({ ok: true });

@@ -1,7 +1,7 @@
 import { clerkClient } from "@clerk/express";
 import { Resend } from "resend";
-import { db, emailOutboxTable } from "@workspace/db";
-import { eq, and, lte, lt, inArray } from "drizzle-orm";
+import { db, emailOutboxTable, sellerRegistrationDraftsTable } from "@workspace/db";
+import { eq, and, lte, lt, inArray, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 import { insertAdminNotification } from "./adminNotifications";
 
@@ -512,6 +512,210 @@ export async function sendVendorRejectionEmailForVendor(opts: {
     <p>Thank you for your understanding.</p>
   `;
   await sendVendorLifecycleEmail({ ...opts, subject, body });
+}
+
+/**
+ * Queues a one-time nudge email for a seller who started registration (step 2
+ * verified) but has been idle for at least 24 hours without submitting.
+ *
+ * Writes an outbox row for retry support.
+ *
+ * Returns `true` if the outbox row was successfully persisted (meaning the
+ * nudge is queued for delivery); `false` if the email could not be queued
+ * because the Resend API key is absent or the user's email address could not
+ * be resolved. The caller must NOT mark `nudgeSentAt` when `false` is
+ * returned — the draft remains eligible for a retry on the next worker tick.
+ */
+export async function sendSellerRegistrationNudgeEmail(opts: {
+  userId: string;
+  registrationUrl?: string;
+}): Promise<boolean> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn({ userId: opts.userId }, "[transactionalEmail] RESEND_API_KEY not set — seller registration nudge not queued");
+    return false;
+  }
+
+  const toEmail = await getUserEmail(opts.userId);
+  if (!toEmail) {
+    logger.warn({ userId: opts.userId }, "[transactionalEmail] Could not resolve email for seller registration nudge — not queued");
+    return false;
+  }
+
+  const registrationUrl = opts.registrationUrl ?? "https://twirldrape.com/seller/register";
+  const subject = `Complete your TwirlDrape seller registration`;
+  const body = `
+    <p>Hi there,</p>
+    <p>You started your seller registration on TwirlDrape but haven't finished yet. Your progress has been saved — pick up right where you left off!</p>
+    <p style="margin:24px 0;">
+      <a href="${registrationUrl}"
+         style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+        Continue Registration
+      </a>
+    </p>
+    <p>Once approved, you'll be able to list your sarees and reach thousands of shoppers across India.</p>
+    <p>If you have any questions or need help, feel free to reach out to our support team — we're happy to assist.</p>
+    <p>We hope to see you on TwirlDrape soon!</p>
+  `;
+
+  const html = wrapInTemplate(subject, body);
+
+  const [entry] = await db
+    .insert(emailOutboxTable)
+    .values({
+      userId: opts.userId,
+      orderId: null,
+      type: "seller_registration_nudge",
+      toEmail,
+      subject,
+      html,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: new Date(),
+    })
+    .returning();
+
+  // Attempt immediate delivery; failures are retried by the outbox worker
+  await attemptSend(resend, { ...entry, orderId: null, userId: opts.userId });
+
+  // Return true: the outbox row is persisted. Delivery may still fail and be
+  // retried, but the nudge has been durably queued.
+  return true;
+}
+
+/**
+ * Background worker that runs every hour and queues a registration nudge email
+ * for sellers who have been idle for at least 24 hours without submitting.
+ * Each seller receives at most one nudge (tracked via `nudgeSentAt`).
+ *
+ * Crash-safety / atomicity:
+ *  - For each eligible draft the worker resolves the seller's email address
+ *    (Clerk API call, outside any transaction), then runs a single database
+ *    transaction that atomically:
+ *      1. Claims the draft: UPDATE SET nudgeSentAt=now WHERE nudgeSentAt IS NULL
+ *      2. Creates the outbox row: INSERT INTO email_outbox
+ *    If the process dies mid-transaction the database rolls both changes back,
+ *    leaving the draft with nudgeSentAt=null and the draft eligible again on
+ *    the next worker tick — no permanent suppression.
+ *  - Concurrent worker instances racing on the same draft: the first to commit
+ *    its transaction wins; the second sees 0 rows from the claim UPDATE and
+ *    skips the outbox insert.
+ *  - The seller saving their draft (PUT) resets nudgeSentAt=null, which
+ *    satisfies the claim WHERE clause on any concurrent worker trying to claim
+ *    that draft — the second claim then finds IS NULL and proceeds, which is
+ *    correct (if the draft becomes stale again, a new nudge is warranted).
+ */
+export function startSellerRegistrationNudgeWorker(intervalMs = 60 * 60 * 1000): void {
+  const IDLE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  const run = async () => {
+    const cutoff = new Date(Date.now() - IDLE_THRESHOLD_MS);
+
+    // Find eligible drafts without modifying them yet.
+    const eligibleDrafts = await db
+      .select({ id: sellerRegistrationDraftsTable.id, userId: sellerRegistrationDraftsTable.userId })
+      .from(sellerRegistrationDraftsTable)
+      .where(
+        and(
+          lt(sellerRegistrationDraftsTable.updatedAt, cutoff),
+          isNull(sellerRegistrationDraftsTable.nudgeSentAt)
+        )
+      );
+
+    if (eligibleDrafts.length === 0) return;
+
+    logger.info({ count: eligibleDrafts.length }, "[sellerNudge] Found stale drafts — processing nudge emails");
+
+    for (const draft of eligibleDrafts) {
+      try {
+        // Resolve the email address BEFORE the transaction — Clerk API calls
+        // must not run inside a database transaction.
+        const toEmail = await getUserEmail(draft.userId);
+        if (!toEmail) {
+          logger.warn({ userId: draft.userId }, "[sellerNudge] Email unresolvable — draft stays eligible for next tick");
+          continue;
+        }
+
+        const registrationUrl = "https://twirldrape.com/seller/register";
+        const subject = `Complete your TwirlDrape seller registration`;
+        const body = `
+    <p>Hi there,</p>
+    <p>You started your seller registration on TwirlDrape but haven't finished yet. Your progress has been saved — pick up right where you left off!</p>
+    <p style="margin:24px 0;">
+      <a href="${registrationUrl}"
+         style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+        Continue Registration
+      </a>
+    </p>
+    <p>Once approved, you'll be able to list your sarees and reach thousands of shoppers across India.</p>
+    <p>If you have any questions or need help, feel free to reach out to our support team — we're happy to assist.</p>
+    <p>We hope to see you on TwirlDrape soon!</p>
+  `;
+        const html = wrapInTemplate(subject, body);
+        const claimedAt = new Date();
+
+        // Single transaction: atomically claim the draft AND create the outbox row.
+        // If the process dies here, the transaction rolls back and the draft
+        // remains with nudgeSentAt=null — no permanent suppression possible.
+        let outboxEntry: typeof emailOutboxTable.$inferSelect | undefined;
+        await db.transaction(async (tx) => {
+          const claimed = await tx
+            .update(sellerRegistrationDraftsTable)
+            .set({ nudgeSentAt: claimedAt })
+            .where(
+              and(
+                eq(sellerRegistrationDraftsTable.id, draft.id),
+                isNull(sellerRegistrationDraftsTable.nudgeSentAt)
+              )
+            )
+            .returning({ id: sellerRegistrationDraftsTable.id });
+
+          if (claimed.length === 0) {
+            // Another worker instance already claimed this draft — skip.
+            logger.info({ userId: draft.userId }, "[sellerNudge] Draft already claimed by concurrent worker — skipping");
+            return;
+          }
+
+          const [entry] = await tx
+            .insert(emailOutboxTable)
+            .values({
+              userId: draft.userId,
+              orderId: null,
+              type: "seller_registration_nudge",
+              toEmail,
+              subject,
+              html,
+              status: "pending",
+              attempts: 0,
+              nextRetryAt: new Date(),
+            })
+            .returning();
+
+          outboxEntry = entry;
+        });
+
+        if (!outboxEntry) continue; // concurrent worker claimed it
+
+        logger.info({ userId: draft.userId }, "[sellerNudge] Nudge claimed and outbox row created atomically");
+
+        // Best-effort immediate send. Failures are retried by the outbox worker.
+        const resend = getResendClient();
+        if (resend) {
+          await attemptSend(resend, { ...outboxEntry, orderId: null, userId: draft.userId });
+        }
+      } catch (err) {
+        logger.error({ err, userId: draft.userId }, "[sellerNudge] Error processing draft — will retry on next tick");
+      }
+    }
+  };
+
+  // Run once at startup, then hourly
+  run().catch((err) => logger.error({ err }, "[sellerNudge] Error in initial nudge worker run"));
+  setInterval(() => {
+    run().catch((err) => logger.error({ err }, "[sellerNudge] Error in nudge worker tick"));
+  }, intervalMs).unref();
+
+  logger.info("[sellerNudge] Seller registration nudge worker started");
 }
 
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {

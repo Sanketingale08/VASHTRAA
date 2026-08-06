@@ -6,6 +6,7 @@ export const sellerRegistrationDraftsTable = pgTable("seller_registration_drafts
   data: jsonb("data").notNull().default({}),
   step: integer("step").notNull().default(2),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  nudgeSentAt: timestamp("nudge_sent_at"),
 });
 
 export type SellerRegistrationDraft = typeof sellerRegistrationDraftsTable.$inferSelect;

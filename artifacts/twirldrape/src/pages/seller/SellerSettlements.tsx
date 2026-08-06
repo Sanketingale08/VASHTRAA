@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { IndianRupee, Clock, CheckCircle2, TrendingUp, Package, ChevronDown, ChevronUp, X } from "lucide-react";
+import { IndianRupee, Clock, CheckCircle2, TrendingUp, Package, X, ArrowDownToLine } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
@@ -35,6 +35,7 @@ interface SettlementsData {
     totalPending: number;
     totalPaid: number;
   };
+  hasPendingPayoutRequest: boolean;
 }
 
 function formatDate(iso: string) {
@@ -162,8 +163,10 @@ export default function SellerSettlements() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedSettlement, setSelectedSettlement] = useState<Settlement | null>(null);
+  const [payoutRequesting, setPayoutRequesting] = useState(false);
+  const [payoutMessage, setPayoutMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
+  const fetchSettlements = () => {
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
     params.set("page", String(page));
@@ -176,7 +179,36 @@ export default function SellerSettlements() {
       .then((d) => { setData(d); setError(""); })
       .catch(() => setError("Could not load settlements. Please try again."))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchSettlements();
   }, [statusFilter, page]);
+
+  const handlePayoutRequest = async () => {
+    setPayoutRequesting(true);
+    setPayoutMessage(null);
+    try {
+      const r = await fetch(getApiUrl("/api/seller/settlements/payout-request"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = await r.json();
+      if (r.status === 409) {
+        setPayoutMessage({ kind: "error", text: body.error ?? "A payout request is already pending." });
+      } else if (!r.ok) {
+        setPayoutMessage({ kind: "error", text: body.error ?? "Failed to submit payout request." });
+      } else {
+        setPayoutMessage({ kind: "success", text: "Payout request submitted successfully. Our team will review it shortly." });
+        fetchSettlements();
+      }
+    } catch {
+      setPayoutMessage({ kind: "error", text: "Network error. Please try again." });
+    } finally {
+      setPayoutRequesting(false);
+    }
+  };
 
   const summary = data?.summary;
   const summaryCards = [
@@ -204,17 +236,44 @@ export default function SellerSettlements() {
   ];
 
   const settlements = data?.settlements ?? [];
+  const hasPendingPayoutRequest = data?.hasPendingPayoutRequest ?? false;
 
   return (
     <SellerLayout title="Settlements">
       <div className="max-w-5xl mx-auto space-y-8">
-        <div>
-          <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Settlements</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Full fee breakdown and payout status for your delivered orders</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Settlements</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Full fee breakdown and payout status for your delivered orders</p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <button
+              onClick={handlePayoutRequest}
+              disabled={payoutRequesting || hasPendingPayoutRequest || loading}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: hasPendingPayoutRequest ? "#E5E7EB" : MAROON, color: hasPendingPayoutRequest ? "#6B7280" : "#fff" }}
+              title={hasPendingPayoutRequest ? "A payout request is already pending review" : undefined}
+            >
+              <ArrowDownToLine size={15} />
+              {payoutRequesting ? "Submitting…" : hasPendingPayoutRequest ? "Payout Pending Review" : "Request Payout"}
+            </button>
+            {hasPendingPayoutRequest && (
+              <p className="text-[11px] text-amber-600">A payout request is already under review</p>
+            )}
+          </div>
         </div>
 
         {error && (
           <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+        )}
+
+        {payoutMessage && (
+          <div className={`px-4 py-3 rounded-xl text-sm flex items-start justify-between gap-3 ${payoutMessage.kind === "success" ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+            <span>{payoutMessage.text}</span>
+            <button onClick={() => setPayoutMessage(null)} className="shrink-0 opacity-60 hover:opacity-100">
+              <X size={14} />
+            </button>
+          </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

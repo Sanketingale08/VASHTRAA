@@ -1077,6 +1077,10 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
       if (s.status === "paid" || s.status === "completed") totalPaid += net;
     }
 
+    const hasPendingPayoutRequest = all.some(
+      (s) => s.type === "payout" && (s.status === "pending" || s.status === "processing" || s.status === "approved"),
+    );
+
     const filtered = statusFilter && statusFilter !== "all" ? all.filter((s) => s.status === statusFilter) : all;
     const total = filtered.length;
     const settlements = filtered.slice(offset, offset + limit);
@@ -1087,10 +1091,63 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
       page,
       totalPages: Math.ceil(total / limit),
       summary: { totalEarnedThisMonth, totalPending, totalPaid },
+      hasPendingPayoutRequest,
     });
   } catch (err: any) {
     req.log?.error({ err }, "seller/settlements failed");
     res.status(500).json({ error: "Failed to load settlements" });
+  }
+});
+
+router.post("/seller/settlements/payout-request", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+
+  try {
+    // Check for an existing pending payout request
+    const existing = await db
+      .select({ id: vendorSettlementsTable.id, status: vendorSettlementsTable.status })
+      .from(vendorSettlementsTable)
+      .where(and(
+        eq(vendorSettlementsTable.vendorId, vendorId),
+        eq(vendorSettlementsTable.type, "payout"),
+        inArray(vendorSettlementsTable.status, ["pending", "processing", "approved"]),
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return res.status(409).json({
+        error: "A payout request is already pending review. Please wait for it to be processed before submitting a new one.",
+      });
+    }
+
+    // Sum all pending order_settlement net payouts for this vendor
+    const pendingSettlements = await db
+      .select({ netPayout: vendorSettlementsTable.netPayout, amount: vendorSettlementsTable.amount })
+      .from(vendorSettlementsTable)
+      .where(and(
+        eq(vendorSettlementsTable.vendorId, vendorId),
+        eq(vendorSettlementsTable.type, "order_settlement"),
+        eq(vendorSettlementsTable.status, "pending"),
+      ));
+
+    const totalAmount = pendingSettlements.reduce((sum, s) => sum + (s.netPayout ?? s.amount ?? 0), 0);
+
+    if (totalAmount <= 0) {
+      return res.status(400).json({ error: "No pending balance available to request a payout for." });
+    }
+
+    const [created] = await db.insert(vendorSettlementsTable).values({
+      vendorId,
+      amount: totalAmount,
+      type: "payout",
+      status: "pending",
+      note: "Vendor-initiated payout request",
+    }).returning();
+
+    res.status(201).json({ settlement: created });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/settlements/payout-request failed");
+    res.status(500).json({ error: "Failed to submit payout request" });
   }
 });
 

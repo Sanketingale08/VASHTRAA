@@ -7,6 +7,11 @@ import {
 import { eq, desc } from "drizzle-orm";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import {
+  sendVendorPayoutRequestApprovedEmail,
+  sendVendorPayoutApprovedEmail,
+  sendVendorPayoutRejectedEmail,
+} from "../lib/transactionalEmail";
+import {
   computeRevenueReport, computePaymentReport, computeRefundReport, computeProfitAnalysis,
   listSettlements,
 } from "../lib/financialManagement";
@@ -66,12 +71,21 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
       res.status(404).json({ error: "Settlement not found" });
       return;
     }
+
+    // Fetch vendor info for email notifications (name, contactEmail, ownerId)
+    const [vendor] = await db
+      .select({ name: vendorsTable.name, contactEmail: vendorsTable.contactEmail, ownerId: vendorsTable.ownerId })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, existing.vendorId))
+      .limit(1);
+
     const newStatus = decision === "approve" ? "approved"
       : decision === "reject" ? "rejected"
       : decision === "paid" ? "paid"
       : decision === "process" ? "processing"
       : "completed";
     const isSettled = newStatus === "completed" || newStatus === "paid";
+    const isRejected = newStatus === "rejected";
     const [updated] = await db.update(vendorSettlementsTable)
       .set({
         status: newStatus,
@@ -84,8 +98,9 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
       .where(eq(vendorSettlementsTable.id, id))
       .returning();
 
+    const payAmount = existing.netPayout ?? existing.amount;
+
     if (isSettled) {
-      const payAmount = existing.netPayout ?? existing.amount;
       await insertSellerNotification({
         vendorId: existing.vendorId,
         type: existing.type === "payout" ? "payout_successful" : "settlement_released",
@@ -93,6 +108,38 @@ router.post("/admin/financial/settlements/:id/review", requireAdminKey, async (r
         body: `Your settlement of ₹${payAmount.toLocaleString("en-IN")} has been transferred.${utrNumber ? ` UTR: ${utrNumber}` : ""}`,
         metadata: { settlementId: id, utrNumber: utrNumber ?? null },
       });
+
+      if (vendor) {
+        sendVendorPayoutApprovedEmail({
+          vendorId: existing.vendorId,
+          vendorName: vendor.name,
+          contactEmail: vendor.contactEmail ?? null,
+          ownerId: vendor.ownerId ?? null,
+          amount: payAmount,
+          utrNumber: utrNumber ?? existing.utrNumber ?? null,
+        }).catch((err) => req.log.error({ err, settlementId: id }, "Failed to send payout approved email"));
+      }
+    }
+
+    if (newStatus === "approved" && vendor) {
+      sendVendorPayoutRequestApprovedEmail({
+        vendorId: existing.vendorId,
+        vendorName: vendor.name,
+        contactEmail: vendor.contactEmail ?? null,
+        ownerId: vendor.ownerId ?? null,
+        amount: payAmount,
+      }).catch((err) => req.log.error({ err, settlementId: id }, "Failed to send payout request approved email"));
+    }
+
+    if (isRejected && vendor) {
+      sendVendorPayoutRejectedEmail({
+        vendorId: existing.vendorId,
+        vendorName: vendor.name,
+        contactEmail: vendor.contactEmail ?? null,
+        ownerId: vendor.ownerId ?? null,
+        amount: payAmount,
+        note: req.body?.note ?? null,
+      }).catch((err) => req.log.error({ err, settlementId: id }, "Failed to send payout rejected email"));
     }
 
     res.json({ settlement: updated });

@@ -515,6 +515,80 @@ export async function sendVendorRejectionEmailForVendor(opts: {
 }
 
 /**
+ * Sends a "payout request approved" email to the vendor when admin approves a
+ * payout request (status → approved). The funds have not been disbursed yet at
+ * this stage — the email sets expectations that payment will follow.
+ *
+ * Email address resolved from contactEmail → Clerk ownerId, same as other vendor
+ * lifecycle emails. Falls back gracefully if neither address is available.
+ */
+export async function sendVendorPayoutRequestApprovedEmail(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+  amount: number;
+}): Promise<void> {
+  const amountFormatted = `₹${opts.amount.toLocaleString("en-IN")}`;
+  const subject = `Your payout request of ${amountFormatted} has been approved — ${APP_NAME}`;
+  const body = `
+    <p>Great news! Your payout request of <strong>${amountFormatted}</strong> from <strong>${opts.vendorName}</strong> has been <strong>approved</strong>.</p>
+    <p>Our team will now process the transfer. You will receive another email with the payment reference once the funds have been sent.</p>
+    <p>If you have any questions in the meantime, please reach out to our support team.</p>
+  `;
+  await sendVendorLifecycleEmail({ ...opts, subject, body });
+}
+
+/**
+ * Sends a "payout paid/transferred" email to the vendor when admin marks a
+ * settlement as paid or completed. Includes the transferred amount and UTR number.
+ *
+ * Email address resolved from contactEmail → Clerk ownerId, same as other vendor
+ * lifecycle emails. Falls back gracefully if neither address is available.
+ */
+export async function sendVendorPayoutApprovedEmail(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+  amount: number;
+  utrNumber?: string | null;
+}): Promise<void> {
+  const amountFormatted = `₹${opts.amount.toLocaleString("en-IN")}`;
+  const subject = `Your payout of ${amountFormatted} has been processed — ${APP_NAME}`;
+  const body = `
+    <p>Great news! Your payout of <strong>${amountFormatted}</strong> from <strong>${opts.vendorName}</strong> has been <strong>successfully transferred</strong>.</p>
+    ${opts.utrNumber ? `<p>UTR / Transaction Reference: <code>${opts.utrNumber}</code></p>` : ""}
+    <p>The funds should reflect in your registered bank account within 1–3 business days, depending on your bank.</p>
+    <p>If you have any questions, please reach out to our support team with the reference above.</p>
+  `;
+  await sendVendorLifecycleEmail({ ...opts, subject, body });
+}
+
+/**
+ * Sends a payout-rejected email to the vendor when admin rejects a payout request.
+ * Includes an optional rejection note so the vendor understands the reason.
+ */
+export async function sendVendorPayoutRejectedEmail(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+  amount: number;
+  note?: string | null;
+}): Promise<void> {
+  const amountFormatted = `₹${opts.amount.toLocaleString("en-IN")}`;
+  const subject = `Update on your payout request — ${APP_NAME}`;
+  const body = `
+    <p>We're writing to let you know that your payout request for <strong>${amountFormatted}</strong> from <strong>${opts.vendorName}</strong> has been <strong>declined</strong> at this time.</p>
+    ${opts.note ? `<p>Reason: ${opts.note}</p>` : ""}
+    <p>If you believe this is an error or need clarification, please contact our support team and we will be happy to assist.</p>
+    <p>You can raise a new payout request from your seller dashboard once any issues have been resolved.</p>
+  `;
+  await sendVendorLifecycleEmail({ ...opts, subject, body });
+}
+
+/**
  * Queues a one-time nudge email for a seller who started registration (step 2
  * verified) but has been idle for at least 24 hours without submitting.
  *

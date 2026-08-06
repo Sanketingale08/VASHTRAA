@@ -209,14 +209,27 @@ export function AccountProfilePage() {
         throw new Error(body.error ?? "Failed to save profile");
       }
 
-      // Reload Clerk's user object so publicMetadata changes propagate
-      // immediately to all useUser() consumers (Navbar, DashboardLayout, etc.)
+      // Reload Clerk's user object so the session reflects any name change.
       await user.reload();
 
-      // Explicitly re-hydrate the form from the freshly-reloaded user.
-      // We cannot rely on the useEffect([user]) re-firing because Clerk
-      // mutates the user object in-place — the reference stays the same.
-      setForm(hydrateForm(user));
+      // Optimistic form update — do NOT re-hydrate the whole form from Clerk.
+      //
+      // Clerk's client-side user.reload() re-fetches the session, but
+      // publicMetadata written server-side via clerkClient.users.updateUserMetadata()
+      // may lag slightly before it's visible in the client-side user object.
+      // Calling setForm(hydrateForm(user)) here would overwrite the fields the
+      // user just edited with stale values from Clerk, making the save appear
+      // to have no effect.
+      //
+      // Instead: keep the submitted values for metadata fields (they are already
+      // correct — that's what we just saved). Only pull firstName/lastName from
+      // the reload, because Clerk may have silently rejected an OAuth-managed name
+      // change (e.g. Google SSO), and the reload reflects the actual accepted value.
+      setForm(prev => ({
+        ...prev,
+        firstName: user.firstName ?? prev.firstName,
+        lastName: user.lastName ?? prev.lastName,
+      }));
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startEmailOutboxWorker } from "./lib/transactionalEmail";
+import { deleteExpiredRegistrationDrafts } from "./routes/sellerRegistrationDraft";
 
 const rawPort = process.env["PORT"];
 
@@ -24,4 +25,24 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startEmailOutboxWorker();
+  startDraftExpiryWorker();
 });
+
+function startDraftExpiryWorker(): void {
+  const INTERVAL_MS = 60 * 60 * 1000; // run every hour
+
+  async function run() {
+    try {
+      const count = await deleteExpiredRegistrationDrafts();
+      if (count > 0) {
+        logger.info({ count }, "Deleted expired seller registration drafts");
+      }
+    } catch (err) {
+      logger.error({ err }, "Failed to delete expired seller registration drafts");
+    }
+  }
+
+  // Run once at startup, then on a recurring interval
+  run();
+  setInterval(run, INTERVAL_MS).unref();
+}

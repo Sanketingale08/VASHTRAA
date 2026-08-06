@@ -2,9 +2,24 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { sellerRegistrationDraftsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 
 const router = Router();
+
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function isDraftExpired(updatedAt: Date): boolean {
+  return Date.now() - updatedAt.getTime() > DRAFT_TTL_MS;
+}
+
+export async function deleteExpiredRegistrationDrafts(): Promise<number> {
+  const cutoff = new Date(Date.now() - DRAFT_TTL_MS);
+  const deleted = await db
+    .delete(sellerRegistrationDraftsTable)
+    .where(lt(sellerRegistrationDraftsTable.updatedAt, cutoff))
+    .returning({ id: sellerRegistrationDraftsTable.id });
+  return deleted.length;
+}
 
 const requireAuth = (req: any, res: any, next: any) => {
   const auth = getAuth(req);
@@ -26,6 +41,14 @@ router.get("/seller/registration-draft", requireAuth, async (req: any, res: any)
 
     if (!draft) {
       return res.status(404).json({ error: "No draft found" });
+    }
+
+    if (isDraftExpired(draft.updatedAt)) {
+      // Delete the stale draft and tell the caller to start fresh
+      await db
+        .delete(sellerRegistrationDraftsTable)
+        .where(eq(sellerRegistrationDraftsTable.userId, req.userId));
+      return res.status(404).json({ error: "Draft expired" });
     }
 
     res.json({ data: draft.data, step: draft.step, updatedAt: draft.updatedAt });

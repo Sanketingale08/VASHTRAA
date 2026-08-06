@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Save, Loader2, CheckCircle, ExternalLink,
   User, Phone, Mail, Calendar, Users, KeyRound, Settings,
-  ChevronRight,
+  ChevronRight, Camera,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ChangePhoneModal } from "./ChangePhoneModal";
@@ -69,10 +69,62 @@ function SummaryRow({
   );
 }
 
+/** Reusable avatar circle — photo if available, otherwise initials, otherwise icon. */
+function AvatarCircle({
+  imageUrl,
+  firstName,
+  lastName,
+  size = "sm",
+}: {
+  imageUrl?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  size?: "sm" | "lg";
+}) {
+  const dim = size === "lg" ? "w-20 h-20" : "w-10 h-10";
+  const textCls = size === "lg" ? "text-xl font-bold" : "text-sm font-bold";
+  const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join("").toUpperCase();
+
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt="Profile photo"
+        className={`${dim} rounded-full object-cover shrink-0`}
+      />
+    );
+  }
+
+  return (
+    <div className={`${dim} rounded-full bg-[#1E6B5A] flex items-center justify-center shrink-0`}>
+      {initials ? (
+        <span className={`${textCls} text-white`}>{initials}</span>
+      ) : (
+        <User size={size === "lg" ? 28 : 18} className="text-white" />
+      )}
+    </div>
+  );
+}
+
+/** Hydrate a ProfileForm from a Clerk user object (used after every reload). */
+function hydrateForm(user: NonNullable<ReturnType<typeof useUser>["user"]>): ProfileForm {
+  const meta = (user.publicMetadata ?? {}) as Record<string, string>;
+  return {
+    firstName: user.firstName ?? "",
+    lastName: user.lastName ?? "",
+    phone: meta.phone ?? "",
+    alternateMobile: meta.alternateMobile ?? "",
+    dateOfBirth: meta.dateOfBirth ?? "",
+    gender: meta.gender ?? "",
+    language: meta.language ?? "English",
+  };
+}
+
 export function AccountProfilePage() {
   const { user, isLoaded } = useUser();
   const { openUserProfile } = useClerk();
   const editFormRef = useRef<HTMLDivElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<ProfileForm>({
     firstName: "",
@@ -89,19 +141,16 @@ export function AccountProfilePage() {
   const [error, setError] = useState("");
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
 
+  // Initial hydration when Clerk user first loads.
+  // On subsequent reloads we explicitly call setForm — Clerk mutates the
+  // user object in-place so the reference doesn't change, meaning this
+  // effect wouldn't re-fire. Do NOT rely on it for post-save refreshes.
   useEffect(() => {
     if (user) {
-      const meta = (user.publicMetadata ?? {}) as Record<string, string>;
-      setForm({
-        firstName: user.firstName ?? "",
-        lastName: user.lastName ?? "",
-        phone: meta.phone ?? "",
-        alternateMobile: meta.alternateMobile ?? "",
-        dateOfBirth: meta.dateOfBirth ?? "",
-        gender: meta.gender ?? "",
-        language: meta.language ?? "English",
-      });
+      setForm(hydrateForm(user));
     }
   }, [user]);
 
@@ -167,8 +216,13 @@ export function AccountProfilePage() {
       }
 
       // Reload Clerk's user object so publicMetadata changes propagate
-      // immediately to all useUser() consumers (dashboard header, overview, etc.)
+      // immediately to all useUser() consumers (Navbar, DashboardLayout, etc.)
       await user.reload();
+
+      // Explicitly re-hydrate the form from the freshly-reloaded user.
+      // We cannot rely on the useEffect([user]) re-firing because Clerk
+      // mutates the user object in-place — the reference stays the same.
+      setForm(hydrateForm(user));
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -180,6 +234,30 @@ export function AccountProfilePage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setPhotoUploading(true);
+    setPhotoError("");
+    try {
+      await user.setProfileImage({ file });
+      await user.reload();
+      // Re-hydrate so name/metadata stay in sync too
+      setForm(hydrateForm(user));
+    } catch (err: any) {
+      setPhotoError(
+        err?.errors?.[0]?.message ??
+          err?.message ??
+          "Failed to upload photo. Please try again.",
+      );
+    } finally {
+      setPhotoUploading(false);
+      // Reset file input so the same file can be re-selected if needed
+      if (photoInputRef.current) photoInputRef.current.value = "";
     }
   }
 
@@ -218,7 +296,7 @@ export function AccountProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
         >
-          {/* Card header */}
+          {/* Card header — shows real avatar/initials, not a static icon */}
           <div className="px-5 py-4 bg-gradient-to-r from-[#1E6B5A]/5 to-[#C9A84C]/5 border-b border-[#C9A84C]/10 flex items-center justify-between">
             <div>
               <p className="font-serif text-base font-bold text-[#1E6B5A]">
@@ -226,9 +304,12 @@ export function AccountProfilePage() {
               </p>
               <p className="text-xs text-gray-400 mt-0.5">{email}</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-[#1E6B5A] flex items-center justify-center shrink-0">
-              <User size={18} className="text-white" />
-            </div>
+            <AvatarCircle
+              imageUrl={user?.imageUrl}
+              firstName={form.firstName}
+              lastName={form.lastName}
+              size="sm"
+            />
           </div>
 
           {/* Summary rows */}
@@ -320,6 +401,68 @@ export function AccountProfilePage() {
               <ChevronRight size={16} className="text-gray-300 shrink-0" />
             </button>
           ))}
+        </motion.div>
+
+        {/* ── Profile Photo ──────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06 }}
+          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-5"
+        >
+          <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider mb-4">
+            Profile Photo
+          </h3>
+
+          <div className="flex items-center gap-5">
+            {/* Large avatar preview */}
+            <div className="relative shrink-0">
+              <AvatarCircle
+                imageUrl={user?.imageUrl}
+                firstName={form.firstName}
+                lastName={form.lastName}
+                size="lg"
+              />
+              {photoUploading && (
+                <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                  <Loader2 size={20} className="text-white animate-spin" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-600 mb-3">
+                Upload a clear photo so other people can recognise you.
+              </p>
+
+              {/* Hidden file input */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={handlePhotoChange}
+                disabled={photoUploading}
+              />
+
+              <button
+                type="button"
+                disabled={photoUploading}
+                onClick={() => photoInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#1E6B5A] text-[#1E6B5A] text-sm font-semibold hover:bg-[#1E6B5A] hover:text-white transition-colors disabled:opacity-50"
+              >
+                {photoUploading ? (
+                  <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                ) : (
+                  <><Camera size={14} /> {user?.imageUrl ? "Change Photo" : "Upload Photo"}</>
+                )}
+              </button>
+
+              {photoError && (
+                <p className="mt-2 text-xs text-red-600">{photoError}</p>
+              )}
+            </div>
+          </div>
         </motion.div>
 
         {/* ── Edit Form ─────────────────────────────────────────── */}

@@ -60,7 +60,7 @@ function DisputesContent() {
   function loadTickets(f: string) {
     setLoading(true);
     const qs = f === "needs_admin" ? "?disputeStatus=needs_admin" : "";
-    fetch(`${basePath}/api/admin/tickets${qs}`, {
+    fetch(`/api/admin/tickets${qs}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })

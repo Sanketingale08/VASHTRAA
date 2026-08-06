@@ -19,7 +19,7 @@ export default function AdminLogin() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${basePath}/api/admin/stats`, {
+      const res = await fetch(`/api/admin/stats`, {
         headers: { "x-admin-key": key.trim() },
         credentials: "include",
       });

@@ -68,7 +68,8 @@ function saveLocalCart(items: CartItem[]) {
 }
 
 async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(`${BASE}${path}`, {
+  // path is always an absolute /api/... path — never prepend BASE_URL
+  const res = await fetch(path, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     ...options,

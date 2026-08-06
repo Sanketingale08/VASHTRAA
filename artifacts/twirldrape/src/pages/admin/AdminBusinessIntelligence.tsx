@@ -150,7 +150,7 @@ function BusinessIntelligenceContent() {
     if (!adminKey) return;
     if (period === "custom" && (!from || !to)) return;
     setLoading(true);
-    fetch(`${basePath}/api/admin/bi/dashboard?${query}`, {
+    fetch(`/api/admin/bi/dashboard?${query}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })

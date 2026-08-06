@@ -30,7 +30,7 @@ function useWishlistItems(isSignedIn: boolean) {
   return useQuery<{ items: WishlistItem[] }>({
     queryKey: ["wishlist-items"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/wishlists`, { credentials: "include" });
+      const res = await fetch(`/api/wishlists`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch wishlist");
       return res.json();
     },

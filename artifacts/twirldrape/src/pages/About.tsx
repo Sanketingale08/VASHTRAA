@@ -124,7 +124,7 @@ export default function About() {
   const [content, setContent] = useState<AboutContent>(DEFAULT_CONTENT);
 
   useEffect(() => {
-    fetch(`${basePath}/api/about-content`, { credentials: "include" })
+    fetch(`/api/about-content`, { credentials: "include" })
       .then((r) => r.json())
       .then((data: AboutContent) => setContent(data))
       .catch(() => {});

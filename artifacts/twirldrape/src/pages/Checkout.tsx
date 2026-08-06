@@ -174,7 +174,7 @@ export function CheckoutPage() {
     setPincodeStatus({ loading: true });
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`${BASE}/api/shipping/check?pincode=${address.pincode}`);
+        const res = await fetch(`/api/shipping/check?pincode=${address.pincode}`);
         const data = await res.json();
         setPincodeStatus({ loading: false, available: data.available, message: data.message });
       } catch { setPincodeStatus(null); }
@@ -243,7 +243,7 @@ export function CheckoutPage() {
     if (buyNowItems) {
       try {
         const ids = buyNowItems.map((i) => i.productId).join(",");
-        const res = await fetch(`${BASE}/api/products?ids=${encodeURIComponent(ids)}&limit=100`, {
+        const res = await fetch(`/api/products?ids=${encodeURIComponent(ids)}&limit=100`, {
           credentials: "include",
         });
         if (!res.ok) return [];
@@ -294,7 +294,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
-    fetch(`${BASE}/api/addresses`, { credentials: "include" })
+    fetch(`/api/addresses`, { credentials: "include" })
       .then(r => r.ok ? r.json() : { addresses: [] })
       .then(data => {
         const addrs: SavedAddress[] = data.addresses ?? [];
@@ -375,7 +375,7 @@ export function CheckoutPage() {
     setCouponLoading(true);
     setCouponError("");
     try {
-      const res = await fetch(`${BASE}/api/coupons/validate?code=${encodeURIComponent(code)}`, {
+      const res = await fetch(`/api/coupons/validate?code=${encodeURIComponent(code)}`, {
         credentials: "include",
       });
       if (!res.ok) {
@@ -411,7 +411,7 @@ export function CheckoutPage() {
       return;
     }
     try {
-      const res = await fetch(`${BASE}/api/orders`, {
+      const res = await fetch(`/api/orders`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -460,7 +460,7 @@ export function CheckoutPage() {
       const storedRef = localStorage.getItem("td_ref_code");
       if (storedRef) {
         localStorage.removeItem("td_ref_code");
-        fetch(`${BASE}/api/rewards/referral/apply`, {
+        fetch(`/api/rewards/referral/apply`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -704,7 +704,7 @@ export function CheckoutPage() {
                         if (!validateAddress()) return;
                         if (saveThisAddress && enteringNew && !selectedSavedId) {
                           try {
-                            const r = await fetch(`${BASE}/api/addresses`, {
+                            const r = await fetch(`/api/addresses`, {
                               method: "POST",
                               credentials: "include",
                               headers: { "Content-Type": "application/json" },

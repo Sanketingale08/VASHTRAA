@@ -85,7 +85,7 @@ export default function AdminAboutContent() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   useEffect(() => {
-    fetch(`${basePath}/api/about-content`, { credentials: "include" })
+    fetch(`/api/about-content`, { credentials: "include" })
       .then((r) => r.json())
       .then((data: AboutContent) => setForm(data))
       .catch(() => setForm(DEFAULT))
@@ -113,7 +113,7 @@ export default function AdminAboutContent() {
   async function handleSave() {
     setSaving(true);
     try {
-      const r = await fetch(`${basePath}/api/admin/about-content`, {
+      const r = await fetch(`/api/admin/about-content`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

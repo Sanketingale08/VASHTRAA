@@ -241,7 +241,7 @@ function CouponsContent() {
   function loadCoupons() {
     setLoading(true);
     setError("");
-    fetch(`${basePath}/api/admin/coupons`, {
+    fetch(`/api/admin/coupons`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
@@ -286,7 +286,7 @@ function CouponsContent() {
     setSaving(true);
     setFormError("");
     try {
-      const res = await fetch(`${basePath}/api/admin/coupons`, {
+      const res = await fetch(`/api/admin/coupons`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         credentials: "include",
@@ -311,7 +311,7 @@ function CouponsContent() {
     setSaving(true);
     setFormError("");
     try {
-      const res = await fetch(`${basePath}/api/admin/coupons/${editing.id}`, {
+      const res = await fetch(`/api/admin/coupons/${editing.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         credentials: "include",
@@ -335,7 +335,7 @@ function CouponsContent() {
     if (!confirm(`Deactivate coupon "${coupon.code}"?`)) return;
     setActionLoading(coupon.id);
     try {
-      const res = await fetch(`${basePath}/api/admin/coupons/${coupon.id}`, {
+      const res = await fetch(`/api/admin/coupons/${coupon.id}`, {
         method: "DELETE",
         headers: { "x-admin-key": adminKey },
         credentials: "include",

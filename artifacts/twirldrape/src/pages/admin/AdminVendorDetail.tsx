@@ -112,7 +112,7 @@ function KycDocButton({ label, objectPath, adminKey, className }: {
     setLoading(true);
     try {
       const res = await fetch(
-        `${basePath}/api/admin/storage/signed-url?path=${encodeURIComponent(objectPath)}`,
+        `/api/admin/storage/signed-url?path=${encodeURIComponent(objectPath)}`,
         { headers: { "x-admin-key": adminKey } }
       );
       if (!res.ok) { alert("Could not load document — access denied or file missing."); return; }
@@ -144,7 +144,7 @@ function VendorDetailContent() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetch(`${basePath}/api/admin/vendors/${id}`, {
+    fetch(`/api/admin/vendors/${id}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
@@ -163,7 +163,7 @@ function VendorDetailContent() {
     if (!vendor) return;
     setActionLoading(action);
     try {
-      const res = await fetch(`${basePath}/api/admin/vendors/${vendor.id}/${action}`, {
+      const res = await fetch(`/api/admin/vendors/${vendor.id}/${action}`, {
         method: "POST",
         headers: { "x-admin-key": adminKey },
         credentials: "include",
@@ -185,7 +185,7 @@ function VendorDetailContent() {
     if (!vendor) return;
     setActionLoading(action);
     try {
-      const res = await fetch(`${basePath}/api/admin/vendors/${vendor.id}/kyc`, {
+      const res = await fetch(`/api/admin/vendors/${vendor.id}/kyc`, {
         method: "PATCH",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",

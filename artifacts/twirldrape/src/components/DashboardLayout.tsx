@@ -45,7 +45,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: openCountData } = useQuery<{ count: number }>({
     queryKey: ["support-open-count"],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/support/tickets/open-count`, { credentials: "include" });
+      const r = await fetch(`/api/support/tickets/open-count`, { credentials: "include" });
       if (!r.ok) return { count: 0 };
       return r.json();
     },

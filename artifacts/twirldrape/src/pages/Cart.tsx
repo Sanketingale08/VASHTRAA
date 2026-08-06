@@ -77,7 +77,7 @@ export function CartPage() {
     setCouponLoading(true);
     setCouponError("");
     try {
-      const res = await fetch(`${basePath}/api/coupons/validate?code=${encodeURIComponent(code)}`, {
+      const res = await fetch(`/api/coupons/validate?code=${encodeURIComponent(code)}`, {
         credentials: "include",
       });
       if (!res.ok) {

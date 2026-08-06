@@ -88,7 +88,7 @@ function DetailContent() {
   function load() {
     if (!id || !adminKey) return;
     setLoading(true);
-    fetch(`${basePath}/api/admin/vendor-analytics/${id}?granularity=${granularity}`, {
+    fetch(`/api/admin/vendor-analytics/${id}?granularity=${granularity}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
@@ -108,7 +108,7 @@ function DetailContent() {
     if (!id) return;
     setActionLoading(field + action);
     try {
-      const res = await fetch(`${basePath}/api/admin/vendor-analytics/${id}/verification`, {
+      const res = await fetch(`/api/admin/vendor-analytics/${id}/verification`, {
         method: "POST",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",
@@ -124,7 +124,7 @@ function DetailContent() {
     if (!id || !settlementAmount) return;
     setSettlementBusy(true);
     try {
-      const res = await fetch(`${basePath}/api/admin/vendor-analytics/${id}/settlements`, {
+      const res = await fetch(`/api/admin/vendor-analytics/${id}/settlements`, {
         method: "POST",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",

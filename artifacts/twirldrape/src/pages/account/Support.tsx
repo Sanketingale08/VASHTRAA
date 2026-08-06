@@ -212,7 +212,7 @@ export function AccountSupportPage() {
   const { data: orders = [] } = useQuery<{ id: string; createdAt: string; items?: { name?: string }[] }[]>({
     queryKey: ["support-orders"],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/orders`, { credentials: "include" });
+      const r = await fetch(`/api/orders`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to fetch orders");
       const data = await r.json();
       return data.orders ?? [];
@@ -222,7 +222,7 @@ export function AccountSupportPage() {
   const { data: categories = FALLBACK_CATEGORIES } = useQuery<Category[]>({
     queryKey: ["support-categories"],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/support/categories`, { credentials: "include" });
+      const r = await fetch(`/api/support/categories`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to fetch categories");
       const data = await r.json();
       return data.categories ?? FALLBACK_CATEGORIES;
@@ -235,7 +235,7 @@ export function AccountSupportPage() {
       const params = new URLSearchParams({ page: String(ticketPage), limit: String(ticketLimit) });
       if (ticketSearch.trim()) params.set("search", ticketSearch.trim());
       if (ticketStatusFilter) params.set("status", ticketStatusFilter);
-      const r = await fetch(`${basePath}/api/support/tickets?${params.toString()}`, { credentials: "include" });
+      const r = await fetch(`/api/support/tickets?${params.toString()}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to fetch tickets");
       return r.json();
     },
@@ -247,7 +247,7 @@ export function AccountSupportPage() {
   const { data: ticketDetail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: ["support-ticket", selectedId],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/support/tickets/${selectedId}`, { credentials: "include" });
+      const r = await fetch(`/api/support/tickets/${selectedId}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to fetch ticket");
       return r.json();
     },
@@ -256,7 +256,7 @@ export function AccountSupportPage() {
 
   const createTicket = useMutation({
     mutationFn: async (data: { subject: string; category: string; description: string; orderId?: string; attachments?: string[] }) => {
-      const r = await fetch(`${basePath}/api/support/tickets`, {
+      const r = await fetch(`/api/support/tickets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -283,7 +283,7 @@ export function AccountSupportPage() {
 
   const addReply = useMutation({
     mutationFn: async ({ body, attachments }: { body: string; attachments?: string[] }) => {
-      const r = await fetch(`${basePath}/api/support/tickets/${selectedId}/messages`, {
+      const r = await fetch(`/api/support/tickets/${selectedId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -305,7 +305,7 @@ export function AccountSupportPage() {
 
   const reopenTicket = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`${basePath}/api/support/tickets/${selectedId}/reopen`, {
+      const r = await fetch(`/api/support/tickets/${selectedId}/reopen`, {
         method: "POST",
         credentials: "include",
       });
@@ -323,7 +323,7 @@ export function AccountSupportPage() {
 
   const escalateTicket = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`${basePath}/api/support/tickets/${selectedId}/escalate`, {
+      const r = await fetch(`/api/support/tickets/${selectedId}/escalate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -350,7 +350,7 @@ export function AccountSupportPage() {
 
   async function uploadFiles(files: File[]): Promise<string[]> {
     return Promise.all(files.map(async (file) => {
-      const res = await fetch(`${basePath}/api/storage/uploads/request-url`, {
+      const res = await fetch(`/api/storage/uploads/request-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

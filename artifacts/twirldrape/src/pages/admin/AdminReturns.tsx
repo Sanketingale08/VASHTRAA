@@ -124,7 +124,7 @@ function ReturnsContent() {
 
   function loadOrders() {
     setLoading(true);
-    fetch(`${basePath}/api/admin/returns`, {
+    fetch(`/api/admin/returns`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
@@ -164,7 +164,7 @@ function ReturnsContent() {
     const key = orderId + "return" + decision;
     setActionLoading(key);
     try {
-      const res = await fetch(`${basePath}/api/admin/orders/${orderId}/return`, {
+      const res = await fetch(`/api/admin/orders/${orderId}/return`, {
         method: "POST",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",
@@ -188,7 +188,7 @@ function ReturnsContent() {
     const key = orderId + "refund" + decision;
     setActionLoading(key);
     try {
-      const res = await fetch(`${basePath}/api/admin/orders/${orderId}/refund`, {
+      const res = await fetch(`/api/admin/orders/${orderId}/refund`, {
         method: "POST",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",
@@ -214,7 +214,7 @@ function ReturnsContent() {
     processingInFlight.current.add(key);
     setActionLoading(key);
     try {
-      const res = await fetch(`${basePath}/api/admin/orders/${orderId}/refund/process`, {
+      const res = await fetch(`/api/admin/orders/${orderId}/refund/process`, {
         method: "POST",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",

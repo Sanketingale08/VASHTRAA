@@ -76,7 +76,7 @@ function DashboardContent() {
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   useEffect(() => {
-    fetch(`${basePath}/api/admin/stats`, {
+    fetch(`/api/admin/stats`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })

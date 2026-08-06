@@ -50,7 +50,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
       setLoading(false);
       return;
     }
-    fetch(`${BASE}/api/orders`, { credentials: "include" })
+    fetch(`/api/orders`, { credentials: "include" })
       .then(async r => {
         if (!r.ok) throw new Error("Failed to load orders");
         const data = await r.json();

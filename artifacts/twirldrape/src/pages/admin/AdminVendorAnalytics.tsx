@@ -141,7 +141,7 @@ function AnalyticsContent() {
   function load() {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`${basePath}/api/admin/vendor-analytics?${query}`, {
+    fetch(`/api/admin/vendor-analytics?${query}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })

@@ -86,7 +86,7 @@ function AdminSupportContent() {
       const params = new URLSearchParams({ scope: scopeTab, page: String(page), limit: String(limit) });
       if (statusTab !== "all") params.set("status", statusTab);
       if (search.trim()) params.set("search", search.trim());
-      const r = await fetch(`${basePath}/api/admin/support/tickets?${params}`, {
+      const r = await fetch(`/api/admin/support/tickets?${params}`, {
         headers: { "x-admin-key": adminKey },
         credentials: "include",
       });
@@ -101,7 +101,7 @@ function AdminSupportContent() {
   const { data: detail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: ["admin-support-ticket", selectedId],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/admin/support/tickets/${selectedId}`, {
+      const r = await fetch(`/api/admin/support/tickets/${selectedId}`, {
         headers: { "x-admin-key": adminKey },
         credentials: "include",
       });
@@ -113,7 +113,7 @@ function AdminSupportContent() {
 
   const addReply = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`${basePath}/api/admin/support/tickets/${selectedId}/messages`, {
+      const r = await fetch(`/api/admin/support/tickets/${selectedId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         credentials: "include",
@@ -131,7 +131,7 @@ function AdminSupportContent() {
 
   const updateStatus = useMutation({
     mutationFn: async (status: string) => {
-      const r = await fetch(`${basePath}/api/admin/support/tickets/${selectedId}/status`, {
+      const r = await fetch(`/api/admin/support/tickets/${selectedId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         credentials: "include",
@@ -153,7 +153,7 @@ function AdminSupportContent() {
 
   const assignTicket = useMutation({
     mutationFn: async (assignedAdmin: string) => {
-      const r = await fetch(`${basePath}/api/admin/support/tickets/${selectedId}/assign`, {
+      const r = await fetch(`/api/admin/support/tickets/${selectedId}/assign`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
         credentials: "include",
@@ -325,7 +325,7 @@ function AdminSupportContent() {
                         <div className="flex flex-wrap gap-1 mt-2">
                           {m.attachments.map((path, ai) => {
                             const isImg = /\.(jpg|jpeg|png)$/i.test(path);
-                            const url = `${basePath}/api/storage${path}`;
+                            const url = `/api/storage${path}`;
                             const name = decodeURIComponent(path.split("/").pop() ?? `file-${ai + 1}`);
                             return (
                               <a key={ai} href={url} target="_blank" rel="noreferrer"

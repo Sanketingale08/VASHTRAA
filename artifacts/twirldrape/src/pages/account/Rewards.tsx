@@ -142,7 +142,7 @@ export function AccountRewardsPage() {
   const { data: summary, isLoading: summaryLoading } = useQuery<RewardsSummary>({
     queryKey: ["rewards-summary"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/rewards/summary`, { credentials: "include" });
+      const res = await fetch(`/api/rewards/summary`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -152,7 +152,7 @@ export function AccountRewardsPage() {
   const { data: historyData, isLoading: historyLoading } = useQuery<HistoryResponse>({
     queryKey: ["rewards-history", historyPage],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/rewards/history?page=${historyPage}`, { credentials: "include" });
+      const res = await fetch(`/api/rewards/history?page=${historyPage}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

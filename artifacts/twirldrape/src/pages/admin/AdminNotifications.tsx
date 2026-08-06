@@ -99,7 +99,7 @@ function AdminNotificationsContent() {
       if (search.trim()) params.set("search", search.trim());
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
-      const r = await fetch(`${basePath}/api/admin/notifications?${params}`, {
+      const r = await fetch(`/api/admin/notifications?${params}`, {
         headers: { "x-admin-key": adminKey },
         credentials: "include",
       });
@@ -112,7 +112,7 @@ function AdminNotificationsContent() {
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`${basePath}/api/admin/notifications/${id}/read`, {
+      await fetch(`/api/admin/notifications/${id}/read`, {
         method: "PATCH",
         headers: { "x-admin-key": adminKey },
         credentials: "include",
@@ -126,7 +126,7 @@ function AdminNotificationsContent() {
 
   const markUnread = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`${basePath}/api/admin/notifications/${id}/unread`, {
+      await fetch(`/api/admin/notifications/${id}/unread`, {
         method: "PATCH",
         headers: { "x-admin-key": adminKey },
         credentials: "include",
@@ -140,7 +140,7 @@ function AdminNotificationsContent() {
 
   const markAllRead = useMutation({
     mutationFn: async () => {
-      await fetch(`${basePath}/api/admin/notifications/read-all`, {
+      await fetch(`/api/admin/notifications/read-all`, {
         method: "PATCH",
         headers: { "x-admin-key": adminKey },
         credentials: "include",
@@ -154,7 +154,7 @@ function AdminNotificationsContent() {
 
   const dismiss = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`${basePath}/api/admin/notifications/${id}`, {
+      await fetch(`/api/admin/notifications/${id}`, {
         method: "DELETE",
         headers: { "x-admin-key": adminKey },
         credentials: "include",

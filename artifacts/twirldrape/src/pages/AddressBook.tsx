@@ -347,7 +347,7 @@ export function AddressBookPage() {
 
   const fetchAddresses = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/addresses`, { credentials: "include" });
+      const res = await fetch(`/api/addresses`, { credentials: "include" });
       const data = await res.json();
       setAddresses(data.addresses ?? []);
     } catch {
@@ -366,7 +366,7 @@ export function AddressBookPage() {
     setSaveError("");
     try {
       const isEdit = mode === "edit" && editingAddress;
-      const url = isEdit ? `${BASE}/api/addresses/${editingAddress.id}` : `${BASE}/api/addresses`;
+      const url = isEdit ? `/api/addresses/${editingAddress.id}` : `/api/addresses`;
       const method = isEdit ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -391,7 +391,7 @@ export function AddressBookPage() {
   async function handleDelete(id: string) {
     setDeleting(id);
     try {
-      await fetch(`${BASE}/api/addresses/${id}`, { method: "DELETE", credentials: "include" });
+      await fetch(`/api/addresses/${id}`, { method: "DELETE", credentials: "include" });
       setAddresses(prev => prev.filter(a => a.id !== id));
       setConfirmDeleteId(null);
     } catch {
@@ -403,7 +403,7 @@ export function AddressBookPage() {
   async function handleSetDefault(id: string) {
     setSettingDefault(id);
     try {
-      const res = await fetch(`${BASE}/api/addresses/${id}/default`, {
+      const res = await fetch(`/api/addresses/${id}/default`, {
         method: "PATCH",
         credentials: "include",
       });

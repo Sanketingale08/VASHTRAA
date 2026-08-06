@@ -44,7 +44,7 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${BASE}/api/account/phone-otp/request`, {
+      const res = await fetch(`/api/account/phone-otp/request`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +70,7 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${BASE}/api/account/phone-otp/verify`, {
+      const res = await fetch(`/api/account/phone-otp/verify`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

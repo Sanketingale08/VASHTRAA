@@ -17,7 +17,8 @@ const WishlistContext = createContext<WishlistContextType>({
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(`${BASE}${path}`, {
+  // path is always an absolute /api/... path — never prepend BASE_URL
+  const res = await fetch(path, {
     credentials: "include",
     ...options,
   });

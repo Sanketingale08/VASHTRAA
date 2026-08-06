@@ -322,7 +322,7 @@ export default function Home() {
   const [heroBanners, setHeroBanners] = useState<HeroBanner[]>([]);
 
   useEffect(() => {
-    fetch(`${BASE}/api/hero-banners`, { credentials: "include" })
+    fetch(`/api/hero-banners`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : [])
       .then((data: HeroBanner[]) => { if (Array.isArray(data) && data.length > 0) setHeroBanners(data); })
       .catch(() => {});

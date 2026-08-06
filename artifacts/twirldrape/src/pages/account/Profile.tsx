@@ -199,7 +199,7 @@ export function AccountProfilePage() {
         // Provider-controlled name — skip silently and continue saving metadata
       }
 
-      const res = await fetch(`${BASE}/api/account/profile`, {
+      const res = await fetch(`/api/account/profile`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

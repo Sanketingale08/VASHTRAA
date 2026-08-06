@@ -48,7 +48,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
       return;
     }
     try {
-      const res = await fetch(`${basePath}/api/seller/orders`, { credentials: "include" });
+      const res = await fetch(`/api/seller/orders`, { credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();
       const lastTs = new Date(lastViewed).getTime();
@@ -62,7 +62,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
 
   const fetchUnreadNotifCount = useCallback(async () => {
     try {
-      const res = await fetch(`${basePath}/api/seller/notifications/unread-count`, { credentials: "include" });
+      const res = await fetch(`/api/seller/notifications/unread-count`, { credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();
       setUnreadNotifCount(data.count ?? 0);
@@ -240,7 +240,7 @@ export default function SellerDashboard() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${basePath}/api/seller/dashboard`, { credentials: "include" })
+    fetch(`/api/seller/dashboard`, { credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();

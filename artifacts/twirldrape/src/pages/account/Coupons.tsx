@@ -41,7 +41,7 @@ function useAvailableCoupons(enabled: boolean) {
   return useQuery<{ coupons: AvailableCoupon[] }>({
     queryKey: ["coupons-available"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/coupons/available`, { credentials: "include" });
+      const res = await fetch(`/api/coupons/available`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -53,7 +53,7 @@ function useUsedCoupons(enabled: boolean) {
   return useQuery<{ redemptions: Redemption[] }>({
     queryKey: ["coupons-used"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/coupons/used`, { credentials: "include" });
+      const res = await fetch(`/api/coupons/used`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -65,7 +65,7 @@ function useExpiredCoupons() {
   return useQuery<{ coupons: ExpiredCoupon[] }>({
     queryKey: ["coupons-expired"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/coupons/expired`);
+      const res = await fetch(`/api/coupons/expired`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

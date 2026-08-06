@@ -462,7 +462,7 @@ function OrderActions({
   if (!canCancel && !canReturn && !canRefund && !successMessage && !order.refundStatus) return null;
 
   async function doCancel(reason: string) {
-    const r = await fetch(`${BASE}/api/orders/${order.id}/cancel`, {
+    const r = await fetch(`/api/orders/${order.id}/cancel`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -478,7 +478,7 @@ function OrderActions({
   }
 
   async function doReturn(reason: string, itemNotes?: Record<string, string>) {
-    const r = await fetch(`${BASE}/api/orders/${order.id}/return`, {
+    const r = await fetch(`/api/orders/${order.id}/return`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -494,7 +494,7 @@ function OrderActions({
   }
 
   async function doRefund(method: string) {
-    const r = await fetch(`${BASE}/api/orders/${order.id}/refund`, {
+    const r = await fetch(`/api/orders/${order.id}/refund`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -662,7 +662,7 @@ export function OrderConfirmationPage() {
       setLoading(false);
       return;
     }
-    fetch(`${BASE}/api/orders/${orderId}`, { credentials: "include" })
+    fetch(`/api/orders/${orderId}`, { credentials: "include" })
       .then(async r => {
         if (!r.ok) throw new Error("Order not found");
         const data = await r.json();

@@ -64,7 +64,7 @@ function VendorsContent() {
 
   function loadVendors() {
     setLoading(true);
-    fetch(`${basePath}/api/admin/vendors`, {
+    fetch(`/api/admin/vendors`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
@@ -98,7 +98,7 @@ function VendorsContent() {
   async function doAction(id: string, action: string) {
     setActionLoading(id + action);
     try {
-      const res = await fetch(`${basePath}/api/admin/vendors/${id}/${action}`, {
+      const res = await fetch(`/api/admin/vendors/${id}/${action}`, {
         method: "POST",
         headers: { "x-admin-key": adminKey },
         credentials: "include",

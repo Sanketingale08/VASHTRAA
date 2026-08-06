@@ -30,7 +30,7 @@ function useOrders(enabled: boolean) {
   return useQuery<{ orders: Order[] }>({
     queryKey: ["dashboard-orders"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/orders`, { credentials: "include" });
+      const res = await fetch(`/api/orders`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -42,7 +42,7 @@ function useWishlistCount(enabled: boolean) {
   return useQuery<{ productIds: string[] }>({
     queryKey: ["dashboard-wishlist-ids"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/wishlists/ids`, { credentials: "include" });
+      const res = await fetch(`/api/wishlists/ids`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -54,7 +54,7 @@ function useCouponCount(enabled: boolean) {
   return useQuery<{ coupons: unknown[] }>({
     queryKey: ["dashboard-coupons-available"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/coupons/available`, { credentials: "include" });
+      const res = await fetch(`/api/coupons/available`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -66,7 +66,7 @@ function useRewardsSummary(enabled: boolean) {
   return useQuery<{ balance: number; tier: string }>({
     queryKey: ["rewards-summary"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/rewards/summary`, { credentials: "include" });
+      const res = await fetch(`/api/rewards/summary`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

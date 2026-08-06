@@ -93,7 +93,7 @@ function OrdersContent() {
     setLoading(true);
     setError("");
     const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-    fetch(`${basePath}/api/admin/orders${qs}`, {
+    fetch(`/api/admin/orders${qs}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
     })
@@ -134,7 +134,7 @@ function OrdersContent() {
       if (statusFilter) params.set("status", statusFilter);
       if (search.trim()) params.set("search", search.trim());
       const qs = params.toString() ? `?${params.toString()}` : "";
-      const r = await fetch(`${basePath}/api/admin/orders/export.csv${qs}`, {
+      const r = await fetch(`/api/admin/orders/export.csv${qs}`, {
         headers: { "x-admin-key": adminKey },
         credentials: "include",
       });

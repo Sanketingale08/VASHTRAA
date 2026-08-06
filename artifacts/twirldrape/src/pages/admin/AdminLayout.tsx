@@ -43,7 +43,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       setLocation("/admin/login");
       return;
     }
-    fetch(`${basePath}/api/admin/vendors`, {
+    fetch(`/api/admin/vendors`, {
       headers: { "x-admin-key": key },
       credentials: "include",
     }).then((r) => {
@@ -83,7 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { data: countData } = useQuery({
     queryKey: ["admin-notif-count"],
     queryFn: async () => {
-      const r = await fetch(`${basePath}/api/admin/notifications/unread-count`, {
+      const r = await fetch(`/api/admin/notifications/unread-count`, {
         headers: { "x-admin-key": adminKey },
         credentials: "include",
       });

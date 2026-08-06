@@ -11,6 +11,11 @@ interface Stat {
   value: string;
 }
 
+interface Card {
+  title: string;
+  desc: string;
+}
+
 interface AboutContent {
   stats: Stat[];
   heroHeadline: string;
@@ -23,6 +28,8 @@ interface AboutContent {
   weaversParagraph2: string;
   ctaHeadline: string;
   ctaSubtext: string;
+  missionValues: Card[];
+  trustBadges: Card[];
 }
 
 const DEFAULT: AboutContent = {
@@ -47,6 +54,20 @@ const DEFAULT: AboutContent = {
     "We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee structures. If a weaver raises a concern, it goes directly to Rohan's phone. That accountability is what lets us promise you a saree made with genuine care.",
   ctaHeadline: "Discover the Craft. Wear the Story.",
   ctaSubtext: "Explore our curated collections of handwoven sarees from India's finest artisans.",
+  missionValues: [
+    { title: "Heritage First", desc: "We champion India's handloom traditions, giving every weave the recognition and respect it deserves." },
+    { title: "Direct From Artisans", desc: "We work directly with weaver collectives — no middlemen — so artisans earn fairly for their craft." },
+    { title: "Uncompromising Quality", desc: "Every saree is hand-inspected before it reaches you, so authenticity is never in question." },
+    { title: "Sustainable Craft", desc: "We champion slow fashion — handwoven pieces made to last generations, not seasons." },
+  ],
+  trustBadges: [
+    { title: "100% Authentic Products", desc: "Every saree is verified and sourced directly from trusted weavers and artisans." },
+    { title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on TwirlDrape." },
+    { title: "Secure Payments & Data Protection", desc: "Bank-grade encryption keeps your payment and personal data completely safe." },
+    { title: "Easy Returns & Refunds", desc: "Hassle-free returns within 7 days — no questions asked, full refund guaranteed." },
+    { title: "Fast & Reliable Pan India Delivery", desc: "Swift shipping across all states with real-time tracking on every order." },
+    { title: "Dedicated Support 24/7", desc: "Our saree experts are always available to help you find the perfect drape." },
+  ],
 };
 
 function Field({
@@ -107,6 +128,20 @@ export default function AdminAboutContent() {
         i === index ? { ...s, [key]: value } : s
       );
       return { ...prev, stats };
+    });
+  }
+
+  function setCard(
+    section: "missionValues" | "trustBadges",
+    index: number,
+    key: keyof Card,
+    value: string
+  ) {
+    setForm((prev) => {
+      const cards = prev[section].map((c, i) =>
+        i === index ? { ...c, [key]: value } : c
+      );
+      return { ...prev, [section]: cards };
     });
   }
 
@@ -323,6 +358,70 @@ export default function AdminAboutContent() {
                 onChange={(e) => set("weaversParagraph2", e.target.value)}
               />
             </Field>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+            <h2 className="text-sm font-bold text-gray-700 border-b border-gray-100 pb-3">
+              Mission &amp; Values Cards
+            </h2>
+            <p className="text-xs text-gray-400 -mt-3">
+              The four principle cards shown in the Mission &amp; Values section.
+            </p>
+            <div className="space-y-4">
+              {form.missionValues.map((card, i) => (
+                <div key={i} className="border border-gray-100 rounded-lg p-3 space-y-2 bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Card {i + 1}</p>
+                  <Field label="Title">
+                    <input
+                      className={inputCls}
+                      value={card.title}
+                      onChange={(e) => setCard("missionValues", i, "title", e.target.value)}
+                      placeholder="e.g. Heritage First"
+                    />
+                  </Field>
+                  <Field label="Description">
+                    <textarea
+                      className={textareaCls}
+                      rows={2}
+                      value={card.desc}
+                      onChange={(e) => setCard("missionValues", i, "desc", e.target.value)}
+                    />
+                  </Field>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+            <h2 className="text-sm font-bold text-gray-700 border-b border-gray-100 pb-3">
+              Trust Badges
+            </h2>
+            <p className="text-xs text-gray-400 -mt-3">
+              The six trust indicators shown in the "Why Shop With TwirlDrape?" section.
+            </p>
+            <div className="space-y-4">
+              {form.trustBadges.map((badge, i) => (
+                <div key={i} className="border border-gray-100 rounded-lg p-3 space-y-2 bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Badge {i + 1}</p>
+                  <Field label="Title">
+                    <input
+                      className={inputCls}
+                      value={badge.title}
+                      onChange={(e) => setCard("trustBadges", i, "title", e.target.value)}
+                      placeholder="e.g. 100% Authentic Products"
+                    />
+                  </Field>
+                  <Field label="Description">
+                    <textarea
+                      className={textareaCls}
+                      rows={2}
+                      value={badge.desc}
+                      onChange={(e) => setCard("trustBadges", i, "desc", e.target.value)}
+                    />
+                  </Field>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">

@@ -56,36 +56,20 @@ function SectionTitle({
   );
 }
 
-const MISSION_VALUES = [
-  {
-    icon: <Heart className="w-7 h-7" style={{ color: GOLD }} />,
-    title: "Heritage First",
-    desc: "We champion India's handloom traditions, giving every weave the recognition and respect it deserves.",
-  },
-  {
-    icon: <Users className="w-7 h-7" style={{ color: GOLD }} />,
-    title: "Direct From Artisans",
-    desc: "We work directly with weaver collectives — no middlemen — so artisans earn fairly for their craft.",
-  },
-  {
-    icon: <Sparkles className="w-7 h-7" style={{ color: GOLD }} />,
-    title: "Uncompromising Quality",
-    desc: "Every saree is hand-inspected before it reaches you, so authenticity is never in question.",
-  },
-  {
-    icon: <Leaf className="w-7 h-7" style={{ color: GOLD }} />,
-    title: "Sustainable Craft",
-    desc: "We champion slow fashion — handwoven pieces made to last generations, not seasons.",
-  },
+const MISSION_VALUE_ICONS = [
+  <Heart className="w-7 h-7" style={{ color: GOLD }} />,
+  <Users className="w-7 h-7" style={{ color: GOLD }} />,
+  <Sparkles className="w-7 h-7" style={{ color: GOLD }} />,
+  <Leaf className="w-7 h-7" style={{ color: GOLD }} />,
 ];
 
-const TRUST_BADGES = [
-  { icon: <BadgeCheck className="w-8 h-8" style={{ color: GOLD }} />, title: "100% Authentic Products", desc: "Every saree is verified and sourced directly from trusted weavers and artisans." },
-  { icon: <ShieldCheck className="w-8 h-8" style={{ color: GOLD }} />, title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on TwirlDrape." },
-  { icon: <CreditCard className="w-8 h-8" style={{ color: GOLD }} />, title: "Secure Payments & Data Protection", desc: "Bank-grade encryption keeps your payment and personal data completely safe." },
-  { icon: <RefreshCcw className="w-8 h-8" style={{ color: GOLD }} />, title: "Easy Returns & Refunds", desc: "Hassle-free returns within 7 days — no questions asked, full refund guaranteed." },
-  { icon: <Truck className="w-8 h-8" style={{ color: GOLD }} />, title: "Fast & Reliable Pan India Delivery", desc: "Swift shipping across all states with real-time tracking on every order." },
-  { icon: <Headphones className="w-8 h-8" style={{ color: GOLD }} />, title: "Dedicated Support 24/7", desc: "Our saree experts are always available to help you find the perfect drape." },
+const TRUST_BADGE_ICONS = [
+  <BadgeCheck className="w-8 h-8" style={{ color: GOLD }} />,
+  <ShieldCheck className="w-8 h-8" style={{ color: GOLD }} />,
+  <CreditCard className="w-8 h-8" style={{ color: GOLD }} />,
+  <RefreshCcw className="w-8 h-8" style={{ color: GOLD }} />,
+  <Truck className="w-8 h-8" style={{ color: GOLD }} />,
+  <Headphones className="w-8 h-8" style={{ color: GOLD }} />,
 ];
 
 const TEAM = [
@@ -116,6 +100,20 @@ const DEFAULT_CONTENT = {
     "We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee structures. If a weaver raises a concern, it goes directly to Rohan's phone. That accountability is what lets us promise you a saree made with genuine care.",
   ctaHeadline: "Discover the Craft. Wear the Story.",
   ctaSubtext: "Explore our curated collections of handwoven sarees from India's finest artisans.",
+  missionValues: [
+    { title: "Heritage First", desc: "We champion India's handloom traditions, giving every weave the recognition and respect it deserves." },
+    { title: "Direct From Artisans", desc: "We work directly with weaver collectives — no middlemen — so artisans earn fairly for their craft." },
+    { title: "Uncompromising Quality", desc: "Every saree is hand-inspected before it reaches you, so authenticity is never in question." },
+    { title: "Sustainable Craft", desc: "We champion slow fashion — handwoven pieces made to last generations, not seasons." },
+  ],
+  trustBadges: [
+    { title: "100% Authentic Products", desc: "Every saree is verified and sourced directly from trusted weavers and artisans." },
+    { title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on TwirlDrape." },
+    { title: "Secure Payments & Data Protection", desc: "Bank-grade encryption keeps your payment and personal data completely safe." },
+    { title: "Easy Returns & Refunds", desc: "Hassle-free returns within 7 days — no questions asked, full refund guaranteed." },
+    { title: "Fast & Reliable Pan India Delivery", desc: "Swift shipping across all states with real-time tracking on every order." },
+    { title: "Dedicated Support 24/7", desc: "Our saree experts are always available to help you find the perfect drape." },
+  ],
 };
 
 type AboutContent = typeof DEFAULT_CONTENT;
@@ -202,9 +200,9 @@ export default function About() {
               Why Shop With TwirlDrape?
             </SectionTitle>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {TRUST_BADGES.map((f, i) => (
+              {content.trustBadges.map((f, i) => (
                 <motion.div
-                  key={f.title}
+                  key={i}
                   custom={i}
                   initial="hidden"
                   whileInView="visible"
@@ -212,7 +210,7 @@ export default function About() {
                   variants={fadeUp}
                   className="flex flex-col items-start gap-4 p-6 rounded-2xl border border-[#C9A84C]/20 hover:shadow-md transition-shadow duration-300 bg-[#F3F8F5]"
                 >
-                  <div className="p-3 rounded-xl" style={{ background: MAROON + "15" }}>{f.icon}</div>
+                  <div className="p-3 rounded-xl" style={{ background: MAROON + "15" }}>{TRUST_BADGE_ICONS[i]}</div>
                   <div>
                     <h4 className="font-serif text-lg font-semibold mb-1" style={{ color: MAROON }}>{f.title}</h4>
                     <p className="text-sm text-[#7a5f4e] leading-relaxed">{f.desc}</p>
@@ -230,9 +228,9 @@ export default function About() {
               Mission & Values
             </SectionTitle>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {MISSION_VALUES.map((v, i) => (
+              {content.missionValues.map((v, i) => (
                 <motion.div
-                  key={v.title}
+                  key={i}
                   custom={i}
                   initial="hidden"
                   whileInView="visible"
@@ -241,7 +239,7 @@ export default function About() {
                   className="bg-white rounded-2xl p-6 border border-[#C9A84C]/20 shadow-sm hover:shadow-md transition-shadow duration-300 text-center"
                 >
                   <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#1E6B5A]/8 flex items-center justify-center">
-                    {v.icon}
+                    {MISSION_VALUE_ICONS[i]}
                   </div>
                   <h3 className="font-semibold text-[#3D1515] text-base mb-2">{v.title}</h3>
                   <p className="text-sm text-[#7a5f4e] leading-relaxed">{v.desc}</p>

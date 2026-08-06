@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startEmailOutboxWorker } from "./lib/transactionalEmail";
 import { deleteExpiredRegistrationDrafts } from "./routes/sellerRegistrationDraft";
+import { bootstrapDatabase } from "./lib/bootstrapDatabase";
 
 const rawPort = process.env["PORT"];
 
@@ -17,16 +18,23 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+bootstrapDatabase()
+  .then(() => {
+    app.listen(port, (err) => {
+      if (err) {
+        logger.error({ err }, "Error listening on port");
+        process.exit(1);
+      }
 
-  logger.info({ port }, "Server listening");
-  startEmailOutboxWorker();
-  startDraftExpiryWorker();
-});
+      logger.info({ port }, "Server listening");
+      startEmailOutboxWorker();
+      startDraftExpiryWorker();
+    });
+  })
+  .catch((err) => {
+    logger.error({ err }, "Database bootstrap failed — server will not start");
+    process.exit(1);
+  });
 
 function startDraftExpiryWorker(): void {
   const INTERVAL_MS = 60 * 60 * 1000; // run every hour

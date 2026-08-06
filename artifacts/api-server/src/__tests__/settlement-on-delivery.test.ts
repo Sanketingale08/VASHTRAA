@@ -31,6 +31,11 @@ const state = vi.hoisted(() => ({
     vendorId: "vendor-settlement-uuid-1",
     category: "sarees",
   },
+  /**
+   * When non-null, overrides `product` for the products mock — use this
+   * to inject multi-product / multi-vendor scenarios.
+   */
+  products: null as any[] | null,
   vendor: {
     id: "vendor-settlement-uuid-1",
     ownerId: "vendor-settlement-owner-1",
@@ -99,7 +104,7 @@ vi.mock("@workspace/db", () => {
       case "products":
         return {
           from: vi.fn(() => ({
-            where: vi.fn(() => queryResult(() => [state.product])),
+            where: vi.fn(() => queryResult(() => state.products ?? [state.product])),
           })),
         };
       case "vendors":
@@ -270,6 +275,7 @@ describe("Settlement-on-delivery — commission rate correctness", () => {
   beforeEach(async () => {
     process.env.ADMIN_API_KEY = ADMIN_KEY;
     state.order = makeOrder();
+    state.products = null; // reset to single-product mode
     state.settlements = [];
     state.notifications = [];
     state.notifIdCounter = 0;
@@ -440,4 +446,140 @@ describe("Settlement-on-delivery — commission rate correctness", () => {
     expect(s.netPayout).toBeGreaterThanOrEqual(0);
   });
 
+});
+
+// ─── Multi-vendor settlement tests ───────────────────────────────────────────
+
+/**
+ * Two-vendor order: one order whose items belong to two different vendors.
+ * When marked as delivered the route must create exactly two settlement rows —
+ * one per vendor — with productAmount and netPayout computed independently for
+ * each vendor's share of the order.
+ */
+
+const VENDOR_A_ID = "vendor-multi-a";
+const VENDOR_B_ID = "vendor-multi-b";
+const PRODUCT_A_ID = "prod-multi-a";
+const PRODUCT_B_ID = "prod-multi-b";
+const PRICE_A = 6_000;
+const PRICE_B = 4_000;
+const QTY_A = 1;
+const QTY_B = 1;
+const MULTI_SHIPPING = 199;
+
+function makeMultiVendorOrder() {
+  return {
+    id: ORDER_ID,
+    userId: USER_ID,
+    status: "dispatched",
+    statusHistory: [],
+    items: [
+      { productId: PRODUCT_A_ID, name: "Kanjivaram Silk", price: PRICE_A, quantity: QTY_A },
+      { productId: PRODUCT_B_ID, name: "Banarasi Cotton", price: PRICE_B, quantity: QTY_B },
+    ],
+    shipping: MULTI_SHIPPING,
+    subtotal: PRICE_A * QTY_A + PRICE_B * QTY_B,
+  };
+}
+
+describe("Settlement-on-delivery — multi-vendor orders", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    state.order = makeMultiVendorOrder();
+    state.products = [
+      { id: PRODUCT_A_ID, vendorId: VENDOR_A_ID, category: "sarees" },
+      { id: PRODUCT_B_ID, vendorId: VENDOR_B_ID, category: "sarees" },
+    ];
+    state.settlements = [];
+    state.notifications = [];
+    state.notifIdCounter = 0;
+    state.commissionRules = []; // default 10%
+    app = await buildApp();
+  });
+
+  it("creates exactly two settlement rows — one per vendor", async () => {
+    const res = await markDelivered(app);
+    expect(res.status).toBe(200);
+    expect(state.settlements).toHaveLength(2);
+  });
+
+  it("each settlement is associated with the correct vendor", async () => {
+    await markDelivered(app);
+    const vendorIds = state.settlements.map((s: any) => s.vendorId).sort();
+    expect(vendorIds).toEqual([VENDOR_A_ID, VENDOR_B_ID].sort());
+  });
+
+  it("productAmount for each vendor matches only their own items", async () => {
+    await markDelivered(app);
+
+    const sA = state.settlements.find((s: any) => s.vendorId === VENDOR_A_ID);
+    const sB = state.settlements.find((s: any) => s.vendorId === VENDOR_B_ID);
+
+    expect(sA).toBeDefined();
+    expect(sB).toBeDefined();
+    expect(sA.productAmount).toBe(PRICE_A * QTY_A); // 6000
+    expect(sB.productAmount).toBe(PRICE_B * QTY_B); // 4000
+  });
+
+  it("shipping is split proportionally to each vendor's productAmount", async () => {
+    await markDelivered(app);
+
+    const orderSubtotal = PRICE_A * QTY_A + PRICE_B * QTY_B; // 10000
+    const sA = state.settlements.find((s: any) => s.vendorId === VENDOR_A_ID)!;
+    const sB = state.settlements.find((s: any) => s.vendorId === VENDOR_B_ID)!;
+
+    const expectedShippingA = Math.round(MULTI_SHIPPING * (PRICE_A * QTY_A) / orderSubtotal); // round(119.4) = 119
+    const expectedShippingB = Math.round(MULTI_SHIPPING * (PRICE_B * QTY_B) / orderSubtotal); // round(79.6)  = 80
+
+    expect(sA.shippingCharge).toBe(expectedShippingA);
+    expect(sB.shippingCharge).toBe(expectedShippingB);
+  });
+
+  it("netPayout is computed correctly for each vendor at the default 10% commission", async () => {
+    await markDelivered(app);
+
+    const orderSubtotal = PRICE_A * QTY_A + PRICE_B * QTY_B; // 10000
+
+    const sA = state.settlements.find((s: any) => s.vendorId === VENDOR_A_ID)!;
+    const sB = state.settlements.find((s: any) => s.vendorId === VENDOR_B_ID)!;
+
+    // Vendor A
+    const commA = Math.round(PRICE_A * QTY_A * 0.10);                                    // 600
+    const shipA = Math.round(MULTI_SHIPPING * (PRICE_A * QTY_A) / orderSubtotal);        // 119
+    const taxA  = Math.round(commA * 0.18);                                               // 108
+    const netA  = Math.max(0, PRICE_A * QTY_A - commA - shipA - taxA);                   // 5173
+
+    expect(sA.commissionRate).toBe(0.10);
+    expect(sA.commission).toBe(commA);
+    expect(sA.settlementTax).toBe(taxA);
+    expect(sA.netPayout).toBe(netA);
+
+    // Vendor B
+    const commB = Math.round(PRICE_B * QTY_B * 0.10);                                    // 400
+    const shipB = Math.round(MULTI_SHIPPING * (PRICE_B * QTY_B) / orderSubtotal);        // 80
+    const taxB  = Math.round(commB * 0.18);                                               // 72
+    const netB  = Math.max(0, PRICE_B * QTY_B - commB - shipB - taxB);                   // 3448
+
+    expect(sB.commissionRate).toBe(0.10);
+    expect(sB.commission).toBe(commB);
+    expect(sB.settlementTax).toBe(taxB);
+    expect(sB.netPayout).toBe(netB);
+  });
+
+  it("vendor-specific commission rules are applied per-vendor independently", async () => {
+    // Vendor A has a custom 20% rule; Vendor B falls back to default 10%
+    state.commissionRules = [
+      { scope: "vendor", vendorId: VENDOR_A_ID, category: null, rate: 0.20 },
+    ];
+
+    await markDelivered(app);
+
+    const sA = state.settlements.find((s: any) => s.vendorId === VENDOR_A_ID)!;
+    const sB = state.settlements.find((s: any) => s.vendorId === VENDOR_B_ID)!;
+
+    expect(sA.commissionRate).toBe(0.20);
+    expect(sB.commissionRate).toBe(0.10);
+  });
 });

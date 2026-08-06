@@ -166,31 +166,20 @@ export function AccountProfilePage() {
     setSaving(true);
     setError("");
     try {
-      // Update name fields via Clerk client SDK.
-      // OAuth providers (e.g. Google) may control these — swallow provider
-      // restriction errors rather than aborting the whole save.
+      // Best-effort name update via Clerk client SDK.
+      // Clerk may reject this for many reasons: the name is controlled by an
+      // OAuth provider (Google SSO), the instance has firstName/lastName
+      // disabled, or the API returns 422 for any field constraint.
+      // In all cases we must continue to save the other metadata — never let
+      // a Clerk name rejection abort the whole save.
       try {
         await user.update({
           firstName: form.firstName.trim() || undefined,
           lastName: form.lastName.trim() || undefined,
         });
-      } catch (nameErr: any) {
-        const code: string =
-          nameErr?.errors?.[0]?.code ??
-          nameErr?.errors?.[0]?.message ??
-          nameErr?.message ??
-          "";
-        // Only re-throw genuinely unexpected errors
-        if (
-          !code.includes("external") &&
-          !code.includes("provider") &&
-          !code.includes("form_param") &&
-          !code.includes("unverified") &&
-          !code.includes("managed")
-        ) {
-          throw nameErr;
-        }
-        // Provider-controlled name — skip silently and continue saving metadata
+      } catch {
+        // Swallow unconditionally — name is best-effort.
+        // user.reload() below will reflect whatever Clerk actually accepted.
       }
 
       const res = await fetch(`/api/account/profile`, {

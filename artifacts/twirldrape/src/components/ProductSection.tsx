@@ -91,7 +91,7 @@ export function ProductSection({
     ...(activeCategory ? { category: activeCategory } : params?.category ? {} : {}),
   };
 
-  const { data, isLoading } = useListProducts(queryParams);
+  const { data, isLoading, isError } = useListProducts(queryParams);
   const products = data?.products ?? [];
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
@@ -225,11 +225,11 @@ export function ProductSection({
 
           <div ref={emblaRef} className="overflow-hidden px-1">
             <div className="flex gap-4">
-              {isLoading ? (
+              {isLoading || isError ? (
                 Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
               ) : products.length === 0 ? (
                 <div className="w-full py-12 text-center text-gray-400">
-                  <p className="text-sm">No products found in this collection yet.</p>
+                  <p className="text-sm">No products in this collection yet — check back soon!</p>
                 </div>
               ) : (
                 products.map((p, i) => (

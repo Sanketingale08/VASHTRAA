@@ -148,6 +148,13 @@
       "when": 1754438400000,
       "tag": "0023_td_ps_ds_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1754524800000,
+      "tag": "0024_email_outbox_order_id_nullable",
+      "breakpoints": true
     }
   ]
 }

@@ -192,7 +192,7 @@ function wrapInTemplate(subject: string, body: string): string {
 
 async function attemptSend(
   resend: Resend,
-  entry: { id: string; toEmail: string; subject: string; html: string; attempts: number; orderId: string; userId: string }
+  entry: { id: string; toEmail: string; subject: string; html: string; attempts: number; orderId: string | null; userId: string }
 ): Promise<void> {
   const now = new Date();
   const nextAttempt = entry.attempts + 1;
@@ -392,6 +392,126 @@ export async function sendVendorRejectionEmail(opts: {
   } catch (err) {
     logger.error({ err, toEmail, vendorName }, "[transactionalEmail] Failed to send vendor rejection email");
   }
+}
+
+/**
+ * Shared internal helper for vendor lifecycle emails (approval, suspension, rejection).
+ *
+ * Resolves the recipient address from:
+ *   1. contactEmail stored on the vendor row (preferred)
+ *   2. The Clerk account email via getUserEmail(ownerId) (fallback)
+ *
+ * If neither source yields an address, logs a warn with the vendorId so admins
+ * can follow up, and returns without sending.
+ *
+ * The email is written to the outbox for retry support just like order emails.
+ */
+async function sendVendorLifecycleEmail(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+  subject: string;
+  body: string;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn({ vendorId: opts.vendorId }, "[transactionalEmail] RESEND_API_KEY not set — skipping vendor lifecycle email");
+    return;
+  }
+
+  // Resolve recipient address
+  let toEmail: string | null = opts.contactEmail ?? null;
+  if (!toEmail && opts.ownerId) {
+    toEmail = await getUserEmail(opts.ownerId);
+  }
+
+  if (!toEmail) {
+    logger.warn(
+      { vendorId: opts.vendorId, vendorName: opts.vendorName },
+      "[transactionalEmail] Could not resolve email for vendor — email not sent, manual follow-up required"
+    );
+    return;
+  }
+
+  const html = wrapInTemplate(opts.subject, opts.body);
+
+  const [entry] = await db
+    .insert(emailOutboxTable)
+    .values({
+      userId: opts.ownerId ?? opts.vendorId,
+      orderId: null,
+      type: "vendor_lifecycle",
+      toEmail,
+      subject: opts.subject,
+      html,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: new Date(),
+    })
+    .returning();
+
+  await attemptSend(resend, {
+    ...entry,
+    orderId: null,
+    userId: opts.ownerId ?? opts.vendorId,
+  });
+}
+
+export async function sendVendorApprovalEmailForVendor(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+  dashboardUrl?: string;
+}): Promise<void> {
+  const dashboardUrl = opts.dashboardUrl ?? "https://twirldrape.com/seller/dashboard";
+  const subject = `Your TwirlDrape store is live — Welcome aboard!`;
+  const body = `
+    <p>Congratulations! Your store <strong>${opts.vendorName}</strong> has been <strong>approved</strong> by the TwirlDrape team.</p>
+    <p>Your store is now live and you can start listing your sarees right away.</p>
+    <p style="margin:24px 0;">
+      <a href="${dashboardUrl}"
+         style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+        Go to Seller Dashboard
+      </a>
+    </p>
+    <p>If you have any questions, our support team is here to help.</p>
+    <p>Welcome to the TwirlDrape family!</p>
+  `;
+  await sendVendorLifecycleEmail({ ...opts, subject, body });
+}
+
+export async function sendVendorSuspensionEmailForVendor(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+}): Promise<void> {
+  const subject = `Your TwirlDrape store has been suspended`;
+  const body = `
+    <p>We regret to inform you that your store <strong>${opts.vendorName}</strong> has been <strong>suspended</strong> by the TwirlDrape team.</p>
+    <p>Your store listings are no longer visible to shoppers while the suspension is in effect.</p>
+    <p>If you believe this is an error or would like to appeal, please contact our support team with your store details and we will review your case.</p>
+    <p>We appreciate your understanding and hope to resolve this as quickly as possible.</p>
+  `;
+  await sendVendorLifecycleEmail({ ...opts, subject, body });
+}
+
+export async function sendVendorRejectionEmailForVendor(opts: {
+  vendorId: string;
+  vendorName: string;
+  contactEmail: string | null;
+  ownerId: string | null;
+}): Promise<void> {
+  const subject = `Update on your TwirlDrape seller application`;
+  const body = `
+    <p>Thank you for your interest in selling on TwirlDrape.</p>
+    <p>After reviewing your application for <strong>${opts.vendorName}</strong>, we are unable to approve your store at this time.</p>
+    <p>If you have questions about this decision or would like guidance on reapplying, please reach out to our support team — we are happy to help.</p>
+    <p>Thank you for your understanding.</p>
+  `;
+  await sendVendorLifecycleEmail({ ...opts, subject, body });
 }
 
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {

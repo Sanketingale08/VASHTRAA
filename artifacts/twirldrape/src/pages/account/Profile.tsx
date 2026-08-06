@@ -297,7 +297,7 @@ export function AccountProfilePage() {
           className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
         >
           {/* Card header — shows real avatar/initials, not a static icon */}
-          <div className="px-5 py-4 bg-gradient-to-r from-[#1E6B5A]/5 to-[#C9A84C]/5 border-b border-[#C9A84C]/10 flex items-center justify-between">
+          <div className="px-4 sm:px-5 py-4 bg-gradient-to-r from-[#1E6B5A]/5 to-[#C9A84C]/5 border-b border-[#C9A84C]/10 flex items-center justify-between">
             <div>
               <p className="font-serif text-base font-bold text-[#1E6B5A]">
                 {fullName || "Your Account"}
@@ -313,7 +313,7 @@ export function AccountProfilePage() {
           </div>
 
           {/* Summary rows */}
-          <div className="px-5 py-1">
+          <div className="px-4 sm:px-5 py-1">
             <SummaryRow
               icon={<User size={14} className="text-[#1E6B5A]" />}
               label="Full Name"
@@ -389,7 +389,7 @@ export function AccountProfilePage() {
             <button
               key={item.label}
               onClick={item.action}
-              className={`w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-[#F3F8F5] transition-colors ${i > 0 ? "border-t border-gray-50" : ""}`}
+              className={`w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 text-left hover:bg-[#F3F8F5] transition-colors ${i > 0 ? "border-t border-gray-50" : ""}`}
             >
               <div className="w-9 h-9 rounded-xl bg-[#1E6B5A]/8 flex items-center justify-center shrink-0">
                 {item.icon}
@@ -408,7 +408,7 @@ export function AccountProfilePage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.06 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-5"
+          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-4 sm:p-5"
         >
           <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider mb-4">
             Profile Photo
@@ -472,7 +472,7 @@ export function AccountProfilePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.08 }}
             onSubmit={handleSave}
-            className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-5 space-y-4"
+            className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-4 sm:p-5 space-y-4"
           >
             <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">
               Edit Personal Details
@@ -600,7 +600,7 @@ export function AccountProfilePage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.12 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-5"
+          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-4 sm:p-5"
         >
           <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider mb-2">
             Account Security

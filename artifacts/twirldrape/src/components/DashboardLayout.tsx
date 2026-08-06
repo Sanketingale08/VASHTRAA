@@ -32,7 +32,7 @@ const navItems: { href: string; icon: React.ComponentType<{ size?: number; class
   { href: "/account/support", icon: HelpCircle, label: "Support" },
 ];
 
-const mobileTabItems = navItems.slice(0, 5);
+// All 9 items shown in the scrollable mobile tab bar — none hidden.
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -70,7 +70,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="mb-5 lg:mb-7">
             <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#1E6B5A]">My Account</h1>
             {user && (
-              <p className="text-sm text-[#7a5f4e] mt-0.5">
+              <p className="text-sm text-[#7a5f4e] mt-0.5 truncate">
                 {[user.firstName, user.lastName].filter(Boolean).join(" ")}
                 {user.primaryEmailAddress?.emailAddress && (
                   <span className="text-gray-400"> · {user.primaryEmailAddress.emailAddress}</span>
@@ -164,21 +164,29 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </div>
 
-        {/* Mobile bottom tab bar */}
+        {/* Mobile bottom tab bar — all 9 nav items, horizontally scrollable */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
-          <div className="flex">
-            {mobileTabItems.map(({ href, icon: Icon, label, exact }) => {
+          <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {navItems.map(({ href, icon: Icon, label, exact }) => {
               const active = isActive(href, exact);
+              const isSupport = href === "/account/support";
               return (
                 <Link
                   key={href}
                   href={href}
                   className={cn(
-                    "flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors",
+                    "shrink-0 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors",
+                    "w-[20vw] min-w-[64px] max-w-[88px]",
                     active ? "text-[#1E6B5A]" : "text-gray-400",
                   )}
                 >
-                  <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                  {/* Icon wrapper — badge positioned relative to icon */}
+                  <div className="relative inline-flex">
+                    <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                    {isSupport && openTicketCount > 0 && (
+                      <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-[#1E6B5A]" />
+                    )}
+                  </div>
                   <span className="text-[9px] font-semibold leading-tight uppercase tracking-wide">
                     {label.split(" ")[0]}
                   </span>

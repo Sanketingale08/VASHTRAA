@@ -408,6 +408,8 @@ export default function SellerRegister() {
   const leaveResolveRef = useRef<((ok: boolean) => void) | null>(null);
   const isDirtyRef = useRef(false);
 
+  const [showStartOverModal, setShowStartOverModal] = useState(false);
+
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailCode, setEmailCode] = useState("");
   const [phoneObj, setPhoneObj] = useState<any>(null);
@@ -744,7 +746,7 @@ export default function SellerRegister() {
 
           {step > (isSignedIn ? 2 : 1) && (
             <div className="flex justify-end -mt-4 mb-4">
-              <button type="button" onClick={startOver}
+              <button type="button" onClick={() => setShowStartOverModal(true)}
                 className="text-xs text-gray-400 underline hover:text-red-400">
                 Start over
               </button>
@@ -994,6 +996,39 @@ export default function SellerRegister() {
           <a href="mailto:sellers@twirldrape.com" className="underline">sellers@twirldrape.com</a>
         </p>
       </div>
+
+      {showStartOverModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl border border-[#C8D8D0] p-6 max-w-sm w-full shadow-xl"
+          >
+            <h3 className="text-base font-bold mb-2" style={{ color: EMERALD }}>
+              Start over?
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">
+              This will erase all your progress — your KYC details, bank info, and business profile will be lost. Are you sure?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowStartOverModal(false)}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E6F0EA]"
+                style={{ borderColor: "#C8D8D0", color: EMERALD }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowStartOverModal(false); startOver(); }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90"
+                style={{ background: "#DC2626" }}
+              >
+                Start over
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {showLeaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">

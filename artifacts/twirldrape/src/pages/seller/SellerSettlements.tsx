@@ -165,6 +165,20 @@ export default function SellerSettlements() {
   const [selectedSettlement, setSelectedSettlement] = useState<Settlement | null>(null);
   const [payoutRequesting, setPayoutRequesting] = useState(false);
   const [payoutMessage, setPayoutMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [payoutRequests, setPayoutRequests] = useState<Settlement[]>([]);
+  const [payoutRequestsLoading, setPayoutRequestsLoading] = useState(true);
+
+  const fetchPayoutRequests = () => {
+    setPayoutRequestsLoading(true);
+    fetch(getApiUrl("/api/seller/settlements/payout-requests"), { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load payout requests");
+        return r.json();
+      })
+      .then((d) => setPayoutRequests(d.payouts ?? []))
+      .catch(() => {/* silently handled — settlements error covers this */})
+      .finally(() => setPayoutRequestsLoading(false));
+  };
 
   const fetchSettlements = () => {
     const params = new URLSearchParams();
@@ -180,6 +194,10 @@ export default function SellerSettlements() {
       .catch(() => setError("Could not load settlements. Please try again."))
       .finally(() => setLoading(false));
   };
+
+  useEffect(() => {
+    fetchPayoutRequests();
+  }, []);
 
   useEffect(() => {
     fetchSettlements();
@@ -202,6 +220,7 @@ export default function SellerSettlements() {
       } else {
         setPayoutMessage({ kind: "success", text: "Payout request submitted successfully. Our team will review it shortly." });
         fetchSettlements();
+        fetchPayoutRequests();
       }
     } catch {
       setPayoutMessage({ kind: "error", text: "Network error. Please try again." });
@@ -235,7 +254,7 @@ export default function SellerSettlements() {
     },
   ];
 
-  const settlements = data?.settlements ?? [];
+  const orderSettlements = data?.settlements ?? [];
   const hasPendingPayoutRequest = data?.hasPendingPayoutRequest ?? false;
 
   return (
@@ -301,6 +320,75 @@ export default function SellerSettlements() {
           ))}
         </div>
 
+        {/* Payout Requests section */}
+        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Payout Requests</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Every time you requested a transfer to your bank account</p>
+          </div>
+
+          {payoutRequestsLoading ? (
+            <div className="p-5 space-y-3">
+              {[1, 2].map((n) => (
+                <div key={n} className="h-12 rounded-xl bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : payoutRequests.length === 0 ? (
+            <div className="text-center py-10">
+              <ArrowDownToLine size={32} className="mx-auto mb-2 text-gray-300" />
+              <p className="font-medium text-gray-500 text-sm">No payout requests yet</p>
+              <p className="text-xs text-gray-400 mt-1">Use "Request Payout" above to transfer your balance to your bank</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b" style={{ borderColor: "#C9A84C22", background: CREAM }}>
+                    {["Amount", "Date Requested", "Status", "UTR Number"].map((h) => (
+                      <th
+                        key={h}
+                        className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 ${h === "Amount" ? "text-right" : "text-left"}`}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payoutRequests.map((s, i) => (
+                    <motion.tr
+                      key={s.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="border-b last:border-b-0"
+                      style={{ borderColor: "#F3F4F6" }}
+                    >
+                      <td className="px-5 py-3.5 text-right font-semibold text-sm" style={{ color: MAROON }}>
+                        {fmt(s.amount)}
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500">{formatDate(s.createdAt)}</td>
+                      <td className="px-5 py-3.5">
+                        <StatusBadge status={s.status} />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {s.utrNumber ? (
+                          <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded">{s.utrNumber}</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                        {s.paidAt && (
+                          <div className="text-[10px] text-gray-400 mt-0.5">Paid {formatDate(s.paidAt)}</div>
+                        )}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
             <div>
@@ -327,7 +415,7 @@ export default function SellerSettlements() {
                 <div key={n} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
               ))}
             </div>
-          ) : settlements.length === 0 ? (
+          ) : orderSettlements.length === 0 ? (
             <div className="text-center py-16">
               <Package size={40} className="mx-auto mb-3 text-gray-300" />
               <p className="font-medium text-gray-500">No settlements yet</p>
@@ -344,7 +432,7 @@ export default function SellerSettlements() {
                   </tr>
                 </thead>
                 <tbody>
-                  {settlements.map((s, i) => (
+                  {orderSettlements.map((s, i) => (
                     <motion.tr
                       key={s.id}
                       initial={{ opacity: 0 }}

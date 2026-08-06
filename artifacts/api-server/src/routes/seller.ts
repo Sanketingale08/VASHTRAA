@@ -1070,7 +1070,10 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
     let totalPending = 0;
     let totalPaid = 0;
 
-    for (const s of all) {
+    // Only count order_settlement rows in the summary (payout rows are transfer records, not earnings)
+    const orderSettlementsAll = all.filter((s) => s.type !== "payout");
+
+    for (const s of orderSettlementsAll) {
       const net = s.netPayout ?? s.amount;
       if (new Date(s.createdAt) >= monthStart) totalEarnedThisMonth += net;
       if (s.status === "processing" || s.status === "pending" || s.status === "approved") totalPending += net;
@@ -1081,7 +1084,10 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
       (s) => s.type === "payout" && (s.status === "pending" || s.status === "processing" || s.status === "approved"),
     );
 
-    const filtered = statusFilter && statusFilter !== "all" ? all.filter((s) => s.status === statusFilter) : all;
+    // Pagination and status filters apply only to order settlements
+    const filtered = statusFilter && statusFilter !== "all"
+      ? orderSettlementsAll.filter((s) => s.status === statusFilter)
+      : orderSettlementsAll;
     const total = filtered.length;
     const settlements = filtered.slice(offset, offset + limit);
 
@@ -1096,6 +1102,26 @@ router.get("/seller/settlements", requireVendorAuth, async (req: any, res: any) 
   } catch (err: any) {
     req.log?.error({ err }, "seller/settlements failed");
     res.status(500).json({ error: "Failed to load settlements" });
+  }
+});
+
+router.get("/seller/settlements/payout-requests", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+
+  try {
+    const payouts = await db
+      .select()
+      .from(vendorSettlementsTable)
+      .where(and(
+        eq(vendorSettlementsTable.vendorId, vendorId),
+        eq(vendorSettlementsTable.type, "payout"),
+      ))
+      .orderBy(desc(vendorSettlementsTable.createdAt));
+
+    res.json({ payouts });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/settlements/payout-requests failed");
+    res.status(500).json({ error: "Failed to load payout requests" });
   }
 });
 

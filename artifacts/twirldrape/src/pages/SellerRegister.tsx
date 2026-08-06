@@ -275,9 +275,18 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setShowConfirm(false);
     }
+    function onMouseDown(e: MouseEvent) {
+      if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) {
+        setShowConfirm(false);
+      }
+    }
     window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onMouseDown);
     confirmRef.current?.focus();
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onMouseDown);
+    };
   }, [showConfirm]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {

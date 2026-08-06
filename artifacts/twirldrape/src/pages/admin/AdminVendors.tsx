@@ -22,6 +22,7 @@ interface Vendor {
   revenue: number;
   totalOrders: number;
   kycVerified: boolean;
+  featured: boolean;
 }
 
 function fmt(n: number) {
@@ -105,7 +106,11 @@ function VendorsContent() {
       if (res.ok) {
         const data = await res.json();
         setVendors((prev) =>
-          prev.map((v) => (v.id === id ? { ...v, status: data.vendor.status } : v))
+          prev.map((v) => (v.id === id ? {
+            ...v,
+            status: data.vendor.status ?? v.status,
+            featured: data.vendor.featured ?? v.featured,
+          } : v))
         );
       }
     } finally {
@@ -187,13 +192,18 @@ function VendorsContent() {
                       {(page - 1) * PAGE_SIZE + idx + 1}
                     </td>
                     <td className="px-4 py-3.5">
-                      <button
-                        className="text-left hover:underline font-semibold text-sm"
-                        style={{ color: NAVY }}
-                        onClick={() => setLocation(`/admin/vendors/${v.id}`)}
-                      >
-                        {v.name}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          className="text-left hover:underline font-semibold text-sm"
+                          style={{ color: NAVY }}
+                          onClick={() => setLocation(`/admin/vendors/${v.id}`)}
+                        >
+                          {v.name}
+                        </button>
+                        {v.featured && (
+                          <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#fef9ec", color: "#b45309" }}>⭐</span>
+                        )}
+                      </div>
                       {v.contactEmail && (
                         <div className="text-xs text-gray-400 mt-0.5">{v.contactEmail}</div>
                       )}
@@ -253,6 +263,23 @@ function VendorsContent() {
                             bg="#f0fdf4"
                             loading={actionLoading === v.id + "activate"}
                             onClick={() => doAction(v.id, "activate")}
+                          />
+                        )}
+                        {v.featured ? (
+                          <ActionBtn
+                            label="Unfeature"
+                            color="#6b7280"
+                            bg="#f3f4f6"
+                            loading={actionLoading === v.id + "unfeature"}
+                            onClick={() => doAction(v.id, "unfeature")}
+                          />
+                        ) : (
+                          <ActionBtn
+                            label="⭐ Feature"
+                            color="#b45309"
+                            bg="#fef9ec"
+                            loading={actionLoading === v.id + "feature"}
+                            onClick={() => doAction(v.id, "feature")}
                           />
                         )}
                         <ActionBtn

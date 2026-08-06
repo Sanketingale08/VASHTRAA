@@ -155,6 +155,13 @@
       "when": 1754524800000,
       "tag": "0024_email_outbox_order_id_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1754611200000,
+      "tag": "0025_add_vendor_featured",
+      "breakpoints": true
     }
   ]
 }

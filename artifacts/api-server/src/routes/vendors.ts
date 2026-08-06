@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable, productsTable, ordersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { insertAdminNotification } from "../lib/adminNotifications";
@@ -39,7 +39,14 @@ const requireAuth = (req: any, res: any, next: any) => {
 
 router.get("/vendors", async (req, res) => {
   try {
-    const vendors = await db.select().from(vendorsTable).orderBy(vendorsTable.name);
+    // Return only approved vendors, featured ones first, then sorted by rating desc.
+    // If no featured vendors exist, all approved vendors are returned (sorted by rating).
+    const vendors = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.status, "approved"))
+      .orderBy(desc(vendorsTable.featured), desc(vendorsTable.rating), desc(vendorsTable.sareesCount));
+
     res.json(vendors.map((v) => ({
       id: v.id,
       name: v.name,
@@ -401,6 +408,7 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         contactEmail: v.contactEmail ?? null,
         kycVerified: v.kycVerified,
         kycResubmissionRequested: v.kycResubmissionRequested,
+        featured: v.featured,
         revenue: vendorRevenue[v.id] ?? 0,
         totalOrders: vendorOrders[v.id] ?? 0,
       })),
@@ -544,6 +552,38 @@ router.post("/admin/vendors/:id/deactivate", requireAdminKey, async (req: any, r
   } catch (err) {
     req.log.error({ err }, "Failed to deactivate vendor");
     res.status(500).json({ error: "Failed to deactivate vendor" });
+  }
+});
+
+router.post("/admin/vendors/:id/feature", requireAdminKey, async (req: any, res: any) => {
+  const { id } = req.params;
+  try {
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({ featured: true })
+      .where(eq(vendorsTable.id, id))
+      .returning({ id: vendorsTable.id, name: vendorsTable.name, featured: vendorsTable.featured });
+    if (!updated) return res.status(404).json({ error: "Vendor not found" });
+    res.json({ vendor: updated });
+  } catch (err) {
+    req.log.error({ err }, "Failed to feature vendor");
+    res.status(500).json({ error: "Failed to feature vendor" });
+  }
+});
+
+router.post("/admin/vendors/:id/unfeature", requireAdminKey, async (req: any, res: any) => {
+  const { id } = req.params;
+  try {
+    const [updated] = await db
+      .update(vendorsTable)
+      .set({ featured: false })
+      .where(eq(vendorsTable.id, id))
+      .returning({ id: vendorsTable.id, name: vendorsTable.name, featured: vendorsTable.featured });
+    if (!updated) return res.status(404).json({ error: "Vendor not found" });
+    res.json({ vendor: updated });
+  } catch (err) {
+    req.log.error({ err }, "Failed to unfeature vendor");
+    res.status(500).json({ error: "Failed to unfeature vendor" });
   }
 });
 

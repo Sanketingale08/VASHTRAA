@@ -42,6 +42,7 @@ interface VendorDetail {
   shopState: string | null;
   shopPincode: string | null;
   termsAcceptedAt: string | null;
+  featured: boolean;
   totalProducts: number;
   activeProducts: number;
   totalRevenue: number;
@@ -169,7 +170,11 @@ function VendorDetailContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        setVendor((prev) => prev ? { ...prev, status: data.vendor.status } : prev);
+        setVendor((prev) => prev ? {
+          ...prev,
+          status: data.vendor.status ?? prev.status,
+          featured: data.vendor.featured ?? prev.featured,
+        } : prev);
       }
     } finally {
       setActionLoading(null);
@@ -296,6 +301,22 @@ function VendorDetailContent() {
               {vendor.status === "suspended" && (
                 <ActionBtn label="✓ Activate Vendor" action="activate" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
               )}
+              <div className="pt-1 mt-1 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-gray-400">Featured on homepage</span>
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                    style={vendor.featured ? { background: "#fef9ec", color: "#b45309" } : { background: "#f3f4f6", color: "#6b7280" }}
+                  >
+                    {vendor.featured ? "⭐ Featured" : "Not featured"}
+                  </span>
+                </div>
+                {vendor.featured ? (
+                  <ActionBtn label="Remove from Featured" action="unfeature" color="#6b7280" bg="#f3f4f6" loading={actionLoading} onClick={doAction} />
+                ) : (
+                  <ActionBtn label="⭐ Mark as Featured" action="feature" color="#b45309" bg="#fef9ec" loading={actionLoading} onClick={doAction} />
+                )}
+              </div>
               <div className="pt-1 mt-1 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] text-gray-400">KYC status</span>

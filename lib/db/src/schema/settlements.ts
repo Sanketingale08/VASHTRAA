@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, integer, real, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, integer, real, boolean, timestamp, index } from "drizzle-orm/pg-core";
 import { vendorsTable } from "./vendors";
 
 export const VENDOR_SETTLEMENT_TYPES = ["release", "payout", "order_settlement"] as const;

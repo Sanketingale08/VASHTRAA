@@ -469,19 +469,22 @@ export default function SellerRegister() {
     return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
   }, [step]);
 
+  const isDirty = !done && step >= 1 && (step > 1 || data.email.trim() !== "" || data.password !== "");
+  isDirtyRef.current = isDirty;
+
   useEffect(() => {
-    if (uploadCount === 0) return;
+    if (!isDirty) return;
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
-      e.returnValue = "A file upload is in progress. If you leave now, the upload will be lost.";
-      return e.returnValue;
+      const msg = uploadCount > 0
+        ? "A file upload is in progress. If you leave now, the upload will be lost."
+        : "Your registration is not complete. If you leave now, your progress may be lost.";
+      e.returnValue = msg;
+      return msg;
     }
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [uploadCount]);
-
-  const isDirty = !done && step >= 1 && (step > 1 || data.email.trim() !== "" || data.password !== "");
-  isDirtyRef.current = isDirty;
+  }, [isDirty, uploadCount]);
 
   function askLeave(): Promise<boolean> {
     return new Promise((resolve) => {

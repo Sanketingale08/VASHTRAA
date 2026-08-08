@@ -363,6 +363,22 @@ describe("Order status updates reach the notification bell", () => {
       expect.objectContaining({ type: "order_delivered", userId: USER_ID, orderId: ORDER_ID })
     );
   });
+
+  it("calls sendTransactionalEmail with type order_cancelled when an order is cancelled", async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${ORDER_ID}/status`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ status: "cancelled", note: "Out of stock" });
+    expect(res.status).toBe(200);
+
+    // Allow the fire-and-forget void promise to settle
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_cancelled", userId: USER_ID, orderId: ORDER_ID })
+    );
+  });
 });
 
 describe("insertOrderStatusNotification — tracking number passed as reference", () => {

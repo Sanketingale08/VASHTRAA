@@ -243,7 +243,7 @@ function ReturnsContent() {
   }), [orders]);
 
   function exportCSV() {
-    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Requested Date", "Updated Date"];
+    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Requested Date", "Updated Date", "Payout Ref", "Processed At"];
     const rows = filtered.map((o) => [
       o.id,
       o.address?.name ?? "",
@@ -253,6 +253,8 @@ function ReturnsContent() {
       o.refundStatus ? o.refundStatus.replace(/_/g, " ") : "",
       new Date(o.returnRequestedAt).toLocaleString("en-IN"),
       new Date(o.updatedAt).toLocaleString("en-IN"),
+      o.refundReference ?? "",
+      o.refundProcessedAt ? new Date(o.refundProcessedAt).toLocaleString("en-IN") : "",
     ]);
 
     // Build summary row
@@ -271,6 +273,8 @@ function ReturnsContent() {
       `Total rows: ${filtered.length}`,
       (totalRefundAmount / 100).toFixed(2),
       statusBreakdown,
+      "",
+      "",
       "",
       "",
       "",

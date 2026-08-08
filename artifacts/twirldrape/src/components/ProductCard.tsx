@@ -13,6 +13,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 type ProductCardProduct = {
   id: string;
   name: string;
+  vendorId?: string | null;
   vendorName?: string;
   vendor?: string;
   price: number;
@@ -204,7 +205,17 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
 
         {/* Content */}
         <div className="p-4 bg-white">
-          <p className="text-[11px] text-gray-400 mb-1 font-medium tracking-wide uppercase">{vendorLabel}</p>
+          {product.vendorId && vendorLabel ? (
+            <Link
+              href={`/weavers/${product.vendorId}`}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              className="inline-block text-[11px] text-[#1E6B5A]/70 hover:text-[#1E6B5A] mb-1 font-medium tracking-wide uppercase transition-colors"
+            >
+              by {vendorLabel}
+            </Link>
+          ) : (
+            <p className="text-[11px] text-gray-400 mb-1 font-medium tracking-wide uppercase">{vendorLabel}</p>
+          )}
           <h3 className="font-serif text-base leading-snug mb-2 line-clamp-2 min-h-[2.5rem] text-[#2D1B1B]">
             {product.name}
           </h3>

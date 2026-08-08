@@ -340,12 +340,12 @@ export default function Home() {
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
         />
 
-        {/* Gradient overlay — left heavy so text stays readable */}
+        {/* Gradient overlay — cream panel fades out so the image dominates the right */}
         <div
           className="absolute inset-0 z-10"
           style={{
             background:
-              "linear-gradient(to right, rgba(245,232,220,0.96) 0%, rgba(245,232,220,0.88) 38%, rgba(245,232,220,0.55) 62%, rgba(245,232,220,0.08) 100%)",
+              "linear-gradient(to right, rgba(245,232,220,0.82) 0%, rgba(245,232,220,0.70) 30%, rgba(245,232,220,0.26) 58%, rgba(245,232,220,0.00) 80%)",
           }}
         />
 
@@ -409,10 +409,14 @@ export default function Home() {
 
         {/* ── Mobile layout ── */}
         <div className="flex lg:hidden flex-col relative z-20 px-6 py-10 gap-6" style={{ minHeight: "480px" }}>
-          {/* mobile gradient — top-heavy so image peeks through at bottom */}
+          {/* mobile gradient — heavier at top for text, lighter at bottom so image shows */}
           <div
             className="absolute inset-0"
-            style={{ background: "rgba(245,232,220,0.91)", zIndex: -1 }}
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(245,232,220,0.88) 0%, rgba(245,232,220,0.74) 45%, rgba(245,232,220,0.32) 100%)",
+              zIndex: -1,
+            }}
           />
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-4" style={{ color: GOLD }}>

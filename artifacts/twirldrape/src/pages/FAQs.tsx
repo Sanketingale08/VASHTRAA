@@ -292,18 +292,62 @@ export default function FAQs() {
           )}
 
           {filteredSections.length === 0 ? (
-            <div className="text-center py-16">
-              <p className="text-[#7a5f4e] text-base mb-2">No FAQs match your search.</p>
-              <p className="text-sm text-[#7a5f4e]/70">
+            <div className="text-center py-12">
+              {/* No-results icon */}
+              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[#C9A84C]/10 flex items-center justify-center">
+                <Search size={28} className="text-[#C9A84C]" />
+              </div>
+
+              <h3 className="font-serif text-xl text-[#3D1515] font-bold mb-2">
+                No results for "{query}"
+              </h3>
+              <p className="text-sm text-[#7a5f4e] mb-1">
                 Try different keywords or{" "}
                 <button
                   onClick={() => setQuery("")}
-                  className="underline hover:text-[#1E6B5A] transition-colors"
+                  className="underline hover:text-[#1E6B5A] transition-colors font-medium"
                 >
-                  clear the search
-                </button>{" "}
-                to see all questions.
+                  browse all questions
+                </button>.
               </p>
+              <p className="text-sm text-[#7a5f4e]/70 mb-8">
+                If you can't find your answer, our support team is here to help.
+              </p>
+
+              <Link
+                href="/contact"
+                className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-7 py-3.5 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+              >
+                <MessageCircle size={16} />
+                Contact Support
+              </Link>
+
+              {/* Popular FAQs */}
+              <div className="mt-12 text-left">
+                <p className="text-xs text-[#7a5f4e]/60 uppercase tracking-widest font-bold text-center mb-5">
+                  Popular questions
+                </p>
+                <div className="space-y-3">
+                  {[
+                    FAQ_SECTIONS[0].items[0],
+                    FAQ_SECTIONS[1].items[0],
+                    FAQ_SECTIONS[2].items[0],
+                  ].map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setQuery(item.question.split(" ").slice(0, 3).join(" "))}
+                      className="w-full text-left bg-white border border-[#C9A84C]/20 rounded-xl px-5 py-4 hover:bg-[#F3F8F5] transition-colors group"
+                    >
+                      <p className="font-medium text-[#3D1515] text-sm group-hover:text-[#1E6B5A] transition-colors">
+                        {item.question}
+                      </p>
+                      <p className="text-xs text-[#7a5f4e]/70 mt-1 line-clamp-2">
+                        {item.answer}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             filteredSections.map((sec) => {

@@ -305,6 +305,11 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
               <p className="opacity-70">Each saree is wrapped in acid-free tissue paper and a branded dust bag before dispatch.</p>
             </div>
           </div>
+          <div className="pt-1 text-right">
+            <Link href="/faqs#shipping-delivery" className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors">
+              More shipping FAQs →
+            </Link>
+          </div>
         </div>
       ),
     },
@@ -334,6 +339,11 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
               <p className="font-semibold mb-1">Quality Guarantee</p>
               <p className="opacity-70">All products undergo a quality check before dispatch. If you receive a defective item, we'll replace it or issue a full refund.</p>
             </div>
+          </div>
+          <div className="pt-1 text-right">
+            <Link href="/faqs#returns-exchanges" className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors">
+              Read our full return policy →
+            </Link>
           </div>
         </div>
       ),

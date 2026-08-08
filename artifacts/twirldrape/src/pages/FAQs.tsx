@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { ChevronDown, ChevronUp, MessageCircle, Search, X } from "lucide-react";
 import { Layout } from "@/components/Layout";
@@ -129,6 +129,16 @@ const FAQ_SECTIONS: { section: string; items: FAQItem[] }[] = [
   },
 ];
 
+function slugify(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/&/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 function highlight(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
@@ -144,7 +154,7 @@ function highlight(text: string, query: string): React.ReactNode {
   );
 }
 
-function FAQAccordion({ items, query }: { items: FAQItem[]; query: string }) {
+function FAQAccordion({ items, query, expandFirst }: { items: FAQItem[]; query: string; expandFirst?: boolean }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   React.useEffect(() => {
@@ -152,6 +162,12 @@ function FAQAccordion({ items, query }: { items: FAQItem[]; query: string }) {
       setOpenIndex(null);
     }
   }, [query]);
+
+  React.useEffect(() => {
+    if (expandFirst) {
+      setOpenIndex(0);
+    }
+  }, [expandFirst]);
 
   return (
     <div className="space-y-3">
@@ -185,6 +201,27 @@ function FAQAccordion({ items, query }: { items: FAQItem[]; query: string }) {
 
 export default function FAQs() {
   const [query, setQuery] = useState("");
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Handle hash-based navigation: scroll to section and expand its first item
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return;
+      setActiveSection(hash);
+      // Wait a tick for layout to settle, then scroll
+      setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 120);
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
 
   const filteredSections = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -269,16 +306,25 @@ export default function FAQs() {
               </p>
             </div>
           ) : (
-            filteredSections.map((sec) => (
-              <div key={sec.section} className="mb-12">
-                <h2 className="font-serif text-xl text-[#1E6B5A] font-bold mb-5 flex items-center gap-3">
-                  <span className="h-px flex-1 bg-[#C9A84C]/30" />
-                  {sec.section}
-                  <span className="h-px flex-1 bg-[#C9A84C]/30" />
-                </h2>
-                <FAQAccordion items={sec.items} query={query} />
-              </div>
-            ))
+            filteredSections.map((sec) => {
+              const slug = slugify(sec.section);
+              const isActive = activeSection === slug;
+              return (
+                <div
+                  key={sec.section}
+                  id={slug}
+                  ref={(el) => { sectionRefs.current[slug] = el; }}
+                  className="mb-12 scroll-mt-6"
+                >
+                  <h2 className="font-serif text-xl text-[#1E6B5A] font-bold mb-5 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-[#C9A84C]/30" />
+                    {sec.section}
+                    <span className="h-px flex-1 bg-[#C9A84C]/30" />
+                  </h2>
+                  <FAQAccordion items={sec.items} query={query} expandFirst={isActive} />
+                </div>
+              );
+            })
           )}
         </section>
 

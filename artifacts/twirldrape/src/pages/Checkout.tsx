@@ -1179,6 +1179,19 @@ export function CheckoutPage() {
                       )}
                     </div>
 
+                    {/* FAQ help links */}
+                    <p className="text-xs text-gray-400 text-center">
+                      Questions about{" "}
+                      <Link href="/faqs#shipping-delivery" className="text-[#1E6B5A] hover:text-[#C9A84C] font-semibold transition-colors">
+                        shipping
+                      </Link>
+                      {" "}or{" "}
+                      <Link href="/faqs#returns-exchanges" className="text-[#1E6B5A] hover:text-[#C9A84C] font-semibold transition-colors">
+                        returns
+                      </Link>
+                      ? See our FAQs.
+                    </p>
+
                     {stockNotice.length > 0 && (
                       <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-4 py-3">
                         <div className="flex items-start gap-2">

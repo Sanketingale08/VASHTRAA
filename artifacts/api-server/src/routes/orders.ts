@@ -584,13 +584,7 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
 
             for (const [vid, vItems] of vendorItemGroups) {
               const productAmount = vItems.reduce((s, i) => s + i.price * i.quantity, 0);
-              if (productAmount <= 0) {
-                req.log.warn(
-                  { orderId: order.id, vendorId: vid, items: vItems },
-                  "Skipping settlement: zero or missing price for all items in vendor group"
-                );
-                continue;
-              }
+              if (productAmount <= 0) continue;
 
               const alreadySettled = await tx
                 .select({ id: vendorSettlementsTable.id })

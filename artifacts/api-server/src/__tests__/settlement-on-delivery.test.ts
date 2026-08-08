@@ -250,7 +250,7 @@ async function buildApp(): Promise<Express> {
   const app = express();
   app.use(express.json());
   app.use((req: any, _res: unknown, next: () => void) => {
-    req.log = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
+    req.log = { error: vi.fn(), info: vi.fn() };
     next();
   });
   const { default: ordersRouter } = await import("../routes/orders");

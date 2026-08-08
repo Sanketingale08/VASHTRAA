@@ -110,76 +110,6 @@ function refundTone(status: string | null): "orange" | "green" | "red" | "gray" 
 
 const TABS = ["all", "returns", "refunds"] as const;
 
-interface PayoutConfirmState {
-  orderId: string;
-  orderDisplay: string;
-  amount: number;
-  reference: string;
-}
-
-function PayoutConfirmModal({
-  state,
-  onConfirm,
-  onCancel,
-  loading,
-}: {
-  state: PayoutConfirmState;
-  onConfirm: () => void;
-  onCancel: () => void;
-  loading: boolean;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.45)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <BadgeCheck size={20} className="text-blue-600 shrink-0" />
-          <h2 className="text-base font-bold" style={{ color: NAVY }}>Confirm payout</h2>
-        </div>
-        <p className="text-sm text-gray-600 mb-4">
-          You are about to mark this refund as <span className="font-semibold text-blue-700">paid out</span>. This action cannot be undone from the UI.
-        </p>
-        <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1.5 text-sm mb-5">
-          <div className="flex justify-between">
-            <span className="text-gray-500">Order</span>
-            <span className="font-mono font-medium text-gray-800">#{state.orderDisplay}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">Refund amount</span>
-            <span className="font-semibold" style={{ color: NAVY }}>{fmtMoney(state.amount)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">Payout reference</span>
-            <span className="font-medium text-gray-700 text-right max-w-[180px] break-words">
-              {state.reference || <em className="text-gray-400">none entered</em>}
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
-            style={{ background: "#1d4ed8", color: "#fff" }}
-          >
-            {loading ? "Processing…" : "Confirm payout"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ReturnsContent() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,7 +119,6 @@ function ReturnsContent() {
   const [sortOrder, setSortOrder] = useState<"oldest" | "newest">("oldest");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [payoutConfirm, setPayoutConfirm] = useState<PayoutConfirmState | null>(null);
   const processingInFlight = useRef<Set<string>>(new Set());
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
@@ -279,18 +208,6 @@ function ReturnsContent() {
     }
   }
 
-  function requestProcessRefund(order: AdminOrder) {
-    const display = order.id.startsWith("TD")
-      ? order.id
-      : order.id.replace(/-/g, "").slice(0, 8).toUpperCase();
-    setPayoutConfirm({
-      orderId: order.id,
-      orderDisplay: display,
-      amount: order.total,
-      reference: noteDrafts[order.id] ?? "",
-    });
-  }
-
   async function processRefund(orderId: string) {
     const key = orderId + "refundprocess";
     if (processingInFlight.current.has(key)) return;
@@ -316,7 +233,6 @@ function ReturnsContent() {
     } finally {
       processingInFlight.current.delete(key);
       setActionLoading(null);
-      setPayoutConfirm(null);
     }
   }
 
@@ -327,7 +243,7 @@ function ReturnsContent() {
   }), [orders]);
 
   function exportCSV() {
-    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Requested Date", "Updated Date", "Payout Ref", "Processed At"];
+    const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Requested Date", "Updated Date"];
     const rows = filtered.map((o) => [
       o.id,
       o.address?.name ?? "",
@@ -337,8 +253,6 @@ function ReturnsContent() {
       o.refundStatus ? o.refundStatus.replace(/_/g, " ") : "",
       new Date(o.returnRequestedAt).toLocaleString("en-IN"),
       new Date(o.updatedAt).toLocaleString("en-IN"),
-      o.refundReference ?? "",
-      o.refundProcessedAt ? new Date(o.refundProcessedAt).toLocaleString("en-IN") : "",
     ]);
 
     // Build summary row
@@ -360,8 +274,6 @@ function ReturnsContent() {
       "",
       "",
       "",
-      "",
-      "",
     ];
 
     const escape = (val: string) => `"${val.replace(/"/g, '""')}"`;
@@ -377,15 +289,6 @@ function ReturnsContent() {
   }
 
   return (
-    <>
-    {payoutConfirm && (
-      <PayoutConfirmModal
-        state={payoutConfirm}
-        loading={actionLoading === payoutConfirm.orderId + "refundprocess"}
-        onConfirm={() => processRefund(payoutConfirm.orderId)}
-        onCancel={() => setPayoutConfirm(null)}
-      />
-    )}
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -547,7 +450,7 @@ function ReturnsContent() {
                             label="Mark payout done"
                             color="#1d4ed8" bg="#eff6ff"
                             loading={actionLoading === o.id + "refundprocess"}
-                            onClick={() => requestProcessRefund(o)}
+                            onClick={() => processRefund(o.id)}
                           />
                         )}
                         {o.status !== "return_requested" && o.refundStatus !== "pending" && o.refundStatus !== "approved" && (
@@ -576,7 +479,6 @@ function ReturnsContent() {
         )}
       </div>
     </div>
-    </>
   );
 }
 

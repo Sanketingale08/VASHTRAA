@@ -1,17 +1,11 @@
 import { Router } from "express";
-import { getAuth, clerkClient } from "@clerk/express";
+import { clerkClient } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
 import { Resend } from "resend";
 import crypto from "crypto";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
-  req.userId = userId;
-  next();
-};
 
 // ─── In-memory phone OTP store ──────────────────────────────────────────────
 // userId → { otp, phone, expiresAt, requests: Date[], attempts: number }

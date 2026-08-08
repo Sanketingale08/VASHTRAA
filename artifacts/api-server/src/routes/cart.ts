@@ -1,22 +1,13 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
 import { cartItemsTable, productsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
-router.get("/cart", requireAuth, async (req: any, res) => {
+router.get("/cart", isCustomer, async (req: any, res) => {
   try {
     const rows = await db
       .select({
@@ -45,7 +36,7 @@ router.get("/cart", requireAuth, async (req: any, res) => {
   }
 });
 
-router.post("/cart/:productId", requireAuth, async (req: any, res: any): Promise<void> => {
+router.post("/cart/:productId", isCustomer, async (req: any, res: any): Promise<void> => {
   const { productId } = req.params;
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
@@ -88,7 +79,7 @@ router.post("/cart/:productId", requireAuth, async (req: any, res: any): Promise
   }
 });
 
-router.put("/cart/:productId", requireAuth, async (req: any, res: any): Promise<void> => {
+router.put("/cart/:productId", isCustomer, async (req: any, res: any): Promise<void> => {
   const { productId } = req.params;
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
@@ -124,7 +115,7 @@ router.put("/cart/:productId", requireAuth, async (req: any, res: any): Promise<
   }
 });
 
-router.delete("/cart/:productId", requireAuth, async (req: any, res) => {
+router.delete("/cart/:productId", isCustomer, async (req: any, res) => {
   const { productId } = req.params;
   try {
     await db
@@ -137,7 +128,7 @@ router.delete("/cart/:productId", requireAuth, async (req: any, res) => {
   }
 });
 
-router.delete("/cart", requireAuth, async (req: any, res) => {
+router.delete("/cart", isCustomer, async (req: any, res) => {
   try {
     await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
     res.json({ success: true });

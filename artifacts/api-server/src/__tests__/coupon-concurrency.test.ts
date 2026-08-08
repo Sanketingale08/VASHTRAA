@@ -156,6 +156,8 @@ vi.mock("@workspace/db", () => {
         delete: vi.fn(() => ({
           where: vi.fn(() => Promise.resolve()),
         })),
+
+        execute: vi.fn(() => Promise.resolve({ rows: [{ seq: 42 }] })),
       };
 
       try {

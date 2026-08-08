@@ -1,20 +1,11 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
 import { userProfilesTable, rewardPointsLogTable, referralsTable, ordersTable } from "@workspace/db";
 import { eq, desc, count, sql } from "drizzle-orm";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
 function computeTier(totalPoints: number): "silver" | "gold" | "platinum" {
   if (totalPoints >= 5000) return "platinum";
@@ -69,7 +60,7 @@ async function getOrCreateProfile(userId: string) {
   return refetched;
 }
 
-router.get("/rewards/summary", requireAuth, async (req: any, res: any): Promise<void> => {
+router.get("/rewards/summary", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const profile = await getOrCreateProfile(req.userId);
 
@@ -93,7 +84,7 @@ router.get("/rewards/summary", requireAuth, async (req: any, res: any): Promise<
   }
 });
 
-router.get("/rewards/history", requireAuth, async (req: any, res: any): Promise<void> => {
+router.get("/rewards/history", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
     const limit = 20;
@@ -121,7 +112,7 @@ router.get("/rewards/history", requireAuth, async (req: any, res: any): Promise<
   }
 });
 
-router.post("/rewards/referral/apply", requireAuth, async (req: any, res: any): Promise<void> => {
+router.post("/rewards/referral/apply", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const { referralCode } = req.body;
     if (!referralCode || typeof referralCode !== "string") {

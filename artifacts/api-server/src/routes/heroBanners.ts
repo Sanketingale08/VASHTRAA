@@ -10,14 +10,7 @@ const objectStorageService = new ObjectStorageService();
 
 const GLOBAL_INTERVAL_KEY = "hero_global_interval_ms";
 
-function requireAdminKey(req: any, res: any, next: any) {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = req.headers["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  next();
-}
+import { requireAdminKey } from "../middlewares/isAdmin";
 
 /**
  * GET /api/hero-banners — public

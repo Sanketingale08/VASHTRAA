@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS } from "@workspace/db";
 import { eq, desc, asc, inArray, and, sql } from "drizzle-orm";
-import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";

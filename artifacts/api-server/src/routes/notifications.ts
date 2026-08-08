@@ -1,18 +1,11 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
 import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
-  req.userId = userId;
-  next();
-};
 
 router.get("/notifications/unread-count", requireAuth, async (req: any, res: any): Promise<void> => {
   try {

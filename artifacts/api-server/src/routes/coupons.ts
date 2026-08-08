@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
+import { requireAdminKey } from "../middlewares/isAdmin";
 import { db } from "@workspace/db";
 import {
   couponsTable,
@@ -9,23 +11,6 @@ import {
   wishlistsTable,
 } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
-
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
-  req.userId = userId;
-  next();
-};
-
-const requireAdminKey = (req: any, res: any, next: any) => {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = req.headers["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  next();
-};
 
 const router = Router();
 

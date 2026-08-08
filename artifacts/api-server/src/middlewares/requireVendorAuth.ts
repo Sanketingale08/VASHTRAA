@@ -1,6 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { db } from "@workspace/db";
-import { vendorsTable } from "@workspace/db/schema";
+import { db, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 export async function requireVendorAuth(req: any, res: any, next: any) {
@@ -15,7 +14,7 @@ export async function requireVendorAuth(req: any, res: any, next: any) {
     const rows = await db
       .select()
       .from(vendorsTable)
-      .where(eq(vendorsTable.ownerId, userId))
+      .where(eq(vendorsTable.ownerId, userId as string))
       .limit(1);
 
     if (rows.length === 0) {

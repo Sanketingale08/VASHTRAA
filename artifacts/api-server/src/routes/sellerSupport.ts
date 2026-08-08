@@ -6,7 +6,7 @@ import {
   SELLER_TICKET_CATEGORIES,
 } from "@workspace/db";
 import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
-import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { notifyTicketEvent } from "../lib/ticketSupport";
 
 const router = Router();

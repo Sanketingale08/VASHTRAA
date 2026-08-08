@@ -11,7 +11,7 @@ import {
   notificationsTable,
 } from "@workspace/db";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
-import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 
 const router = Router();
 

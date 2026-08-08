@@ -1,22 +1,13 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
 import { wishlistsTable, productsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
-router.get("/wishlists", requireAuth, async (req: any, res) => {
+router.get("/wishlists", isCustomer, async (req: any, res) => {
   try {
     const items = await db
       .select({
@@ -44,7 +35,7 @@ router.get("/wishlists", requireAuth, async (req: any, res) => {
   }
 });
 
-router.get("/wishlists/ids", requireAuth, async (req: any, res) => {
+router.get("/wishlists/ids", isCustomer, async (req: any, res) => {
   try {
     const rows = await db
       .select({ productId: wishlistsTable.productId })
@@ -57,7 +48,7 @@ router.get("/wishlists/ids", requireAuth, async (req: any, res) => {
   }
 });
 
-router.post("/wishlists/:productId", requireAuth, async (req: any, res) => {
+router.post("/wishlists/:productId", isCustomer, async (req: any, res) => {
   const { productId } = req.params;
   try {
     await db
@@ -70,7 +61,7 @@ router.post("/wishlists/:productId", requireAuth, async (req: any, res) => {
   }
 });
 
-router.delete("/wishlists/:productId", requireAuth, async (req: any, res) => {
+router.delete("/wishlists/:productId", isCustomer, async (req: any, res) => {
   const { productId } = req.params;
   try {
     await db

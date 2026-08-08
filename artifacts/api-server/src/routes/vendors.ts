@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { vendorsTable, productsTable, ordersTable } from "@workspace/db";
 import { eq, sql, desc } from "drizzle-orm";
-import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
+import { requireAuth } from "../middlewares/isAuthenticated";
+import { requireAdminKey } from "../middlewares/isAdmin";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { insertAdminNotification } from "../lib/adminNotifications";
 import { insertSellerNotification } from "../lib/sellerNotifications";
@@ -17,25 +18,6 @@ import {
 } from "../lib/transactionalEmail";
 
 const router = Router();
-
-const requireAdminKey = (req: any, res: any, next: any) => {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = req.headers["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  next();
-};
-
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
 router.get("/vendors", async (req, res) => {
   try {

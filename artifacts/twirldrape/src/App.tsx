@@ -12,6 +12,7 @@ import { CartProvider } from "@/context/CartContext";
 import { OrdersProvider } from "@/context/OrdersContext";
 import { CartDrawer } from "@/components/CartDrawer";
 import NotFound from "@/pages/not-found";
+import Unauthorized from "@/pages/Unauthorized";
 import Home from "@/pages/Home";
 import Collections from "@/pages/Collections";
 import Paithani from "@/pages/Paithani";
@@ -322,6 +323,7 @@ function Router() {
       <Route path="/weavers" component={Weavers} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
+      <Route path="/unauthorized" component={Unauthorized} />
       <Route component={NotFound} />
     </Switch>
   );

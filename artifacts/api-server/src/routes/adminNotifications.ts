@@ -5,14 +5,7 @@ import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 
 const router = Router();
 
-const requireAdminKey = (req: any, res: any, next: any) => {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = req.headers["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  next();
-};
+import { requireAdminKey } from "../middlewares/isAdmin";
 
 router.get("/admin/notifications/unread-count", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {

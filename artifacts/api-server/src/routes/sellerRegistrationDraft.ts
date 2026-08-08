@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import { sellerRegistrationDraftsTable } from "@workspace/db";
 import { eq, lt } from "drizzle-orm";
@@ -21,15 +21,6 @@ export async function deleteExpiredRegistrationDrafts(): Promise<number> {
   return deleted.length;
 }
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
 router.get("/seller/registration-draft", requireAuth, async (req: any, res: any) => {
   try {

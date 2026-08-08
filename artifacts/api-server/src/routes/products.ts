@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
-import { requireVendorAuth } from "../middlewares/requireVendorAuth";
+import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { recordStockChange } from "../lib/stockHistory";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
@@ -281,13 +282,6 @@ router.get("/products/:id", async (req, res) => {
   }
 });
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
-  req.userId = userId;
-  next();
-};
 
 async function notifyWishlistRestock(productId: string, productName: string, previousStock: number, newStock: number) {
   if (!(previousStock === 0 && newStock > 0)) return;

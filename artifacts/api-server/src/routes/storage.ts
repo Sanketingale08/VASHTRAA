@@ -22,15 +22,7 @@ function requireClerkAuth(req: Request, res: Response, next: any) {
   next();
 }
 
-function requireAdminKey(req: Request, res: Response, next: any) {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = (req.headers as any)["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  next();
-}
+import { requireAdminKey } from "../middlewares/isAdmin";
 
 async function issueUploadUrl(req: Request, res: Response) {
   const parsed = RequestUploadUrlBody.safeParse(req.body);

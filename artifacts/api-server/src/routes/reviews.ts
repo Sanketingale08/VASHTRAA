@@ -1,18 +1,11 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import { productsTable, productReviewsTable, productQueriesTable, ordersTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
-  req.userId = userId;
-  next();
-};
 
 router.get("/products/:productId/reviews", async (req: any, res: any) => {
   const { productId } = req.params;

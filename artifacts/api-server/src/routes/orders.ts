@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import {
   ordersTable, cartItemsTable, productsTable, couponsTable,
@@ -15,18 +15,10 @@ import { insertSellerNotification, insertSellerNotificationForVendors } from "..
 import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 import { sendTransactionalEmail } from "../lib/transactionalEmail";
+import { requireAdminKey } from "../middlewares/isAdmin";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
 function computeTier(totalPoints: number): "silver" | "gold" | "platinum" {
   if (totalPoints >= 5000) return "platinum";
@@ -514,15 +506,6 @@ router.get("/orders/:orderId", requireAuth, async (req: any, res: any): Promise<
     res.status(500).json({ error: "Failed to fetch order" });
   }
 });
-
-const requireAdminKey = (req: any, res: any, next: any) => {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = req.headers["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  next();
-};
 
 // POST and PATCH /orders/:orderId/status — admin only: advance order status
 async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {

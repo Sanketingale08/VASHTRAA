@@ -1,22 +1,13 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
+import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
 import { savedAddressesTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 
 const router = Router();
 
-const requireAuth = (req: any, res: any, next: any) => {
-  const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId || auth?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  req.userId = userId;
-  next();
-};
 
-router.get("/addresses", requireAuth, async (req: any, res: any): Promise<void> => {
+router.get("/addresses", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const rows = await db
       .select()
@@ -30,7 +21,7 @@ router.get("/addresses", requireAuth, async (req: any, res: any): Promise<void> 
   }
 });
 
-router.post("/addresses", requireAuth, async (req: any, res: any): Promise<void> => {
+router.post("/addresses", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const { name, phone, line1, line2, city, state, pincode, isDefault } = req.body;
     if (!name || !phone || !line1 || !city || !state || !pincode) {
@@ -71,7 +62,7 @@ router.post("/addresses", requireAuth, async (req: any, res: any): Promise<void>
   }
 });
 
-router.put("/addresses/:id", requireAuth, async (req: any, res: any): Promise<void> => {
+router.put("/addresses/:id", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const { id } = req.params;
     const { name, phone, line1, line2, city, state, pincode, isDefault } = req.body;
@@ -125,7 +116,7 @@ router.put("/addresses/:id", requireAuth, async (req: any, res: any): Promise<vo
   }
 });
 
-router.delete("/addresses/:id", requireAuth, async (req: any, res: any): Promise<void> => {
+router.delete("/addresses/:id", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const { id } = req.params;
 
@@ -151,7 +142,7 @@ router.delete("/addresses/:id", requireAuth, async (req: any, res: any): Promise
   }
 });
 
-router.patch("/addresses/:id/default", requireAuth, async (req: any, res: any): Promise<void> => {
+router.patch("/addresses/:id/default", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const { id } = req.params;
 

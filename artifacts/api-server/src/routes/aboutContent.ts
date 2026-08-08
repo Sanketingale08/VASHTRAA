@@ -5,14 +5,7 @@ import { eq } from "drizzle-orm";
 
 const ABOUT_SETTINGS_KEY = "about_page_content";
 
-const requireAdminKey = (req: any, res: any, next: any) => {
-  const adminKey = process.env.ADMIN_API_KEY;
-  const provided = req.headers["x-admin-key"];
-  if (!adminKey || !provided || provided !== adminKey) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  next();
-};
+import { requireAdminKey } from "../middlewares/isAdmin";
 
 const router = Router();
 

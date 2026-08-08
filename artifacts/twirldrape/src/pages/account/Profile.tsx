@@ -138,14 +138,25 @@ export function AccountProfilePage() {
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
 
-  // Initial hydration when Clerk user first loads.
-  // On subsequent reloads we explicitly call setForm — Clerk mutates the
-  // user object in-place so the reference doesn't change, meaning this
-  // effect wouldn't re-fire. Do NOT rely on it for post-save refreshes.
+  // When true, the next user-dependency fire of the hydration effect is
+  // skipped. We set this before calling user.reload() after a save so that
+  // a new Clerk user-object reference (emitted by the SDK after the reload)
+  // doesn't overwrite the form with potentially-stale publicMetadata and
+  // cause the "My Profile" summary to revert to old values.
+  const skipNextHydrateRef = useRef(false);
+
+  // Hydrate the form from the Clerk user object.
+  // Runs on initial mount (user goes from null → User) and whenever the
+  // user reference changes (e.g. sign-out / sign-in with a different account).
+  // Skipped immediately after a successful save so the optimistic form values
+  // are preserved until the Clerk session propagates the new publicMetadata.
   useEffect(() => {
-    if (user) {
-      setForm(hydrateForm(user));
+    if (!user) return;
+    if (skipNextHydrateRef.current) {
+      skipNextHydrateRef.current = false;
+      return;
     }
+    setForm(hydrateForm(user));
   }, [user]);
 
   function set(field: keyof ProfileForm, value: string) {
@@ -198,22 +209,21 @@ export function AccountProfilePage() {
         throw new Error(body.error ?? "Failed to save profile");
       }
 
+      // Signal the hydration effect to skip its next fire.
+      // user.reload() may cause Clerk to emit a new user-object reference,
+      // which would trigger the useEffect([user]) and call hydrateForm(user).
+      // If publicMetadata hasn't propagated yet that would overwrite the form
+      // with stale values, making the save appear to have had no effect.
+      // Setting this flag before reload() prevents that race.
+      skipNextHydrateRef.current = true;
+
       // Reload Clerk's user object so the session reflects any name change.
       await user.reload();
 
-      // Optimistic form update — do NOT re-hydrate the whole form from Clerk.
-      //
-      // Clerk's client-side user.reload() re-fetches the session, but
-      // publicMetadata written server-side via clerkClient.users.updateUserMetadata()
-      // may lag slightly before it's visible in the client-side user object.
-      // Calling setForm(hydrateForm(user)) here would overwrite the fields the
-      // user just edited with stale values from Clerk, making the save appear
-      // to have no effect.
-      //
-      // Instead: keep the submitted values for metadata fields (they are already
-      // correct — that's what we just saved). Only pull firstName/lastName from
-      // the reload, because Clerk may have silently rejected an OAuth-managed name
-      // change (e.g. Google SSO), and the reload reflects the actual accepted value.
+      // Keep the submitted values for all metadata fields (already correct —
+      // that's exactly what we just saved). Only pull firstName/lastName from
+      // the reloaded user because Clerk may have silently rejected an
+      // OAuth-managed name change (e.g. Google SSO).
       setForm(prev => ({
         ...prev,
         firstName: user.firstName ?? prev.firstName,

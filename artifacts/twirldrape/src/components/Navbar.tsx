@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, Store, ChevronDown } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk, Show } from "@clerk/react";
@@ -351,17 +351,6 @@ export function Navbar() {
                 <Show when="signed-out">
                   <div className="flex items-center gap-1">
                     <Link
-                      href="/seller/register"
-                      className={cn(
-                        "hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors border",
-                        isDark || isDesignerDark
-                          ? "border-[#C9A84C]/40 text-[#C9A84C] hover:bg-white/10"
-                          : "border-[#C9A84C]/50 text-[#1E6B5A] hover:bg-[#C9A84C]/10"
-                      )}
-                    >
-                      <Store size={11} /> Sell
-                    </Link>
-                    <Link
                       href="/sign-in"
                       className={cn(
                         "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
@@ -424,13 +413,6 @@ export function Navbar() {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
                       >
                         <ClipboardList size={14} className="text-[#C9A84C]" /> My Orders
-                      </Link>
-                      <Link
-                        href="/seller/dashboard"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
-                      >
-                        <Store size={14} className="text-[#C9A84C]" /> Seller Panel
                       </Link>
                       <Link
                         href="/wishlist"
@@ -550,13 +532,6 @@ export function Navbar() {
                   >
                     <ClipboardList size={16} className="text-[#C9A84C]" /> My Orders
                   </Link>
-                  <Link
-                    href="/seller/dashboard"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
-                  >
-                    <Store size={16} className="text-[#C9A84C]" /> Seller Panel
-                  </Link>
                 </Show>
                 <Link
                   href="/wishlist"
@@ -571,14 +546,6 @@ export function Navbar() {
                   )}
                 </Link>
                 <Show when="signed-out">
-                  <Link
-                    href="/seller/register"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors font-semibold"
-                    style={{ color: "#C9A84C" }}
-                  >
-                    <Store size={16} className="text-[#C9A84C]" /> Become a Vendor
-                  </Link>
                   <Link
                     href="/sign-in"
                     onClick={() => setMobileMenuOpen(false)}

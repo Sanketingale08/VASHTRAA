@@ -9,6 +9,15 @@ import { recordStockChange } from "../lib/stockHistory";
 
 const router = Router();
 
+/**
+ * Lightweight endpoint to check whether the current user is an approved seller.
+ * Returns { isSeller: true, vendorId, vendorName } for approved vendors,
+ * 403 for non-vendors (handled by requireVendorAuth).
+ */
+router.get("/seller/status", requireVendorAuth, (req: any, res: any) => {
+  res.json({ isSeller: true, vendorId: req.vendor.id, vendorName: req.vendor.name });
+});
+
 router.get("/seller/dashboard", requireVendorAuth, async (req: any, res: any) => {
   const vendor = req.vendor;
   const vendorId = vendor.id;

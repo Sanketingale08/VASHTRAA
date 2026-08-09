@@ -64,6 +64,20 @@ export default function AccountScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [isSeller, setIsSeller] = useState<boolean | null>(null);
+
+  const fetchSellerStatus = useCallback(async () => {
+    if (!isSignedIn) return;
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/seller/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setIsSeller(res.ok);
+    } catch {
+      setIsSeller(false);
+    }
+  }, [isSignedIn, getToken]);
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (!isSignedIn) return;
@@ -87,8 +101,11 @@ export default function AccountScreen() {
   }, [isSignedIn, getToken]);
 
   useEffect(() => {
-    if (isLoaded) fetchOrders();
-  }, [isLoaded, fetchOrders]);
+    if (isLoaded) {
+      fetchOrders();
+      fetchSellerStatus();
+    }
+  }, [isLoaded, fetchOrders, fetchSellerStatus]);
 
   const isFirstFocus = useRef(true);
   useFocusEffect(
@@ -231,6 +248,21 @@ export default function AccountScreen() {
     },
     sellerBtnTitle: { fontFamily: "DMSans_700Bold", fontSize: 14, color: colors.foreground },
     sellerBtnSub: { fontFamily: "DMSans_400Regular", fontSize: 12, color: colors.mutedForeground, marginTop: 1 },
+    becomeSellerBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.card,
+      borderRadius: colors.radius,
+      borderWidth: 1,
+      borderColor: colors.border + "22",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      opacity: 0.75,
+    },
+    becomeSellerTitle: { fontFamily: "DMSans_700Bold", fontSize: 14, color: colors.mutedForeground },
   });
 
   if (!isLoaded) {
@@ -307,17 +339,32 @@ export default function AccountScreen() {
           </Pressable>
         </View>
 
-        <Pressable
-          style={s.sellerBtn}
-          onPress={() => router.push("/seller/products")}
-        >
-          <Ionicons name="storefront-outline" size={20} color={colors.secondary} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.sellerBtnTitle}>Seller Dashboard</Text>
-            <Text style={s.sellerBtnSub}>Manage your product listings</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
+        {isSeller === true && (
+          <Pressable
+            style={s.sellerBtn}
+            onPress={() => router.push("/seller/products")}
+          >
+            <Ionicons name="storefront-outline" size={20} color={colors.secondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.sellerBtnTitle}>Seller Dashboard</Text>
+              <Text style={s.sellerBtnSub}>Manage your product listings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        )}
+        {isSeller === false && (
+          <Pressable
+            style={s.becomeSellerBtn}
+            onPress={() => router.push("/become-seller" as any)}
+          >
+            <Ionicons name="storefront-outline" size={20} color={colors.mutedForeground} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.becomeSellerTitle}>Become a Seller</Text>
+              <Text style={s.sellerBtnSub}>List your sarees on TwirlDrape</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        )}
 
         <Text style={s.sectionTitle}>My Orders</Text>
 

@@ -2,18 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Save, Loader2, CheckCircle, ExternalLink,
-  User, Phone, Mail, Calendar, Users, KeyRound, Settings,
-  ChevronRight,
+  Pencil, Save, X, Loader2, CheckCircle, ExternalLink,
+  User, KeyRound,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ChangePhoneModal } from "./ChangePhoneModal";
 import { ChangeEmailModal } from "./ChangeEmailModal";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-const LANGUAGES = ["English", "Hindi", "Marathi"];
-const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say"];
+const GENDERS = ["Male", "Female", "Other", "Prefer not to say"];
 
 type ProfileForm = {
   firstName: string;
@@ -23,9 +19,108 @@ type ProfileForm = {
   dateOfBirth: string;
   gender: string;
   language: string;
+  location: string;
 };
 
-function Field({
+/** Hydrate a ProfileForm from a Clerk user object. */
+function hydrateForm(user: NonNullable<ReturnType<typeof useUser>["user"]>): ProfileForm {
+  const meta = (user.publicMetadata ?? {}) as Record<string, string>;
+  return {
+    firstName: user.firstName ?? "",
+    lastName: user.lastName ?? "",
+    phone: meta.phone ?? "",
+    alternateMobile: meta.alternateMobile ?? "",
+    dateOfBirth: meta.dateOfBirth ?? "",
+    gender: meta.gender ?? "",
+    language: meta.language ?? "English",
+    location: meta.location ?? "",
+  };
+}
+
+function formatDob(dob: string): string {
+  if (!dob) return "";
+  try {
+    return new Date(dob).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return dob;
+  }
+}
+
+/** Initials avatar disc. */
+function AvatarCircle({
+  firstName,
+  lastName,
+}: {
+  firstName?: string | null;
+  lastName?: string | null;
+}) {
+  const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join("").toUpperCase();
+  return (
+    <div className="w-14 h-14 rounded-full bg-[#1E6B5A] flex items-center justify-center shrink-0 select-none">
+      {initials ? (
+        <span className="text-xl font-bold text-white leading-none">{initials}</span>
+      ) : (
+        <User size={22} className="text-white" />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A single row in the two-column profile table.
+ * Desktop: label (fixed width) | value + optional action (flex).
+ * Mobile: label above value, action button below value.
+ */
+function ProfileRow({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value: string | null | undefined;
+  action?: React.ReactNode;
+}) {
+  const display = value?.trim() || null;
+  return (
+    <div className="py-3.5 border-b border-gray-50 last:border-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+      <span className="sm:w-36 lg:w-44 text-xs font-semibold text-gray-400 uppercase tracking-wider shrink-0">
+        {label}
+      </span>
+      <div className="flex-1 flex items-center justify-between gap-3 min-w-0">
+        <span
+          className={`text-sm font-medium truncate ${
+            display ? "text-[#1a1a2e]" : "text-gray-300 italic font-normal"
+          }`}
+        >
+          {display ?? "Not added"}
+        </span>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** Inline [Edit] button for phone / email rows. */
+function InlineEditBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-[44px] px-2 text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors flex items-center"
+    >
+      Edit
+    </button>
+  );
+}
+
+const inputCls =
+  "w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white";
+
+function EditField({
   label,
   children,
 }: {
@@ -42,86 +137,11 @@ function Field({
   );
 }
 
-const inputCls =
-  "w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white";
-
-function SummaryRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-      <div className="w-8 h-8 rounded-xl bg-[#1E6B5A]/8 flex items-center justify-center shrink-0 mt-0.5">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
-        <p className="text-sm font-medium text-[#1a1a2e] truncate">
-          {value || <span className="text-gray-300 font-normal">Not provided</span>}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Initials avatar — always renders a coloured disc with the user's initials.
- * No photo upload; matches the Myntra-style generated avatar pattern.
- *
- * Sizes:
- *   "sm"  — 40 px  (w-10 h-10)  used in compact contexts
- *   "md"  — 56 px  (w-14 h-14)  used in the profile card header
- *   "lg"  — 80 px  (w-20 h-20)  available for larger displays
- */
-function AvatarCircle({
-  firstName,
-  lastName,
-  size = "sm",
-}: {
-  firstName?: string | null;
-  lastName?: string | null;
-  size?: "sm" | "md" | "lg";
-}) {
-  const dim = size === "lg" ? "w-20 h-20" : size === "md" ? "w-14 h-14" : "w-10 h-10";
-  const textCls = size === "lg" ? "text-2xl font-bold" : size === "md" ? "text-xl font-bold" : "text-sm font-bold";
-  const iconSize = size === "lg" ? 28 : size === "md" ? 22 : 18;
-  const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join("").toUpperCase();
-
-  return (
-    <div className={`${dim} rounded-full bg-[#1E6B5A] flex items-center justify-center shrink-0 select-none`}>
-      {initials ? (
-        <span className={`${textCls} text-white leading-none`}>{initials}</span>
-      ) : (
-        <User size={iconSize} className="text-white" />
-      )}
-    </div>
-  );
-}
-
-/** Hydrate a ProfileForm from a Clerk user object (used after every reload). */
-function hydrateForm(user: NonNullable<ReturnType<typeof useUser>["user"]>): ProfileForm {
-  const meta = (user.publicMetadata ?? {}) as Record<string, string>;
-  return {
-    firstName: user.firstName ?? "",
-    lastName: user.lastName ?? "",
-    phone: meta.phone ?? "",
-    alternateMobile: meta.alternateMobile ?? "",
-    dateOfBirth: meta.dateOfBirth ?? "",
-    gender: meta.gender ?? "",
-    language: meta.language ?? "English",
-  };
-}
-
 export function AccountProfilePage() {
   const { user, isLoaded } = useUser();
   const { openUserProfile } = useClerk();
-  const editFormRef = useRef<HTMLDivElement>(null);
 
+  /** Displayed (view-mode) form values. */
   const [form, setForm] = useState<ProfileForm>({
     firstName: "",
     lastName: "",
@@ -130,8 +150,13 @@ export function AccountProfilePage() {
     dateOfBirth: "",
     gender: "",
     language: "English",
+    location: "",
   });
 
+  /** Separate copy used only while editing — avoids live-updating the view card. */
+  const [editForm, setEditForm] = useState<ProfileForm>(form);
+
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -142,14 +167,11 @@ export function AccountProfilePage() {
   // skipped. We set this before calling user.reload() after a save so that
   // a new Clerk user-object reference (emitted by the SDK after the reload)
   // doesn't overwrite the form with potentially-stale publicMetadata and
-  // cause the "My Profile" summary to revert to old values.
+  // cause the card to revert to old values.
   const skipNextHydrateRef = useRef(false);
 
-  // Hydrate the form from the Clerk user object.
-  // Runs on initial mount (user goes from null → User) and whenever the
-  // user reference changes (e.g. sign-out / sign-in with a different account).
-  // Skipped immediately after a successful save so the optimistic form values
-  // are preserved until the Clerk session propagates the new publicMetadata.
+  // Hydrate on initial mount and genuine user-reference changes
+  // (e.g. sign-out / sign-in with a different account).
   useEffect(() => {
     if (!user) return;
     if (skipNextHydrateRef.current) {
@@ -159,17 +181,28 @@ export function AccountProfilePage() {
     setForm(hydrateForm(user));
   }, [user]);
 
-  function set(field: keyof ProfileForm, value: string) {
-    setForm((f) => ({ ...f, [field]: value }));
-    if (saved) setSaved(false);
+  /** Open edit mode — snapshot the current displayed values into editForm. */
+  function openEdit() {
+    setEditForm({ ...form });
+    setError("");
+    setSaved(false);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setError("");
+  }
+
+  function setField(field: keyof ProfileForm, value: string) {
+    setEditForm((f) => ({ ...f, [field]: value }));
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
 
-    // Client-side validation (phone is read-only here; changes go through OTP modal)
-    if (form.alternateMobile && !/^\d{10}$/.test(form.alternateMobile)) {
+    if (editForm.alternateMobile && !/^\d{10}$/.test(editForm.alternateMobile)) {
       setError("Alternate mobile must be exactly 10 digits.");
       return;
     }
@@ -178,19 +211,16 @@ export function AccountProfilePage() {
     setError("");
     try {
       // Best-effort name update via Clerk client SDK.
-      // Clerk may reject this for many reasons: the name is controlled by an
-      // OAuth provider (Google SSO), the instance has firstName/lastName
-      // disabled, or the API returns 422 for any field constraint.
-      // In all cases we must continue to save the other metadata — never let
-      // a Clerk name rejection abort the whole save.
+      // Clerk may reject this when the name is controlled by an OAuth provider
+      // (e.g. Google SSO). Swallow the error unconditionally and let
+      // user.reload() surface whatever Clerk actually accepted.
       try {
         await user.update({
-          firstName: form.firstName.trim() || undefined,
-          lastName: form.lastName.trim() || undefined,
+          firstName: editForm.firstName.trim() || undefined,
+          lastName: editForm.lastName.trim() || undefined,
         });
       } catch {
-        // Swallow unconditionally — name is best-effort.
-        // user.reload() below will reflect whatever Clerk actually accepted.
+        /* best-effort — intentionally swallowed */
       }
 
       const res = await fetch(`/api/account/profile`, {
@@ -198,10 +228,11 @@ export function AccountProfilePage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          alternateMobile: form.alternateMobile.trim(),
-          dateOfBirth: form.dateOfBirth,
-          gender: form.gender,
-          language: form.language,
+          alternateMobile: editForm.alternateMobile.trim(),
+          dateOfBirth: editForm.dateOfBirth,
+          gender: editForm.gender,
+          language: editForm.language,
+          location: editForm.location.trim(),
         }),
       });
       if (!res.ok) {
@@ -209,29 +240,23 @@ export function AccountProfilePage() {
         throw new Error(body.error ?? "Failed to save profile");
       }
 
-      // Signal the hydration effect to skip its next fire.
-      // user.reload() may cause Clerk to emit a new user-object reference,
-      // which would trigger the useEffect([user]) and call hydrateForm(user).
-      // If publicMetadata hasn't propagated yet that would overwrite the form
-      // with stale values, making the save appear to have had no effect.
-      // Setting this flag before reload() prevents that race.
+      // Prevent the useEffect from re-hydrating with potentially-stale
+      // publicMetadata after user.reload() emits a new user reference.
       skipNextHydrateRef.current = true;
-
-      // Reload Clerk's user object so the session reflects any name change.
       await user.reload();
 
-      // Keep the submitted values for all metadata fields (already correct —
-      // that's exactly what we just saved). Only pull firstName/lastName from
-      // the reloaded user because Clerk may have silently rejected an
-      // OAuth-managed name change (e.g. Google SSO).
-      setForm(prev => ({
-        ...prev,
-        firstName: user.firstName ?? prev.firstName,
-        lastName: user.lastName ?? prev.lastName,
+      // Commit the successfully-saved edit values to the view form.
+      // Use the reloaded user's name in case Clerk silently rejected it.
+      setForm((prev) => ({
+        ...editForm,
+        firstName: user.firstName ?? editForm.firstName,
+        lastName: user.lastName ?? editForm.lastName,
+        phone: prev.phone, // phone is managed by OTP flow — never overwrite here
       }));
 
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setEditing(false);
+      setTimeout(() => setSaved(false), 3500);
     } catch (err: any) {
       setError(
         err?.errors?.[0]?.message ??
@@ -246,297 +271,245 @@ export function AccountProfilePage() {
   const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ");
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
 
-  function formatDob(dob: string): string {
-    if (!dob) return "";
-    try {
-      return new Date(dob).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-    } catch {
-      return dob;
-    }
-  }
-
-  function scrollToEditForm() {
-    editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    // focus first input after scroll
-    setTimeout(() => {
-      const first = editFormRef.current?.querySelector<HTMLInputElement>("input, select");
-      first?.focus();
-    }, 400);
-  }
-
   return (
     <DashboardLayout>
-      <div className="space-y-5 max-w-xl">
+      <div className="space-y-4 max-w-xl">
         {/* Page heading */}
-        <div>
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">My Profile</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Profile Details</h2>
+          {saved && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full"
+            >
+              <CheckCircle size={12} /> Saved
+            </motion.div>
+          )}
         </div>
 
-        {/* ── Account Summary Card ───────────────────────────────── */}
+        {/* ── Profile Details Card ──────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
         >
-          {/* Card header — shows real avatar/initials, not a static icon */}
-          <div className="px-4 sm:px-5 py-4 bg-gradient-to-r from-[#1E6B5A]/5 to-[#C9A84C]/5 border-b border-[#C9A84C]/10 flex items-center justify-between">
-            <div>
-              <p className="font-serif text-base font-bold text-[#1E6B5A]">
-                {fullName || "Your Account"}
+          {/* Card header: avatar + name + email */}
+          <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-[#1E6B5A]/5 to-[#C9A84C]/5 border-b border-[#C9A84C]/10 flex items-center gap-4">
+            <AvatarCircle firstName={form.firstName} lastName={form.lastName} />
+            <div className="min-w-0">
+              <p className="font-serif text-base font-bold text-[#1E6B5A] truncate">
+                {fullName || "Your Profile"}
               </p>
-              <p className="text-xs text-gray-400 mt-0.5">{email}</p>
+              <p className="text-xs text-gray-400 mt-0.5 truncate">{email || "—"}</p>
             </div>
-            <AvatarCircle
-              firstName={form.firstName}
-              lastName={form.lastName}
-              size="md"
-            />
           </div>
 
-          {/* Summary rows */}
-          <div className="px-4 sm:px-5 py-1">
-            <SummaryRow
-              icon={<User size={14} className="text-[#1E6B5A]" />}
-              label="Full Name"
-              value={fullName}
-            />
-            <SummaryRow
-              icon={<Phone size={14} className="text-[#1E6B5A]" />}
-              label="Mobile Number"
-              value={form.phone}
-            />
-            <SummaryRow
-              icon={<Mail size={14} className="text-[#1E6B5A]" />}
-              label="Email Address"
-              value={email}
-            />
-            <SummaryRow
-              icon={<Users size={14} className="text-[#1E6B5A]" />}
-              label="Gender"
-              value={form.gender}
-            />
-            <SummaryRow
-              icon={<Calendar size={14} className="text-[#1E6B5A]" />}
-              label="Date of Birth"
-              value={formatDob(form.dateOfBirth)}
-            />
-            <SummaryRow
-              icon={<Phone size={14} className="text-[#C9A84C]" />}
-              label="Alternate Mobile"
-              value={form.alternateMobile}
-            />
-          </div>
-        </motion.div>
+          {/* Body — view mode or edit mode */}
+          <AnimatePresence mode="wait">
+            {!editing ? (
+              /* ── View mode ──────────────────────────────────────── */
+              <motion.div
+                key="view"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="px-4 sm:px-6 py-1"
+              >
+                <ProfileRow label="Full Name" value={fullName} />
 
-        {/* ── Quick Actions ──────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.04 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
-        >
-          {[
-            {
-              icon: <User size={16} className="text-[#1E6B5A]" />,
-              label: "Edit Profile",
-              desc: "Update your name, phone, gender, and date of birth",
-              action: scrollToEditForm,
-            },
-            {
-              icon: <Phone size={16} className="text-[#1E6B5A]" />,
-              label: "Change Mobile Number",
-              desc: "Verify a new number via code sent to your email",
-              action: () => setShowPhoneModal(true),
-            },
-            {
-              icon: <Mail size={16} className="text-[#1E6B5A]" />,
-              label: "Change Email Address",
-              desc: "Receive a verification code on your new email",
-              action: () => setShowEmailModal(true),
-            },
-            {
-              icon: <KeyRound size={16} className="text-[#1E6B5A]" />,
-              label: "Change Password",
-              desc: "Update your account password",
-              action: () => openUserProfile(),
-            },
-            {
-              icon: <Settings size={16} className="text-[#1E6B5A]" />,
-              label: "Profile Management",
-              desc: "Connected accounts, two-factor authentication, and more",
-              action: () => openUserProfile(),
-            },
-          ].map((item, i) => (
-            <button
-              key={item.label}
-              onClick={item.action}
-              className={`w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 text-left hover:bg-[#F3F8F5] transition-colors ${i > 0 ? "border-t border-gray-50" : ""}`}
-            >
-              <div className="w-9 h-9 rounded-xl bg-[#1E6B5A]/8 flex items-center justify-center shrink-0">
-                {item.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[#1a1a2e]">{item.label}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
-              </div>
-              <ChevronRight size={16} className="text-gray-300 shrink-0" />
-            </button>
-          ))}
-        </motion.div>
-
-        {/* ── Edit Form ─────────────────────────────────────────── */}
-        <div ref={editFormRef}>
-          <motion.form
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            onSubmit={handleSave}
-            className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-4 sm:p-5 space-y-4"
-          >
-            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">
-              Edit Personal Details
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="First Name">
-                <input
-                  value={form.firstName}
-                  onChange={(e) => set("firstName", e.target.value)}
-                  placeholder="Priya"
-                  className={inputCls}
+                <ProfileRow
+                  label="Mobile Number"
+                  value={form.phone ? `+91 ${form.phone}` : null}
+                  action={<InlineEditBtn onClick={() => setShowPhoneModal(true)} />}
                 />
-              </Field>
-              <Field label="Last Name">
-                <input
-                  value={form.lastName}
-                  onChange={(e) => set("lastName", e.target.value)}
-                  placeholder="Sharma"
-                  className={inputCls}
-                />
-              </Field>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Phone is read-only here — changes require OTP verification */}
-              <Field label="Mobile Number">
-                <div className="flex items-center border border-[#C9A84C]/20 rounded-lg bg-[#F9F9F9] px-3 py-2.5 gap-2">
-                  <span className="flex-1 text-sm text-gray-500 truncate">
-                    {form.phone ? `+91 ${form.phone}` : <span className="text-gray-300">Not set</span>}
-                  </span>
+                <ProfileRow
+                  label="Email ID"
+                  value={email}
+                  action={<InlineEditBtn onClick={() => setShowEmailModal(true)} />}
+                />
+
+                <ProfileRow label="Gender" value={form.gender} />
+                <ProfileRow label="Date of Birth" value={formatDob(form.dateOfBirth)} />
+                <ProfileRow label="Location" value={form.location} />
+                <ProfileRow
+                  label="Alternate Mobile"
+                  value={form.alternateMobile ? `+91 ${form.alternateMobile}` : null}
+                />
+
+                {/* Edit Profile CTA */}
+                <div className="py-5 flex justify-center">
                   <button
-                    type="button"
-                    onClick={() => setShowPhoneModal(true)}
-                    className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors whitespace-nowrap"
+                    onClick={openEdit}
+                    className="flex items-center gap-2 bg-[#1E6B5A] hover:bg-[#6a1826] text-white text-sm font-bold uppercase tracking-wider px-8 py-2.5 rounded-xl transition-colors min-h-[44px]"
                   >
-                    Change
+                    <Pencil size={14} />
+                    Edit Profile
                   </button>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Mobile changes require OTP verification.</p>
-              </Field>
-              <Field label="Alternate Mobile (Optional)">
-                <input
-                  value={form.alternateMobile}
-                  onChange={(e) =>
-                    set("alternateMobile", e.target.value.replace(/\D/g, "").slice(0, 10))
-                  }
-                  placeholder="9876543210"
-                  type="tel"
-                  className={inputCls}
-                />
-              </Field>
-            </div>
-
-            <Field label="Date of Birth">
-              <input
-                value={form.dateOfBirth}
-                onChange={(e) => set("dateOfBirth", e.target.value)}
-                type="date"
-                className={inputCls}
-              />
-            </Field>
-
-            <Field label="Gender">
-              <select
-                value={form.gender}
-                onChange={(e) => set("gender", e.target.value)}
-                className={inputCls}
+              </motion.div>
+            ) : (
+              /* ── Edit mode ──────────────────────────────────────── */
+              <motion.div
+                key="edit"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
               >
-                <option value="">Select gender</option>
-                {GENDERS.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                <form onSubmit={handleSave} className="px-4 sm:px-6 py-5 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <EditField label="First Name">
+                      <input
+                        value={editForm.firstName}
+                        onChange={(e) => setField("firstName", e.target.value)}
+                        placeholder="Priya"
+                        className={inputCls}
+                      />
+                    </EditField>
+                    <EditField label="Last Name">
+                      <input
+                        value={editForm.lastName}
+                        onChange={(e) => setField("lastName", e.target.value)}
+                        placeholder="Sharma"
+                        className={inputCls}
+                      />
+                    </EditField>
+                  </div>
 
-            <Field label="Preferred Language">
-              <select
-                value={form.language}
-                onChange={(e) => set("language", e.target.value)}
-                className={inputCls}
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                  <EditField label="Gender">
+                    <select
+                      value={editForm.gender}
+                      onChange={(e) => setField("gender", e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">Select gender</option>
+                      {GENDERS.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </EditField>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-600">
-                {error}
-              </div>
+                  <EditField label="Date of Birth">
+                    <input
+                      type="date"
+                      value={editForm.dateOfBirth}
+                      onChange={(e) => setField("dateOfBirth", e.target.value)}
+                      className={inputCls}
+                    />
+                  </EditField>
+
+                  <EditField label="Location">
+                    <input
+                      value={editForm.location}
+                      onChange={(e) => setField("location", e.target.value)}
+                      placeholder="Mumbai, Maharashtra"
+                      className={inputCls}
+                    />
+                  </EditField>
+
+                  <EditField label="Alternate Mobile (Optional)">
+                    <input
+                      value={editForm.alternateMobile}
+                      onChange={(e) =>
+                        setField(
+                          "alternateMobile",
+                          e.target.value.replace(/\D/g, "").slice(0, 10),
+                        )
+                      }
+                      placeholder="9876543210"
+                      type="tel"
+                      className={inputCls}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      10-digit Indian mobile number without country code.
+                    </p>
+                  </EditField>
+
+                  {/* Note: phone and email changes use their own OTP flow */}
+                  <div className="bg-[#F3F8F5] rounded-xl px-3 py-2.5 text-xs text-gray-500">
+                    To change your{" "}
+                    <button
+                      type="button"
+                      onClick={() => { cancelEdit(); setShowPhoneModal(true); }}
+                      className="font-semibold text-[#1E6B5A] hover:underline"
+                    >
+                      mobile number
+                    </button>{" "}
+                    or{" "}
+                    <button
+                      type="button"
+                      onClick={() => { cancelEdit(); setShowEmailModal(true); }}
+                      className="font-semibold text-[#1E6B5A] hover:underline"
+                    >
+                      email address
+                    </button>
+                    , use the Edit buttons on the profile view.
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-sm text-red-600">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={saving}
+                      className="flex-1 border border-[#C9A84C]/30 text-gray-600 hover:bg-gray-50 disabled:opacity-50 py-2.5 text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                    >
+                      <X size={14} /> Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving || !isLoaded}
+                      className="flex-1 bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-white py-2.5 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors min-h-[44px]"
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" /> Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Save size={14} /> Save Changes
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
             )}
+          </AnimatePresence>
+        </motion.div>
 
-            {saved && (
-              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-sm text-green-700">
-                <CheckCircle size={14} className="shrink-0" /> Profile saved successfully!
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={saving || !isLoaded}
-              className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-3 font-bold uppercase tracking-wider text-sm rounded-xl flex items-center justify-center gap-2 transition-colors"
-            >
-              {saving ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" /> Saving…
-                </>
-              ) : (
-                <>
-                  <Save size={14} /> Save Changes
-                </>
-              )}
-            </button>
-          </motion.form>
-        </div>
-
-        {/* ── Account Security ──────────────────────────────────── */}
+        {/* ── Account Security (compact) ────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-4 sm:p-5"
+          transition={{ delay: 0.06 }}
+          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm px-4 sm:px-6 py-4"
         >
-          <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider mb-2">
-            Account Security
-          </h3>
-          <p className="text-xs text-gray-500 mb-4">
-            Manage your password, connected accounts, and two-factor authentication.
+          <p className="text-xs text-gray-400 mb-3">
+            Manage your password, two-factor authentication, and connected accounts.
           </p>
           <button
             onClick={() => openUserProfile()}
             className="flex items-center gap-2 text-sm font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
           >
-            <ExternalLink size={14} /> Manage account security
+            <KeyRound size={14} />
+            Manage account security
+            <ExternalLink size={12} className="text-gray-300" />
           </button>
         </motion.div>
       </div>
 
-      {/* ── Modals ────────────────────────────────────────────── */}
+      {/* ── Modals ───────────────────────────────────────────────── */}
       <AnimatePresence>
         {showPhoneModal && (
           <ChangePhoneModal

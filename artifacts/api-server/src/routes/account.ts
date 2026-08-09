@@ -179,7 +179,7 @@ router.post("/account/phone-otp/verify", requireAuth, async (req: any, res: any)
 router.patch("/account/profile", requireAuth, async (req: any, res: any): Promise<void> => {
   // `phone` is intentionally excluded here — phone changes require OTP verification
   // via POST /api/account/phone-otp/request + /api/account/phone-otp/verify.
-  const { alternateMobile, dateOfBirth, gender, language } = req.body;
+  const { alternateMobile, dateOfBirth, gender, language, location } = req.body;
   try {
     await clerkClient.users.updateUserMetadata(req.userId, {
       publicMetadata: {
@@ -187,6 +187,7 @@ router.patch("/account/profile", requireAuth, async (req: any, res: any): Promis
         dateOfBirth: dateOfBirth ?? "",
         gender: gender ?? "",
         language: language ?? "English",
+        location: location ?? "",
       },
     });
     res.json({ success: true });

@@ -560,3 +560,109 @@ describe("insertOrderStatusNotification — emailOrderUpdates opt-out gate", () 
     expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
   });
 });
+
+describe("insertOrderStatusNotification — mid-order preference toggle", () => {
+  beforeEach(() => {
+    state.notifications = [];
+    state.notifIdCounter = 0;
+    state.notifPrefs = null;
+    sendTransactionalEmailMock.mockClear();
+  });
+
+  it("re-enables in-app notifications after orderUpdates is turned back ON", async () => {
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+
+    // Step 1: user disables order updates — packed notification should be silently dropped
+    state.notifPrefs = { orderUpdates: false, emailOrderUpdates: true };
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_packed",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+    expect(state.notifications).toHaveLength(0);
+
+    // Step 2: user re-enables order updates — shipped notification should now go through
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: true };
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+    expect(state.notifications).toHaveLength(1);
+    expect(state.notifications[0].type).toBe("order_shipped");
+    expect(state.notifications[0].userId).toBe(USER_ID);
+  });
+
+  it("re-enables transactional emails after emailOrderUpdates is turned back ON", async () => {
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+
+    // Step 1: user disables email order updates — packed email should not be sent
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: false };
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_packed",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
+    // In-app notification was still inserted
+    expect(state.notifications).toHaveLength(1);
+    expect(state.notifications[0].type).toBe("order_packed");
+
+    sendTransactionalEmailMock.mockClear();
+
+    // Step 2: user re-enables email order updates — shipped email should now fire
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: true };
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_shipped",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_shipped", userId: USER_ID, orderId: ORDER_ID })
+    );
+    // Both packed and shipped in-app notifications present
+    expect(state.notifications).toHaveLength(2);
+  });
+
+  it("suppresses both in-app and email when orderUpdates is toggled OFF between two statuses", async () => {
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+
+    // Step 1: prefs enabled — order_processing goes through
+    state.notifPrefs = { orderUpdates: true, emailOrderUpdates: true };
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_processing",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+    expect(state.notifications).toHaveLength(1);
+
+    sendTransactionalEmailMock.mockClear();
+
+    // Step 2: user disables order updates mid-flow — order_packed is dropped
+    state.notifPrefs = { orderUpdates: false, emailOrderUpdates: true };
+    await insertOrderStatusNotification({
+      userId: USER_ID,
+      type: "order_packed",
+      orderId: ORDER_ID,
+      itemName: "Kanjivaram Silk Saree",
+      extraItemCount: 0,
+    });
+    await new Promise((r) => setImmediate(r));
+    // No new notifications or emails should have been added
+    expect(state.notifications).toHaveLength(1);
+    expect(sendTransactionalEmailMock).not.toHaveBeenCalled();
+  });
+});

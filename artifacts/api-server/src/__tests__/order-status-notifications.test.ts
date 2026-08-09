@@ -209,7 +209,7 @@ async function buildApp(): Promise<Express> {
   const app = express();
   app.use(express.json());
   app.use((req: any, _res: unknown, next: () => void) => {
-    req.log = { error: vi.fn(), info: vi.fn() };
+    req.log = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
     next();
   });
   const { default: ordersRouter } = await import("../routes/orders");
@@ -361,6 +361,22 @@ describe("Order status updates reach the notification bell", () => {
     expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
     expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({ type: "order_delivered", userId: USER_ID, orderId: ORDER_ID })
+    );
+  });
+
+  it("calls sendTransactionalEmail with type order_cancelled when an order is cancelled", async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${ORDER_ID}/status`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ status: "cancelled", note: "Out of stock" });
+    expect(res.status).toBe(200);
+
+    // Allow the fire-and-forget void promise to settle
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendTransactionalEmailMock).toHaveBeenCalledOnce();
+    expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "order_cancelled", userId: USER_ID, orderId: ORDER_ID })
     );
   });
 });

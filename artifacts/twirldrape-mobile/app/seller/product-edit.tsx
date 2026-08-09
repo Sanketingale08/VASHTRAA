@@ -247,13 +247,13 @@ export default function SellerProductEditScreen() {
         contentContainerStyle={s.content}
       >
         {success && (
-          <View style={s.successBanner}>
+          <View testID="product-success-banner" style={s.successBanner}>
             <Ionicons name="checkmark-circle" size={16} color="#22A66A" />
             <Text style={s.successText}>Changes saved!</Text>
           </View>
         )}
         {apiError ? (
-          <View style={s.errorBanner}>
+          <View testID="product-error-banner" style={s.errorBanner}>
             <Ionicons name="alert-circle-outline" size={16} color="#D93025" />
             <Text style={s.errorBannerText}>{apiError}</Text>
           </View>
@@ -270,6 +270,7 @@ export default function SellerProductEditScreen() {
         <FormSection title="Basic Info">
           <FieldGroup label="Product Name" required error={errors.name}>
             <TextInput
+              testID="product-name-input"
               style={[s.input, errors.name ? s.inputError : null]}
               placeholder="e.g. Paithani Silk Saree — Peacock Design"
               placeholderTextColor={colors.mutedForeground}
@@ -310,6 +311,7 @@ export default function SellerProductEditScreen() {
         <FormSection title="Pricing">
           <FieldGroup label="Selling Price (₹)" required error={errors.price}>
             <TextInput
+              testID="product-price-input"
               style={[s.input, errors.price ? s.inputError : null]}
               placeholder="0"
               placeholderTextColor={colors.mutedForeground}
@@ -373,6 +375,7 @@ export default function SellerProductEditScreen() {
         </FormSection>
 
         <Pressable
+          testID="product-submit-btn"
           style={[s.submitBtn, submitting && s.submitBtnDisabled]}
           onPress={submitting ? undefined : handleSubmit}
         >

@@ -181,14 +181,29 @@ router.patch("/account/profile", requireAuth, async (req: any, res: any): Promis
   // via POST /api/account/phone-otp/request + /api/account/phone-otp/verify.
   const { firstName, lastName, alternateMobile, dateOfBirth, gender, language, location } = req.body;
   try {
-    // Update core name fields via the admin API so they persist even when the
-    // Clerk client-side user.update() is unavailable (e.g. for OAuth accounts).
-    // Only send fields that were explicitly provided to avoid clearing existing values.
+    // Update core name fields via the admin API.
+    // OAuth-managed accounts (Google, Facebook, etc.) have provider-controlled names;
+    // Clerk rejects admin name updates for those users. Isolate this in its own try/catch
+    // so a Clerk rejection does NOT abort the metadata update that follows.
     const nameUpdate: Record<string, string> = {};
     if (typeof firstName === "string") nameUpdate.firstName = firstName.trim();
     if (typeof lastName === "string") nameUpdate.lastName = lastName.trim();
     if (Object.keys(nameUpdate).length > 0) {
-      await clerkClient.users.updateUser(req.userId, nameUpdate);
+      try {
+        await clerkClient.users.updateUser(req.userId, nameUpdate);
+      } catch (nameErr: any) {
+        // 400/422 indicate a Clerk validation rejection — typically provider-managed
+        // names that OAuth identity providers don't allow the app to override.
+        // Those are tolerated here so the metadata fields below (dateOfBirth, gender,
+        // etc.) are still persisted. Any other status (network error, 5xx, etc.)
+        // is re-thrown so the caller knows the request genuinely failed.
+        const httpStatus = nameErr?.status ?? nameErr?.statusCode;
+        if (httpStatus === 400 || httpStatus === 422) {
+          req.log?.warn({ nameErr }, "Name update rejected by Clerk (likely provider-managed name); continuing with metadata update");
+        } else {
+          throw nameErr;
+        }
+      }
     }
 
     await clerkClient.users.updateUserMetadata(req.userId, {

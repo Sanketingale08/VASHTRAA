@@ -115,7 +115,7 @@ function ImageTile({ entry, index, total, onRemove, onMoveUp, onMoveDown, onRepl
   const canInteract = Boolean(entry.url) && !entry.uploading && !entry.error;
 
   return (
-    <View style={[s.tile, { backgroundColor: colors.beige }]}>
+    <View testID={`gallery-tile-${index}`} style={[s.tile, { backgroundColor: colors.beige }]}>
       {entry.uri || entry.url ? (
         <Image
           source={{ uri: entry.url || entry.uri }}
@@ -125,7 +125,7 @@ function ImageTile({ entry, index, total, onRemove, onMoveUp, onMoveDown, onRepl
       ) : null}
 
       {entry.uploading && (
-        <View style={[s.tileOverlay, { backgroundColor: "rgba(232,213,183,0.90)" }]}>
+        <View testID="upload-progress-indicator" style={[s.tileOverlay, { backgroundColor: "rgba(232,213,183,0.90)" }]}>
           <ProgressRing progress={entry.progress} color={colors.maroon} />
           <Text style={[s.progressText, { color: colors.maroon }]}>{entry.progress}%</Text>
         </View>
@@ -148,6 +148,8 @@ function ImageTile({ entry, index, total, onRemove, onMoveUp, onMoveDown, onRepl
         <View style={s.tileActions}>
           <View style={s.reorderCol}>
             <Pressable
+              testID={`tile-move-up-${index}`}
+              accessibilityLabel={`Move image ${index + 1} up`}
               style={[s.reorderBtn, isFirst && s.reorderBtnDisabled]}
               onPress={isFirst ? undefined : onMoveUp}
               hitSlop={4}
@@ -155,6 +157,8 @@ function ImageTile({ entry, index, total, onRemove, onMoveUp, onMoveDown, onRepl
               <Ionicons name="chevron-up" size={14} color={isFirst ? "#ccc" : "#fff"} />
             </Pressable>
             <Pressable
+              testID={`tile-move-down-${index}`}
+              accessibilityLabel={`Move image ${index + 1} down`}
               style={[s.reorderBtn, isLast && s.reorderBtnDisabled]}
               onPress={isLast ? undefined : onMoveDown}
               hitSlop={4}
@@ -163,10 +167,10 @@ function ImageTile({ entry, index, total, onRemove, onMoveUp, onMoveDown, onRepl
             </Pressable>
           </View>
           <View style={s.actionCol}>
-            <Pressable style={s.replaceBtn} onPress={() => onReplace("replace")} hitSlop={4}>
+            <Pressable testID={`tile-replace-${index}`} style={s.replaceBtn} onPress={() => onReplace("replace")} hitSlop={4}>
               <Ionicons name="refresh-outline" size={14} color="#fff" />
             </Pressable>
-            <Pressable style={[s.removeBtn, { backgroundColor: "rgba(200,30,30,0.55)" }]} onPress={onRemove} hitSlop={4}>
+            <Pressable testID={`tile-remove-${index}`} style={[s.removeBtn, { backgroundColor: "rgba(200,30,30,0.55)" }]} onPress={onRemove} hitSlop={4}>
               <Ionicons name="close" size={14} color="#fff" />
             </Pressable>
           </View>
@@ -302,12 +306,25 @@ export default function ImageGalleryPicker({ images, authToken, onImagesChange }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: replaceId ? false : true,
-      quality: 0.9,
-      exif: false,
-    });
+    // E2E test hook: when `window.__mockImagePickerResult__` is set, consume it
+    // instead of opening the native/web picker. The value must conform to the
+    // ImagePickerResult shape. This key is only checked in non-production builds.
+    let result: ImagePicker.ImagePickerResult;
+    if (
+      typeof window !== "undefined" &&
+      process.env.NODE_ENV !== "production" &&
+      (window as any).__mockImagePickerResult__
+    ) {
+      result = (window as any).__mockImagePickerResult__ as ImagePicker.ImagePickerResult;
+      delete (window as any).__mockImagePickerResult__;
+    } else {
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: replaceId ? false : true,
+        quality: 0.9,
+        exif: false,
+      });
+    }
 
     if (result.canceled) return;
 
@@ -390,6 +407,7 @@ export default function ImageGalleryPicker({ images, authToken, onImagesChange }
     <View>
       {!hasImages ? (
         <Pressable
+          testID="gallery-upload-zone"
           style={[
             galleryStyles.emptyZone,
             { borderColor: colors.border, backgroundColor: colors.cream },

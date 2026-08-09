@@ -23,7 +23,7 @@
  * injects its cookies, avoiding 2 extra ~15 s auth round-trips.
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync, readFileSync } from "fs";
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import {
   createVerifiedSeller,
@@ -111,10 +111,17 @@ async function dragCard2OntoCard1(page: Page): Promise<string | null> {
 
 test.describe("Seller image gallery", () => {
   let seller: SellerAuthUser;
+  /** Real approved vendor created in beforeAll for the persistence test. */
+  let e2eVendorId: string | null = null;
+  /** Product created by the persistence test; deleted in afterAll. */
+  let e2eProductId: string | null = null;
 
   // -------------------------------------------------------------------------
   // Create ONE Clerk user for the whole suite, sign in, and save the storage
   // state so individual tests can restore the session cheaply.
+  //
+  // Also provision a real approved vendor for Test 4 (drag-reorder persistence)
+  // so the POST /api/products call goes all the way to the DB.
   // -------------------------------------------------------------------------
   test.beforeAll(async ({ browser, baseURL }) => {
     seller = await createVerifiedSeller();
@@ -129,10 +136,93 @@ test.describe("Seller image gallery", () => {
     await signInSeller(page, baseURL!, seller.userId);
     // Overwrite the placeholder with the real Clerk session cookies.
     await ctx.storageState({ path: STATE_FILE });
+
+    // Create a real vendor for this Clerk user so the persistence test can
+    // submit products to the live API without mocking requireVendorAuth.
+    const vendorResult = await page.evaluate(async (vendorData: Record<string, unknown>) => {
+      const res = await fetch("/api/vendors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(vendorData),
+      });
+      const json = await res.json().catch(() => ({ error: `status ${res.status}` }));
+      return { ok: res.ok, ...json };
+    }, {
+      name: "E2E Persist Test Store",
+      location: "Mumbai",
+      mobile: "9876543210",
+      panNumber: "ABCDE1234F",
+      panCardUrl: "https://example.com/e2e-pan.jpg",
+      bankHolder: "E2E Test Seller",
+      bankName: "Test Bank",
+      bankAccount: "1234567890",
+      bankIfsc: "TEST0001234",
+      shopCity: "Mumbai",
+      shopState: "Maharashtra",
+      shopPincode: "400001",
+      termsAccepted: true,
+    });
+
+    if (vendorResult.ok && vendorResult.id) {
+      e2eVendorId = vendorResult.id as string;
+
+      // Approve the vendor via the admin API (use the suite's configured baseURL
+      // so the call routes through the same proxy/host used by the tests — never
+      // hardcode a local port that breaks when PLAYWRIGHT_BASE_URL targets a
+      // non-local environment).
+      const adminKey = process.env.ADMIN_API_KEY ?? "";
+      const approveRes = await fetch(
+        `${baseURL}/api/admin/vendors/${e2eVendorId}/approve`,
+        { method: "POST", headers: { "x-admin-key": adminKey } },
+      );
+      if (!approveRes.ok) {
+        // Record the failure but do not set e2eVendorId to null — Test 4 will
+        // see a non-null vendorId but fail on its own POST, making the failure
+        // explicit rather than silently skipping the coverage.
+        console.warn(`[beforeAll] Failed to approve vendor ${e2eVendorId}: ${approveRes.status}`);
+      }
+    } else {
+      console.warn("[beforeAll] Vendor creation failed:", vendorResult);
+    }
+
     await ctx.close();
   });
 
-  test.afterAll(async () => {
+  test.afterAll(async ({ baseURL }) => {
+    const adminKey = process.env.ADMIN_API_KEY ?? "";
+
+    // Soft-deactivate the test product (DELETE /api/products/:id sets active=false,
+    // removing it from public listings). Uses the seller's saved Clerk session
+    // cookies extracted from the state file so no browser context is needed.
+    if (e2eProductId) {
+      try {
+        const sessionState = JSON.parse(readFileSync(STATE_FILE, "utf8"));
+        const cookieHeader = (sessionState.cookies as Array<{ name: string; value: string }>)
+          .map((c) => `${c.name}=${c.value}`)
+          .join("; ");
+        await fetch(`${baseURL}/api/products/${e2eProductId}`, {
+          method: "DELETE",
+          headers: { Cookie: cookieHeader },
+        });
+      } catch (err) {
+        console.warn("[afterAll] Failed to deactivate e2e product:", err);
+      }
+    }
+
+    // Suspend the vendor so it is no longer publicly approved and does not
+    // accumulate across repeated test runs.
+    if (e2eVendorId) {
+      try {
+        await fetch(`${baseURL}/api/admin/vendors/${e2eVendorId}/suspend`, {
+          method: "POST",
+          headers: { "x-admin-key": adminKey },
+        });
+      } catch (err) {
+        console.warn("[afterAll] Failed to suspend e2e vendor:", err);
+      }
+    }
+
     if (seller) await cleanupSeller(seller.userId);
   });
 
@@ -165,9 +255,13 @@ test.describe("Seller image gallery", () => {
     });
 
     // Wait for real API to respond; thumbnail replaces the progress spinner.
-    const thumbnail = page.locator('img[alt=""]').first();
+    // Use a scoped locator (inside the draggable card) to avoid matching the
+    // vendor avatar image which also has alt="" in the SellerLayout sidebar.
+    const thumbnail = page.locator("div[draggable='true'] img[alt='']").first();
     await expect(thumbnail).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText("Main").first()).toBeVisible({ timeout: 5_000 });
+    // "Main" badge lives inside the first draggable card.
+    const mainBadge = page.locator("div[draggable='true']").first().getByText("Main");
+    await expect(mainBadge).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/upload failed/i)).toHaveCount(0);
   });
 
@@ -269,6 +363,116 @@ test.describe("Seller image gallery", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Test 4 — Drag-reorder persists: after form submit the fetched product
+  // has the dragged image first (real DB persistence, no mocks on POST/GET).
+  //
+  // A real approved vendor is created in beforeAll for this Clerk user so
+  // requireVendorAuth passes and the product is actually written to the DB.
+  // The upload endpoint is still mocked for deterministic image URLs.
+  // After submission the test captures the product ID from the POST response
+  // and fetches the product from the real API to assert images[0].
+  // -------------------------------------------------------------------------
+  test("drag-reorder is persisted: fetched product has the dragged image first", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+
+    // If vendor provisioning failed in beforeAll, fail immediately so CI is
+    // never silently green while the persistence coverage is absent.
+    expect(e2eVendorId, "Real vendor was not provisioned in beforeAll — check ADMIN_API_KEY and API server availability").not.toBeNull();
+
+    // Mock upload for deterministic image URLs (no file-storage dependency).
+    let uploadCount = 0;
+    await page.route("**/api/seller/upload/product-image", (route) => {
+      uploadCount++;
+      const url = uploadCount === 1 ? FAKE_IMAGE_URL_1 : FAKE_IMAGE_URL_2;
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ publicRelPath: url }),
+      });
+    });
+
+    await page.goto("/seller/products/new");
+    await expect(page.getByRole("heading", { name: /Add New Product/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const fileInput = page
+      .locator('div[role="button"]:has-text("Drag")')
+      .locator('input[type="file"]');
+
+    // Upload image 1 (→ FAKE_IMAGE_URL_1 / e2e-image-001).
+    await fileInput.setInputFiles({ name: "img1.jpg", mimeType: "image/jpeg", buffer: minimalJpeg() });
+    await expect(page.locator('img[src*="e2e-image-001"]')).toBeVisible({ timeout: 15_000 });
+
+    // Upload image 2 (→ FAKE_IMAGE_URL_2 / e2e-image-002).
+    await fileInput.setInputFiles({ name: "img2.jpg", mimeType: "image/jpeg", buffer: minimalJpeg() });
+    await expect(page.locator('img[src*="e2e-image-002"]')).toBeVisible({ timeout: 15_000 });
+
+    // Drag card[1] (e2e-image-002) onto card[0] (e2e-image-001).
+    // After drag, slot 0 must display e2e-image-002.
+    const card1SrcAfterDrag = await dragCard2OntoCard1(page);
+    expect(
+      card1SrcAfterDrag,
+      "Drag reorder did not update card[0] — reorder is broken",
+    ).toContain("e2e-image-002");
+
+    // Fill required fields.
+    await page
+      .getByPlaceholder("e.g. Peacock Paithani Silk Saree")
+      .fill("E2E Drag Persist Saree");
+    await page.getByPlaceholder("15000").fill("6000");
+
+    // Arm a listener to capture the real POST response (no interception —
+    // the request goes all the way to the server and DB).
+    const postResponsePromise = page.waitForResponse(
+      (resp) => resp.url().includes("/api/products") && resp.request().method() === "POST",
+      { timeout: 20_000 },
+    );
+
+    await page.getByRole("button", { name: /Create Product/i }).click();
+
+    const postResponse = await postResponsePromise;
+    expect(postResponse.status(), "POST /api/products should return 201").toBe(201);
+
+    const created = await postResponse.json();
+
+    // Track the ID so afterAll can delete it.
+    e2eProductId = created.id ?? null;
+
+    // ── Assertion 1: server returned the images in the dragged order ──────
+    expect(created.images, "POST response should include images").toBeDefined();
+    expect(
+      created.images[0],
+      "Server-returned images[0] should be the dragged-to-first image (e2e-image-002)",
+    ).toContain("e2e-image-002");
+    expect(
+      created.images[1],
+      "Server-returned images[1] should be the original first image (e2e-image-001)",
+    ).toContain("e2e-image-001");
+
+    // ── Assertion 2: fetch from the real DB via GET /api/products/:id ─────
+    // Runs inside the browser so page.route() request routing works, and the
+    // actual API response comes from the DB — no mock involved.
+    const fetched = await page.evaluate(async (id: string) => {
+      const res = await fetch(`/api/products/${id}`, { credentials: "include" });
+      if (!res.ok) throw new Error(`GET /api/products/${id} returned ${res.status}`);
+      return res.json();
+    }, created.id);
+
+    expect(fetched.images, "Fetched product should have images").toBeDefined();
+    expect(
+      fetched.images[0],
+      "DB-persisted images[0] should be the dragged-to-first image (e2e-image-002)",
+    ).toContain("e2e-image-002");
+    expect(
+      fetched.images[1],
+      "DB-persisted images[1] should be the original first image (e2e-image-001)",
+    ).toContain("e2e-image-001");
+  });
+
+  // -------------------------------------------------------------------------
   // Test 3 — Edit Product: existing images pre-populate the gallery.
   // -------------------------------------------------------------------------
   test("Edit Product: existing images load into gallery with Main badge and no spinner", async ({
@@ -311,7 +515,9 @@ test.describe("Seller image gallery", () => {
     );
 
     await page.goto(`/seller/products/${FAKE_PRODUCT_ID}/edit`);
-    await expect(page.getByRole("heading", { name: /Edit Product/i })).toBeVisible({
+    // Use getByRole("main") to avoid strict-mode collision with the SellerLayout
+    // header's own "Edit Product" h1 — the page renders two matching headings.
+    await expect(page.getByRole("main").getByRole("heading", { name: /Edit Product/i })).toBeVisible({
       timeout: 15_000,
     });
 

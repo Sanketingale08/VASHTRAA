@@ -4,6 +4,7 @@ import { eq, ne, and, isNull, desc, gte, lte, sql } from "drizzle-orm";
 import { requireAdminKey, clearAdminKeyCache, sha256hex } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { clearAdminNotifPrefCache } from "../lib/adminNotifications";
+import { clearMaintenanceModeCache } from "../middlewares/maintenanceMode";
 import crypto from "crypto";
 
 const router = Router();
@@ -330,6 +331,119 @@ router.get("/admin/audit-logs", requireAdminKey, async (req: any, res: any) => {
     res.json({ logs, total, limit: limitNum, offset: offsetNum });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch audit logs" });
+  }
+});
+
+// ── Public: maintenance status probe (no auth — used by the storefront SPA) ──
+
+router.get("/settings/maintenance-status", async (_req: any, res: any) => {
+  try {
+    const val = await getSetting("maintenance_mode");
+    res.json({ maintenance: val === "true" });
+  } catch {
+    res.json({ maintenance: false }); // never block traffic on error
+  }
+});
+
+// ── Platform Settings ─────────────────────────────────────────────────────────
+
+const PLATFORM_DEFAULTS: Record<string, string> = {
+  platform_name:    "TwirlDrape",
+  platform_logo_url:"",
+  country:          "India",
+  currency:         "INR",
+  timezone:         "Asia/Kolkata",
+  date_format:      "DD/MM/YYYY",
+  support_email:    "",
+  support_mobile:   "",
+  business_info:    "",
+};
+
+router.get("/admin/settings/platform", requireAdminKey, async (_req: any, res: any) => {
+  try {
+    const keys = Object.keys(PLATFORM_DEFAULTS);
+    const values = await Promise.all(keys.map((k) => getSetting(k)));
+    const settings: Record<string, string> = {};
+    keys.forEach((k, i) => { settings[k] = values[i] ?? PLATFORM_DEFAULTS[k]; });
+    res.json({ settings });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch platform settings" });
+  }
+});
+
+router.patch("/admin/settings/platform", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const body: Record<string, unknown> = req.body ?? {};
+    const allowed = new Set(Object.keys(PLATFORM_DEFAULTS));
+    const updates: Promise<void>[] = [];
+    const changedKeys: string[] = [];
+
+    for (const [key, val] of Object.entries(body)) {
+      if (!allowed.has(key) || typeof val !== "string") continue;
+      updates.push(upsertSetting(key, val.trim()));
+      changedKeys.push(key);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No valid fields provided" });
+    }
+
+    await Promise.all(updates);
+    writeAuditLog({
+      action: "platform_settings_updated",
+      module: "Platform Settings",
+      details: { fields: changedKeys },
+      ipAddress: getIp(req),
+    }).catch(() => {});
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update platform settings" });
+  }
+});
+
+// ── System Health ─────────────────────────────────────────────────────────────
+
+router.get("/admin/settings/system-health", requireAdminKey, async (_req: any, res: any) => {
+  try {
+    let dbOk = false;
+    try {
+      await db.select({ one: sql<number>`1` }).from(siteSettingsTable).limit(1);
+      dbOk = true;
+    } catch { /* db degraded */ }
+
+    const maintenanceModeVal = await getSetting("maintenance_mode").catch(() => null);
+    const uptime = Math.floor(process.uptime());
+
+    res.json({
+      status: dbOk ? "ok" : "degraded",
+      db: dbOk,
+      uptime,
+      maintenanceMode: maintenanceModeVal === "true",
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch system health" });
+  }
+});
+
+// ── Maintenance Mode ──────────────────────────────────────────────────────────
+
+router.patch("/admin/settings/maintenance-mode", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const { enabled } = req.body ?? {};
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled (boolean) is required" });
+    }
+    await upsertSetting("maintenance_mode", String(enabled));
+    clearMaintenanceModeCache();
+    writeAuditLog({
+      action: enabled ? "maintenance_mode_enabled" : "maintenance_mode_disabled",
+      module: "System",
+      ipAddress: getIp(req),
+    }).catch(() => {});
+    res.json({ ok: true, maintenanceMode: enabled });
+  } catch {
+    res.status(500).json({ error: "Failed to update maintenance mode" });
   }
 });
 

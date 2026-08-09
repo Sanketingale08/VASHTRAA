@@ -314,7 +314,7 @@ describe("PATCH /api/admin/settings/notification-prefs", () => {
     expect(state.settingsUpserts.length).toBeGreaterThanOrEqual(1);
     const saved = state.settingsUpserts.find(u => u.key === "admin_notification_prefs");
     // The saved JSON must contain the patched value
-    if (saved) {
+    if (saved?.value) {
       const parsed = JSON.parse(saved.value);
       expect(parsed.new_order.email).toBe(false);
       // Other categories should still appear (full blob written)
@@ -331,7 +331,7 @@ describe("PATCH /api/admin/settings/notification-prefs", () => {
 
     expect(res.status).toBe(200);
     const saved = state.settingsUpserts.find(u => u.key === "admin_notification_prefs");
-    if (saved) {
+    if (saved?.value) {
       const parsed = JSON.parse(saved.value);
       expect(parsed.totally_fake_category).toBeUndefined();
     }

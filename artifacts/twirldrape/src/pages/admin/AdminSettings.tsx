@@ -4,7 +4,8 @@ import {
   User, Shield, Clock, Monitor, Users, Bell, Globe, CreditCard,
   Truck, Mail, Settings, BookOpen, Eye, EyeOff, Loader2, CheckCircle,
   XCircle, ChevronRight, LogOut, AlertTriangle, Lock, Smartphone,
-  MapPin, Chrome, X,
+  MapPin, Chrome, X, Save, Activity, Power, Database, Server,
+  Building2, RefreshCw,
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { useToast } from "@/hooks/use-toast";
@@ -870,12 +871,389 @@ function AuditLogsSection() {
   );
 }
 
+// ─── Platform Settings ────────────────────────────────────────────────────────
+const COUNTRY_OPTIONS = ["India","United States","United Kingdom","Singapore","United Arab Emirates","Australia","Canada","Germany","France","Japan","Other"];
+const CURRENCY_OPTIONS = ["INR","USD","GBP","EUR","AED","SGD","AUD","CAD"];
+const TIMEZONE_OPTIONS = ["Asia/Kolkata","Asia/Singapore","Asia/Dubai","Asia/Tokyo","America/New_York","America/Los_Angeles","America/Chicago","Europe/London","Europe/Paris","Australia/Sydney"];
+const DATE_FORMAT_OPTIONS = ["DD/MM/YYYY","MM/DD/YYYY","YYYY-MM-DD","DD-MM-YYYY","D MMM YYYY"];
+
+type PlatformFields = {
+  platform_name: string;
+  platform_logo_url: string;
+  country: string;
+  currency: string;
+  timezone: string;
+  date_format: string;
+  support_email: string;
+  support_mobile: string;
+  business_info: string;
+};
+
+const PLATFORM_DEFAULTS: PlatformFields = {
+  platform_name: "TwirlDrape",
+  platform_logo_url: "",
+  country: "India",
+  currency: "INR",
+  timezone: "Asia/Kolkata",
+  date_format: "DD/MM/YYYY",
+  support_email: "",
+  support_mobile: "",
+  business_info: "",
+};
+
+function SelectInput({ value, onChange, options, disabled }: { value: string; onChange: (v: string) => void; options: string[]; disabled?: boolean }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      disabled={disabled}
+      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all bg-white disabled:opacity-60"
+    >
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+function PlatformSettingsSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState<PlatformFields>(PLATFORM_DEFAULTS);
+  const [editing, setEditing] = useState(false);
+
+  const { data, isLoading } = useQuery<{ settings: PlatformFields }>({
+    queryKey: ["admin-platform-settings"],
+    queryFn: () => apiFetch("/api/admin/settings/platform"),
+  });
+
+  useEffect(() => {
+    if (data?.settings) setForm(data.settings);
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () => apiFetch("/api/admin/settings/platform", { method: "PATCH", body: JSON.stringify(form) }),
+    onSuccess: () => {
+      toast({ title: "Platform settings saved", description: "Changes have been applied to the marketplace." });
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["admin-platform-settings"] });
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  function set<K extends keyof PlatformFields>(key: K, val: string) {
+    setForm(f => ({ ...f, [key]: val }));
+  }
+
+  return (
+    <SectionCard id="platform">
+      <SectionHeader icon={Globe} title="Platform Settings" desc="Marketplace name, currency, timezone and support contact details" />
+      <div className="px-6 py-5">
+        {isLoading ? (
+          <div className="flex gap-2 items-center text-sm text-gray-400"><Loader2 size={14} className="animate-spin" />Loading…</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Platform Name */}
+              <Field label="Platform Name">
+                <Input value={form.platform_name} onChange={e => set("platform_name", e.target.value)} disabled={!editing} placeholder="TwirlDrape" />
+              </Field>
+
+              {/* Country */}
+              <Field label="Country">
+                {editing ? (
+                  <SelectInput value={form.country} onChange={v => set("country", v)} options={COUNTRY_OPTIONS} />
+                ) : (
+                  <Input value={form.country} readOnly disabled />
+                )}
+              </Field>
+
+              {/* Currency */}
+              <Field label="Currency">
+                {editing ? (
+                  <SelectInput value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS} />
+                ) : (
+                  <Input value={form.currency} readOnly disabled />
+                )}
+              </Field>
+
+              {/* Timezone */}
+              <Field label="Timezone">
+                {editing ? (
+                  <SelectInput value={form.timezone} onChange={v => set("timezone", v)} options={TIMEZONE_OPTIONS} />
+                ) : (
+                  <Input value={form.timezone} readOnly disabled />
+                )}
+              </Field>
+
+              {/* Date Format */}
+              <Field label="Date Format">
+                {editing ? (
+                  <SelectInput value={form.date_format} onChange={v => set("date_format", v)} options={DATE_FORMAT_OPTIONS} />
+                ) : (
+                  <Input value={form.date_format} readOnly disabled />
+                )}
+              </Field>
+
+              {/* Support Email */}
+              <Field label="Support Email">
+                <Input type="email" value={form.support_email} onChange={e => set("support_email", e.target.value)} disabled={!editing} placeholder="support@twirldrape.com" />
+              </Field>
+
+              {/* Support Mobile */}
+              <Field label="Support Mobile">
+                <Input type="tel" value={form.support_mobile} onChange={e => set("support_mobile", e.target.value)} disabled={!editing} placeholder="+91 98765 43210" />
+              </Field>
+
+              {/* Logo URL */}
+              <Field label="Logo URL">
+                <Input value={form.platform_logo_url} onChange={e => set("platform_logo_url", e.target.value)} disabled={!editing} placeholder="https://example.com/logo.png" />
+                {form.platform_logo_url && (
+                  <img
+                    src={form.platform_logo_url}
+                    alt="Logo preview"
+                    className="mt-2 h-10 w-auto object-contain rounded border border-gray-100 p-1 bg-gray-50"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                )}
+              </Field>
+
+              {/* Business Information — full width */}
+              <div className="sm:col-span-2">
+                <Field label="Business Information">
+                  <textarea
+                    value={form.business_info}
+                    onChange={e => set("business_info", e.target.value)}
+                    disabled={!editing}
+                    rows={3}
+                    placeholder="Registered address, GSTIN, CIN, etc."
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all bg-white disabled:opacity-60 resize-none"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+              {editing ? (
+                <>
+                  <Btn onClick={() => save.mutate()} loading={save.isPending}>
+                    <Save size={14} />Save Changes
+                  </Btn>
+                  <Btn variant="secondary" onClick={() => { setEditing(false); if (data?.settings) setForm(data.settings); }}>
+                    Cancel
+                  </Btn>
+                </>
+              ) : (
+                <Btn variant="secondary" onClick={() => setEditing(true)}>Edit Settings</Btn>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── System & Maintenance ─────────────────────────────────────────────────────
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function StatusDot({ ok }: { ok: boolean }) {
+  return (
+    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${ok ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+  );
+}
+
+function SystemMaintenanceSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [confirmEnable, setConfirmEnable] = useState(false);
+
+  const { data: health, isLoading: healthLoading, refetch, isFetching } = useQuery<{
+    status: "ok" | "degraded";
+    db: boolean;
+    uptime: number;
+    maintenanceMode: boolean;
+  }>({
+    queryKey: ["admin-system-health"],
+    queryFn: () => apiFetch("/api/admin/settings/system-health"),
+    refetchInterval: 30_000,
+  });
+
+  const toggleMaintenance = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiFetch("/api/admin/settings/maintenance-mode", { method: "PATCH", body: JSON.stringify({ enabled }) }),
+    onSuccess: (_, enabled) => {
+      toast({
+        title: enabled ? "Maintenance mode enabled" : "Maintenance mode disabled",
+        description: enabled
+          ? "Shoppers will see a maintenance page until you disable this."
+          : "The storefront is live again.",
+      });
+      setConfirmEnable(false);
+      qc.invalidateQueries({ queryKey: ["admin-system-health"] });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const maintOn = health?.maintenanceMode ?? false;
+
+  function handleToggle() {
+    if (!maintOn) {
+      // Enabling is destructive — require confirmation
+      setConfirmEnable(true);
+    } else {
+      toggleMaintenance.mutate(false);
+    }
+  }
+
+  return (
+    <SectionCard id="system">
+      <SectionHeader icon={Settings} title="System & Maintenance" desc="Monitor platform health and control storefront availability" />
+      <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        {/* ── Health Panel ── */}
+        <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Activity size={14} style={{ color: NAVY }} />
+              <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">System Health</span>
+            </div>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
+              title="Refresh"
+            >
+              <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
+            </button>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {healthLoading ? (
+              <div className="px-4 py-6 flex gap-2 items-center text-sm text-gray-400">
+                <Loader2 size={14} className="animate-spin" />Checking…
+              </div>
+            ) : (
+              <>
+                <div className="px-4 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Server size={15} className="text-gray-400" />
+                    <span className="text-sm text-gray-700">API Server</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <StatusDot ok={true} />
+                    <span className="text-xs font-medium text-emerald-700">Operational</span>
+                  </div>
+                </div>
+                <div className="px-4 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Database size={15} className="text-gray-400" />
+                    <span className="text-sm text-gray-700">Database</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <StatusDot ok={health?.db ?? false} />
+                    <span className={`text-xs font-medium ${health?.db ? "text-emerald-700" : "text-red-600"}`}>
+                      {health?.db ? "Connected" : "Degraded"}
+                    </span>
+                  </div>
+                </div>
+                <div className="px-4 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Clock size={15} className="text-gray-400" />
+                    <span className="text-sm text-gray-700">Uptime</span>
+                  </div>
+                  <span className="text-xs font-medium text-gray-600 font-mono">
+                    {health ? formatUptime(health.uptime) : "—"}
+                  </span>
+                </div>
+                <div className="px-4 py-3 bg-gray-50/40 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Overall status</span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${health?.status === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                    {health?.status === "ok" ? "All Systems Go" : "Degraded"}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Maintenance Mode Card ── */}
+        <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+            <Power size={14} style={{ color: NAVY }} />
+            <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Maintenance Mode</span>
+          </div>
+          <div className="px-4 py-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Storefront Maintenance</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  When enabled, shoppers see a maintenance page. The admin panel remains fully accessible.
+                </p>
+              </div>
+              <ToggleSwitch
+                checked={maintOn}
+                onChange={handleToggle}
+                disabled={toggleMaintenance.isPending || healthLoading}
+              />
+            </div>
+
+            {maintOn && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 flex gap-2">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <span className="font-semibold">Maintenance is active.</span> Shoppers cannot place orders. Disable when maintenance is complete.
+                </p>
+              </div>
+            )}
+
+            {!maintOn && (
+              <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                <CheckCircle size={12} className="text-emerald-500" />
+                Storefront is live and accepting orders.
+              </p>
+            )}
+          </div>
+
+          {/* Inline confirmation for enabling */}
+          {confirmEnable && (
+            <div className="mx-4 mb-4 p-4 rounded-lg bg-red-50 border border-red-100 flex flex-col gap-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={15} className="text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">Enable maintenance mode?</p>
+                  <p className="text-xs text-red-700 mt-0.5">This will immediately block all shoppers from accessing the storefront.</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Btn
+                  variant="danger"
+                  loading={toggleMaintenance.isPending}
+                  onClick={() => toggleMaintenance.mutate(true)}
+                >
+                  Yes, Enable
+                </Btn>
+                <Btn variant="secondary" onClick={() => setConfirmEnable(false)}>Cancel</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 // ─── Settings overview grid ───────────────────────────────────────────────────
 function OverviewGrid({ onNavigate }: { onNavigate: (id: string) => void }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
       {SECTIONS.map(({ id, label, icon: Icon, desc, phase }) => {
-        const active = phase <= 2;
+        const active = phase <= 3;
         return (
           <button
             key={id}
@@ -945,13 +1323,15 @@ export default function AdminSettings() {
           <NotificationPrefsSection />
           <AuditLogsSection />
 
-          {/* Phase 3–4: coming-soon stubs */}
+          {/* Phase 3: functional sections */}
+          <PlatformSettingsSection />
+          <SystemMaintenanceSection />
+
+          {/* Phase 4: coming-soon stubs */}
           {[
-            { id: "platform",   label: "Platform Settings",    icon: Globe,       desc: "Name, currency, timezone and support info", phase: 3 },
-            { id: "system",     label: "System & Maintenance", icon: Settings,    desc: "Maintenance mode and system health",        phase: 3 },
-            { id: "payment",    label: "Payment Settings",     icon: CreditCard,  desc: "Cashfree integration and payment methods",  phase: 4 },
-            { id: "shipping",   label: "Shipping Settings",    icon: Truck,       desc: "Shiprocket and delivery configuration",     phase: 4 },
-            { id: "email-sms",  label: "Email & SMS Settings", icon: Mail,        desc: "Providers, OTP and sender configuration",   phase: 4 },
+            { id: "payment",   label: "Payment Settings",   icon: CreditCard, desc: "Cashfree integration and payment methods", phase: 4 },
+            { id: "shipping",  label: "Shipping Settings",  icon: Truck,      desc: "Shiprocket and delivery configuration",    phase: 4 },
+            { id: "email-sms", label: "Email & SMS Settings",icon: Mail,      desc: "Providers, OTP and sender configuration",  phase: 4 },
           ].map(({ id, label, icon, desc, phase }) => (
             <SectionCard key={id} id={id}>
               <SectionHeader icon={icon} title={label} desc={desc} />

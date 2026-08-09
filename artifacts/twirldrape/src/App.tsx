@@ -3,7 +3,7 @@ import { ClerkProvider, SignIn, SignUp } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useClerk } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -85,6 +85,7 @@ import Returns from "@/pages/Returns";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import { SellerGuard } from "@/components/SellerGuard";
+import MaintenancePage from "@/pages/MaintenancePage";
 
 const queryClient = new QueryClient();
 
@@ -335,6 +336,36 @@ function Router() {
   );
 }
 
+/**
+ * MaintenanceGuard — polls /api/settings/maintenance-status every 30 s.
+ * When maintenance is active, shoppers see MaintenancePage.
+ * Admin and seller paths are never blocked so the admin panel stays usable.
+ */
+function MaintenanceGuard({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const isAdminOrSeller =
+    location.startsWith("/admin") || location.startsWith("/seller");
+
+  const { data } = useQuery({
+    queryKey: ["maintenance-status"],
+    queryFn: async () => {
+      const r = await fetch("/api/settings/maintenance-status");
+      if (!r.ok) return { maintenance: false };
+      return r.json() as Promise<{ maintenance: boolean }>;
+    },
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+    // Don't hold up the initial render — assume live until proven otherwise
+    placeholderData: { maintenance: false },
+  });
+
+  if (!isAdminOrSeller && data?.maintenance) {
+    return <MaintenancePage />;
+  }
+
+  return <>{children}</>;
+}
+
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
 
@@ -369,7 +400,9 @@ function ClerkProviderWithRoutes() {
           <WishlistProvider>
             <CartProvider>
               <OrdersProvider>
-                <Router />
+                <MaintenanceGuard>
+                  <Router />
+                </MaintenanceGuard>
                 <CartDrawer />
                 <Toaster />
               </OrdersProvider>

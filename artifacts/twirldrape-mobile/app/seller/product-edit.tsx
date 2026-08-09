@@ -28,6 +28,14 @@ const COLORS_LIST = [
   "purple", "cream", "gold", "black", "orange", "mint",
 ] as const;
 
+interface ProductVariant {
+  size: string;
+  color: string;
+  stock: string;
+  price: string;
+  sku: string;
+}
+
 interface FormData {
   name: string;
   description: string;
@@ -41,6 +49,7 @@ interface FormData {
   isBestSeller: boolean;
   isNewArrival: boolean;
   images: string[];
+  variants: ProductVariant[];
 }
 
 function validate(form: FormData) {
@@ -99,6 +108,15 @@ export default function SellerProductEditScreen() {
           isBestSeller: p.isBestSeller ?? false,
           isNewArrival: p.isNewArrival ?? false,
           images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
+          variants: Array.isArray(p.variants)
+            ? p.variants.map((v: any) => ({
+                size: v.size ?? "",
+                color: v.color ?? "",
+                stock: v.stock != null ? String(v.stock) : "",
+                price: v.price != null ? String(v.price) : "",
+                sku: v.sku ?? "",
+              }))
+            : [],
         });
       } catch (e: any) {
         setLoadError(e.message ?? "Failed to load product");
@@ -110,6 +128,26 @@ export default function SellerProductEditScreen() {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
     setApiError("");
+  }
+
+  function addVariant() {
+    setForm((prev) =>
+      prev ? { ...prev, variants: [...prev.variants, { size: "", color: "", stock: "", price: "", sku: "" }] } : prev
+    );
+  }
+
+  function removeVariant(idx: number) {
+    setForm((prev) =>
+      prev ? { ...prev, variants: prev.variants.filter((_, i) => i !== idx) } : prev
+    );
+  }
+
+  function updateVariant(idx: number, field: keyof ProductVariant, value: string) {
+    setForm((prev) =>
+      prev
+        ? { ...prev, variants: prev.variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v)) }
+        : prev
+    );
   }
 
   async function handleSubmit() {
@@ -135,6 +173,15 @@ export default function SellerProductEditScreen() {
         images: form.images.filter(Boolean),
         isBestSeller: form.isBestSeller,
         isNewArrival: form.isNewArrival,
+        variants: form.variants
+          .filter((v) => v.size.trim() || v.color.trim())
+          .map((v) => ({
+            size: v.size.trim(),
+            color: v.color.trim(),
+            stock: v.stock.trim() ? parseInt(v.stock) : 0,
+            price: v.price.trim() ? parseInt(v.price) : null,
+            sku: v.sku.trim() || null,
+          })),
       };
       const res = await fetch(`${API_BASE}/api/products/${id}`, {
         method: "PUT",
@@ -299,6 +346,27 @@ export default function SellerProductEditScreen() {
           </FieldGroup>
         </FormSection>
 
+        <FormSection title="Variants">
+          <Text style={[fss.hintText, { color: colors.mutedForeground }]}>
+            Optional. Add size/color combinations with per-variant stock, price, and SKU.
+          </Text>
+          {form.variants.map((variant, idx) => (
+            <VariantCard
+              key={idx}
+              variant={variant}
+              index={idx}
+              onChange={(field, val) => updateVariant(idx, field, val)}
+              onRemove={() => removeVariant(idx)}
+              colors={colors}
+              inputStyle={s.input}
+            />
+          ))}
+          <Pressable style={[fss.addVariantBtn, { borderColor: colors.primary + "55" }]} onPress={addVariant}>
+            <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+            <Text style={[fss.addVariantText, { color: colors.primary }]}>Add Variant</Text>
+          </Pressable>
+        </FormSection>
+
         <FormSection title="Labels">
           <SwitchRow label="Best Seller" value={form.isBestSeller} onChange={(v) => update("isBestSeller", v)} colors={colors} />
           <SwitchRow label="New Arrival" value={form.isNewArrival} onChange={(v) => update("isNewArrival", v)} colors={colors} />
@@ -393,6 +461,90 @@ function SwitchRow({
   );
 }
 
+function VariantCard({
+  variant,
+  index,
+  onChange,
+  onRemove,
+  colors,
+  inputStyle,
+}: {
+  variant: ProductVariant;
+  index: number;
+  onChange: (field: keyof ProductVariant, value: string) => void;
+  onRemove: () => void;
+  colors: ReturnType<typeof useColors>;
+  inputStyle: object;
+}) {
+  return (
+    <View style={[fss.variantCard, { backgroundColor: colors.muted + "55", borderColor: colors.border + "44" }]}>
+      <View style={fss.variantHeader}>
+        <Text style={[fss.variantLabel, { color: colors.mutedForeground }]}>Variant {index + 1}</Text>
+        <Pressable onPress={onRemove} hitSlop={8} style={fss.variantRemoveBtn}>
+          <Ionicons name="close-circle" size={20} color="#D93025" />
+        </Pressable>
+      </View>
+      <View style={fss.variantRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[fss.variantFieldLabel, { color: colors.mutedForeground }]}>Size</Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 4 }]}
+            placeholder="e.g. 5.5m"
+            placeholderTextColor={colors.mutedForeground}
+            value={variant.size}
+            onChangeText={(v) => onChange("size", v)}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[fss.variantFieldLabel, { color: colors.mutedForeground }]}>Color</Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 4 }]}
+            placeholder="e.g. Red"
+            placeholderTextColor={colors.mutedForeground}
+            value={variant.color}
+            onChangeText={(v) => onChange("color", v)}
+          />
+        </View>
+      </View>
+      <View style={fss.variantRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[fss.variantFieldLabel, { color: colors.mutedForeground }]}>Stock</Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 4 }]}
+            placeholder="0"
+            placeholderTextColor={colors.mutedForeground}
+            value={variant.stock}
+            onChangeText={(v) => onChange("stock", v)}
+            keyboardType="numeric"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[fss.variantFieldLabel, { color: colors.mutedForeground }]}>Price (₹)</Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 4 }]}
+            placeholder="Optional"
+            placeholderTextColor={colors.mutedForeground}
+            value={variant.price}
+            onChangeText={(v) => onChange("price", v)}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+      <View>
+        <Text style={[fss.variantFieldLabel, { color: colors.mutedForeground }]}>SKU</Text>
+        <TextInput
+          style={[inputStyle, { marginTop: 4 }]}
+          placeholder="Optional — e.g. PAI-RED-55"
+          placeholderTextColor={colors.mutedForeground}
+          value={variant.sku}
+          onChangeText={(v) => onChange("sku", v)}
+          autoCapitalize="characters"
+        />
+      </View>
+    </View>
+  );
+}
+
 const fss = StyleSheet.create({
   section: { borderRadius: 14, borderWidth: 1, padding: 16, marginBottom: 14 },
   sectionTitle: { fontFamily: "DMSans_700Bold", fontSize: 10, letterSpacing: 1.2, marginBottom: 14 },
@@ -402,6 +554,26 @@ const fss = StyleSheet.create({
   chipText: { fontFamily: "DMSans_500Medium", fontSize: 12 },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
   switchLabel: { fontFamily: "DMSans_500Medium", fontSize: 14 },
+  hintText: { fontFamily: "DMSans_400Regular", fontSize: 12, marginBottom: 4 },
+  variantCard: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 10 },
+  variantHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  variantLabel: { fontFamily: "DMSans_700Bold", fontSize: 12, letterSpacing: 0.4 },
+  variantRemoveBtn: { padding: 2 },
+  variantRow: { flexDirection: "row", gap: 10 },
+  variantFieldLabel: { fontFamily: "DMSans_500Medium", fontSize: 11 },
+  addVariantBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  addVariantText: { fontFamily: "DMSans_700Bold", fontSize: 13 },
 });
 
 function makeStyles(colors: ReturnType<typeof useColors>, insets: { top: number }) {

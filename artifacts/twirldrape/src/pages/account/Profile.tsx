@@ -210,24 +210,18 @@ export function AccountProfilePage() {
     setSaving(true);
     setError("");
     try {
-      // Best-effort name update via Clerk client SDK.
-      // Clerk may reject this when the name is controlled by an OAuth provider
-      // (e.g. Google SSO). Swallow the error unconditionally and let
-      // user.reload() surface whatever Clerk actually accepted.
-      try {
-        await user.update({
-          firstName: editForm.firstName.trim() || undefined,
-          lastName: editForm.lastName.trim() || undefined,
-        });
-      } catch {
-        /* best-effort — intentionally swallowed */
-      }
-
+      // All six fields — including firstName and lastName — go through the
+      // backend PATCH so they are persisted via Clerk's admin API.
+      // This replaces the old client-side user.update() best-effort call
+      // which silently failed for OAuth accounts and caused the card to
+      // revert to stale values.
       const res = await fetch(`/api/account/profile`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
           alternateMobile: editForm.alternateMobile.trim(),
           dateOfBirth: editForm.dateOfBirth,
           gender: editForm.gender,
@@ -245,12 +239,13 @@ export function AccountProfilePage() {
       skipNextHydrateRef.current = true;
       await user.reload();
 
-      // Commit the successfully-saved edit values to the view form.
-      // Use the reloaded user's name in case Clerk silently rejected it.
+      // Commit the successfully-saved edit values directly to the view form.
+      // editForm values are authoritative — do not fall back to the Clerk
+      // session value which may lag behind the just-completed server write.
       setForm((prev) => ({
         ...editForm,
-        firstName: user.firstName ?? editForm.firstName,
-        lastName: user.lastName ?? editForm.lastName,
+        firstName: editForm.firstName || user.firstName || "",
+        lastName: editForm.lastName || user.lastName || "",
         phone: prev.phone, // phone is managed by OTP flow — never overwrite here
       }));
 
@@ -270,6 +265,8 @@ export function AccountProfilePage() {
 
   const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ");
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
+  // OAuth-linked accounts (Google, etc.) lock the display name at the provider level.
+  const isOAuthAccount = (user?.externalAccounts?.length ?? 0) > 0;
 
   return (
     <DashboardLayout>
@@ -360,13 +357,22 @@ export function AccountProfilePage() {
                 transition={{ duration: 0.15 }}
               >
                 <form onSubmit={handleSave} className="px-4 sm:px-6 py-5 space-y-4">
+                  {/* OAuth accounts (Google, etc.) lock the display name — show a notice */}
+                  {isOAuthAccount && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700">
+                      Your name is managed by your connected account (
+                      {user?.externalAccounts[0]?.provider ?? "OAuth provider"}) and cannot be
+                      changed here.
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <EditField label="First Name">
                       <input
                         value={editForm.firstName}
                         onChange={(e) => setField("firstName", e.target.value)}
                         placeholder="Priya"
-                        className={inputCls}
+                        disabled={isOAuthAccount}
+                        className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed`}
                       />
                     </EditField>
                     <EditField label="Last Name">
@@ -374,7 +380,8 @@ export function AccountProfilePage() {
                         value={editForm.lastName}
                         onChange={(e) => setField("lastName", e.target.value)}
                         placeholder="Sharma"
-                        className={inputCls}
+                        disabled={isOAuthAccount}
+                        className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed`}
                       />
                     </EditField>
                   </div>

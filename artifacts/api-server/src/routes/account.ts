@@ -179,8 +179,18 @@ router.post("/account/phone-otp/verify", requireAuth, async (req: any, res: any)
 router.patch("/account/profile", requireAuth, async (req: any, res: any): Promise<void> => {
   // `phone` is intentionally excluded here — phone changes require OTP verification
   // via POST /api/account/phone-otp/request + /api/account/phone-otp/verify.
-  const { alternateMobile, dateOfBirth, gender, language, location } = req.body;
+  const { firstName, lastName, alternateMobile, dateOfBirth, gender, language, location } = req.body;
   try {
+    // Update core name fields via the admin API so they persist even when the
+    // Clerk client-side user.update() is unavailable (e.g. for OAuth accounts).
+    // Only send fields that were explicitly provided to avoid clearing existing values.
+    const nameUpdate: Record<string, string> = {};
+    if (typeof firstName === "string") nameUpdate.firstName = firstName.trim();
+    if (typeof lastName === "string") nameUpdate.lastName = lastName.trim();
+    if (Object.keys(nameUpdate).length > 0) {
+      await clerkClient.users.updateUser(req.userId, nameUpdate);
+    }
+
     await clerkClient.users.updateUserMetadata(req.userId, {
       publicMetadata: {
         alternateMobile: alternateMobile ?? "",

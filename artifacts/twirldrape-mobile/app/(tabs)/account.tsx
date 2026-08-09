@@ -27,6 +27,8 @@ type Order = {
   status: string;
   createdAt: string;
   deliveryMethod: "standard" | "express";
+  refundStatus?: string | null;
+  refundProcessedAt?: string | null;
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -358,9 +360,36 @@ export default function AccountScreen() {
                 <View style={s.orderCardInner}>
                   <View style={s.orderTopRow}>
                     <Text style={s.orderId} numberOfLines={1}>#{order.id.slice(0, 8).toUpperCase()}</Text>
-                    <View style={[s.statusBadge, { backgroundColor: sc.bg }]}>
-                      <Ionicons name={statusIcon(order.status)} size={11} color={sc.text} />
-                      <Text style={[s.statusText, { color: sc.text }]}>{order.status}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <View style={[s.statusBadge, { backgroundColor: sc.bg }]}>
+                        <Ionicons name={statusIcon(order.status)} size={11} color={sc.text} />
+                        <Text style={[s.statusText, { color: sc.text }]}>{order.status}</Text>
+                      </View>
+                      {order.refundStatus === "processed" && (
+                        <View style={[s.statusBadge, { backgroundColor: "#EFF6FF" }]}>
+                          <Text style={[s.statusText, { color: "#1D4ED8" }]}>
+                            Refunded{order.refundProcessedAt ? ` · ${new Date(order.refundProcessedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                          </Text>
+                        </View>
+                      )}
+                      {order.refundStatus && order.refundStatus !== "processed" && (
+                        <View style={[s.statusBadge, {
+                          backgroundColor:
+                            order.refundStatus === "approved" ? "#F0FDF4" :
+                            order.refundStatus === "rejected" ? "#FFF0F0" :
+                            "#FFF7ED",
+                        }]}>
+                          <Text style={[s.statusText, {
+                            color:
+                              order.refundStatus === "approved" ? "#16A34A" :
+                              order.refundStatus === "rejected" ? "#D93025" :
+                              "#C2410C",
+                            textTransform: "capitalize",
+                          }]}>
+                            Refund {order.refundStatus}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 

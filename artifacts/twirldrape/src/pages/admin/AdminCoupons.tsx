@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Plus, X, Pencil, Ban, Loader2, BadgePercent, Search,
 } from "lucide-react";
@@ -235,6 +235,7 @@ function CouponsContent() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const inFlight = useRef<Set<string>>(new Set());
 
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
@@ -283,6 +284,8 @@ function CouponsContent() {
   }
 
   async function handleCreate(form: CouponFormState) {
+    if (inFlight.current.has("createCoupon")) return;
+    inFlight.current.add("createCoupon");
     setSaving(true);
     setFormError("");
     try {
@@ -302,12 +305,16 @@ function CouponsContent() {
     } catch {
       setFormError("Network error. Please try again.");
     } finally {
+      inFlight.current.delete("createCoupon");
       setSaving(false);
     }
   }
 
   async function handleEdit(form: CouponFormState) {
     if (!editing) return;
+    const key = "editCoupon:" + editing.id;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     setSaving(true);
     setFormError("");
     try {
@@ -327,13 +334,17 @@ function CouponsContent() {
     } catch {
       setFormError("Network error. Please try again.");
     } finally {
+      inFlight.current.delete(key);
       setSaving(false);
     }
   }
 
   async function handleDeactivate(coupon: Coupon) {
     if (!confirm(`Deactivate coupon "${coupon.code}"?`)) return;
-    setActionLoading(coupon.id);
+    const key = coupon.id;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    setActionLoading(key);
     try {
       const res = await fetch(`/api/admin/coupons/${coupon.id}`, {
         method: "DELETE",
@@ -344,6 +355,7 @@ function CouponsContent() {
         setCoupons((prev) => prev.map((c) => (c.id === coupon.id ? { ...c, active: false } : c)));
       }
     } finally {
+      inFlight.current.delete(key);
       setActionLoading(null);
     }
   }

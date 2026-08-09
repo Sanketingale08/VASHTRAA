@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   HelpCircle, Send, Clock, CheckCircle2, AlertCircle, XCircle,
@@ -79,6 +79,7 @@ function AdminSupportContent() {
   const [internal, setInternal] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 10;
+  const inFlight = useRef<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery<{ tickets: Ticket[]; total: number }>({
     queryKey: ["admin-support-tickets", scopeTab, statusTab, search, page],
@@ -167,6 +168,25 @@ function AdminSupportContent() {
       qc.invalidateQueries({ queryKey: ["admin-support-tickets"] });
     },
   });
+
+  function guardedAddReply() {
+    if (inFlight.current.has("addReply")) return;
+    inFlight.current.add("addReply");
+    addReply.mutate(undefined, { onSettled: () => inFlight.current.delete("addReply") });
+  }
+
+  function guardedUpdateStatus(status: string) {
+    const key = "updateStatus:" + status;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    updateStatus.mutate(status, { onSettled: () => inFlight.current.delete(key) });
+  }
+
+  function guardedAssignTicket(admin: string) {
+    if (inFlight.current.has("assignTicket")) return;
+    inFlight.current.add("assignTicket");
+    assignTicket.mutate(admin, { onSettled: () => inFlight.current.delete("assignTicket") });
+  }
 
   return (
     <div className="space-y-4">
@@ -283,7 +303,7 @@ function AdminSupportContent() {
                 </div>
                 <div className="flex items-center gap-2">
                   <form
-                    onSubmit={(e) => { e.preventDefault(); assignTicket.mutate(assigneeInput.trim()); }}
+                    onSubmit={(e) => { e.preventDefault(); guardedAssignTicket(assigneeInput.trim()); }}
                     className="flex items-center gap-1"
                   >
                     <input
@@ -302,7 +322,7 @@ function AdminSupportContent() {
                   </form>
                   <select
                     value={detail.status}
-                    onChange={(e) => updateStatus.mutate(e.target.value)}
+                    onChange={(e) => guardedUpdateStatus(e.target.value)}
                     className="text-xs border rounded-lg px-2 py-1"
                   >
                     {STATUS_TABS.filter((s) => s !== "all").map((s) => <option key={s} value={s}>{s}</option>)}
@@ -342,7 +362,7 @@ function AdminSupportContent() {
                 ))}
               </div>
               <div className="border-t p-3 space-y-2">
-                <form onSubmit={(e) => { e.preventDefault(); if (replyBody.trim()) addReply.mutate(); }} className="flex gap-2">
+                <form onSubmit={(e) => { e.preventDefault(); if (replyBody.trim()) guardedAddReply(); }} className="flex gap-2">
                   <textarea
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}

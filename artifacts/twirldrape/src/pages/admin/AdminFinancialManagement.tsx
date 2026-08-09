@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Wallet, CheckCircle, XCircle, Clock, IndianRupee, TrendingUp, TrendingDown,
   Download, FileSpreadsheet, Percent, Receipt, RotateCcw, CreditCard, Printer,
@@ -134,6 +134,7 @@ function SettlementsPanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reviewMeta, setReviewMeta] = useState<{ paymentMethod: string; transactionId: string; utrNumber: string }>({ paymentMethod: "", transactionId: "", utrNumber: "" });
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const inFlight = useRef<Set<string>>(new Set());
 
   function load() {
     if (!adminKey) return;
@@ -167,6 +168,9 @@ function SettlementsPanel() {
   }
 
   async function review(id: string, decision: "approve" | "reject" | "complete" | "paid" | "process") {
+    const key = id + decision;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     setBusyId(id);
     try {
       await fetch(`/api/admin/financial/settlements/${id}/review`, {
@@ -184,6 +188,7 @@ function SettlementsPanel() {
       setReviewMeta({ paymentMethod: "", transactionId: "", utrNumber: "" });
       load();
     } finally {
+      inFlight.current.delete(key);
       setBusyId(null);
     }
   }
@@ -343,6 +348,7 @@ function CommissionRulesPanel() {
   const [showHistory, setShowHistory] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const commissionInFlight = useRef<Set<string>>(new Set());
 
   function load() {
     if (!adminKey) return;
@@ -372,6 +378,8 @@ function CommissionRulesPanel() {
   }
 
   async function createRule() {
+    if (commissionInFlight.current.has("createRule")) return;
+    commissionInFlight.current.add("createRule");
     setCreating(true);
     setError("");
     try {
@@ -393,17 +401,25 @@ function CommissionRulesPanel() {
     } catch (e: any) {
       setError(e.message ?? "Failed to create rule");
     } finally {
+      commissionInFlight.current.delete("createRule");
       setCreating(false);
     }
   }
 
   async function deactivate(id: string) {
-    await fetch(`/api/admin/financial/commission-rules/${id}/deactivate`, {
-      method: "POST",
-      headers: { "x-admin-key": adminKey },
-      credentials: "include",
-    });
-    load();
+    const key = id + "deactivate";
+    if (commissionInFlight.current.has(key)) return;
+    commissionInFlight.current.add(key);
+    try {
+      await fetch(`/api/admin/financial/commission-rules/${id}/deactivate`, {
+        method: "POST",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      load();
+    } finally {
+      commissionInFlight.current.delete(key);
+    }
   }
 
   const visibleRules = showHistory ? rules : rules.filter((r) => r.active);
@@ -993,6 +1009,7 @@ function ReportSchedulesPanel() {
   const [recipientEmail, setRecipientEmail] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const scheduleInFlight = useRef<Set<string>>(new Set());
 
   function load() {
     if (!adminKey) return;
@@ -1006,6 +1023,8 @@ function ReportSchedulesPanel() {
   usePolling(load, [adminKey]);
 
   async function createSchedule() {
+    if (scheduleInFlight.current.has("createSchedule")) return;
+    scheduleInFlight.current.add("createSchedule");
     setCreating(true);
     setError("");
     try {
@@ -1021,26 +1040,41 @@ function ReportSchedulesPanel() {
     } catch (e: any) {
       setError(e.message ?? "Failed to create schedule");
     } finally {
+      scheduleInFlight.current.delete("createSchedule");
       setCreating(false);
     }
   }
 
   async function toggle(id: string) {
-    await fetch(`/api/admin/financial/report-schedules/${id}/toggle`, {
-      method: "POST",
-      headers: { "x-admin-key": adminKey },
-      credentials: "include",
-    });
-    load();
+    const key = id + "toggle";
+    if (scheduleInFlight.current.has(key)) return;
+    scheduleInFlight.current.add(key);
+    try {
+      await fetch(`/api/admin/financial/report-schedules/${id}/toggle`, {
+        method: "POST",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      load();
+    } finally {
+      scheduleInFlight.current.delete(key);
+    }
   }
 
   async function remove(id: string) {
-    await fetch(`/api/admin/financial/report-schedules/${id}`, {
-      method: "DELETE",
-      headers: { "x-admin-key": adminKey },
-      credentials: "include",
-    });
-    load();
+    const key = id + "remove";
+    if (scheduleInFlight.current.has(key)) return;
+    scheduleInFlight.current.add(key);
+    try {
+      await fetch(`/api/admin/financial/report-schedules/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      load();
+    } finally {
+      scheduleInFlight.current.delete(key);
+    }
   }
 
   return (

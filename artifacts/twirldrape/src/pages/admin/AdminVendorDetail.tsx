@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, MapPin, Mail, FileText, Star, Package, ShoppingBag,
@@ -139,6 +139,7 @@ function VendorDetailContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const inFlight = useRef<Set<string>>(new Set());
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   useEffect(() => {
@@ -161,6 +162,8 @@ function VendorDetailContent() {
 
   async function doAction(action: string) {
     if (!vendor) return;
+    if (inFlight.current.has(action)) return;
+    inFlight.current.add(action);
     setActionLoading(action);
     try {
       const res = await fetch(`/api/admin/vendors/${vendor.id}/${action}`, {
@@ -177,12 +180,15 @@ function VendorDetailContent() {
         } : prev);
       }
     } finally {
+      inFlight.current.delete(action);
       setActionLoading(null);
     }
   }
 
   async function doKycAction(action: "verify" | "request_resubmission") {
     if (!vendor) return;
+    if (inFlight.current.has(action)) return;
+    inFlight.current.add(action);
     setActionLoading(action);
     try {
       const res = await fetch(`/api/admin/vendors/${vendor.id}/kyc`, {
@@ -198,6 +204,7 @@ function VendorDetailContent() {
           : prev);
       }
     } finally {
+      inFlight.current.delete(action);
       setActionLoading(null);
     }
   }

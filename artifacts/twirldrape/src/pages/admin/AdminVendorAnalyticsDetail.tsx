@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, MapPin, Mail, FileText, Star, Package, ShoppingBag,
@@ -82,6 +82,7 @@ function DetailContent() {
   const [settlementAmount, setSettlementAmount] = useState("");
   const [settlementNote, setSettlementNote] = useState("");
   const [settlementBusy, setSettlementBusy] = useState(false);
+  const inFlight = useRef<Set<string>>(new Set());
 
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
@@ -106,7 +107,10 @@ function DetailContent() {
 
   async function doVerification(field: "kyc" | "pan" | "gst" | "bank", action: "verify" | "reject" | "request_documents") {
     if (!id) return;
-    setActionLoading(field + action);
+    const key = field + action;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    setActionLoading(key);
     try {
       const res = await fetch(`/api/admin/vendor-analytics/${id}/verification`, {
         method: "POST",
@@ -116,12 +120,16 @@ function DetailContent() {
       });
       if (res.ok) load();
     } finally {
+      inFlight.current.delete(key);
       setActionLoading(null);
     }
   }
 
   async function releaseSettlement(type: "release" | "payout") {
     if (!id || !settlementAmount) return;
+    const key = "settlement" + type;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     setSettlementBusy(true);
     try {
       const res = await fetch(`/api/admin/vendor-analytics/${id}/settlements`, {
@@ -136,6 +144,7 @@ function DetailContent() {
         load();
       }
     } finally {
+      inFlight.current.delete(key);
       setSettlementBusy(false);
     }
   }

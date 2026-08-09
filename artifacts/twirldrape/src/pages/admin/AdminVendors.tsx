@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   Search, CheckCircle, Clock, XCircle, Star, ChevronLeft, ChevronRight,
@@ -60,6 +60,7 @@ function VendorsContent() {
   const [statusTab, setStatusTab] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const inFlight = useRef<Set<string>>(new Set());
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadVendors() {
@@ -96,7 +97,10 @@ function VendorsContent() {
   const pageVendors = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   async function doAction(id: string, action: string) {
-    setActionLoading(id + action);
+    const key = id + action;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    setActionLoading(key);
     try {
       const res = await fetch(`/api/admin/vendors/${id}/${action}`, {
         method: "POST",
@@ -114,6 +118,7 @@ function VendorsContent() {
         );
       }
     } finally {
+      inFlight.current.delete(key);
       setActionLoading(null);
     }
   }

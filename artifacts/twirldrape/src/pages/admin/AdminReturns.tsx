@@ -233,6 +233,8 @@ function ReturnsContent() {
 
   async function reviewReturn(orderId: string, decision: "approved" | "rejected") {
     const key = orderId + "return" + decision;
+    if (processingInFlight.current.has(key)) return;
+    processingInFlight.current.add(key);
     setActionLoading(key);
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/return`, {
@@ -251,12 +253,15 @@ function ReturnsContent() {
     } catch {
       setError("Failed to update return status");
     } finally {
+      processingInFlight.current.delete(key);
       setActionLoading(null);
     }
   }
 
   async function reviewRefund(orderId: string, decision: "approved" | "rejected") {
     const key = orderId + "refund" + decision;
+    if (processingInFlight.current.has(key)) return;
+    processingInFlight.current.add(key);
     setActionLoading(key);
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/refund`, {
@@ -275,6 +280,7 @@ function ReturnsContent() {
     } catch {
       setError("Failed to update refund status");
     } finally {
+      processingInFlight.current.delete(key);
       setActionLoading(null);
     }
   }

@@ -100,6 +100,8 @@ export default function AdminHeroBanners() {
   const [globalIntervalSec, setGlobalIntervalSec] = useState(6);
   const [savingGlobal, setSavingGlobal] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const inFlight = useRef<Set<string>>(new Set());
+  const pendingReorder = useRef<string[] | null>(null);
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });
@@ -137,6 +139,8 @@ export default function AdminHeroBanners() {
   }, []);
 
   async function saveGlobalInterval() {
+    if (inFlight.current.has("saveGlobal")) return;
+    inFlight.current.add("saveGlobal");
     setSavingGlobal(true);
     try {
       const ms = Math.max(2, Math.min(30, globalIntervalSec)) * 1000;
@@ -151,6 +155,7 @@ export default function AdminHeroBanners() {
     } catch {
       showToast("Network error.", false);
     } finally {
+      inFlight.current.delete("saveGlobal");
       setSavingGlobal(false);
     }
   }
@@ -158,6 +163,8 @@ export default function AdminHeroBanners() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (inFlight.current.has("upload")) return;
+    inFlight.current.add("upload");
     setUploading(true);
     try {
       const uploadRes = await fetch(`/api/admin/upload/hero-image`, {
@@ -189,12 +196,16 @@ export default function AdminHeroBanners() {
     } catch {
       showToast("Network error.", false);
     } finally {
+      inFlight.current.delete("upload");
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
 
   async function toggleActive(id: string, current: boolean) {
+    const key = id + "toggleActive";
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "PATCH",
@@ -208,10 +219,15 @@ export default function AdminHeroBanners() {
       }
     } catch {
       showToast("Failed to update banner.", false);
+    } finally {
+      inFlight.current.delete(key);
     }
   }
 
   async function setAsDefault(id: string, currentIsDefault: boolean) {
+    const key = id + "setDefault";
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "PATCH",
@@ -232,10 +248,15 @@ export default function AdminHeroBanners() {
       }
     } catch {
       showToast("Failed to update.", false);
+    } finally {
+      inFlight.current.delete(key);
     }
   }
 
   async function updateField(id: string, field: "title" | "slideIntervalMs", value: string | number) {
+    const key = id + field;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "PATCH",
@@ -250,10 +271,15 @@ export default function AdminHeroBanners() {
       }
     } catch {
       showToast("Failed to update.", false);
+    } finally {
+      inFlight.current.delete(key);
     }
   }
 
   async function handleDelete(id: string) {
+    const key = id + "delete";
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "DELETE",
@@ -267,6 +293,7 @@ export default function AdminHeroBanners() {
     } catch {
       showToast("Failed to delete.", false);
     } finally {
+      inFlight.current.delete(key);
       setConfirmDelete(null);
     }
   }
@@ -287,18 +314,36 @@ export default function AdminHeroBanners() {
     setBanners(reordered);
   }
 
-  async function handleDragEnd() {
-    setDragId(null);
+  async function submitReorder(ids: string[]): Promise<void> {
+    inFlight.current.add("reorder");
     try {
       await fetch(`/api/admin/hero-banners/reorder`, {
         method: "PUT",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: banners.map((b) => b.id) }),
+        body: JSON.stringify({ ids }),
         credentials: "include",
       });
     } catch {
       showToast("Failed to save order.", false);
+    } finally {
+      inFlight.current.delete("reorder");
+      const pending = pendingReorder.current;
+      if (pending) {
+        pendingReorder.current = null;
+        await submitReorder(pending);
+      }
     }
+  }
+
+  function handleDragEnd() {
+    setDragId(null);
+    const ids = banners.map((b) => b.id);
+    if (inFlight.current.has("reorder")) {
+      // Queue the latest ordering; will be submitted after current request finishes
+      pendingReorder.current = ids;
+      return;
+    }
+    submitReorder(ids);
   }
 
   if (loading) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -86,6 +86,7 @@ function AdminNotificationsContent() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const qc = useQueryClient();
+  const inFlight = useRef<Set<string>>(new Set());
 
   const filterTypes = activeTab === "all" ? undefined : activeTab.split(",");
 
@@ -166,6 +167,33 @@ function AdminNotificationsContent() {
     },
   });
 
+  function safeMarkRead(id: string) {
+    const key = "markRead:" + id;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    markRead.mutate(id, { onSettled: () => inFlight.current.delete(key) });
+  }
+
+  function safeMarkUnread(id: string) {
+    const key = "markUnread:" + id;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    markUnread.mutate(id, { onSettled: () => inFlight.current.delete(key) });
+  }
+
+  function safeDismiss(id: string) {
+    const key = "dismiss:" + id;
+    if (inFlight.current.has(key)) return;
+    inFlight.current.add(key);
+    dismiss.mutate(id, { onSettled: () => inFlight.current.delete(key) });
+  }
+
+  function safeMarkAllRead() {
+    if (inFlight.current.has("markAllRead")) return;
+    inFlight.current.add("markAllRead");
+    markAllRead.mutate(undefined, { onSettled: () => inFlight.current.delete("markAllRead") });
+  }
+
   const notifications = data?.notifications ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / (data?.limit ?? 20)));
@@ -241,7 +269,7 @@ function AdminNotificationsContent() {
         >
           <p className="text-sm" style={{ color: NAVY }}>You have unread notifications</p>
           <button
-            onClick={() => markAllRead.mutate()}
+            onClick={() => safeMarkAllRead()}
             disabled={markAllRead.isPending}
             className="flex items-center gap-1.5 text-sm font-semibold hover:opacity-70 transition-opacity disabled:opacity-50"
             style={{ color: NAVY }}
@@ -307,7 +335,7 @@ function AdminNotificationsContent() {
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!n.read ? (
                       <button
-                        onClick={() => markRead.mutate(n.id)}
+                        onClick={() => safeMarkRead(n.id)}
                         title="Mark as read"
                         className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:bg-gray-100 hover:text-[#0D1B36]"
                       >
@@ -315,7 +343,7 @@ function AdminNotificationsContent() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => markUnread.mutate(n.id)}
+                        onClick={() => safeMarkUnread(n.id)}
                         title="Mark as unread"
                         className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:bg-gray-100 hover:text-[#0D1B36]"
                       >
@@ -323,7 +351,7 @@ function AdminNotificationsContent() {
                       </button>
                     )}
                     <button
-                      onClick={() => dismiss.mutate(n.id)}
+                      onClick={() => safeDismiss(n.id)}
                       title="Dismiss"
                       className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
                     >

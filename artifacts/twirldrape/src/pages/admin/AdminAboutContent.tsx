@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Loader2, Save, RotateCcw, FileText } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
@@ -104,6 +104,7 @@ export default function AdminAboutContent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const inFlight = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetch(`/api/about-content`, { credentials: "include" })
@@ -146,6 +147,8 @@ export default function AdminAboutContent() {
   }
 
   async function handleSave() {
+    if (inFlight.current.has("handleSave")) return;
+    inFlight.current.add("handleSave");
     setSaving(true);
     try {
       const r = await fetch(`/api/admin/about-content`, {
@@ -166,6 +169,7 @@ export default function AdminAboutContent() {
     } catch {
       showToast("Network error — could not save.", false);
     } finally {
+      inFlight.current.delete("handleSave");
       setSaving(false);
     }
   }

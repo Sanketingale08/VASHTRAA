@@ -29,6 +29,7 @@ import heroBannersRouter from "./heroBanners";
 import adminProductsRouter from "./adminProducts";
 import adminCategoriesRouter from "./adminCategories";
 import adminBrandsRouter from "./adminBrands";
+import adminReportsRouter from "./adminReports";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(heroBannersRouter);
 router.use(adminProductsRouter);
 router.use(adminCategoriesRouter);
 router.use(adminBrandsRouter);
+router.use(adminReportsRouter);
 
 export default router;

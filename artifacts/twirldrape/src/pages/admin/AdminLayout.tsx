@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Users, Package, UserCircle, Settings,
   LogOut, Shield, Menu, X, RotateCcw, ShieldAlert, BadgePercent, HelpCircle, Bell, BarChart3,
-  LineChart, Receipt, FileText, Image, ShoppingBag,
+  LineChart, Receipt, FileText, Image, ShoppingBag, BarChart2,
 } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -29,7 +29,7 @@ const NAV_ITEMS = [
   { label: "About Page", href: "/admin/about-content", icon: FileText },
   { label: "Hero Banners", href: "/admin/hero-banners", icon: Image },
   { label: "Products", href: "/admin/products", icon: Package },
-  { label: "Customers", href: "/admin/customers", icon: UserCircle, stub: true },
+  { label: "Reports", href: "/admin/reports", icon: BarChart2 },
   { label: "Settings", href: "/admin/settings", icon: Settings, stub: true },
 ];
 

@@ -36,6 +36,7 @@ const state = vi.hoisted(() => ({
     refundMethod: null as string | null,
     refundProcessedAt: null as Date | null,
     refundReference: null as string | null,
+    refundIdempotencyKey: null as string | null,
     statusHistory: [] as any[],
     items: [{ productId: "prod-refund-uuid-1", name: "Banarasi Silk Saree", quantity: 1 }],
     address: { name: "Test Customer", line1: "12 Main St", city: "Mumbai", state: "Maharashtra", pincode: "400001" },
@@ -173,9 +174,9 @@ vi.mock("@workspace/db", () => {
     db: dbMock,
     ordersTable: tag("orders", [
       "id", "userId", "status", "refundStatus", "refundMethod",
-      "refundProcessedAt", "refundReference", "statusHistory", "items",
-      "address", "total", "updatedAt", "createdAt", "returnReason",
-      "deliveredAt", "cancelReason",
+      "refundProcessedAt", "refundReference", "refundIdempotencyKey",
+      "statusHistory", "items", "address", "total", "updatedAt",
+      "createdAt", "returnReason", "deliveredAt", "cancelReason",
     ]),
     productsTable: tag("products", ["id", "stock", "vendorId"]),
     vendorsTable: tag("vendors", ["id", "ownerId", "name"]),
@@ -243,6 +244,7 @@ describe("Refund payout flow — approve → process", () => {
       refundMethod: "original_payment",
       refundProcessedAt: null,
       refundReference: null,
+      refundIdempotencyKey: null,
       statusHistory: [],
       items: [{ productId: PRODUCT_ID, name: "Banarasi Silk Saree", quantity: 1 }],
       address: { name: "Test Customer", line1: "12 Main St", city: "Mumbai", state: "Maharashtra", pincode: "400001" },
@@ -338,6 +340,88 @@ describe("Refund payout flow — approve → process", () => {
     expect(processedNotif).toBeTruthy();
   });
 
+  it("idempotent replay: same key on an already-processed refund returns 200 without adding a second notification", async () => {
+    state.order.refundStatus = "approved";
+
+    const idempotencyKey = "idem-key-unique-1234";
+
+    // First call — processes the refund
+    const first = await request(app)
+      .post(`/api/admin/orders/${ORDER_ID}/refund/process`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ reference: "TXN-IDEM-001", idempotencyKey });
+
+    expect(first.status).toBe(200);
+    expect(state.order.refundStatus).toBe("processed");
+    const notifCountAfterFirst = state.notifications.filter((n) => n.type === "refund_processed").length;
+    expect(notifCountAfterFirst).toBe(1);
+
+    // Second call with the same idempotency key — must not insert a second notification
+    const second = await request(app)
+      .post(`/api/admin/orders/${ORDER_ID}/refund/process`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ reference: "TXN-IDEM-001", idempotencyKey });
+
+    expect(second.status).toBe(200);
+    const notifCountAfterSecond = state.notifications.filter((n) => n.type === "refund_processed").length;
+    expect(notifCountAfterSecond).toBe(1); // no extra notification
+  });
+
+  it("lost-response retry: same idempotency key resent after a network drop returns 200 without a second notification", async () => {
+    // Simulate: admin sends the request, server processes it, but the response
+    // is lost (network error on client). Admin retries from the same modal
+    // (same idempotencyKey). Server must return 200 idempotently.
+    state.order.refundStatus = "approved";
+    const idempotencyKey = "idem-key-lost-response-5678";
+
+    // First call — server processes refund and would normally respond 200,
+    // but the client treats it as a network failure and retries.
+    const first = await request(app)
+      .post(`/api/admin/orders/${ORDER_ID}/refund/process`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ reference: "TXN-RETRY-001", idempotencyKey });
+
+    expect(first.status).toBe(200);
+    expect(state.order.refundStatus).toBe("processed");
+    expect(state.order.refundIdempotencyKey).toBe(idempotencyKey);
+    const notifCountAfterFirst = state.notifications.filter((n) => n.type === "refund_processed").length;
+    expect(notifCountAfterFirst).toBe(1);
+
+    // Retry — identical body including idempotencyKey. Server must replay without
+    // writing a second notification or another history entry.
+    const retry = await request(app)
+      .post(`/api/admin/orders/${ORDER_ID}/refund/process`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ reference: "TXN-RETRY-001", idempotencyKey });
+
+    expect(retry.status).toBe(200);
+    expect(retry.body.order).toBeTruthy();
+    expect(retry.body.order.refundStatus).toBe("processed");
+    const notifCountAfterRetry = state.notifications.filter((n) => n.type === "refund_processed").length;
+    expect(notifCountAfterRetry).toBe(1); // exactly one, not two
+  });
+
+  it("non-idempotent second process attempt (different or missing key) returns 400", async () => {
+    state.order.refundStatus = "approved";
+
+    // First call succeeds and marks order as processed
+    await request(app)
+      .post(`/api/admin/orders/${ORDER_ID}/refund/process`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ reference: "TXN-FIRST", idempotencyKey: "key-first" });
+
+    expect(state.order.refundStatus).toBe("processed");
+
+    // Second call with a different key — should be rejected because status is no longer "approved"
+    const second = await request(app)
+      .post(`/api/admin/orders/${ORDER_ID}/refund/process`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ reference: "TXN-SECOND", idempotencyKey: "key-second" });
+
+    expect(second.status).toBe(400);
+    expect(second.body.error).toMatch(/approved/i);
+  });
+
   it("admin can reject a pending refund and customer is notified", async () => {
     const res = await request(app)
       .post(`/api/admin/orders/${ORDER_ID}/refund`)
@@ -384,6 +468,7 @@ describe("Refund payout flow — guard rails", () => {
       refundMethod: "original_payment",
       refundProcessedAt: null,
       refundReference: null,
+      refundIdempotencyKey: null,
       statusHistory: [],
       items: [{ productId: PRODUCT_ID, name: "Banarasi Silk Saree", quantity: 1 }],
       address: { name: "Test Customer", line1: "12 Main St", city: "Mumbai", state: "Maharashtra", pincode: "400001" },

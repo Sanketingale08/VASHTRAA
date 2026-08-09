@@ -24,6 +24,7 @@ export const ordersTable = pgTable("orders", {
   refundMethod: text("refund_method"),
   refundProcessedAt: timestamp("refund_processed_at"),
   refundReference: text("refund_reference"),
+  refundIdempotencyKey: text("refund_idempotency_key"),
   deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

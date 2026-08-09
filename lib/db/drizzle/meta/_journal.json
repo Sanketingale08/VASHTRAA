@@ -176,6 +176,13 @@
       "when": 1754784000000,
       "tag": "0027_settlement_dedup_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1754870400000,
+      "tag": "0028_refund_idempotency_key",
+      "breakpoints": true
     }
   ]
 }

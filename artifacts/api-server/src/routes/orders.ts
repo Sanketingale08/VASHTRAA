@@ -1516,7 +1516,7 @@ router.post("/admin/orders/:orderId/refund", requireAdminKey, async (req: any, r
 // POST /admin/orders/:orderId/refund/process — mark an approved refund as processed/paid out
 router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req: any, res: any): Promise<void> => {
   const { orderId } = req.params;
-  const { reference } = req.body;
+  const { reference, idempotencyKey } = req.body;
 
   try {
     let updatedOrder: any;
@@ -1527,6 +1527,7 @@ router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req
             id: ordersTable.id,
             userId: ordersTable.userId,
             refundStatus: ordersTable.refundStatus,
+            refundIdempotencyKey: ordersTable.refundIdempotencyKey,
             statusHistory: ordersTable.statusHistory,
             items: ordersTable.items,
           })
@@ -1537,6 +1538,16 @@ router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req
 
         if (!order) {
           throw Object.assign(new Error("Order not found"), { status: 404 });
+        }
+
+        // Idempotency check: if this key was already used to process the refund,
+        // return a sentinel so the caller can respond 200 without re-processing.
+        if (
+          idempotencyKey &&
+          order.refundStatus === "processed" &&
+          order.refundIdempotencyKey === String(idempotencyKey)
+        ) {
+          return { __idempotent: true as const };
         }
 
         if (order.refundStatus !== "approved") {
@@ -1561,6 +1572,7 @@ router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req
             refundStatus: "processed",
             refundProcessedAt: now,
             refundReference: reference ? String(reference).trim() : undefined,
+            refundIdempotencyKey: idempotencyKey ? String(idempotencyKey) : undefined,
             statusHistory: history,
             updatedAt: now,
           })
@@ -1590,6 +1602,17 @@ router.post("/admin/orders/:orderId/refund/process", requireAdminKey, async (req
         return;
       }
       throw txErr;
+    }
+
+    // Idempotent replay: refund was already processed with the same key — return current state.
+    if (updatedOrder && (updatedOrder as any).__idempotent) {
+      const [current] = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, orderId))
+        .limit(1);
+      res.json({ order: current ? { ...current, returnRequestedAt: deriveReturnRequestedAt(current) } : null });
+      return;
     }
 
     if (updatedOrder) {

@@ -115,6 +115,7 @@ interface PayoutConfirmState {
   orderDisplay: string;
   amount: number;
   reference: string;
+  idempotencyKey: string;
 }
 
 function PayoutConfirmModal({
@@ -289,11 +290,15 @@ function ReturnsContent() {
     const display = order.id.startsWith("TD")
       ? order.id
       : order.id.replace(/-/g, "").slice(0, 8).toUpperCase();
+    // Generate the idempotency key once when the modal opens so every retry
+    // from the same modal sends the same key — the server will short-circuit on
+    // the second call without re-processing the refund.
     setPayoutConfirm({
       orderId: order.id,
       orderDisplay: display,
       amount: order.total,
       reference: noteDrafts[order.id] ?? "",
+      idempotencyKey: crypto.randomUUID(),
     });
   }
 
@@ -302,27 +307,38 @@ function ReturnsContent() {
     if (processingInFlight.current.has(key)) return;
     processingInFlight.current.add(key);
     setActionLoading(key);
+    const idempotencyKey = payoutConfirm?.idempotencyKey;
+    let succeeded = false;
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/refund/process`, {
         method: "POST",
         headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ reference: noteDrafts[orderId] || undefined }),
+        body: JSON.stringify({ reference: noteDrafts[orderId] || undefined, idempotencyKey }),
       });
       if (res.ok) {
         const data = await res.json();
         setOrders((prev) => prev.map((o) => (o.id === orderId ? data.order : o)));
         setNoteDrafts((p) => { const n = { ...p }; delete n[orderId]; return n; });
+        succeeded = true;
       } else {
         const err = await res.json().catch(() => ({}));
         setError(err.error || "Failed to mark refund as processed");
+        // 4xx means the request is definitively rejected (e.g. already processed
+        // with a different key) — close the modal since retrying won't help.
+        if (res.status >= 400 && res.status < 500) succeeded = true;
       }
     } catch {
-      setError("Failed to mark refund as processed");
+      // Network or parse error — keep the modal open with the same idempotency
+      // key so the admin can click Confirm again and the server will replay safely.
+      setError("Network error — please try again. Your previous attempt may have succeeded.");
     } finally {
       processingInFlight.current.delete(key);
       setActionLoading(null);
-      setPayoutConfirm(null);
+      // Only close the modal on confirmed success or terminal client errors.
+      // On transient failures the modal stays open, preserving the idempotency
+      // key so the next Confirm sends the identical key.
+      if (succeeded) setPayoutConfirm(null);
     }
   }
 

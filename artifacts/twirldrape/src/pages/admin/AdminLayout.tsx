@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { label: "Notifications", href: "/admin/notifications", icon: Bell },
   { label: "About Page", href: "/admin/about-content", icon: FileText },
   { label: "Hero Banners", href: "/admin/hero-banners", icon: Image },
-  { label: "Products", href: "/admin/products", icon: Package, stub: true },
+  { label: "Products", href: "/admin/products", icon: Package },
   { label: "Customers", href: "/admin/customers", icon: UserCircle, stub: true },
   { label: "Settings", href: "/admin/settings", icon: Settings, stub: true },
 ];

@@ -26,6 +26,9 @@ import financialManagementRouter from "./financialManagement";
 import sellerRegistrationDraftRouter from "./sellerRegistrationDraft";
 import aboutContentRouter from "./aboutContent";
 import heroBannersRouter from "./heroBanners";
+import adminProductsRouter from "./adminProducts";
+import adminCategoriesRouter from "./adminCategories";
+import adminBrandsRouter from "./adminBrands";
 
 const router: IRouter = Router();
 
@@ -56,5 +59,8 @@ router.use(financialManagementRouter);
 router.use(sellerRegistrationDraftRouter);
 router.use(aboutContentRouter);
 router.use(heroBannersRouter);
+router.use(adminProductsRouter);
+router.use(adminCategoriesRouter);
+router.use(adminBrandsRouter);
 
 export default router;

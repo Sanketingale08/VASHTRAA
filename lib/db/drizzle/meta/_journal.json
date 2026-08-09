@@ -183,6 +183,13 @@
       "when": 1754870400000,
       "tag": "0028_refund_idempotency_key",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1754956800000,
+      "tag": "0029_admin_products_module",
+      "breakpoints": true
     }
   ]
 }

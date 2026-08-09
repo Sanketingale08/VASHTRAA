@@ -11,9 +11,18 @@ and never writes to the `drizzle.__drizzle_migrations` tracking table, so
 `relation already exists` — but drizzle-kit swallows that error instead of
 printing it.
 
+**Second failure mode:** `drizzle-kit migrate` may report "migrations applied
+successfully!" even when the new columns were NOT actually added. This happens
+when the migration's journal entry was already recorded but the SQL never ran
+(e.g. due to a partial apply). The fix is to run `drizzle-kit push` which
+syncs whatever is in the schema directly to the DB, regardless of migration
+tracking state. Confirmed: after `push`, columns immediately appeared and the
+API started working.
+
 **Why:** confirmed by manually re-running the first migration's SQL directly
 against the DB, which surfaced the real Postgres error even though
-`drizzle-kit migrate` itself printed nothing.
+`drizzle-kit migrate` itself printed nothing. Also confirmed by `push` fixing
+a "migrations applied successfully" false positive.
 
 **How to apply:** compare `information_schema` (or the real DB) against each
 migration file to confirm the schema already matches. If so, baseline
@@ -25,3 +34,8 @@ already applied and only run new ones. Prefer this over dropping/recreating
 tables. Also check `lib/db/drizzle/meta/` for missing snapshot json files
 (needed by `drizzle-kit generate`, not `migrate`) as a related but separate
 issue.
+
+**lib/db rebuild:** after adding new schema files, always run
+`pnpm --filter @workspace/db exec tsc -b --force` before restarting the API
+server, or the new table exports won't be in `lib/db/dist/` and dependent
+packages will fail to import them.

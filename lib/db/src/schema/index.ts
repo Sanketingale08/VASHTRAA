@@ -15,3 +15,5 @@ export * from "./email_outbox";
 export * from "./seller_registration_drafts";
 export * from "./site_settings";
 export * from "./hero_banners";
+export * from "./product_categories";
+export * from "./product_brands";

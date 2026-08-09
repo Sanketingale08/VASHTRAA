@@ -1,4 +1,5 @@
 import { pgTable, text, integer, real, boolean, uuid, jsonb, timestamp } from "drizzle-orm/pg-core";
+
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
@@ -57,6 +58,11 @@ export const productsTable = pgTable("products", {
   lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
   active: boolean("active").notNull().default(true),
   viewCount: integer("view_count").notNull().default(0),
+  status: text("status").$type<"pending" | "approved" | "rejected">().notNull().default("approved"),
+  rejectionReason: text("rejection_reason"),
+  approvalRemark: text("approval_remark"),
+  featuredOrder: integer("featured_order"),
+  featuredUntil: timestamp("featured_until"),
 });
 
 export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true });

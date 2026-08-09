@@ -25,6 +25,21 @@ export default function AdminLogin() {
       });
       if (res.ok) {
         sessionStorage.setItem("td_admin_key", key.trim());
+        // Record login session (best-effort — don't block navigation on failure)
+        fetch(`/api/admin/settings/sessions`, {
+          method: "POST",
+          headers: { "x-admin-key": key.trim() },
+          credentials: "include",
+        }).then((r) => {
+          if (r.ok) return r.json();
+        }).then((data) => {
+          if (data?.tokenHash) {
+            sessionStorage.setItem("td_admin_session_token", data.tokenHash);
+          }
+          if (data?.sessionId) {
+            sessionStorage.setItem("td_admin_session_id", data.sessionId);
+          }
+        }).catch(() => {/* ignore */});
         setLocation("/admin/dashboard");
       } else if (res.status === 401 || res.status === 403) {
         setError("Invalid admin key. Please try again.");

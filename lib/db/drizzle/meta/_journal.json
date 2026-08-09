@@ -197,6 +197,13 @@
       "when": 1755043200000,
       "tag": "0030_add_email_offer_stock_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1755129600000,
+      "tag": "0031_add_admin_login_sessions",
+      "breakpoints": true
     }
   ]
 }

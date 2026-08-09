@@ -55,6 +55,7 @@ import AdminAboutContent from "@/pages/admin/AdminAboutContent";
 import AdminHeroBanners from "@/pages/admin/AdminHeroBanners";
 import AdminProducts from "@/pages/admin/AdminProducts";
 import AdminReports from "@/pages/admin/AdminReports";
+import AdminSettings from "@/pages/admin/AdminSettings";
 import SellerSupport from "@/pages/seller/SellerSupport";
 import SellerRegister from "@/pages/SellerRegister";
 import SellerDashboard from "@/pages/seller/SellerDashboard";
@@ -277,6 +278,7 @@ function Router() {
       <Route path="/admin/hero-banners" component={AdminHeroBanners} />
       <Route path="/admin/products" component={AdminProducts} />
       <Route path="/admin/reports" component={AdminReports} />
+      <Route path="/admin/settings" component={AdminSettings} />
       <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
       <Route path="/seller/claim" component={SellerClaimStore} />

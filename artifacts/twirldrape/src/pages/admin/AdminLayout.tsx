@@ -30,8 +30,14 @@ const NAV_ITEMS = [
   { label: "Hero Banners", href: "/admin/hero-banners", icon: Image },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Reports", href: "/admin/reports", icon: BarChart2 },
-  { label: "Settings", href: "/admin/settings", icon: Settings, stub: true },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
+
+function clearAdminSession() {
+  sessionStorage.removeItem("td_admin_key");
+  sessionStorage.removeItem("td_admin_session_token");
+  sessionStorage.removeItem("td_admin_session_id");
+}
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
@@ -43,12 +49,17 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       setLocation("/admin/login");
       return;
     }
+    const sessionToken = sessionStorage.getItem("td_admin_session_token") ?? "";
+    const headers: Record<string, string> = { "x-admin-key": key };
+    if (sessionToken) headers["x-admin-session-token"] = sessionToken;
+
     fetch(`/api/admin/vendors`, {
-      headers: { "x-admin-key": key },
+      headers,
       credentials: "include",
     }).then((r) => {
       if (r.status === 403) {
-        sessionStorage.removeItem("td_admin_key");
+        // Key invalid or session revoked — clear all auth and redirect
+        clearAdminSession();
         setLocation("/admin/login");
       } else {
         setVerified(true);
@@ -97,7 +108,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const unread = countData?.count ?? 0;
 
   function signOut() {
-    sessionStorage.removeItem("td_admin_key");
+    clearAdminSession();
     setLocation("/admin/login");
   }
 
@@ -124,26 +135,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ label, href, icon: Icon, stub }) => {
+        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
           return (
             <button
               key={href}
-              onClick={() => { if (!stub) { setLocation(href); setSidebarOpen(false); } }}
+              onClick={() => { setLocation(href); setSidebarOpen(false); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left"
               style={{
                 background: active ? "rgba(201,168,76,0.12)" : "transparent",
-                color: active ? GOLD : stub ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.65)",
-                cursor: stub ? "default" : "pointer",
+                color: active ? GOLD : "rgba(255,255,255,0.65)",
+                cursor: "pointer",
               }}
             >
-              <Icon size={16} style={{ color: active ? GOLD : stub ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.5)" }} />
+              <Icon size={16} style={{ color: active ? GOLD : "rgba(255,255,255,0.5)" }} />
               <span>{label}</span>
-              {stub && (
-                <span className="ml-auto text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.3)", fontSize: "9px" }}>
-                  SOON
-                </span>
-              )}
             </button>
           );
         })}

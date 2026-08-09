@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, Trash2, CheckCheck, CheckCircle, Search, UserPlus, FileCheck,
-  FileClock, IndianRupee, MessageSquareWarning, ServerCrash, Wallet, CreditCard, Circle, ExternalLink,
+  FileClock, IndianRupee, MessageSquareWarning, ServerCrash, Wallet, CreditCard, Circle, ExternalLink, RefreshCw,
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { cn } from "@/lib/utils";
@@ -167,6 +167,31 @@ function AdminNotificationsContent() {
     },
   });
 
+  const [retryState, setRetryState] = useState<Record<string, "idle" | "pending" | "done" | "not_retryable" | "error">>({});
+
+  async function retryDeadEmail(outboxId: string, notifId: string) {
+    if (retryState[notifId] === "pending" || retryState[notifId] === "done" || retryState[notifId] === "not_retryable") return;
+    setRetryState((s) => ({ ...s, [notifId]: "pending" }));
+    try {
+      const r = await fetch(`/api/admin/email-outbox/${outboxId}/retry`, {
+        method: "POST",
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      if (r.status === 409) {
+        // Entry is no longer dead (already re-queued or sent)
+        setRetryState((s) => ({ ...s, [notifId]: "not_retryable" }));
+        return;
+      }
+      if (!r.ok) throw new Error("Failed");
+      setRetryState((s) => ({ ...s, [notifId]: "done" }));
+      qc.invalidateQueries({ queryKey: ["admin-notif-list"] });
+    } catch {
+      setRetryState((s) => ({ ...s, [notifId]: "error" }));
+      setTimeout(() => setRetryState((s) => ({ ...s, [notifId]: "idle" })), 3000);
+    }
+  }
+
   function safeMarkRead(id: string) {
     const key = "markRead:" + id;
     if (inFlight.current.has(key)) return;
@@ -319,7 +344,7 @@ function AdminNotificationsContent() {
                   <div className="flex-1 min-w-0">
                     <p className={cn("text-sm", n.read ? "text-gray-600" : "font-semibold")} style={!n.read ? { color: NAVY } : {}}>{n.title}</p>
                     <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.body}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <p className="text-[10px] text-gray-300">{relativeTime(n.createdAt)}</p>
                       {deepLinkFor(n) && (
                         <Link
@@ -330,6 +355,26 @@ function AdminNotificationsContent() {
                           View details <ExternalLink size={10} />
                         </Link>
                       )}
+                      {n.type === "email_delivery_failed" && n.metadata?.outboxId && (() => {
+                        const rs = retryState[n.id] ?? "idle";
+                        const isDisabled = rs === "pending" || rs === "done" || rs === "not_retryable";
+                        const label = rs === "done" ? "Queued!" : rs === "error" ? "Failed" : rs === "not_retryable" ? "Already queued" : "Retry";
+                        const color = rs === "done" ? "#16a34a" : rs === "error" ? "#dc2626" : rs === "not_retryable" ? "#6b7280" : GOLD;
+                        const bg = rs === "done" ? "#f0fdf4" : rs === "error" ? "#fef2f2" : rs === "not_retryable" ? "#f3f4f6" : `${GOLD}15`;
+                        const title = rs === "not_retryable" ? "This email has already been re-queued or delivered" : "Re-queue this email for delivery";
+                        return (
+                          <button
+                            onClick={() => retryDeadEmail(n.metadata!.outboxId, n.id)}
+                            disabled={isDisabled}
+                            className="flex items-center gap-0.5 text-[10px] font-semibold rounded px-1.5 py-0.5 transition-colors disabled:opacity-60"
+                            style={{ color, background: bg }}
+                            title={title}
+                          >
+                            <RefreshCw size={9} className={rs === "pending" ? "animate-spin" : ""} />
+                            {label}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

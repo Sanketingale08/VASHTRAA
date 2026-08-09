@@ -135,6 +135,49 @@ router.delete("/admin/notifications/:id", requireAdminKey, async (req: any, res:
   }
 });
 
+// Retry a dead outbox email — resets to pending so the worker picks it up again.
+// Only entries with status="dead" can be re-queued; all other states return 409.
+router.post("/admin/email-outbox/:id/retry", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  const { id } = req.params;
+  try {
+    // First verify the entry exists and check its status
+    const [existing] = await db
+      .select({ id: emailOutboxTable.id, status: emailOutboxTable.status })
+      .from(emailOutboxTable)
+      .where(eq(emailOutboxTable.id, id));
+
+    if (!existing) {
+      res.status(404).json({ error: "Outbox entry not found" });
+      return;
+    }
+
+    if (existing.status !== "dead") {
+      res.status(409).json({
+        error: "not_retryable",
+        message: `Email cannot be retried: current status is "${existing.status}". Only dead emails can be re-queued.`,
+      });
+      return;
+    }
+
+    await db
+      .update(emailOutboxTable)
+      .set({
+        status: "pending",
+        attempts: 0,
+        lastAttemptAt: null,
+        nextRetryAt: new Date(),
+        errorMessage: null,
+      })
+      .where(and(eq(emailOutboxTable.id, id), eq(emailOutboxTable.status, "dead")));
+
+    req.log?.info({ outboxId: id }, "admin/email-outbox/:id/retry — entry re-queued");
+    res.json({ success: true, outboxId: id });
+  } catch (err: any) {
+    req.log?.error({ err }, "admin/email-outbox/:id/retry failed");
+    res.status(500).json({ error: "Failed to retry email" });
+  }
+});
+
 // Dead email outbox — lists emails that permanently failed delivery for manual follow-up
 router.get("/admin/email-outbox/dead", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {

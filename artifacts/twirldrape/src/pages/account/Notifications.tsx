@@ -35,6 +35,8 @@ interface Preferences {
   offerAlerts: boolean;
   emailOrderUpdates: boolean;
   emailMarketingUpdates: boolean;
+  emailOfferUpdates: boolean;
+  emailStockAlerts: boolean;
 }
 
 function typeIcon(type: string, size = 18) {
@@ -555,6 +557,8 @@ export function AccountNotificationsPage() {
               {[
                 { key: "emailOrderUpdates" as const, label: "Order email updates", desc: "Emails for shipping, delivery, returns, and refund status" },
                 { key: "emailMarketingUpdates" as const, label: "Promotional emails", desc: "Flash sales, new arrivals, coupons, and special offers" },
+                { key: "emailOfferUpdates" as const, label: "Offer & coupon emails", desc: "Emails when your coupons are expiring soon" },
+                { key: "emailStockAlerts" as const, label: "Stock alert emails", desc: "Emails when wishlisted items come back in stock" },
               ].map(({ key, label, desc }) => (
                 <div key={key} className="flex items-center justify-between px-5 py-4">
                   <div>

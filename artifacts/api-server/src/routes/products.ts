@@ -9,6 +9,7 @@ import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { recordStockChange } from "../lib/stockHistory";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
+import { sendWishlistRestockEmail } from "../lib/transactionalEmail";
 
 async function notifySellerStockLevel(
   vendorId: string | null,
@@ -293,11 +294,17 @@ async function notifyWishlistRestock(productId: string, productName: string, pre
 
   for (const { userId } of wishlistRows) {
     const prefRows = await db
-      .select({ stockAlerts: notificationPreferencesTable.stockAlerts })
+      .select({
+        stockAlerts: notificationPreferencesTable.stockAlerts,
+        emailStockAlerts: notificationPreferencesTable.emailStockAlerts,
+      })
       .from(notificationPreferencesTable)
       .where(eq(notificationPreferencesTable.userId, userId))
       .limit(1);
     const wantsStock = prefRows.length === 0 || prefRows[0].stockAlerts;
+    const wantsEmailStock = prefRows.length === 0 || prefRows[0].emailStockAlerts;
+
+    // In-app notification — gated by stockAlerts preference
     if (wantsStock) {
       await db.insert(notificationsTable).values({
         userId,
@@ -306,6 +313,11 @@ async function notifyWishlistRestock(productId: string, productName: string, pre
         body: `"${productName}" is back in stock. Don't miss out!`,
         metadata: { productId },
       });
+    }
+
+    // Email — gated by emailStockAlerts preference
+    if (wantsEmailStock) {
+      sendWishlistRestockEmail({ userId, productName, productId }).catch(() => {});
     }
   }
 }

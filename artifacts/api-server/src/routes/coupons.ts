@@ -11,6 +11,7 @@ import {
   wishlistsTable,
 } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
+import { sendCouponExpiryEmail } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -24,12 +25,15 @@ async function maybeNotifyCouponExpiry(
   if (hoursLeft <= 0 || hoursLeft > 72) return;
 
   const offerPrefs = await db
-    .select({ offerAlerts: notificationPreferencesTable.offerAlerts })
+    .select({
+      offerAlerts: notificationPreferencesTable.offerAlerts,
+      emailOfferUpdates: notificationPreferencesTable.emailOfferUpdates,
+    })
     .from(notificationPreferencesTable)
     .where(eq(notificationPreferencesTable.userId, userId))
     .limit(1);
   const wantsOffers = offerPrefs.length === 0 || offerPrefs[0].offerAlerts;
-  if (!wantsOffers) return;
+  const wantsEmailOffers = offerPrefs.length === 0 || offerPrefs[0].emailOfferUpdates;
 
   const existingExpiry = await db
     .select({ id: notificationsTable.id })
@@ -45,13 +49,22 @@ async function maybeNotifyCouponExpiry(
   if (existingExpiry.length > 0) return;
 
   const daysLeft = Math.max(1, Math.ceil(hoursLeft / 24));
-  await db.insert(notificationsTable).values({
-    userId,
-    type: "coupon_expiry",
-    title: `Coupon "${coupon.code}" expiring soon`,
-    body: `Your coupon expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}. Use it before it's gone!`,
-    metadata: { couponId: coupon.id, couponCode: coupon.code },
-  });
+
+  // In-app notification — gated by offerAlerts preference
+  if (wantsOffers) {
+    await db.insert(notificationsTable).values({
+      userId,
+      type: "coupon_expiry",
+      title: `Coupon "${coupon.code}" expiring soon`,
+      body: `Your coupon expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}. Use it before it's gone!`,
+      metadata: { couponId: coupon.id, couponCode: coupon.code },
+    });
+  }
+
+  // Email — gated by emailOfferUpdates preference
+  if (wantsEmailOffers) {
+    sendCouponExpiryEmail({ userId, couponCode: coupon.code, daysLeft }).catch(() => {});
+  }
 }
 
 // ─── Admin endpoints ──────────────────────────────────────────────────────────

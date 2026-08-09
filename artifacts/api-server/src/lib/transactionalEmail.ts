@@ -792,6 +792,114 @@ export function startSellerRegistrationNudgeWorker(intervalMs = 60 * 60 * 1000):
   logger.info("[sellerNudge] Seller registration nudge worker started");
 }
 
+/**
+ * Sends a coupon-expiry reminder email to a user whose coupon is expiring soon.
+ * Writes to the email_outbox for reliable delivery with retry support.
+ */
+export async function sendCouponExpiryEmail(opts: {
+  userId: string;
+  couponCode: string;
+  daysLeft: number;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn({ userId: opts.userId }, "[transactionalEmail] RESEND_API_KEY not set — skipping coupon expiry email");
+    return;
+  }
+
+  const toEmail = await getUserEmail(opts.userId);
+  if (!toEmail) {
+    logger.warn({ userId: opts.userId }, "[transactionalEmail] Could not resolve email for coupon expiry — not sent");
+    return;
+  }
+
+  const subject = `Your coupon "${opts.couponCode}" expires in ${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""} — TwirlDrape`;
+  const body = `
+    <p>Hi there,</p>
+    <p>Just a reminder that your coupon code <strong>${opts.couponCode}</strong> will expire in <strong>${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""}</strong>.</p>
+    <p>Use it before it's gone to enjoy your discount on your next saree purchase!</p>
+    <p style="margin:24px 0;">
+      <a href="https://twirldrape.com/designer"
+         style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+        Shop Now
+      </a>
+    </p>
+    <p>You can manage your email preferences from your <a href="https://twirldrape.com/account/notifications">account settings</a>.</p>
+  `;
+  const html = wrapInTemplate(subject, body);
+
+  const [entry] = await db
+    .insert(emailOutboxTable)
+    .values({
+      userId: opts.userId,
+      orderId: null,
+      type: "coupon_expiry",
+      toEmail,
+      subject,
+      html,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: new Date(),
+    })
+    .returning();
+
+  await attemptSend(resend, { ...entry, orderId: null, userId: opts.userId });
+}
+
+/**
+ * Sends a wishlist restock email to a user when a product they wishlisted comes back in stock.
+ * Writes to the email_outbox for reliable delivery with retry support.
+ */
+export async function sendWishlistRestockEmail(opts: {
+  userId: string;
+  productName: string;
+  productId: string;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    logger.warn({ userId: opts.userId }, "[transactionalEmail] RESEND_API_KEY not set — skipping wishlist restock email");
+    return;
+  }
+
+  const toEmail = await getUserEmail(opts.userId);
+  if (!toEmail) {
+    logger.warn({ userId: opts.userId }, "[transactionalEmail] Could not resolve email for wishlist restock — not sent");
+    return;
+  }
+
+  const subject = `Back in stock: "${opts.productName}" — TwirlDrape`;
+  const body = `
+    <p>Great news!</p>
+    <p>A saree you wishlisted — <strong>${opts.productName}</strong> — is back in stock.</p>
+    <p>Stock is limited, so don't wait too long!</p>
+    <p style="margin:24px 0;">
+      <a href="https://twirldrape.com/products/${opts.productId}"
+         style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+        View Product
+      </a>
+    </p>
+    <p>You can manage your email preferences from your <a href="https://twirldrape.com/account/notifications">account settings</a>.</p>
+  `;
+  const html = wrapInTemplate(subject, body);
+
+  const [entry] = await db
+    .insert(emailOutboxTable)
+    .values({
+      userId: opts.userId,
+      orderId: null,
+      type: "wishlist_restock",
+      toEmail,
+      subject,
+      html,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: new Date(),
+    })
+    .returning();
+
+  await attemptSend(resend, { ...entry, orderId: null, userId: opts.userId });
+}
+
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
   logger.info("[emailOutbox] Starting outbox retry worker");
 

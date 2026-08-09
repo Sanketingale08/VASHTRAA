@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
-  Bell, Package, Truck, CheckCircle, XCircle, Tag, Heart,
+  Bell, Package, Truck, CheckCircle, XCircle, Tag,
   Trash2, CheckCheck, Clock, CreditCard, PackageCheck, MapPin, TrendingDown, Zap,
   Search, Circle, ExternalLink, AlertTriangle,
 } from "lucide-react";
@@ -33,7 +33,6 @@ function deepLinkFor(n: Notification): string | null {
 interface Preferences {
   orderUpdates: boolean;
   offerAlerts: boolean;
-  stockAlerts: boolean;
   emailOrderUpdates: boolean;
   emailMarketingUpdates: boolean;
 }
@@ -57,7 +56,6 @@ function typeIcon(type: string, size = 18) {
     case "refund_completed":   return <CheckCircle size={size} className="text-emerald-600" />;
     case "payment_successful": return <CreditCard size={size} className="text-emerald-600" />;
     case "coupon_expiry":      return <Tag size={size} className="text-amber-600" />;
-    case "wishlist_restock":   return <Heart size={size} className="text-rose-500" />;
     case "price_drop":         return <TrendingDown size={size} className="text-rose-500" />;
     case "flash_sale":         return <Zap size={size} className="text-amber-500" />;
     default:                   return <Bell size={size} className="text-gray-400" />;
@@ -82,7 +80,6 @@ function iconBg(type: string, read: boolean): string {
     case "refund_rejected":    return "bg-red-50 border border-red-100";
     case "coupon_expiry":
     case "order_processing":   return "bg-amber-50 border border-amber-100";
-    case "wishlist_restock":
     case "price_drop":         return "bg-rose-50 border border-rose-100";
     default:                   return "bg-gray-50 border border-gray-100";
   }
@@ -127,7 +124,6 @@ const TYPE_FILTERS = [
   { key: "all", label: "All" },
   { key: "order_confirmed,new_order_placed,payment_successful,order_processing,order_packed,order_shipped,out_for_delivery,order_delivered,order_cancelled,return_requested,return_approved,return_rejected,refund_requested,refund_approved,refund_rejected,refund_completed", label: "Orders" },
   { key: "coupon_expiry,price_drop,flash_sale", label: "Offers" },
-  { key: "wishlist_restock", label: "Stock" },
 ];
 
 function SkeletonRow() {

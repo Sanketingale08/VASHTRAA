@@ -143,6 +143,8 @@ function uploadWithProgress(file: File, onProgress: (p: number) => void): Promis
         } catch {
           reject(new Error("Invalid response"));
         }
+      } else if (xhr.status === 401 || xhr.status === 403) {
+        reject(new Error("AUTH_EXPIRED"));
       } else {
         reject(new Error(`Upload failed (${xhr.status})`));
       }
@@ -335,9 +337,15 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
     for (const { file, id } of accepted) {
       uploadWithProgress(file, (p) => refresh(entriesRef.current.map(e => e.id === id ? { ...e, progress: p } : e)))
         .then((url) => refreshEmit(entriesRef.current.map(e => e.id === id ? { ...e, url, uploading: false, progress: 100 } : e)))
-        .catch(() => {
-          refresh(entriesRef.current.map(e => e.id === id ? { id, url: "", progress: 0, uploading: false, error: `${file.name}: upload failed` } : e));
-          setTimeout(() => refresh(entriesRef.current.filter(e => e.id !== id)), 3500);
+        .catch((err: Error) => {
+          const isAuthError = err.message === "AUTH_EXPIRED";
+          const errorMsg = isAuthError
+            ? "Session expired — please refresh the page to continue"
+            : `${file.name}: upload failed`;
+          refresh(entriesRef.current.map(e => e.id === id ? { id, url: "", progress: 0, uploading: false, error: errorMsg } : e));
+          if (!isAuthError) {
+            setTimeout(() => refresh(entriesRef.current.filter(e => e.id !== id)), 3500);
+          }
         });
     }
   }
@@ -350,9 +358,15 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
     refresh(entriesRef.current.map(e => e.id === id ? { ...e, url: "", progress: 0, uploading: true, error: "" } : e));
     uploadWithProgress(file, (p) => refresh(entriesRef.current.map(e => e.id === id ? { ...e, progress: p } : e)))
       .then((url) => refreshEmit(entriesRef.current.map(e => e.id === id ? { ...e, url, uploading: false, progress: 100 } : e)))
-      .catch(() => {
-        refresh(entriesRef.current.map(e => e.id === id ? { ...e, uploading: false, error: "Replace failed. Try again." } : e));
-        setTimeout(() => refresh(entriesRef.current.map(e => e.id === id ? { ...e, error: "" } : e)), 3500);
+      .catch((err: Error) => {
+        const isAuthError = err.message === "AUTH_EXPIRED";
+        const errorMsg = isAuthError
+          ? "Session expired — please refresh the page to continue"
+          : "Replace failed. Try again.";
+        refresh(entriesRef.current.map(e => e.id === id ? { ...e, uploading: false, error: errorMsg } : e));
+        if (!isAuthError) {
+          setTimeout(() => refresh(entriesRef.current.map(e => e.id === id ? { ...e, error: "" } : e)), 3500);
+        }
       });
   }
 

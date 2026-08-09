@@ -7,6 +7,7 @@ import { requireAuth } from "../middlewares/isAuthenticated";
 import { requireAdminKey } from "../middlewares/isAdmin";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { insertAdminNotification } from "../lib/adminNotifications";
+import { writeAuditLog, getIp } from "../lib/auditLog";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import {
   sendVendorApprovalEmail,
@@ -435,6 +436,7 @@ router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res:
       ownerId: updated.ownerId,
     }).catch((err) => req.log.warn({ err, vendorId: updated.id }, "Failed to send vendor approval email"));
 
+    writeAuditLog({ action: "vendor_approved", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status } });
   } catch (err) {
     req.log.error({ err }, "Failed to approve vendor");
@@ -468,6 +470,7 @@ router.post("/admin/vendors/:id/suspend", requireAdminKey, async (req: any, res:
       ownerId: updated.ownerId,
     }).catch((err) => req.log.warn({ err, vendorId: updated.id }, "Failed to send vendor suspension email"));
 
+    writeAuditLog({ action: "vendor_suspended", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status } });
   } catch (err) {
     req.log.error({ err }, "Failed to suspend vendor");
@@ -490,6 +493,8 @@ router.post("/admin/vendors/:id/reject", requireAdminKey, async (req: any, res: 
         contactEmail: vendorsTable.contactEmail,
       });
     if (!updated) return res.status(404).json({ error: "Vendor not found" });
+
+    writeAuditLog({ action: "vendor_rejected", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
 
     sendVendorRejectionEmailForVendor({
       vendorId: updated.id,

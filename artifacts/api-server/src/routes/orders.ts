@@ -16,6 +16,7 @@ import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 import { sendTransactionalEmail } from "../lib/transactionalEmail";
 import { requireAdminKey } from "../middlewares/isAdmin";
+import { writeAuditLog, getIp } from "../lib/auditLog";
 
 const router = Router();
 
@@ -714,6 +715,7 @@ async function handleUpdateOrderStatus(req: any, res: any): Promise<void> {
       throw txErr;
     }
 
+    writeAuditLog({ action: "order_status_changed", module: "Orders", details: { orderId, status, note }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to update order status");
@@ -1506,6 +1508,7 @@ router.post("/admin/orders/:orderId/refund", requireAdminKey, async (req: any, r
       });
     }
 
+    writeAuditLog({ action: `refund_${decision}`, module: "Orders", details: { orderId, decision, note }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ order: updatedOrder ? { ...updatedOrder, returnRequestedAt: deriveReturnRequestedAt(updatedOrder) } : updatedOrder });
   } catch (err) {
     req.log.error({ err }, "Failed to review refund");

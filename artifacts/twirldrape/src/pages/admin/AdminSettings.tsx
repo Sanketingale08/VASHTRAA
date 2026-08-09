@@ -574,12 +574,308 @@ function ActiveSessionsSection() {
   );
 }
 
+// ─── Admin Permissions ────────────────────────────────────────────────────────
+const ADMIN_MODULES_LIST = [
+  { name: "Dashboard",         desc: "Platform KPIs, revenue overview, and quick stats" },
+  { name: "Vendors",           desc: "Seller registration, KYC approval, and management" },
+  { name: "Orders",            desc: "Order lifecycle, status changes, and fulfilment" },
+  { name: "Products",          desc: "Listing approval, pricing, and catalogue control" },
+  { name: "Coupons",           desc: "Discount codes, flash sales, and usage limits" },
+  { name: "Customers",         desc: "Shopper accounts, addresses, and loyalty points" },
+  { name: "Returns & Refunds", desc: "Return requests and refund approvals" },
+  { name: "Support Tickets",   desc: "Customer support and seller dispute management" },
+  { name: "Finances",          desc: "Settlements, commissions, and payouts" },
+  { name: "Settings",          desc: "Platform, payment, shipping and system configuration" },
+];
+
+function PermissionsSection() {
+  return (
+    <SectionCard id="permissions">
+      <SectionHeader icon={Users} title="Admin Permissions" desc="Module access matrix for the Super Admin role" />
+      <div className="px-6 py-4">
+        <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-100 flex gap-2.5">
+          <Shield size={14} className="text-blue-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-800">
+            <span className="font-semibold">Super Admin</span> has unrestricted access to all modules.
+            Multi-admin role management with granular per-module permissions is planned for a future release.
+          </p>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-gray-100">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
+                <th className="px-4 py-3 text-left">Module</th>
+                <th className="px-4 py-3 text-left">Description</th>
+                <th className="px-4 py-3 text-center">Access Level</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {ADMIN_MODULES_LIST.map(({ name, desc }) => (
+                <tr key={name} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{name}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{desc}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
+                      <CheckCircle size={12} />Full Access
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── Notification Preferences ─────────────────────────────────────────────────
+const NOTIF_CATEGORIES = [
+  { key: "new_order",                label: "New Order",               desc: "When a customer places an order" },
+  { key: "new_vendor_registration",  label: "New Vendor Registration", desc: "Seller submits a new registration" },
+  { key: "vendor_approval_required", label: "Vendor Approval Required",desc: "KYC docs submitted and awaiting review" },
+  { key: "vendor_dispute",           label: "Vendor Dispute",          desc: "Seller raises a dispute or escalation" },
+  { key: "refund_request",           label: "Refund Request",          desc: "Customer submits a refund request" },
+  { key: "support_ticket",           label: "Support Ticket",          desc: "New support ticket opened" },
+  { key: "payment_failure",          label: "Payment Failure",         desc: "A payment transaction fails" },
+  { key: "shipping_issue",           label: "Shipping Issue",          desc: "Delivery or shipment problem detected" },
+  { key: "system_error",             label: "System Error",            desc: "Backend or integration error alert" },
+  { key: "security_login_alert",     label: "Security / Login Alert",  desc: "Admin login or access-key change" },
+];
+
+function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={`w-9 h-5 rounded-full relative transition-colors focus:outline-none shrink-0 ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+      style={{ background: checked ? NAVY : "#E5E7EB" }}
+    >
+      <div
+        className="w-4 h-4 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform"
+        style={{ transform: checked ? "translateX(16px)" : "translateX(2px)" }}
+      />
+    </button>
+  );
+}
+
+function NotificationPrefsSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  type NotifPrefs = Record<string, { email: boolean; inApp: boolean; sms: boolean }>;
+
+  const { data, isLoading, error } = useQuery<{ prefs: NotifPrefs }>({
+    queryKey: ["admin-notif-prefs"],
+    queryFn: () => apiFetch("/api/admin/settings/notification-prefs"),
+  });
+
+  const save = useMutation({
+    mutationFn: (prefs: NotifPrefs) =>
+      apiFetch("/api/admin/settings/notification-prefs", { method: "PATCH", body: JSON.stringify({ prefs }) }),
+    onSuccess: () => {
+      toast({ title: "Preferences saved" });
+      qc.invalidateQueries({ queryKey: ["admin-notif-prefs"] });
+    },
+    onError: (e: Error) => toast({ title: "Failed to save", description: e.message, variant: "destructive" }),
+  });
+
+  function toggle(catKey: string, channel: "email" | "inApp" | "sms", value: boolean) {
+    if (!data?.prefs) return;
+    const updated: NotifPrefs = { ...data.prefs, [catKey]: { ...data.prefs[catKey], [channel]: value } };
+    save.mutate(updated);
+  }
+
+  return (
+    <SectionCard id="notifications">
+      <SectionHeader icon={Bell} title="Admin Notification Preferences" desc="Choose which channels receive alerts for each event category" />
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="flex gap-2 items-center text-sm text-gray-400 py-4"><Loader2 size={14} className="animate-spin" />Loading…</div>
+        ) : error ? (
+          <p className="text-sm text-red-600 py-4">Unable to load notification preferences.</p>
+        ) : (
+          <>
+          <div className="mb-3 p-3 rounded-lg bg-blue-50 border border-blue-100 flex gap-2.5">
+            <Bell size={14} className="text-blue-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-800">
+              <span className="font-semibold">In-App</span> alerts are fully wired — toggling off suppresses the admin notification bell.
+              Email and SMS delivery for admin alerts is planned for Phase 3.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left">Event</th>
+                  <th className="px-4 py-3 text-center w-20">Email</th>
+                  <th className="px-4 py-3 text-center w-20">In-App</th>
+                  <th className="px-4 py-3 text-center w-20">SMS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {NOTIF_CATEGORIES.map(({ key, label, desc }) => {
+                  const pref = data?.prefs?.[key] ?? { email: true, inApp: true, sms: false };
+                  return (
+                    <tr key={key} className="hover:bg-gray-50/50">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900 text-sm">{label}</p>
+                        <p className="text-xs text-gray-400">{desc}</p>
+                      </td>
+                      <td className="px-4 py-3"><div className="flex justify-center"><ToggleSwitch checked={pref.email} onChange={v => toggle(key, "email", v)} disabled={save.isPending} /></div></td>
+                      <td className="px-4 py-3"><div className="flex justify-center"><ToggleSwitch checked={pref.inApp} onChange={v => toggle(key, "inApp", v)} disabled={save.isPending} /></div></td>
+                      <td className="px-4 py-3"><div className="flex justify-center"><ToggleSwitch checked={pref.sms}   onChange={v => toggle(key, "sms",   v)} disabled={save.isPending} /></div></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          </>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+const AUDIT_MODULES = ["all", "Vendors", "Products", "Orders", "Coupons", "Settings", "Security"];
+
+interface AuditLog {
+  id: string;
+  actor: string;
+  action: string;
+  module: string;
+  details: Record<string, unknown> | null;
+  ipAddress: string | null;
+  status: string;
+  createdAt: string;
+}
+
+function formatAction(action: string) {
+  return action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function AuditLogsSection() {
+  const [moduleFilter, setModuleFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [offset, setOffset] = useState(0);
+  const LIMIT = 20;
+
+  const { data, isLoading, error } = useQuery<{ logs: AuditLog[]; total: number }>({
+    queryKey: ["admin-audit-logs", moduleFilter, fromDate, toDate, offset],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
+      if (moduleFilter !== "all") params.set("module", moduleFilter);
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+      return apiFetch(`/api/admin/audit-logs?${params}`);
+    },
+  });
+
+  const logs = data?.logs ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  return (
+    <SectionCard id="audit-logs">
+      <SectionHeader icon={BookOpen} title="Audit Logs" desc="Append-only record of all significant admin actions. Cannot be deleted." />
+      <div className="px-6 py-4">
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3 mb-4">
+          <select
+            value={moduleFilter}
+            onChange={e => { setModuleFilter(e.target.value); setOffset(0); }}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white"
+          >
+            {AUDIT_MODULES.map(m => <option key={m} value={m}>{m === "all" ? "All Modules" : m}</option>)}
+          </select>
+          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setOffset(0); }}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white" />
+          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setOffset(0); }}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white" />
+          {(moduleFilter !== "all" || fromDate || toDate) && (
+            <Btn variant="secondary" onClick={() => { setModuleFilter("all"); setFromDate(""); setToDate(""); setOffset(0); }}>
+              Clear
+            </Btn>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="flex gap-2 items-center text-sm text-gray-400 py-6"><Loader2 size={14} className="animate-spin" />Loading…</div>
+        ) : error ? (
+          <p className="text-sm text-red-600 py-4">Unable to load audit logs.</p>
+        ) : logs.length === 0 ? (
+          <div className="text-center py-10">
+            <BookOpen size={28} className="text-gray-200 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">
+              {total === 0
+                ? "No audit logs yet. Admin actions will appear here automatically."
+                : "No logs match the current filters."}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left whitespace-nowrap">Date & Time</th>
+                    <th className="px-4 py-3 text-left">Admin</th>
+                    <th className="px-4 py-3 text-left">Action</th>
+                    <th className="px-4 py-3 text-left">Module</th>
+                    <th className="px-4 py-3 text-left">IP Address</th>
+                    <th className="px-4 py-3 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50/50">
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{fmtDate(log.createdAt)}</td>
+                      <td className="px-4 py-3 text-gray-900 font-medium text-xs">{log.actor}</td>
+                      <td className="px-4 py-3 text-gray-700 text-xs">{formatAction(log.action)}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">{log.module}</span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">{log.ipAddress?.split(",")[0]?.trim() ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {log.status === "success" ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle size={11} />Success</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600"><XCircle size={11} />Failure</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {total > LIMIT && (
+              <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
+                <p className="text-xs text-gray-400">Showing {offset + 1}–{Math.min(offset + LIMIT, total)} of {total}</p>
+                <div className="flex items-center gap-2">
+                  <Btn variant="secondary" disabled={offset === 0} onClick={() => setOffset(o => Math.max(0, o - LIMIT))}>Previous</Btn>
+                  <span className="text-xs text-gray-500 px-1">Page {currentPage} / {totalPages}</span>
+                  <Btn variant="secondary" disabled={offset + LIMIT >= total} onClick={() => setOffset(o => o + LIMIT)}>Next</Btn>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
 // ─── Settings overview grid ───────────────────────────────────────────────────
 function OverviewGrid({ onNavigate }: { onNavigate: (id: string) => void }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
       {SECTIONS.map(({ id, label, icon: Icon, desc, phase }) => {
-        const active = phase === 1;
+        const active = phase <= 2;
         return (
           <button
             key={id}
@@ -644,16 +940,18 @@ export default function AdminSettings() {
           <LoginActivitySection />
           <ActiveSessionsSection />
 
-          {/* Phase 2–4: coming-soon stubs */}
+          {/* Phase 2: functional sections */}
+          <PermissionsSection />
+          <NotificationPrefsSection />
+          <AuditLogsSection />
+
+          {/* Phase 3–4: coming-soon stubs */}
           {[
-            { id: "permissions",   label: "Admin Permissions",    icon: Users,       desc: "Module access and role management",        phase: 2 },
-            { id: "notifications", label: "Notifications",         icon: Bell,        desc: "Admin alert preferences by channel",       phase: 2 },
-            { id: "audit-logs",    label: "Audit Logs",            icon: BookOpen,    desc: "Append-only record of admin actions",      phase: 2 },
-            { id: "platform",      label: "Platform Settings",     icon: Globe,       desc: "Name, currency, timezone and support info", phase: 3 },
-            { id: "system",        label: "System & Maintenance",  icon: Settings,    desc: "Maintenance mode and system health",       phase: 3 },
-            { id: "payment",       label: "Payment Settings",      icon: CreditCard,  desc: "Cashfree integration and payment methods", phase: 4 },
-            { id: "shipping",      label: "Shipping Settings",     icon: Truck,       desc: "Shiprocket and delivery configuration",    phase: 4 },
-            { id: "email-sms",     label: "Email & SMS Settings",  icon: Mail,        desc: "Providers, OTP and sender configuration",  phase: 4 },
+            { id: "platform",   label: "Platform Settings",    icon: Globe,       desc: "Name, currency, timezone and support info", phase: 3 },
+            { id: "system",     label: "System & Maintenance", icon: Settings,    desc: "Maintenance mode and system health",        phase: 3 },
+            { id: "payment",    label: "Payment Settings",     icon: CreditCard,  desc: "Cashfree integration and payment methods",  phase: 4 },
+            { id: "shipping",   label: "Shipping Settings",    icon: Truck,       desc: "Shiprocket and delivery configuration",     phase: 4 },
+            { id: "email-sms",  label: "Email & SMS Settings", icon: Mail,        desc: "Providers, OTP and sender configuration",   phase: 4 },
           ].map(({ id, label, icon, desc, phase }) => (
             <SectionCard key={id} id={id}>
               <SectionHeader icon={icon} title={label} desc={desc} />

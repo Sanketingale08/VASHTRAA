@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { requireAdminKey } from "../middlewares/isAdmin";
+import { writeAuditLog, getIp } from "../lib/auditLog";
 import { db } from "@workspace/db";
 import {
   couponsTable,
@@ -156,6 +157,7 @@ router.post("/admin/coupons", requireAdminKey, async (req: any, res: any): Promi
       }
     }
 
+    writeAuditLog({ action: "coupon_created", module: "Coupons", details: { couponId: created.id, code: created.code, type: created.type, value: created.value }, ipAddress: getIp(req) }).catch(() => {});
     res.status(201).json({
       coupon: {
         id: created.id,
@@ -277,6 +279,7 @@ router.delete("/admin/coupons/:id", requireAdminKey, async (req: any, res: any):
       .set({ active: false })
       .where(eq(couponsTable.id, id));
 
+    writeAuditLog({ action: "coupon_deactivated", module: "Coupons", details: { couponId: id }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ success: true, message: "Coupon deactivated" });
   } catch (err) {
     req.log.error({ err }, "Failed to deactivate coupon");

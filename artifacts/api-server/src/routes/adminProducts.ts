@@ -7,6 +7,7 @@ import {
   eq, sql, desc, asc, ilike, and, or, inArray,
 } from "drizzle-orm";
 import { requireAdminKey } from "../middlewares/isAdmin";
+import { writeAuditLog, getIp } from "../lib/auditLog";
 
 const router = Router();
 
@@ -204,6 +205,7 @@ router.post("/admin/products/:id/approve", requireAdminKey, async (req: any, res
       .where(eq(productsTable.id, req.params.id))
       .returning({ id: productsTable.id, name: productsTable.name, status: productsTable.status });
     if (!updated) return res.status(404).json({ error: "Product not found" });
+    writeAuditLog({ action: "product_approved", module: "Products", details: { productId: updated.id, productName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ product: updated });
   } catch (err) {
     req.log.error({ err }, "Failed to approve product");
@@ -221,6 +223,7 @@ router.post("/admin/products/:id/reject", requireAdminKey, async (req: any, res:
       .where(eq(productsTable.id, req.params.id))
       .returning({ id: productsTable.id, name: productsTable.name, status: productsTable.status });
     if (!updated) return res.status(404).json({ error: "Product not found" });
+    writeAuditLog({ action: "product_rejected", module: "Products", details: { productId: updated.id, productName: updated.name, reason }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ product: updated });
   } catch (err) {
     req.log.error({ err }, "Failed to reject product");
@@ -231,7 +234,9 @@ router.post("/admin/products/:id/reject", requireAdminKey, async (req: any, res:
 // ── Delete product ────────────────────────────────────────────────────────────
 router.delete("/admin/products/:id", requireAdminKey, async (req: any, res: any) => {
   try {
-    await db.delete(productsTable).where(eq(productsTable.id, req.params.id));
+    const id = req.params.id;
+    await db.delete(productsTable).where(eq(productsTable.id, id));
+    writeAuditLog({ action: "product_deleted", module: "Products", details: { productId: id }, ipAddress: getIp(req) }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     req.log.error({ err }, "Failed to delete product");

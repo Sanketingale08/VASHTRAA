@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { db, siteSettingsTable, adminLoginSessionsTable } from "@workspace/db";
-import { eq, ne, and, isNull, desc } from "drizzle-orm";
+import { db, siteSettingsTable, adminLoginSessionsTable, adminAuditLogsTable } from "@workspace/db";
+import { eq, ne, and, isNull, desc, gte, lte, sql } from "drizzle-orm";
 import { requireAdminKey, clearAdminKeyCache, sha256hex } from "../middlewares/isAdmin";
+import { writeAuditLog, getIp } from "../lib/auditLog";
+import { clearAdminNotifPrefCache } from "../lib/adminNotifications";
 import crypto from "crypto";
 
 const router = Router();
@@ -115,6 +117,7 @@ router.post("/admin/settings/change-access-key", requireAdminKey, async (req: an
     await upsertSetting("admin_key_hash", sha256hex(newKey));
     clearAdminKeyCache();
 
+    writeAuditLog({ action: "access_key_changed", module: "Settings", ipAddress: getIp(req) }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to change access key" });
@@ -139,6 +142,7 @@ router.post("/admin/settings/sessions", requireAdminKey, async (req: any, res: a
       .values({ sessionTokenHash: tokenHash, ipAddress: ip, userAgent: ua, device, os, browser, location: "India" })
       .returning({ id: adminLoginSessionsTable.id });
 
+    writeAuditLog({ action: "admin_login", module: "Security", details: { device, os, browser }, ipAddress: ip }).catch(() => {});
     res.json({ sessionId: session.id, tokenHash });
   } catch (err) {
     res.status(500).json({ error: "Failed to record session" });
@@ -227,6 +231,105 @@ router.post("/admin/settings/sessions/:id/revoke", requireAdminKey, async (req: 
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to revoke session" });
+  }
+});
+
+// ── Notification Preferences ──────────────────────────────────────────────────
+
+const NOTIF_DEFAULTS: Record<string, { email: boolean; inApp: boolean; sms: boolean }> = {
+  new_order:                { email: true,  inApp: true,  sms: false },
+  new_vendor_registration:  { email: true,  inApp: true,  sms: false },
+  vendor_approval_required: { email: true,  inApp: true,  sms: false },
+  vendor_dispute:           { email: true,  inApp: true,  sms: false },
+  refund_request:           { email: true,  inApp: true,  sms: false },
+  support_ticket:           { email: true,  inApp: true,  sms: false },
+  payment_failure:          { email: true,  inApp: true,  sms: false },
+  shipping_issue:           { email: true,  inApp: true,  sms: false },
+  system_error:             { email: true,  inApp: true,  sms: false },
+  security_login_alert:     { email: true,  inApp: true,  sms: true  },
+};
+
+router.get("/admin/settings/notification-prefs", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const raw = await getSetting("admin_notification_prefs");
+    const stored = raw ? JSON.parse(raw) : {};
+    const prefs = Object.fromEntries(
+      Object.entries(NOTIF_DEFAULTS).map(([k, defaults]) => [k, { ...defaults, ...(stored[k] ?? {}) }])
+    );
+    res.json({ prefs });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch notification preferences" });
+  }
+});
+
+router.patch("/admin/settings/notification-prefs", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const { prefs } = req.body ?? {};
+    if (!prefs || typeof prefs !== "object") {
+      return res.status(400).json({ error: "prefs object required" });
+    }
+    const merged: Record<string, any> = {};
+    for (const [key, defaults] of Object.entries(NOTIF_DEFAULTS)) {
+      const inc = (prefs as any)[key] ?? {};
+      merged[key] = {
+        email: typeof inc.email === "boolean" ? inc.email : defaults.email,
+        inApp: typeof inc.inApp === "boolean" ? inc.inApp : defaults.inApp,
+        sms:   typeof inc.sms   === "boolean" ? inc.sms   : defaults.sms,
+      };
+    }
+    await upsertSetting("admin_notification_prefs", JSON.stringify(merged));
+    clearAdminNotifPrefCache();
+    writeAuditLog({ action: "notification_prefs_updated", module: "Settings", ipAddress: getIp(req) }).catch(() => {});
+    res.json({ ok: true, prefs: merged });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update notification preferences" });
+  }
+});
+
+// ── Audit Logs ────────────────────────────────────────────────────────────────
+
+router.get("/admin/audit-logs", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const { module, from, to, limit = "20", offset = "0" } = req.query;
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
+    const offsetNum = Math.max(0, parseInt(offset as string) || 0);
+
+    const conditions: any[] = [];
+    if (module && module !== "all") {
+      conditions.push(eq(adminAuditLogsTable.module, module as string));
+    }
+    if (from) {
+      const d = new Date(from as string);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ error: "Invalid 'from' date — use ISO 8601 format (e.g. 2026-01-01)" });
+      }
+      conditions.push(gte(adminAuditLogsTable.createdAt, d));
+    }
+    if (to) {
+      const d = new Date(to as string);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ error: "Invalid 'to' date — use ISO 8601 format (e.g. 2026-12-31)" });
+      }
+      d.setHours(23, 59, 59, 999);
+      conditions.push(lte(adminAuditLogsTable.createdAt, d));
+    }
+
+    const where = conditions.length ? and(...conditions) : undefined;
+
+    const [logs, [{ total }]] = await Promise.all([
+      db.select().from(adminAuditLogsTable)
+        .where(where)
+        .orderBy(desc(adminAuditLogsTable.createdAt))
+        .limit(limitNum)
+        .offset(offsetNum),
+      db.select({ total: sql<number>`count(*)::int` })
+        .from(adminAuditLogsTable)
+        .where(where),
+    ]);
+
+    res.json({ logs, total, limit: limitNum, offset: offsetNum });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch audit logs" });
   }
 });
 

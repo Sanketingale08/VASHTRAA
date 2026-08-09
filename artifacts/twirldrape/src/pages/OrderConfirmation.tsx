@@ -30,6 +30,7 @@ type OrderAddress = {
 
 type Order = {
   id: string;
+  displayId?: string | null;
   userId: string;
   items: OrderItem[];
   address: OrderAddress;
@@ -764,7 +765,7 @@ export function OrderConfirmationPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Order ID</p>
-                  <p className="font-mono font-bold text-xs text-[#1E6B5A] break-all">{order.id}</p>
+                  <p className="font-mono font-bold text-xs text-[#1E6B5A] break-all">#{order.displayId ?? order.id}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Placed On</p>

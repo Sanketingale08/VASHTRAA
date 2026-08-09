@@ -287,9 +287,7 @@ function ReturnsContent() {
   }
 
   function requestProcessRefund(order: AdminOrder) {
-    const display = order.id.startsWith("TD")
-      ? order.id
-      : order.id.replace(/-/g, "").slice(0, 8).toUpperCase();
+    const display = order.displayId ?? order.id;
     // Generate the idempotency key once when the modal opens so every retry
     // from the same modal sends the same key — the server will short-circuit on
     // the second call without re-processing the refund.
@@ -485,7 +483,7 @@ function ReturnsContent() {
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs text-gray-400">#{o.id.startsWith("TD") ? o.id : o.id.replace(/-/g,"").slice(0,8).toUpperCase()}</span>
+                        <span className="font-mono text-xs text-gray-400">#{o.displayId ?? o.id}</span>
                         {o.address?.name && (
                           <span className="text-xs font-medium text-gray-600">{o.address.name}</span>
                         )}

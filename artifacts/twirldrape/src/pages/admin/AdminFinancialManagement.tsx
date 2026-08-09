@@ -257,7 +257,7 @@ function SettlementsPanel() {
                     <td className="px-4 py-3.5 font-semibold" style={{ color: NAVY }}>{s.vendorName}</td>
                     <td className="px-4 py-3.5">
                       {s.orderId ? (
-                        <span className="font-mono text-xs text-gray-500">#{s.orderId?.startsWith("TD") ? s.orderId : s.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()}</span>
+                        <span className="font-mono text-xs text-gray-500">#{s.orderId}</span>
                       ) : (
                         <span className="text-xs capitalize text-gray-400">{s.type}</span>
                       )}
@@ -579,7 +579,7 @@ function RevenueReportPanel() {
       autoTable(doc, {
         startY: 26,
         head: [["Order", "Date", "Total", "Tax", "Shipping", "Commission", "Vendor Revenue", "Payment"]],
-        body: data.rows.map((r) => [r.orderId?.startsWith("TD") ? r.orderId : r.orderId?.replace(/-/g,"").slice(0,8).toUpperCase(), new Date(r.date).toLocaleDateString("en-IN"), fmt(r.total), fmt(r.tax), fmt(r.shipping), fmt(r.commission), fmt(r.vendorRevenue), r.paymentMethod]),
+        body: data.rows.map((r) => [r.orderId?.startsWith("TD") ? r.orderId : r.orderId ? `TD-${r.orderId.replace(/-/g,"").slice(0,8).toUpperCase()}` : "—", new Date(r.date).toLocaleDateString("en-IN"), fmt(r.total), fmt(r.tax), fmt(r.shipping), fmt(r.commission), fmt(r.vendorRevenue), r.paymentMethod]),
         styles: { fontSize: 8 }, headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76] },
       });
       doc.save(`revenue-report-${Date.now()}.pdf`);
@@ -649,7 +649,7 @@ function RevenueReportPanel() {
                   {data.rows.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-xs text-gray-400">No orders in this range</td></tr>}
                   {data.rows.map((r) => (
                     <tr key={r.orderId} className="hover:bg-gray-50/60">
-                      <td className="px-4 py-3 text-xs text-gray-500">{r.orderId?.startsWith("TD") ? r.orderId : r.orderId?.replace(/-/g,"").slice(0,8).toUpperCase()}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{r.orderId?.startsWith("TD") ? r.orderId : r.orderId ? `TD-${r.orderId.replace(/-/g,"").slice(0,8).toUpperCase()}` : "—"}</td>
                       <td className="px-4 py-3 text-xs text-gray-400">{new Date(r.date).toLocaleDateString("en-IN")}</td>
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: NAVY }}>{fmt(r.total)}</td>
                       <td className="px-4 py-3 text-right text-xs text-gray-600">{fmt(r.commission)}</td>

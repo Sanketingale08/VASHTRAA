@@ -231,6 +231,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
           .insert(ordersTable)
           .values({
             id: newOrderId,
+            displayId: newOrderId,
             userId: req.userId,
             items: resolvedItems,
             address,

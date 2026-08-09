@@ -483,6 +483,7 @@ router.get("/seller/orders", requireVendorAuth, async (req: any, res: any) => {
 
       vendorOrders.push({
         id: order.id,
+        displayId: order.displayId,
         createdAt: order.createdAt,
         status: order.status,
         customerName: String(address.name ?? "Customer").split(" ")[0],
@@ -551,6 +552,7 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
 
     res.json({
       id: order.id,
+      displayId: order.displayId,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       status: order.status,

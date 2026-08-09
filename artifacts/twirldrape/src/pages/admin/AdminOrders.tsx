@@ -22,6 +22,7 @@ interface OrderAddress {
 
 interface AdminOrder {
   id: string;
+  displayId?: string | null;
   userId: string;
   items: OrderItem[];
   address: OrderAddress | null;
@@ -274,7 +275,7 @@ function OrdersContent() {
                 {filtered.map((o) => (
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs text-gray-400 whitespace-nowrap">
-                      #{o.id.startsWith("TD") ? o.id : o.id.replace(/-/g,"").slice(0,8).toUpperCase()}
+                      #{o.displayId ?? o.id}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">
                       <span className="text-sm font-medium" style={{ color: NAVY }}>

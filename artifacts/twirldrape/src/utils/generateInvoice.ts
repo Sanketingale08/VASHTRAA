@@ -24,6 +24,7 @@ type OrderAddress = {
 
 type InvoiceOrder = {
   id: string;
+  displayId?: string | null;
   createdAt: string;
   items: OrderItem[];
   address: OrderAddress;
@@ -67,14 +68,13 @@ function fmt(n: number): string {
   return `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function invoiceNumber(orderId: string): string {
-  if (/^TD\d+$/.test(orderId)) return `INV-${orderId}`;
-  return `INV-TD-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+function invoiceNumber(order: InvoiceOrder): string {
+  const ref = order.displayId ?? order.id;
+  return `INV-${ref}`;
 }
 
-function fmtOrderId(orderId: string): string {
-  if (/^TD\d+$/.test(orderId)) return orderId;
-  return orderId.replace(/-/g, "").slice(0, 8).toUpperCase();
+function fmtOrderId(order: InvoiceOrder): string {
+  return order.displayId ?? order.id;
 }
 
 /** Resolve status → { label, badge color } */
@@ -167,7 +167,7 @@ export function generateInvoice(order: InvoiceOrder): void {
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...GOLD);
-  doc.text(invoiceNumber(order.id), W - MX, 22, { align: "right" });
+  doc.text(invoiceNumber(order), W - MX, 22, { align: "right" });
 
   const placedDate = new Date(order.createdAt).toLocaleDateString("en-IN", {
     day:   "numeric",
@@ -181,7 +181,7 @@ export function generateInvoice(order: InvoiceOrder): void {
   // Order ID (smaller)
   doc.setFontSize(6.5);
   doc.setTextColor(200, 190, 170);
-  doc.text(`Order: ${fmtOrderId(order.id)}`, W - MX, 32.5, { align: "right" });
+  doc.text(`Order: ${fmtOrderId(order)}`, W - MX, 32.5, { align: "right" });
 
   // ── 2. Status badge ───────────────────────────────────────────────────────
   const badge = statusBadge(order.status);

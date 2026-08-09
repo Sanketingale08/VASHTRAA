@@ -33,6 +33,7 @@ function formatDate(iso: string) {
 
 interface OrderDetail {
   id: string;
+  displayId?: string | null;
   createdAt: string;
   status: string;
   statusHistory: any[];
@@ -181,7 +182,7 @@ export default function SellerOrderDetail() {
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Order</p>
                   <h2 className="font-mono text-lg font-bold" style={{ color: MAROON }}>
-                    #{order.id.startsWith("TD") ? order.id : order.id.replace(/-/g,"").slice(0,8).toUpperCase()}
+                    #{order.displayId ?? order.id}
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">{formatDate(order.createdAt)}</p>
                 </div>

@@ -26,6 +26,7 @@ export const ordersTable = pgTable("orders", {
   refundReference: text("refund_reference"),
   refundIdempotencyKey: text("refund_idempotency_key"),
   deliveredAt: timestamp("delivered_at"),
+  displayId: text("display_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

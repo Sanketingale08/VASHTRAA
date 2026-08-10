@@ -269,16 +269,23 @@ export default function SellerProducts() {
               <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
             ))}
           </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-3 py-2 rounded-lg border text-sm outline-none cursor-pointer"
-            style={{ borderColor: "#D6C9BA" }}
-          >
-            <option value="all">{loading ? "All Statuses" : `All Statuses | ${allStatusCount} of ${products.length} product${products.length !== 1 ? "s" : ""}`}</option>
-            <option value="active">Available</option>
-            <option value="hidden">Out of Stock</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="px-3 py-2 rounded-lg border text-sm outline-none cursor-pointer"
+              style={{ borderColor: "#D6C9BA" }}
+            >
+              <option value="all">All Status</option>
+              <option value="active">Available</option>
+              <option value="hidden">Out of Stock</option>
+            </select>
+            {!loading && (
+              <span className="text-xs whitespace-nowrap" style={{ color: "#7a5f4e" }}>
+                {allStatusCount} of {products.length} product{products.length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
         </div>
 
         {error && (

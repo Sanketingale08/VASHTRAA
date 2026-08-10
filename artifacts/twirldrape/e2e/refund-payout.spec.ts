@@ -235,6 +235,143 @@ test.describe("Double-click guard on Mark payout done", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// PayoutConfirmModal — targeted tests
+// ---------------------------------------------------------------------------
+
+/** Helper: seed the admin key, stub the returns list with an approved order,
+ * fill the reference input, and click "Mark payout done" so the modal opens. */
+async function openPayoutModal(
+  page: import("@playwright/test").Page,
+  reference = "NEFT-2025-TXN-001",
+) {
+  const ADMIN_KEY = process.env.ADMIN_API_KEY || "test-e2e-admin-key";
+
+  await page.addInitScript((key) => {
+    sessionStorage.setItem("td_admin_key", key);
+  }, ADMIN_KEY);
+
+  await page.route("**/api/admin/returns", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ orders: [approvedOrder] }),
+    });
+  });
+
+  await page.goto("/admin/returns");
+
+  await expect(page.locator("button", { hasText: /Mark payout done/i }).first()).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Fill the reference so it appears in the modal
+  const refInput = page.locator('input[placeholder*="Payout reference"]').first();
+  await refInput.fill(reference);
+
+  await page.locator("button", { hasText: /Mark payout done/i }).first().click();
+
+  // Wait for the modal to be visible
+  await expect(page.locator("h2", { hasText: /Confirm payout/i })).toBeVisible({ timeout: 8_000 });
+}
+
+test.describe("PayoutConfirmModal — content, cancel, and double-submit guard", () => {
+  test("modal displays the correct order ID, refund amount, and payout reference", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+
+    await openPayoutModal(page, "NEFT-2025-TXN-001");
+
+    // Order ID
+    await expect(
+      page.locator("span.font-mono", { hasText: new RegExp(ORDER_ID, "i") }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Refund amount — 1 500 000 paise = ₹15,000
+    await expect(
+      page.locator("span", { hasText: /₹15,000/i }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Payout reference
+    await expect(
+      page.locator("span", { hasText: /NEFT-2025-TXN-001/ }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("clicking Cancel closes the modal and leaves the order unchanged (still approved)", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+
+    let processCallCount = 0;
+    await page.route(`**/api/admin/orders/${ORDER_ID}/refund/process`, async (route) => {
+      processCallCount++;
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+
+    await openPayoutModal(page, "REF-CANCEL-TEST");
+
+    const cancelBtn = page.locator("button", { hasText: /^Cancel$/i }).first();
+    await expect(cancelBtn).toBeVisible({ timeout: 5_000 });
+    await cancelBtn.click();
+
+    // Modal must be gone
+    await expect(page.locator("h2", { hasText: /Confirm payout/i })).not.toBeVisible({
+      timeout: 5_000,
+    });
+
+    // The order row should still show "refund approved" (not processed)
+    await expect(
+      page.locator("span", { hasText: /refund approved/i }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // No process API call was made
+    expect(processCallCount).toBe(0);
+  });
+
+  test("rapidly double-clicking Confirm payout fires exactly one PATCH and updates row to processed", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+
+    let processCallCount = 0;
+
+    await page.route(`**/api/admin/orders/${ORDER_ID}/refund/process`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      processCallCount++;
+      // Introduce a short delay so both rapid clicks land before the first resolves
+      await new Promise((r) => setTimeout(r, 400));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: processedOrder }),
+      });
+    });
+
+    await openPayoutModal(page, "NEFT-2025-TXN-001");
+
+    const confirmBtn = page.locator("button", { hasText: /Confirm payout/i }).first();
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+
+    // Rapidly double-click the Confirm button
+    await confirmBtn.dblclick();
+
+    // Row updates to "Paid out"
+    await expect(
+      page.locator("div", { hasText: /Paid out/i }).first(),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // The reference should be visible in the "Paid out" block
+    await expect(
+      page.locator("div", { hasText: /NEFT-2025-TXN-001/ }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Only one API call must have been made despite the double-click
+    expect(processCallCount).toBe(1);
+  });
+});
+
 test.describe("Customer order history — Refund paid out badge", () => {
   test("order history shows Refund paid out badge for a processed refund", async ({
     page,

@@ -372,6 +372,220 @@ test.describe("PayoutConfirmModal — content, cancel, and double-submit guard",
   });
 });
 
+// ---------------------------------------------------------------------------
+// Customer order detail page (/orders/:id) — Refund payout block
+// ---------------------------------------------------------------------------
+
+test.describe("Customer order detail page — Refund payout block", () => {
+  let userId: string | null = null;
+
+  test.beforeAll(async () => {
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) return;
+    try {
+      const clerk = createClerkClient({ secretKey });
+      const tag = Date.now();
+      const user = await clerk.users.createUser({
+        emailAddress: [`refund-detail-e2e-${tag}@example.com`],
+        password: `RefundDetail${tag}!`,
+        firstName: "Refund",
+        lastName: "Detail",
+        skipPasswordChecks: true,
+      });
+      userId = user.id;
+    } catch (err) {
+      console.warn("Could not create Clerk test user:", err);
+    }
+  });
+
+  test.afterAll(async () => {
+    if (!userId) return;
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) return;
+    try {
+      const clerk = createClerkClient({ secretKey });
+      await clerk.users.deleteUser(userId);
+    } catch {}
+  });
+
+  async function signInDetailUser(
+    page: import("@playwright/test").Page,
+    baseURL: string,
+    uid: string
+  ) {
+    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+    const { token } = await clerk.signInTokens.createSignInToken({
+      userId: uid,
+      expiresInSeconds: 300,
+    });
+    await setupClerkTestingToken({ page });
+    await page.goto(baseURL);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(2_000);
+    try {
+      await page.waitForFunction(() => !!(window as any).Clerk?.loaded, { timeout: 15_000 });
+    } catch {
+      await page.waitForTimeout(3_000);
+    }
+    await page.evaluate(async ({ ticket }: { ticket: string }) => {
+      const w = window as any;
+      if (!w.Clerk?.client) throw new Error("Clerk client not available");
+      const si = w.Clerk.client.signIn;
+      const result = await si.create({ strategy: "ticket", ticket });
+      if (result.status === "complete") {
+        await w.Clerk.setActive({ session: result.createdSessionId });
+      } else {
+        throw new Error(`Sign-in incomplete: ${result.status}`);
+      }
+    }, { ticket: token });
+    await page.waitForTimeout(1_500);
+  }
+
+  test("order detail page renders Refund payout banner with processed date and reference", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInDetailUser(page, baseURL!, userId);
+
+    // Stub the GET /api/orders/:id with a processed refund
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: { ...processedOrder, userId } }),
+      });
+    });
+
+    await page.goto(`/orders/${ORDER_ID}`);
+
+    // Page must load the order item
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // "Refund Payout" label must be visible
+    await expect(
+      page.locator("text=/Refund Payout/i").first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // "Refund paid out" text must be visible
+    await expect(
+      page.locator("text=/Refund paid out/i").first()
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Processed date — 10 July 2025
+    const processedDateText = new Date(processedOrder.refundProcessedAt!).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    await expect(
+      page.locator(`text=/${processedDateText}/i`).first()
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Reference number
+    await expect(
+      page.locator("text=NEFT-2025-TXN-001").first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("order detail page does not render the payout block when refundStatus is pending", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInDetailUser(page, baseURL!, userId);
+
+    const pendingOrder = {
+      ...processedOrder,
+      userId,
+      refundStatus: "pending",
+      refundProcessedAt: null,
+      refundReference: null,
+    };
+
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: pendingOrder }),
+      });
+    });
+
+    await page.goto(`/orders/${ORDER_ID}`);
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Payout block must NOT appear for a pending refund
+    await expect(page.locator("text=/Refund Payout/i")).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("text=/Refund paid out/i")).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  test("admin marking refund processed updates order detail page payout block end-to-end (API round-trip)", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInDetailUser(page, baseURL!, userId);
+
+    // First load with pending refund
+    let serveProcessed = false;
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      const order = serveProcessed
+        ? { ...processedOrder, userId }
+        : { ...processedOrder, userId, refundStatus: "approved", refundProcessedAt: null, refundReference: null };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order }),
+      });
+    });
+
+    await page.goto(`/orders/${ORDER_ID}`);
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Payout block not yet visible (refundStatus = approved)
+    await expect(page.locator("text=/Refund paid out/i")).not.toBeVisible({ timeout: 5_000 });
+
+    // Simulate admin calling the process endpoint; next page load returns processed data
+    serveProcessed = true;
+
+    // Reload to simulate the shopper refreshing after admin action
+    await page.reload();
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Payout block must now be visible
+    await expect(page.locator("text=/Refund paid out/i").first()).toBeVisible({ timeout: 10_000 });
+
+    const processedDateText = new Date(processedOrder.refundProcessedAt!).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    await expect(page.locator(`text=/${processedDateText}/i`).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("text=NEFT-2025-TXN-001").first()).toBeVisible({ timeout: 5_000 });
+  });
+});
+
 test.describe("Customer order history — Refund paid out badge", () => {
   test("order history shows Refund paid out badge for a processed refund", async ({
     page,

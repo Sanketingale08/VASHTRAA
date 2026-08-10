@@ -112,7 +112,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
             <img
               src={`${basePath}/images/logo.png`}
               alt="TwirlDrape"
-              className="h-10 w-auto object-contain brightness-0 invert mb-1"
+              className="h-14 w-auto object-contain mb-1"
             />
           </Link>
           <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/40 mt-1">Seller Panel</p>

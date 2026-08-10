@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark } from "lucide-react";
+import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark, LogOut, ChevronDown } from "lucide-react";
+import { useClerk } from "@clerk/react";
 import { useSellerContext } from "@/components/SellerGuard";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -37,9 +38,13 @@ const UNREAD_KEY = "td_seller_orders_last_viewed";
 
 export function SellerLayout({ children, title }: { children: React.ReactNode; title?: string }) {
   const { vendor } = useSellerContext();
+  const { signOut } = useClerk();
   const [location] = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const fetchUnreadCount = useCallback(async () => {
     const lastViewed = localStorage.getItem(UNREAD_KEY);
@@ -69,6 +74,18 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
     } catch {
     }
   }, []);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    if (!profileOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [profileOpen]);
 
   useEffect(() => {
     fetchUnreadCount();
@@ -187,9 +204,99 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
               >
                 <Store size={12} /> My Store
               </Link>
+
+              {/* Profile menu */}
+              <div className="relative" ref={profileRef}>
+                <button
+                  onClick={() => setProfileOpen((v) => !v)}
+                  className="flex items-center gap-1 rounded-full transition-all hover:ring-2 hover:ring-[#C9A84C]/40 focus:outline-none"
+                  aria-label="Profile menu"
+                >
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white overflow-hidden shrink-0"
+                    style={{ background: MAROON }}
+                  >
+                    {vendor.avatar ? (
+                      <img
+                        src={vendor.avatar}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      vendor.name[0]?.toUpperCase()
+                    )}
+                  </div>
+                  <ChevronDown
+                    size={12}
+                    className={`transition-transform ${profileOpen ? "rotate-180" : ""}`}
+                    style={{ color: MAROON }}
+                  />
+                </button>
+
+                {profileOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-lg border py-1 z-50"
+                    style={{ borderColor: "#E5E7EB" }}
+                  >
+                    <Link
+                      href="/seller/profile"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-gray-50"
+                      style={{ color: MAROON }}
+                    >
+                      <User size={14} /> Profile
+                    </Link>
+                    <div className="my-1 border-t" style={{ borderColor: "#F3F4F6" }} />
+                    <button
+                      onClick={() => { setProfileOpen(false); setShowLogoutDialog(true); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-red-50 text-red-600"
+                    >
+                      <LogOut size={14} /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </header>
+
+        {/* Logout confirmation dialog */}
+        {showLogoutDialog && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setShowLogoutDialog(false)}
+          >
+            <div
+              className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="font-serif text-lg font-bold mb-2" style={{ color: MAROON }}>
+                Logout
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to log out of your seller account?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowLogoutDialog(false)}
+                  className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-gray-50"
+                  style={{ borderColor: "#E5E7EB", color: "#374151" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => signOut({ redirectUrl: `${basePath}/seller/login` })}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                  style={{ background: "#DC2626" }}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 p-6 overflow-auto">
           {children}

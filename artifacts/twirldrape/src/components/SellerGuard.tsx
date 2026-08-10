@@ -166,22 +166,22 @@ export function SellerGuard({ children }: SellerGuardProps) {
         <div className="max-w-md w-full bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-10 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3" style={{ color: "#1E6B5A" }}>No Vendor Account</h2>
           <p className="text-sm text-gray-500 mb-6">
-            You don't have a vendor account yet. Claim an existing store or register a new one.
+            You don't have a vendor account linked to this login yet. Register a new store to get started.
           </p>
           <div className="flex flex-col gap-3">
             <a
-              href={`${basePath}/seller/claim`}
+              href={`${basePath}/seller/register`}
               className="inline-flex items-center justify-center gap-2 py-3 px-8 font-bold text-sm uppercase tracking-widest rounded-sm"
               style={{ background: "#1E6B5A", color: "#F3F8F5" }}
             >
-              Claim Existing Store
+              Register New Store
             </a>
             <a
-              href={`${basePath}/seller/register`}
+              href={basePath || "/"}
               className="inline-flex items-center justify-center gap-2 py-3 px-8 font-semibold text-sm rounded-sm border border-[#C9A84C]/40 hover:bg-[#E6F0EA] transition-colors"
               style={{ color: "#1E6B5A" }}
             >
-              Register New Store
+              Back to Shopping
             </a>
           </div>
         </div>

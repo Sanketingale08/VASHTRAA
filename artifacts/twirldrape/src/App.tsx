@@ -72,7 +72,6 @@ import SellerAnalytics from "@/pages/seller/SellerAnalytics";
 import SellerPayouts from "@/pages/seller/SellerPayouts";
 import SellerSettlements from "@/pages/seller/SellerSettlements";
 import SellerLogin from "@/pages/seller/SellerLogin";
-import SellerClaimStore from "@/pages/seller/SellerClaimStore";
 import VendorStore from "@/pages/VendorStore";
 import Weavers from "@/pages/Weavers";
 import WeaverProfile from "@/pages/WeaverProfile";
@@ -282,7 +281,7 @@ function Router() {
       <Route path="/admin/settings" component={AdminSettings} />
       <Route path="/seller/login/*?" component={SellerLogin} />
       <Route path="/seller/register" component={SellerRegister} />
-      <Route path="/seller/claim" component={SellerClaimStore} />
+      <Route path="/seller/claim" component={() => <Redirect to="/seller/login" />} />
       <Route path="/seller/dashboard" component={() => (
         <SellerGuard><SellerDashboard /></SellerGuard>
       )} />

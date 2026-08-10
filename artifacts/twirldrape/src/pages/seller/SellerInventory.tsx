@@ -118,10 +118,6 @@ export default function SellerInventory() {
     <SellerLayout title="Inventory">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Inventory Management</h1>
-            <p className="text-sm mt-0.5" style={{ color: "#7a5f4e" }}>Monitor stock levels and update quantities in bulk</p>
-          </div>
           <Link href="/seller/products">
             <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border" style={{ borderColor: "#D6C9BA", color: MAROON }}>
               <ClipboardList size={15} /> Manage Products

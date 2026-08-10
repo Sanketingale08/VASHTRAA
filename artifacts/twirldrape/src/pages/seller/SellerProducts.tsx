@@ -207,6 +207,13 @@ export default function SellerProducts() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // Count ignoring status filter — used in the "All Statuses" label
+  const allStatusCount = useMemo(() => {
+    let list = products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
+    if (categoryFilter !== "all") list = list.filter((p) => p.category === categoryFilter);
+    return list.length;
+  }, [products, search, categoryFilter]);
+
   useEffect(() => { setPage(1); }, [search, categoryFilter, statusFilter]);
 
   function toggleSort(key: SortKey) {
@@ -219,13 +226,7 @@ export default function SellerProducts() {
   return (
     <SellerLayout title="My Products">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div>
-            <h1 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>My Products</h1>
-            <p className="text-sm mt-0.5" style={{ color: "#7a5f4e" }}>
-              {loading ? "Loading…" : `${filtered.length} of ${products.length} product${products.length !== 1 ? "s" : ""}`}
-            </p>
-          </div>
+        <div className="flex items-center justify-end mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowBulkUpload(true)}
@@ -274,7 +275,7 @@ export default function SellerProducts() {
             className="px-3 py-2 rounded-lg border text-sm outline-none cursor-pointer"
             style={{ borderColor: "#D6C9BA" }}
           >
-            <option value="all">All Statuses</option>
+            <option value="all">{loading ? "All Statuses" : `All Statuses | ${allStatusCount} of ${products.length} product${products.length !== 1 ? "s" : ""}`}</option>
             <option value="active">Available</option>
             <option value="hidden">Out of Stock</option>
           </select>

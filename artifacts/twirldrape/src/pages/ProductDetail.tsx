@@ -708,7 +708,8 @@ export default function ProductDetail() {
     { label: "Shop Name", value: `${product.vendorName} – TwirlDrape` },
     { label: "In Stock", value: product.stock > 0 ? `${product.stock} units available` : "Out of stock" },
   ];
-  const isOutOfStock = product.stock <= 0;
+  const isDeactivated = (product as any).active === false;
+  const isOutOfStock = product.stock <= 0 || isDeactivated;
 
   const shopPath = product.vendorId
     ? `/stores/${product.vendorId}`
@@ -968,7 +969,9 @@ export default function ProductDetail() {
                 {isOutOfStock && (
                   <div className="flex items-center gap-2 mb-4 text-red-500">
                     <Package size={16} />
-                    <span className="text-sm font-semibold">Currently out of stock</span>
+                    <span className="text-sm font-semibold">
+                      {isDeactivated ? "This product is currently Out of Stock" : "Currently out of stock"}
+                    </span>
                   </div>
                 )}
 

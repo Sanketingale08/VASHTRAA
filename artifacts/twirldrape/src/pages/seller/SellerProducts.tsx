@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, AlertTriangle, PackageX, ToggleLeft, ToggleRight, Check, X, Copy, Search, Upload, Loader2 } from "lucide-react";
+import { Plus, Pencil, PackageX, ToggleLeft, ToggleRight, Check, X, Copy, Search, Upload, Loader2 } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { CATEGORIES } from "./SellerProductForm";
@@ -51,46 +51,6 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
   );
 }
 
-function DeleteModal({ product, onConfirm, onCancel, loading }: {
-  product: Product; onConfirm: () => void; onCancel: () => void; loading: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-7"
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-            <AlertTriangle size={20} className="text-red-600" />
-          </div>
-          <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Deactivate Product?</h3>
-        </div>
-        <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-          "<strong>{product.name}</strong>" will be hidden from the shop immediately. You can reactivate it later from this panel.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2.5 rounded-lg border text-sm font-medium"
-            style={{ borderColor: "#E2D9CC", color: "#6b5b4e" }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-60"
-            style={{ background: "#991b1b" }}
-          >
-            {loading ? "Deactivating…" : "Deactivate"}
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
 
 function BulkUploadModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
   const [csv, setCsv] = useState("");
@@ -247,8 +207,6 @@ export default function SellerProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -296,7 +254,7 @@ export default function SellerProducts() {
       });
       if (!res.ok) throw new Error();
       setProducts((prev) => prev.map((p) => p.id === product.id ? { ...p, active: !p.active } : p));
-      showToast(product.active ? "Product hidden from shop" : "Product is now live", "success");
+      showToast(product.active ? "Product set to Out of Stock" : "Product is now Available", "success");
     } catch {
       showToast("Failed to update status", "error");
     }
@@ -319,24 +277,6 @@ export default function SellerProducts() {
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(getApiUrl(`/api/products/${deleteTarget.id}`), {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error();
-      setProducts((prev) => prev.map((p) => p.id === deleteTarget.id ? { ...p, active: false } : p));
-      showToast("Product deactivated", "success");
-    } catch {
-      showToast("Failed to deactivate product", "error");
-    } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
-    }
-  }
 
   const filtered = useMemo(() => {
     let list = products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -423,8 +363,8 @@ export default function SellerProducts() {
             style={{ borderColor: "#D6C9BA" }}
           >
             <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="hidden">Hidden</option>
+            <option value="active">Available</option>
+            <option value="hidden">Out of Stock</option>
           </select>
         </div>
 
@@ -515,15 +455,15 @@ export default function SellerProducts() {
                         <td className="px-4 py-3 text-center">
                           <button
                             onClick={() => handleToggleActive(product)}
-                            title={product.active ? "Click to hide from shop" : "Click to make live"}
+                            title={product.active ? "Click to set Out of Stock" : "Click to set Available"}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80"
                             style={{
-                              background: product.active ? "#DCFCE7" : "#F3F4F6",
-                              color: product.active ? "#166534" : "#6B7280",
+                              background: product.active ? "#DCFCE7" : "#FEF3C7",
+                              color: product.active ? "#166534" : "#92400E",
                             }}
                           >
                             {product.active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                            {product.active ? "Active" : "Hidden"}
+                            {product.active ? "Available" : "Out of Stock"}
                           </button>
                         </td>
                         <td className="px-4 py-3">
@@ -547,13 +487,6 @@ export default function SellerProducts() {
                               ) : (
                                 <Copy size={14} style={{ color: MAROON }} />
                               )}
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(product)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                              title="Deactivate"
-                            >
-                              <Trash2 size={14} className="text-red-500" />
                             </button>
                           </div>
                         </td>
@@ -589,14 +522,6 @@ export default function SellerProducts() {
       </div>
 
       <AnimatePresence>
-        {deleteTarget && (
-          <DeleteModal
-            product={deleteTarget}
-            onConfirm={handleDelete}
-            onCancel={() => setDeleteTarget(null)}
-            loading={deleteLoading}
-          />
-        )}
         {showBulkUpload && (
           <BulkUploadModal
             onClose={() => setShowBulkUpload(false)}

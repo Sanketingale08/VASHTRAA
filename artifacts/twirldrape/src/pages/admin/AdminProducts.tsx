@@ -143,16 +143,17 @@ function KpiCard({ label, value, icon: Icon, iconBg, iconColor, active, onClick 
 
 // ─── status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    pending: "bg-amber-50 text-amber-700 border-amber-200",
-    approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    rejected: "bg-red-50 text-red-700 border-red-200",
-    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    inactive: "bg-gray-100 text-gray-500 border-gray-200",
+  const map: Record<string, { cls: string; label: string }> = {
+    pending:  { cls: "bg-amber-50 text-amber-700 border-amber-200",       label: "Pending" },
+    approved: { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "Approved" },
+    rejected: { cls: "bg-red-50 text-red-700 border-red-200",             label: "Rejected" },
+    active:   { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "Available" },
+    inactive: { cls: "bg-amber-50 text-amber-700 border-amber-200",       label: "Out of Stock" },
   };
+  const { cls, label } = map[status] ?? { cls: "bg-gray-100 text-gray-500 border-gray-200", label: status };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${map[status] ?? "bg-gray-100 text-gray-500 border-gray-200"}`}>
-      {status}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cls}`}>
+      {label}
     </span>
   );
 }

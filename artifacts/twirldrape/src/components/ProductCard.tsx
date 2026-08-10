@@ -26,6 +26,7 @@ type ProductCardProduct = {
   isBestSeller?: boolean;
   isNewArrival?: boolean;
   stock?: number;
+  active?: boolean;
   category?: string;
   description?: string;
   occasion?: string;
@@ -106,22 +107,27 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
       >
         {/* Badges */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-          {product.stock === 0 && (
+          {(product.active === false) && (
+            <span className="bg-amber-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
+              Out of Stock
+            </span>
+          )}
+          {product.active !== false && product.stock === 0 && (
             <span className="bg-gray-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               Sold Out
             </span>
           )}
-          {product.stock !== 0 && product.isBestSeller && (
+          {product.active !== false && product.stock !== 0 && product.isBestSeller && (
             <span className="bg-[#C9A84C] text-[#1E6B5A] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               Best Seller
             </span>
           )}
-          {product.stock !== 0 && product.isNewArrival && (
+          {product.active !== false && product.stock !== 0 && product.isNewArrival && (
             <span className="bg-[#1E6B5A] text-[#F3F8F5] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               New Arrival
             </span>
           )}
-          {product.stock !== 0 && discount > 0 && (
+          {product.active !== false && product.stock !== 0 && discount > 0 && (
             <span className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
               {discount}% Off
             </span>
@@ -181,15 +187,15 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
                   category: product.category ?? "",
                 });
               }}
-              disabled={(product.stock ?? 1) === 0}
+              disabled={(product.stock ?? 1) === 0 || product.active === false}
               className={cn(
                 "flex-1 font-bold py-2 text-xs tracking-wider uppercase rounded-md transition-colors",
-                (product.stock ?? 1) === 0
+                (product.stock ?? 1) === 0 || product.active === false
                   ? "bg-gray-400 text-white cursor-not-allowed opacity-80"
                   : "bg-[#C9A84C] hover:bg-[#b59539] text-[#1E3A2A]"
               )}
             >
-              {(product.stock ?? 1) === 0 ? "Sold Out" : "Add to Cart"}
+              {product.active === false ? "Out of Stock" : (product.stock ?? 1) === 0 ? "Sold Out" : "Add to Cart"}
             </button>
             {onQuickView && (
               <button

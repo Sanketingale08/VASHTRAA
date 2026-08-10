@@ -1,0 +1,277 @@
+I have thoroughly tested the TWIRLDRAPE Seller Portal and identified several UI, UX, 
+workflow, and synchronization improvements that need to be implemented. Please implement all 
+of the following changes while preserving the existing architecture and functionality. 
+General Requirements 
+ Do not break or modify any existing functionality. 
+ Do not affect routing, APIs, authentication, database relationships, or business logic. 
+ Maintain real-time synchronization between the Seller Portal, Customer Portal, and Super 
+Admin Panel wherever applicable. 
+ Ensure the UI is fully responsive across desktop, tablet, and mobile devices. 
+ Follow the existing design system and maintain a clean, modern, premium, and 
+professional UI throughout the Seller Portal. 
+ 
+Product Management 
+Real-Time Synchronization 
+Whenever a seller updates any product information, the changes should immediately synchronize 
+with both the Customer Portal and the Super Admin Panel without requiring a page refresh. 
+Synchronize: 
+ Product Status 
+ Availability 
+ Specifications 
+ Images 
+ Videos 
+ Price 
+ Discount 
+ Variants 
+ Stock Quantity 
+ Description 
+ Delivery Information 
+ Return Policy 
+ 
+Seller Profile 
+Rename Store Profile to Seller Profile throughout the Seller Portal. 
+Update this consistently in: 
+ Sidebar 
+ Headers 
+ Breadcrumbs 
+ Forms 
+ Buttons 
+ Dialogs 
+ Notifications 
+ 
+Bulk Product Upload 
+Improve Bulk Upload by allowing sellers to upload an Excel file. 
+The system should: 
+ Read and analyze the uploaded Excel file. 
+ Automatically map product fields. 
+ Validate the data. 
+ Display a review screen before publishing. 
+ Allow editing before import. 
+ Import only valid products. 
+ 
+Product Variants 
+Redesign the Product Variants section. 
+Remove the existing Size option. 
+Implement dynamic variant support for 6-Variant and 9-Variant saree configurations. 
+Allow flexible attributes such as: 
+ Color 
+ Fabric 
+ Border Style 
+ Work Type 
+ Occasion 
+ Pattern 
+ Custom Attributes 
+The variant system should be dynamic and scalable. 
+ 
+Product Status 
+Replace: 
+ Active → Available 
+ Hidden → Out of Stock 
+Customer Portal should display: 
+ Available → In Stock 
+ Out of Stock → Out of Stock badge 
+Disable purchasing when the product is Out of Stock. 
+ 
+Product Activation 
+Remove the Delete Product feature from the main actions. 
+Implement: 
+ Activate Product 
+ Deactivate Product 
+When deactivated: 
+ Hide from Customer Portal. 
+ Keep visible in Seller Portal and Super Admin Panel. 
+ Preserve all product data. 
+When activated: 
+ Show immediately in Customer Portal. 
+ Synchronize in real time across all portals. 
+ 
+Inventory 
+Replace Stock History with: 
+ Total Stock 
+ Available Stock 
+Automatically calculate: 
+ Total quantity 
+ Currently available quantity 
+Remove unnecessary stock history if not required. 
+ 
+Order ID Format Update 
+Update the Order Management module so that every order uses the TWIRLDRAPE Order ID 
+format. 
+Requirements 
+ Replace the current random order ID format (e.g., #ED8C2F35) with a standardized format 
+that starts with #TD.  
+ Every newly created order should automatically generate an ID in one of the following 
+formats:  
+o #TD000001  
+o #TD000002  
+o #TD000003  
+o or #TD2026000001 (Year + Sequence)  
+ Ensure that every Order ID is unique and generated automatically.  
+ Display the new Order ID format consistently across:  
+o Seller Portal  
+o Customer Portal  
+o Super Admin Panel  
+o Order Details Page  
+o Invoices  
+o Packing Slips  
+o Shipping Labels  
+o Shipment Tracking  
+o Notifications  
+o Emails  
+o SMS  
+o Reports & Analytics  
+o Payment Records  
+o Return & Refund Modules  
+ Existing orders should also display the new standardized Order ID format where 
+applicable, without affecting the underlying database relationships. 
+ 
+Customer Module 
+Display: 
+ Mobile Number 
+ Email 
+ Address 
+Allow searching customers by: 
+ Name 
+ Mobile 
+ Email 
+ Address 
+Improve customer status badges. 
+Rename: 
+ Active → Activate 
+ Inactive → Deactivate 
+Add a View Details button showing complete customer information, purchase history, orders, 
+and account details. 
+ 
+Analytics 
+Remove: 
+ Duplicate analytics entries 
+ Customers by State section 
+Rearrange remaining charts for a balanced layout. 
+Enhance Orders by Status with filters: 
+ Pending 
+ Accepted 
+ Processing 
+ Packed 
+ Shipped 
+ Delivered 
+ Cancelled 
+ Returned 
+ Refunded 
+Each status should have a unique color badge and update charts dynamically. 
+ 
+Notifications 
+Remove the subtitle: 
+Stay on top of orders, stock levels, and customer requests. 
+Improve the search bar visibility. 
+Display the delete icon only on hover. 
+Add a Clear All Notifications button. 
+When clicked: 
+ Show confirmation. 
+ Delete all seller notifications. 
+ Update notification count immediately. 
+ 
+Seller Profile 
+Allow only one profile image. 
+Support: 
+ Upload 
+ Drag & Drop 
+ Preview 
+ Replace 
+ Remove 
+Reduce the size of the drag-and-drop area and improve alignment. 
+Add: 
+ Mobile Number 
+Rename: 
+ Contact Email → Email 
+ Location → Address 
+ Bio → Description 
+ GSTIN → Goods and Services Tax Identification Number (GSTIN) 
+Add an Edit Profile button. 
+Allow editing of all profile information. 
+ 
+Global Header 
+Currently, module names appear twice. 
+Display the module name only in the Dashboard Header. 
+Remove duplicate page titles from all modules. 
+Remove all subtitles and helper text such as: 
+ Orders that contain your products 
+ Stay on top of orders... 
+ Your store performance overview 
+ Track your earnings... 
+ Full fee breakdown... 
+ Seller Support 
+The page should begin directly with its content. 
+ 
+Approved Badge 
+No Display: 
+ Approved 
+ My Store 
+It is only display in the dashboard section page and when seller change the module it will be hide 
+. 
+ 
+Payout 
+Replace: 
+ Lifetime Earnings → Earnings 
+Remove all unnecessary subtitles. 
+Remove duplicate payout cards and sections. 
+Keep only the essential payout information. 
+ 
+Settlements 
+Remove all unnecessary helper text, including: 
+ Full fee breakdown and payout status... 
+ From delivered orders 
+ Being processed 
+ Transferred to bank 
+ Click any row to see the full fee breakdown 
+Keep only the settlement table and relevant financial data. 
+ 
+Support 
+Remove: 
+ My Admin Tickets 
+ Duplicate support cards 
+ Unnecessary subtitles 
+Keep only: 
+ Raise Ticket 
+ Ticket List 
+ Ticket Status 
+Rename: 
+ Seller Panel Support → Support in the header of support  
+Improve the search bar visibility. 
+Allow searching tickets by: 
+ Ticket ID 
+ Subject 
+ Status 
+ Date 
+ Keywords 
+ 
+UI Polish 
+Apply a consistent premium UI across all Seller Portal modules. 
+Improve: 
+ Alignment 
+ Spacing 
+ Typography 
+ Buttons 
+ Status badges 
+ Search bars 
+ Cards 
+ Tables 
+ Empty states 
+ Hover effects 
+ Responsive behavior 
+Ensure every page has a consistent look and feel. 
+ 
+  
+Final Validation 
+Before marking the implementation as complete: 
+ Verify that every action performed in any Seller Portal module is immediately reflected in 
+both the Customer Portal and the Super Admin Panel.  
+ Confirm that dashboards, analytics, notifications, inventory, products, orders, customers, 
+payouts, settlements, and support data remain synchronized in real time.  
+ Ensure there are no broken routes, UI inconsistencies, API failures, authentication issues, 
+or database relationship problems.  
+ Test every workflow end-to-end to guarantee a production-ready, scalable, reliable, and 
+enterprise-grade multi-vendor marketplace similar to the Amazon Seller ecosystem. 
+ Implement complete real-time synchronization across the entire Twirldrape. 
+ Every action performed by a seller in any module must automatically synchronize with 
+both the Customer Portal (User Side) and the Super Admin Panel without requiring a 
+manual page refresh.

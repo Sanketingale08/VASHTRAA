@@ -59,13 +59,13 @@ export default function SellerProductNew() {
         images: form.images.filter(Boolean),
         videos: form.videos.filter(Boolean),
         variants: form.variants
-          .filter((v) => v.size.trim() || v.color.trim())
+          .filter((v) => v.attributes.length > 0)
           .map((v) => ({
-            size: v.size.trim(),
-            color: v.color.trim(),
+            attributes: v.attributes,
             stock: v.stock.trim() ? parseInt(v.stock) : 0,
             price: v.price.trim() ? parseInt(v.price) : null,
             sku: v.sku.trim() || null,
+            image: v.image.trim() || null,
           })),
         specifications: form.specifications
           .filter((s) => s.key.trim() && s.value.trim())

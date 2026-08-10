@@ -18,11 +18,16 @@ export const CATEGORY_PREFIX: Record<typeof CATEGORIES[number], string> = {
 };
 
 export type ProductVariant = {
-  size?: string;
-  color?: string;
+  /** New flexible attribute model — array of {name, value} pairs */
+  attributes?: Array<{ name: string; value: string }>;
+  /** Optional per-variant image URL */
+  image?: string;
   stock?: number;
   price?: number;
   sku?: string;
+  /** Legacy fields — preserved for backward compatibility */
+  size?: string;
+  color?: string;
 };
 
 export type ProductSpecification = {

@@ -39,14 +39,42 @@ export default function SellerProductEdit() {
         const images = Array.isArray(p.images) ? p.images : [];
         const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : [""];
         const variants = Array.isArray(p.variants)
-          ? p.variants.map((v: any) => ({
-              size: v.size ?? "",
-              color: v.color ?? "",
-              stock: v.stock != null ? String(v.stock) : "",
-              price: v.price != null ? String(v.price) : "",
-              sku: v.sku ?? "",
-            }))
+          ? p.variants.map((v: any) => {
+              // New format: has attributes array
+              if (Array.isArray(v.attributes) && v.attributes.length > 0) {
+                return {
+                  attributes: v.attributes,
+                  stock: v.stock != null ? String(v.stock) : "",
+                  price: v.price != null ? String(v.price) : "",
+                  sku: v.sku ?? "",
+                  image: v.image ?? "",
+                };
+              }
+              // Legacy format: convert size/color to attribute array
+              const attrs: Array<{ name: string; value: string }> = [];
+              if (v.color) attrs.push({ name: "Colour", value: v.color });
+              if (v.size) attrs.push({ name: "Size", value: v.size });
+              return {
+                attributes: attrs,
+                stock: v.stock != null ? String(v.stock) : "",
+                price: v.price != null ? String(v.price) : "",
+                sku: v.sku ?? "",
+                image: v.image ?? "",
+              };
+            })
           : [];
+        // Infer attribute groups from loaded variants
+        const groupMap = new Map<string, Set<string>>();
+        for (const v of variants) {
+          for (const a of v.attributes) {
+            if (!groupMap.has(a.name)) groupMap.set(a.name, new Set());
+            groupMap.get(a.name)!.add(a.value);
+          }
+        }
+        const attributeGroups = Array.from(groupMap.entries()).map(([name, vals]) => ({
+          name,
+          values: Array.from(vals),
+        }));
         const specifications = Array.isArray(p.specifications)
           ? p.specifications.map((s: any) => ({ key: s.key ?? "", value: s.value ?? "" }))
           : [];
@@ -66,6 +94,7 @@ export default function SellerProductEdit() {
           lowStockThreshold: p.lowStockThreshold != null ? String(p.lowStockThreshold) : "5",
           images: images,
           videos,
+          attributeGroups,
           variants,
           specifications,
           deliveryInfo: p.deliveryInfo ?? "",
@@ -113,13 +142,13 @@ export default function SellerProductEdit() {
         images: form.images.filter(Boolean),
         videos: form.videos.filter(Boolean),
         variants: form.variants
-          .filter((v) => v.size.trim() || v.color.trim())
+          .filter((v) => v.attributes.length > 0)
           .map((v) => ({
-            size: v.size.trim(),
-            color: v.color.trim(),
+            attributes: v.attributes,
             stock: v.stock.trim() ? parseInt(v.stock) : 0,
             price: v.price.trim() ? parseInt(v.price) : null,
             sku: v.sku.trim() || null,
+            image: v.image.trim() || null,
           })),
         specifications: form.specifications
           .filter((s) => s.key.trim() && s.value.trim())

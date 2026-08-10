@@ -12,12 +12,17 @@ export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue
 export const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"] as const;
 export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"] as const;
 
+export interface ProductAttributeGroup {
+  name: string;
+  values: string[];
+}
+
 export interface ProductVariantForm {
-  size: string;
-  color: string;
+  attributes: Array<{ name: string; value: string }>;
   stock: string;
   price: string;
   sku: string;
+  image: string;
 }
 
 export interface ProductSpecForm {
@@ -41,6 +46,7 @@ export interface ProductFormData {
   lowStockThreshold: string;
   images: string[];
   videos: string[];
+  attributeGroups: ProductAttributeGroup[];
   variants: ProductVariantForm[];
   specifications: ProductSpecForm[];
   deliveryInfo: string;
@@ -66,6 +72,7 @@ export function emptyFormData(): ProductFormData {
     lowStockThreshold: "5",
     images: [],
     videos: [""],
+    attributeGroups: [],
     variants: [],
     specifications: [],
     deliveryInfo: "",
@@ -471,6 +478,313 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
   );
 }
 
+// ── Attribute-based variant builder ──────────────────────────────────────────
+
+const ATTRIBUTE_SUGGESTIONS = ["Colour", "Fabric", "Border Style", "Work Type", "Occasion", "Pattern"];
+
+const PRESET_TEMPLATES: Record<string, ProductAttributeGroup[]> = {
+  "6-Variant": [
+    { name: "Colour", values: ["Red", "Blue", "Green"] },
+    { name: "Border Style", values: ["Gold Zari", "Silver Zari"] },
+  ],
+  "9-Variant": [
+    { name: "Colour", values: ["Red", "Blue", "Green"] },
+    { name: "Work Type", values: ["Handwoven", "Machine", "Embroidered"] },
+  ],
+};
+
+function cartesian(groups: ProductAttributeGroup[]): Array<Array<{ name: string; value: string }>> {
+  // All configured groups must have at least one value before any combinations are generated
+  if (groups.length === 0 || groups.some((g) => g.values.length === 0)) return [];
+  return groups.reduce<Array<Array<{ name: string; value: string }>>>(
+    (acc, group) => {
+      const next: Array<Array<{ name: string; value: string }>> = [];
+      for (const existing of acc) {
+        for (const val of group.values) {
+          next.push([...existing, { name: group.name, value: val }]);
+        }
+      }
+      return next;
+    },
+    [[]]
+  );
+}
+
+function variantKey(attrs: Array<{ name: string; value: string }>): string {
+  return attrs.map((a) => `${a.name}:${a.value}`).join("|");
+}
+
+function recomputeVariants(
+  groups: ProductAttributeGroup[],
+  prevVariants: ProductVariantForm[]
+): ProductVariantForm[] {
+  const combos = cartesian(groups);
+  const prevMap = new Map<string, ProductVariantForm>();
+  for (const v of prevVariants) {
+    prevMap.set(variantKey(v.attributes), v);
+  }
+  return combos.map((attrs) => {
+    const key = variantKey(attrs);
+    const prev = prevMap.get(key);
+    return prev
+      ? { ...prev, attributes: attrs }
+      : { attributes: attrs, stock: "", price: "", sku: "", image: "" };
+  });
+}
+
+interface AttributeVariantBuilderProps {
+  attributeGroups: ProductAttributeGroup[];
+  variants: ProductVariantForm[];
+  onAttributeGroupsChange: (groups: ProductAttributeGroup[]) => void;
+  onVariantsChange: (variants: ProductVariantForm[]) => void;
+}
+
+function AttributeVariantBuilder({
+  attributeGroups,
+  variants,
+  onAttributeGroupsChange,
+  onVariantsChange,
+}: AttributeVariantBuilderProps) {
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newValues, setNewValues] = useState<Record<number, string>>({});
+
+  function setGroups(groups: ProductAttributeGroup[]) {
+    onAttributeGroupsChange(groups);
+    onVariantsChange(recomputeVariants(groups, variants));
+  }
+
+  function addGroup() {
+    const name = newGroupName.trim();
+    if (!name || attributeGroups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return;
+    setGroups([...attributeGroups, { name, values: [] }]);
+    setNewGroupName("");
+  }
+
+  function addSuggestion(name: string) {
+    if (attributeGroups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return;
+    setGroups([...attributeGroups, { name, values: [] }]);
+  }
+
+  function removeGroup(idx: number) {
+    setGroups(attributeGroups.filter((_, i) => i !== idx));
+  }
+
+  function addValue(groupIdx: number) {
+    const val = (newValues[groupIdx] ?? "").trim();
+    if (!val) return;
+    const g = attributeGroups[groupIdx];
+    if (g.values.some((v) => v.toLowerCase() === val.toLowerCase())) return;
+    const groups = attributeGroups.map((gr, i) =>
+      i === groupIdx ? { ...gr, values: [...gr.values, val] } : gr
+    );
+    setGroups(groups);
+    setNewValues((prev) => ({ ...prev, [groupIdx]: "" }));
+  }
+
+  function removeValue(groupIdx: number, valIdx: number) {
+    const groups = attributeGroups.map((gr, i) =>
+      i === groupIdx ? { ...gr, values: gr.values.filter((_, vi) => vi !== valIdx) } : gr
+    );
+    setGroups(groups);
+  }
+
+  function updateVariant(varIdx: number, field: "stock" | "price" | "sku", val: string) {
+    onVariantsChange(variants.map((v, i) => (i === varIdx ? { ...v, [field]: val } : v)));
+  }
+
+  const unusedSuggestions = ATTRIBUTE_SUGGESTIONS.filter(
+    (s) => !attributeGroups.some((g) => g.name.toLowerCase() === s.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Quick preset chips */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-xs text-gray-400 font-medium">Quick templates:</span>
+        {Object.entries(PRESET_TEMPLATES).map(([label, tmpl]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setGroups(tmpl.map((g) => ({ ...g, values: [...g.values] })))}
+            className="px-3 py-1 rounded-full text-xs font-bold border transition-all hover:border-[#1E6B5A] hover:text-[#1E6B5A]"
+            style={{ borderColor: "#D6C9BA", color: "#7a5f4e" }}
+          >
+            {label}
+          </button>
+        ))}
+        {attributeGroups.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setGroups([])}
+            className="px-3 py-1 rounded-full text-xs font-bold border border-red-200 text-red-400 hover:bg-red-50 transition-all"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+
+      {/* Attribute group cards */}
+      {attributeGroups.length > 0 && (
+        <div className="space-y-2.5">
+          {attributeGroups.map((group, gIdx) => (
+            <div
+              key={gIdx}
+              className="rounded-lg border p-3 space-y-2.5"
+              style={{ borderColor: "#E2D9CC", background: "#FDFBF8" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: MAROON }}>
+                  {group.name}
+                </span>
+                <button type="button" onClick={() => removeGroup(gIdx)} className="p-1 rounded hover:bg-red-50">
+                  <X size={13} className="text-red-400" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.values.map((val, vIdx) => (
+                  <span
+                    key={vIdx}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                    style={{ background: `${MAROON}18`, color: MAROON }}
+                  >
+                    {val}
+                    <button type="button" onClick={() => removeValue(gIdx, vIdx)}>
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-1.5">
+                <input
+                  className={inputClass + " flex-1"}
+                  style={{ ...inputStyle, padding: "6px 10px", fontSize: "12px" }}
+                  placeholder={`Add ${group.name} value (press Enter)`}
+                  value={newValues[gIdx] ?? ""}
+                  onChange={(e) => setNewValues((prev) => ({ ...prev, [gIdx]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); addValue(gIdx); }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => addValue(gIdx)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                  style={{ background: `${MAROON}14`, color: MAROON }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add attribute — suggestions + custom */}
+      <div className="space-y-2">
+        {unusedSuggestions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-xs text-gray-400">Add attribute:</span>
+            {unusedSuggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => addSuggestion(s)}
+                className="px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all hover:bg-[#1E6B5A] hover:text-white hover:border-[#1E6B5A]"
+                style={{ borderColor: "#D6C9BA", color: "#6b5b4e" }}
+              >
+                + {s}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <input
+            className={inputClass + " flex-1"}
+            style={{ ...inputStyle, padding: "6px 10px", fontSize: "12px" }}
+            placeholder="Custom attribute name (e.g. Blouse Size) — press Enter"
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addGroup(); } }}
+          />
+          <button
+            type="button"
+            onClick={addGroup}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"
+            style={{ background: `${MAROON}14`, color: MAROON }}
+          >
+            <Plus size={12} /> Add
+          </button>
+        </div>
+      </div>
+
+      {/* Variant combination grid */}
+      {variants.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9a8070" }}>
+            {variants.length} combination{variants.length !== 1 ? "s" : ""} — set stock &amp; price per variant
+          </p>
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: "#E2D9CC" }}>
+            <div
+              className="grid text-[10px] font-bold uppercase tracking-wider px-3 py-2"
+              style={{
+                background: `${MAROON}0D`,
+                color: "#7a5f4e",
+                gridTemplateColumns: "1fr 90px 90px",
+              }}
+            >
+              <span>Combination</span>
+              <span>Stock</span>
+              <span>Price (₹)</span>
+            </div>
+            {variants.map((v, vIdx) => (
+              <div
+                key={vIdx}
+                className="grid items-center px-3 py-2 border-t gap-2"
+                style={{ borderColor: "#E2D9CC", gridTemplateColumns: "1fr 90px 90px" }}
+              >
+                <div className="flex flex-wrap gap-x-1.5">
+                  {v.attributes.map((a, ai) => (
+                    <span key={ai} className="text-xs font-semibold" style={{ color: MAROON }}>
+                      {ai > 0 && <span className="mx-0.5 opacity-30">·</span>}
+                      {a.value}
+                    </span>
+                  ))}
+                </div>
+                <input
+                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+                  style={{ borderColor: "#D6C9BA", background: IVORY }}
+                  type="number"
+                  min="0"
+                  value={v.stock}
+                  onChange={(e) => updateVariant(vIdx, "stock", e.target.value)}
+                  placeholder="0"
+                />
+                <input
+                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+                  style={{ borderColor: "#D6C9BA", background: IVORY }}
+                  type="number"
+                  min="0"
+                  value={v.price}
+                  onChange={(e) => updateVariant(vIdx, "price", e.target.value)}
+                  placeholder="—"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {attributeGroups.length > 0 && variants.length === 0 && (
+        <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 border border-amber-100">
+          Add at least one value to each attribute group to generate combinations.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── ProductForm ───────────────────────────────────────────────────────────────
+
 interface ProductFormProps {
   data: ProductFormData;
   errors: Partial<Record<keyof ProductFormData, string>>;
@@ -512,21 +826,6 @@ export default function ProductForm({
     [data.videos, onChange],
   );
 
-  const updateVariant = useCallback(
-    (idx: number, field: keyof ProductVariantForm, value: string) => {
-      const variants = data.variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v));
-      onChange("variants", variants);
-    },
-    [data.variants, onChange],
-  );
-  const addVariant = useCallback(
-    () => onChange("variants", [...data.variants, { size: "", color: "", stock: "", price: "", sku: "" }]),
-    [data.variants, onChange],
-  );
-  const removeVariant = useCallback(
-    (idx: number) => onChange("variants", data.variants.filter((_, i) => i !== idx)),
-    [data.variants, onChange],
-  );
 
   const updateSpec = useCallback(
     (idx: number, field: keyof ProductSpecForm, value: string) => {
@@ -705,23 +1004,15 @@ export default function ProductForm({
       </Section>
 
       <Section icon={Layers} title="Variants">
-        <p className="text-xs text-gray-400 -mt-2">Optional. Add size/color combinations with per-variant stock and price.</p>
-        <div className="space-y-3">
-          {data.variants.map((v, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 rounded-lg" style={{ background: CREAM }}>
-              <input className={inputClass + " col-span-3"} style={inputStyle} value={v.size} onChange={(e) => updateVariant(idx, "size", e.target.value)} placeholder="Size" />
-              <input className={inputClass + " col-span-3"} style={inputStyle} value={v.color} onChange={(e) => updateVariant(idx, "color", e.target.value)} placeholder="Color" />
-              <input className={inputClass + " col-span-2"} style={inputStyle} type="number" value={v.stock} onChange={(e) => updateVariant(idx, "stock", e.target.value)} placeholder="Stock" />
-              <input className={inputClass + " col-span-2"} style={inputStyle} type="number" value={v.price} onChange={(e) => updateVariant(idx, "price", e.target.value)} placeholder="Price" />
-              <button type="button" onClick={() => removeVariant(idx)} className="col-span-2 p-2 rounded-lg hover:bg-red-50 flex justify-center">
-                <X size={14} className="text-red-400" />
-              </button>
-            </div>
-          ))}
-          <button type="button" onClick={addVariant} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: MAROON }}>
-            <Plus size={13} /> Add variant
-          </button>
-        </div>
+        <p className="text-xs text-gray-400 -mt-2">
+          Optional. Build attribute groups (e.g. Colour, Fabric) — combinations are auto-generated with individual stock and pricing.
+        </p>
+        <AttributeVariantBuilder
+          attributeGroups={data.attributeGroups}
+          variants={data.variants}
+          onAttributeGroupsChange={(groups) => onChange("attributeGroups", groups)}
+          onVariantsChange={(variants) => onChange("variants", variants)}
+        />
       </Section>
 
       <Section icon={ListChecks} title="Specifications">

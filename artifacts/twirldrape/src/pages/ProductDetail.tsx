@@ -580,6 +580,7 @@ export default function ProductDetail() {
   const [addedToCart, setAddedToCart] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [galleryTab, setGalleryTab] = useState<"photos" | "video">("photos");
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
   const { data: product, isLoading, isError } = useGetProduct(id ?? "");
 
@@ -709,7 +710,39 @@ export default function ProductDetail() {
     { label: "In Stock", value: product.stock > 0 ? `${product.stock} units available` : "Out of stock" },
   ];
   const isDeactivated = (product as any).active === false;
-  const isOutOfStock = product.stock <= 0 || isDeactivated;
+
+  // Variant picker logic
+  const productVariants: Array<any> = (product as any).variants ?? [];
+  const variantAttrGroups = (() => {
+    const groupMap = new Map<string, Set<string>>();
+    for (const v of productVariants) {
+      if (!Array.isArray(v.attributes)) continue;
+      for (const a of v.attributes) {
+        if (!groupMap.has(a.name)) groupMap.set(a.name, new Set());
+        groupMap.get(a.name)!.add(a.value);
+      }
+    }
+    return Array.from(groupMap.entries()).map(([name, vals]) => ({ name, values: Array.from(vals) }));
+  })();
+  const selectedVariant = productVariants.find((v: any) =>
+    Array.isArray(v.attributes) &&
+    v.attributes.length > 0 &&
+    v.attributes.every((a: any) => selectedAttributes[a.name] === a.value)
+  ) ?? null;
+  const allGroupsSelected =
+    variantAttrGroups.length === 0 ||
+    variantAttrGroups.every((g) => selectedAttributes[g.name] !== undefined);
+  const variantRequired = variantAttrGroups.length > 0 && !allGroupsSelected;
+  const variantOutOfStock =
+    selectedVariant != null &&
+    (selectedVariant.stock === 0 || selectedVariant.stock === "0" || Number(selectedVariant.stock) <= 0);
+  const isOutOfStock = product.stock <= 0 || isDeactivated || variantOutOfStock;
+  const canPurchase = !isOutOfStock && !variantRequired;
+  // Use the selected variant's price/stock when a full combination is chosen
+  const effectivePrice =
+    selectedVariant?.price != null ? Number(selectedVariant.price) : product.price;
+  const effectiveStock =
+    selectedVariant?.stock != null ? Number(selectedVariant.stock) : product.stock;
 
   const shopPath = product.vendorId
     ? `/stores/${product.vendorId}`
@@ -957,6 +990,83 @@ export default function ProductDetail() {
                   {product.description}
                 </p>
 
+                {/* Variant picker — only shown when product has attribute-based variants */}
+                {variantAttrGroups.length > 0 && (
+                  <div className="mb-6 space-y-4">
+                    {variantAttrGroups.map((group) => (
+                      <div key={group.name}>
+                        <p className={cn(
+                          "text-xs font-bold uppercase tracking-widest mb-2",
+                          isDesigner ? "text-[#C9A84C]/70" : "opacity-50"
+                        )}>
+                          {group.name}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {group.values.map((val) => {
+                            const isSelected = selectedAttributes[group.name] === val;
+                            // Check if this value leads to an out-of-stock combo
+                            const comboOos = productVariants.some((v: any) => {
+                              if (!Array.isArray(v.attributes)) return false;
+                              const matchesThis = v.attributes.some(
+                                (a: any) => a.name === group.name && a.value === val
+                              );
+                              return matchesThis && (v.stock === 0 || v.stock === "0");
+                            });
+                            return (
+                              <button
+                                key={val}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedAttributes((prev) => {
+                                    if (prev[group.name] === val) {
+                                      const next = { ...prev };
+                                      delete next[group.name];
+                                      return next;
+                                    }
+                                    return { ...prev, [group.name]: val };
+                                  });
+                                }}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all relative",
+                                  isSelected
+                                    ? "bg-[#1E6B5A] text-white border-[#1E6B5A] shadow-sm"
+                                    : isDesigner
+                                    ? "border-[#C9A84C]/30 hover:border-[#C9A84C] text-[#E6F0EA]"
+                                    : "border-[#C9A84C]/30 hover:border-[#1E6B5A]"
+                                )}
+                              >
+                                {val}
+                                {comboOos && !isSelected && (
+                                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-400 border border-white" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {selectedVariant && (
+                      <div className="flex items-center gap-3 text-sm">
+                        {selectedVariant.stock != null && (
+                          <span className={cn(
+                            "font-semibold",
+                            selectedVariant.stock > 0 ? "text-green-600" : "text-red-500"
+                          )}>
+                            {selectedVariant.stock > 0
+                              ? `${selectedVariant.stock} in stock`
+                              : "Out of stock for this combination"}
+                          </span>
+                        )}
+                        {selectedVariant.price != null && selectedVariant.price !== product.price && (
+                          <span className="font-bold text-[#1E6B5A]">
+                            ₹{Number(selectedVariant.price).toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Stock Status */}
                 {product.stock > 0 && product.stock <= 5 && (
                   <div className="flex items-center gap-2 mb-4 text-orange-500">
@@ -979,25 +1089,25 @@ export default function ProductDetail() {
                 <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <button
                     onClick={() => {
-                      if (isOutOfStock) return;
+                      if (!canPurchase) return;
                       addItem({
                         id: product.id,
                         productId: product.id,
                         name: product.name,
-                        price: product.price,
+                        price: effectivePrice,
                         originalPrice: product.originalPrice ?? null,
                         images: product.images ?? [],
                         vendorName: product.vendorName ?? "",
-                        stock: product.stock ?? 99,
+                        stock: effectiveStock,
                         category: product.category ?? "",
                       });
                       setAddedToCart(true);
                       setTimeout(() => setAddedToCart(false), 2000);
                     }}
-                    disabled={isOutOfStock}
+                    disabled={!canPurchase}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 py-4 font-bold uppercase tracking-wider text-sm transition-all rounded-sm disabled:cursor-not-allowed",
-                      isOutOfStock
+                      !canPurchase
                         ? "bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                         : addedToCart
                         ? "bg-green-600 text-white"
@@ -1005,7 +1115,13 @@ export default function ProductDetail() {
                     )}
                   >
                     <ShoppingBag size={18} />
-                    {isOutOfStock ? "Out of Stock" : addedToCart ? "Added to Cart!" : "Add to Cart"}
+                    {variantRequired
+                      ? "Select Options"
+                      : isOutOfStock
+                      ? "Out of Stock"
+                      : addedToCart
+                      ? "Added to Cart!"
+                      : "Add to Cart"}
                   </button>
                   <button
                     onClick={() => toggle(id ?? "")}
@@ -1022,6 +1138,7 @@ export default function ProductDetail() {
                 </div>
                 <button
                   onClick={() => {
+                    if (!canPurchase) return;
                     try {
                       sessionStorage.setItem(
                         BUY_NOW_KEY,
@@ -1032,11 +1149,11 @@ export default function ProductDetail() {
                             id: product.id,
                             productId: product.id,
                             name: product.name,
-                            price: product.price,
+                            price: effectivePrice,
                             originalPrice: product.originalPrice ?? null,
                             images: product.images ?? [],
                             vendorName: product.vendorName ?? "",
-                            stock: product.stock ?? 99,
+                            stock: effectiveStock,
                             category: product.category ?? "",
                           },
                         })
@@ -1044,7 +1161,7 @@ export default function ProductDetail() {
                     } catch {}
                     setLocation("/checkout");
                   }}
-                  disabled={isOutOfStock}
+                  disabled={!canPurchase}
                   className={cn(
                     "w-full flex items-center justify-center gap-2 py-4 border-2 font-bold uppercase tracking-wider text-sm rounded-sm transition-all mb-6 disabled:opacity-50 disabled:cursor-not-allowed",
                     isDesigner

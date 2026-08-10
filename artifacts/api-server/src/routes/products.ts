@@ -422,14 +422,40 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
 function sanitizeVariants(variants: any): any[] {
   if (!Array.isArray(variants)) return [];
   return variants
-    .filter((v) => v && (v.size || v.color))
-    .map((v) => ({
-      size: v.size ? String(v.size).trim() : undefined,
-      color: v.color ? String(v.color).trim() : undefined,
-      stock: v.stock != null && v.stock !== "" ? parseInt(v.stock) : undefined,
-      price: v.price != null && v.price !== "" ? parseInt(v.price) : undefined,
-      sku: v.sku ? String(v.sku).trim() : undefined,
-    }));
+    .filter((v) => {
+      if (!v) return false;
+      if (Array.isArray(v.attributes) && v.attributes.length > 0) return true;
+      return v.size || v.color; // legacy
+    })
+    .map((v) => {
+      const stock = v.stock != null && v.stock !== "" ? parseInt(v.stock) : undefined;
+      const price = v.price != null && v.price !== "" ? parseInt(v.price) : undefined;
+      const sku = v.sku ? String(v.sku).trim() : undefined;
+      const image = v.image ? String(v.image).trim() : undefined;
+      // New flexible format
+      if (Array.isArray(v.attributes) && v.attributes.length > 0) {
+        return {
+          attributes: v.attributes
+            .filter((a: any) => a && String(a.name || "").trim() && String(a.value || "").trim())
+            .map((a: any) => ({
+              name: String(a.name).trim(),
+              value: String(a.value).trim(),
+            })),
+          stock,
+          price,
+          sku,
+          image,
+        };
+      }
+      // Legacy size/color format
+      return {
+        size: v.size ? String(v.size).trim() : undefined,
+        color: v.color ? String(v.color).trim() : undefined,
+        stock,
+        price,
+        sku,
+      };
+    });
 }
 
 function sanitizeSpecifications(specs: any): any[] {

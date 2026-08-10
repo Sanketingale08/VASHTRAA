@@ -10,9 +10,6 @@ import { insertAdminNotification } from "../lib/adminNotifications";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import {
-  sendVendorApprovalEmail,
-  sendVendorSuspensionEmail,
-  sendVendorRejectionEmail,
   sendVendorApprovalEmailForVendor,
   sendVendorSuspensionEmailForVendor,
   sendVendorRejectionEmailForVendor,

@@ -21,11 +21,8 @@ const rejectionEmailMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined)
 vi.mock("../lib/transactionalEmail", () => ({
   sendVendorSuspensionEmailForVendor: suspensionEmailMock,
   sendVendorRejectionEmailForVendor: rejectionEmailMock,
-  // Stubs for other exports imported by vendors.ts
-  sendVendorApprovalEmail: vi.fn().mockResolvedValue(undefined),
+  // Stub for other export imported by vendors.ts
   sendVendorApprovalEmailForVendor: vi.fn().mockResolvedValue(undefined),
-  sendVendorSuspensionEmail: vi.fn().mockResolvedValue(undefined),
-  sendVendorRejectionEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------

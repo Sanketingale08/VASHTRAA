@@ -78,8 +78,9 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Invalid or expired code");
-      // reload user so publicMetadata syncs
-      await user?.reload();
+      // Do NOT call user.reload() here — the parent updates form.phone directly
+      // via onSuccess(), and a reload can return stale publicMetadata that would
+      // overwrite the just-confirmed value before onSuccess has a chance to run.
       setStep("success");
       onSuccess(phone.replace(/\D/g, ""));
     } catch (err: any) {

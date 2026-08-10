@@ -109,10 +109,12 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
     try {
       // Verify the code
       const verified = await emailAddrObj.attemptVerification({ code: code.trim() });
-      // Make the new email the primary one
+      // Make the new email the primary one — user.update() already updates the
+      // local Clerk user object, so primaryEmailAddress reflects the new value
+      // immediately. Calling user.reload() here can return stale data and cause
+      // the parent to display the old email; the parent handles the UI update
+      // optimistically via the onSuccess callback instead.
       await user.update({ primaryEmailAddressId: verified.id });
-      // Sync Clerk context everywhere
-      await user.reload();
       setStep("success");
       onSuccess(newEmail.trim().toLowerCase());
     } catch (err: any) {

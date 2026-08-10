@@ -163,6 +163,11 @@ export function AccountProfilePage() {
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
 
+  // Tracks the displayed email address independently of the Clerk user object.
+  // This lets the email row update immediately after ChangeEmailModal signals
+  // success, without waiting for a potentially-slow Clerk reload to propagate.
+  const [displayEmail, setDisplayEmail] = useState("");
+
   // When true, the next user-dependency fire of the hydration effect is
   // skipped. We set this before calling user.reload() after a save so that
   // a new Clerk user-object reference (emitted by the SDK after the reload)
@@ -179,6 +184,12 @@ export function AccountProfilePage() {
       return;
     }
     setForm(hydrateForm(user));
+    // Hydrate displayEmail from Clerk on genuine user-reference changes.
+    // Because we no longer call user.reload() inside ChangeEmailModal, this
+    // effect won't fire immediately after email OTP success — so the optimistic
+    // value written by the onSuccess callback is safe until the next real
+    // sign-out / sign-in cycle.
+    setDisplayEmail(user.primaryEmailAddress?.emailAddress || "");
   }, [user]);
 
   /** Open edit mode — snapshot the current displayed values into editForm. */
@@ -264,7 +275,9 @@ export function AccountProfilePage() {
   }
 
   const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ");
-  const email = user?.primaryEmailAddress?.emailAddress ?? "";
+  // Use displayEmail (local state) so the card updates immediately after
+  // ChangeEmailModal succeeds, without waiting for Clerk propagation.
+  const email = displayEmail || user?.primaryEmailAddress?.emailAddress || "";
   // OAuth-linked accounts (Google, etc.) lock the display name at the provider level.
   const isOAuthAccount = (user?.externalAccounts?.length ?? 0) > 0;
 
@@ -530,7 +543,10 @@ export function AccountProfilePage() {
         {showEmailModal && (
           <ChangeEmailModal
             onClose={() => setShowEmailModal(false)}
-            onSuccess={(_newEmail) => {
+            onSuccess={(newEmail) => {
+              // Update local state immediately so the Email ID row reflects
+              // the new address without waiting for Clerk to propagate.
+              setDisplayEmail(newEmail);
               setShowEmailModal(false);
             }}
           />

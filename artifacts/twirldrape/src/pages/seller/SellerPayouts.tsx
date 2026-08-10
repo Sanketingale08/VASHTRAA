@@ -44,16 +44,14 @@ export default function SellerPayouts() {
 
   const summaryCards = [
     {
-      label: "Lifetime Earnings",
+      label: "Earnings",
       value: data ? `₹${data.lifetimeEarnings.toLocaleString("en-IN")}` : "—",
-      sub: "from delivered orders",
       icon: IndianRupee,
       iconBg: MAROON,
     },
     {
       label: "Pending Balance",
       value: data ? `₹${data.pendingBalance.toLocaleString("en-IN")}` : "—",
-      sub: "awaiting payout",
       icon: Clock,
       iconBg: GOLD,
     },
@@ -88,7 +86,6 @@ export default function SellerPayouts() {
                 <p className="text-2xl font-bold" style={{ color: MAROON }}>{card.value}</p>
               )}
               <p className="text-xs font-semibold text-gray-500 mt-0.5">{card.label}</p>
-              <p className="text-[10px] text-gray-400">{card.sub}</p>
             </motion.div>
           ))}
         </div>
@@ -96,7 +93,6 @@ export default function SellerPayouts() {
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Payout History</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Amounts earned from delivered orders, awaiting settlement</p>
           </div>
 
           {loading ? (

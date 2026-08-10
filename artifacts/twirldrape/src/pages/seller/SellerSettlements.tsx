@@ -234,21 +234,18 @@ export default function SellerSettlements() {
     {
       label: "Earned This Month",
       value: summary ? fmt(summary.totalEarnedThisMonth) : "—",
-      sub: "from delivered orders",
       icon: TrendingUp,
       iconBg: MAROON,
     },
     {
       label: "Pending Payout",
       value: summary ? fmt(summary.totalPending) : "—",
-      sub: "being processed",
       icon: Clock,
       iconBg: GOLD,
     },
     {
       label: "Total Paid Out",
       value: summary ? fmt(summary.totalPaid) : "—",
-      sub: "transferred to bank",
       icon: CheckCircle2,
       iconBg: "#22A06B",
     },
@@ -311,7 +308,6 @@ export default function SellerSettlements() {
                 <p className="text-2xl font-bold" style={{ color: MAROON }}>{card.value}</p>
               )}
               <p className="text-xs font-semibold text-gray-500 mt-0.5">{card.label}</p>
-              <p className="text-[10px] text-gray-400">{card.sub}</p>
             </motion.div>
           ))}
         </div>
@@ -320,7 +316,6 @@ export default function SellerSettlements() {
         <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Payout Requests</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Every time you requested a transfer to your bank account</p>
           </div>
 
           {payoutRequestsLoading ? (
@@ -389,7 +384,6 @@ export default function SellerSettlements() {
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
             <div>
               <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Settlement History</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Click any row to see the full fee breakdown</p>
             </div>
             <div className="flex gap-1.5">
               {STATUS_FILTERS.map((f) => (

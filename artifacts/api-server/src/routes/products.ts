@@ -513,7 +513,8 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
         isNewArrival: Boolean(isNewArrival),
         vendorId: req.vendorId,
         vendorName: req.vendor.name,
-        active: true,
+        status: "pending",
+        active: false,
       })
       .returning();
 
@@ -619,9 +620,13 @@ router.delete("/products/:id", requireVendorAuth, async (req: any, res: any): Pr
 router.patch("/products/:id/activate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const [existing] = await db.select({ vendorId: productsTable.vendorId, status: productsTable.status }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
     if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+    if (existing.status !== "approved") {
+      res.status(403).json({ error: "Product must be approved before it can be made available" });
+      return;
+    }
     const [updated] = await db.update(productsTable).set({ active: true }).where(eq(productsTable.id, id)).returning();
     res.json(normalizeProduct(updated));
   } catch (err) {
@@ -686,6 +691,7 @@ router.post("/products/:id/duplicate", requireVendorAuth, async (req: any, res: 
         isNewArrival: existing.isNewArrival,
         vendorId: req.vendorId,
         vendorName: req.vendor.name,
+        status: "pending",
         active: false,
       })
       .returning();
@@ -726,6 +732,7 @@ function normalizeProduct(p: typeof productsTable.$inferSelect) {
     stock: p.stock,
     lowStockThreshold: p.lowStockThreshold,
     active: p.active,
+    status: p.status,
   };
 }
 

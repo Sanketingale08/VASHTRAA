@@ -141,6 +141,7 @@ router.get("/seller/products", requireVendorAuth, async (req: any, res: any) => 
         stock: p.stock,
         lowStockThreshold: p.lowStockThreshold,
         active: p.active,
+        status: p.status,
       })),
     });
   } catch (err: any) {
@@ -425,7 +426,8 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
           : [],
         vendorId:   req.vendorId,
         vendorName: req.vendor.name,
-        active: true,
+        status: "pending",
+        active: false,
       });
     });
 
@@ -519,7 +521,8 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         images: row.images ? row.images.split("|").map((s: string) => s.trim()).filter(Boolean) : [],
         vendorId: req.vendorId,
         vendorName: req.vendor.name,
-        active: true,
+        status: "pending",
+        active: false,
       });
     });
 

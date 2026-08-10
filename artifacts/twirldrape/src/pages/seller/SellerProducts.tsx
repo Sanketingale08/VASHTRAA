@@ -29,6 +29,7 @@ interface Product {
   rating: number;
   reviewCount: number;
   active: boolean;
+  status: "pending" | "approved" | "rejected";
 }
 
 type SortKey = "name" | "price" | "stock";
@@ -355,6 +356,21 @@ export default function SellerProducts() {
                             <div className="min-w-0">
                               <p className="font-medium text-gray-800 truncate max-w-[200px]">{product.name}</p>
                               <p className="text-xs text-gray-400">{product.fabric} · {product.color}</p>
+                              {product.status === "pending" && (
+                                <span className="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#FEF9C3", color: "#854D0E" }}>
+                                  Pending Approval
+                                </span>
+                              )}
+                              {product.status === "rejected" && (
+                                <span className="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#FEE2E2", color: "#991B1B" }}>
+                                  Rejected
+                                </span>
+                              )}
+                              {product.status === "approved" && (
+                                <span className="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#DCFCE7", color: "#166534" }}>
+                                  Approved
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -373,18 +389,29 @@ export default function SellerProducts() {
                           <StockCell product={product} onUpdate={updateStock} />
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => handleToggleActive(product)}
-                            title={product.active ? "Click to set Out of Stock" : "Click to set Available"}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80"
-                            style={{
-                              background: product.active ? "#DCFCE7" : "#FEF3C7",
-                              color: product.active ? "#166534" : "#92400E",
-                            }}
-                          >
-                            {product.active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                            {product.active ? "Available" : "Out of Stock"}
-                          </button>
+                          {product.status === "approved" ? (
+                            <button
+                              onClick={() => handleToggleActive(product)}
+                              title={product.active ? "Click to set Out of Stock" : "Click to set Available"}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80"
+                              style={{
+                                background: product.active ? "#DCFCE7" : "#FEF3C7",
+                                color: product.active ? "#166534" : "#92400E",
+                              }}
+                            >
+                              {product.active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                              {product.active ? "Available" : "Out of Stock"}
+                            </button>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                              style={{ background: "#F3F4F6", color: "#6B7280" }}
+                              title={product.status === "pending" ? "Awaiting admin approval" : "Listing was rejected"}
+                            >
+                              <ToggleLeft size={14} />
+                              {product.status === "rejected" ? "Rejected" : "Pending"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-2">

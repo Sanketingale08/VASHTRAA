@@ -67,6 +67,7 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
       tagline: v.tagline ?? null,
       contactEmail: v.contactEmail ?? null,
       gstin: v.gstin ?? null,
+      mobile: v.mobile ?? null,
       status: v.status,
       ownerId: v.ownerId,
     });
@@ -298,7 +299,7 @@ router.post("/seller/claim/:vendorId", requireAuth, async (req: any, res: any) =
 
 router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { name, location, bio, gstin, contactEmail, tagline, avatar } = req.body;
+  const { name, location, bio, gstin, contactEmail, tagline, avatar, mobile } = req.body;
 
   try {
     const rows = await db
@@ -322,6 +323,17 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
     if (contactEmail !== undefined) updates.contactEmail = String(contactEmail).trim() || null;
     if (tagline !== undefined) updates.tagline = String(tagline).trim() || null;
     if (avatar !== undefined) updates.avatar = String(avatar).trim() || null;
+    if (mobile !== undefined) {
+      if (mobile === null || mobile === "") {
+        updates.mobile = null;
+      } else {
+        const mobileStr = String(mobile).trim();
+        if (mobileStr && !/^[6-9]\d{9}$/.test(mobileStr)) {
+          return res.status(400).json({ error: "Mobile number must be a 10-digit Indian number starting with 6, 7, 8, or 9." });
+        }
+        updates.mobile = mobileStr || null;
+      }
+    }
 
     const [updated] = await db
       .update(vendorsTable)
@@ -338,6 +350,7 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
       contactEmail: updated.contactEmail,
       gstin: updated.gstin,
       avatar: updated.avatar,
+      mobile: updated.mobile ?? null,
       status: updated.status,
     });
   } catch (err) {

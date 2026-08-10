@@ -16,6 +16,7 @@ interface VendorProfile {
   tagline: string | null;
   contactEmail: string | null;
   gstin: string | null;
+  mobile: string | null;
   status: "pending" | "approved" | "suspended";
   ownerId: string | null;
 }

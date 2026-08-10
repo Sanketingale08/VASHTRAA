@@ -206,6 +206,140 @@ test.describe("Mobile — customer refund request flow", () => {
     await expect(page.getByText(/Request Refund/i)).not.toBeVisible({ timeout: 3_000 });
   });
 
+  test("Shows error message and re-enables submit button when API returns 400", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!authUser) {
+      test.skip(true, "Clerk test user creation failed");
+      return;
+    }
+
+    await signInWithTicket(page, BASE_URL, authUser.userId);
+
+    // Mock order detail — cancelled order with no refundStatus
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: cancelledOrder }),
+      });
+    });
+
+    // Mock refund POST — return a 400 error
+    await page.route(`**/api/orders/${ORDER_ID}/refund`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Refund is not eligible for this order" }),
+      });
+    });
+
+    await page.goto(`${BASE_URL}/orders/${ORDER_ID}?from=history`);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(3_000);
+
+    await expect(page.getByText("Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Open the refund modal
+    const refundBtn = page.getByText(/Request Refund/i).first();
+    await expect(refundBtn).toBeVisible({ timeout: 10_000 });
+    await refundBtn.tap();
+
+    // Wait for modal to open
+    await expect(page.getByText("Original Payment Method")).toBeVisible({ timeout: 8_000 });
+
+    // Select a method
+    const storeCreditOption = page.getByText("Store Credit").first();
+    await storeCreditOption.tap();
+    await page.waitForTimeout(500);
+
+    // Locate the Pressable submit button via its testID (not just the inner Text node)
+    const submitPressable = page.getByTestId("refund-submit-btn");
+    await expect(submitPressable).toBeVisible({ timeout: 5_000 });
+    await submitPressable.tap();
+
+    // The error message should appear in the modal
+    await expect(
+      page.getByText("Refund is not eligible for this order")
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The Pressable must be re-enabled (not disabled) so the customer can retry
+    await expect(submitPressable).toBeEnabled({ timeout: 5_000 });
+
+    // Modal should still be open (no success / banner transition)
+    await expect(page.getByText(/Submit Refund Request/i)).toBeVisible({ timeout: 3_000 });
+  });
+
+  test("Shows error message and re-enables submit button when API returns 500", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!authUser) {
+      test.skip(true, "Clerk test user creation failed");
+      return;
+    }
+
+    await signInWithTicket(page, BASE_URL, authUser.userId);
+
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: cancelledOrder }),
+      });
+    });
+
+    // Mock refund POST — return a 500 server error
+    await page.route(`**/api/orders/${ORDER_ID}/refund`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Internal server error" }),
+      });
+    });
+
+    await page.goto(`${BASE_URL}/orders/${ORDER_ID}?from=history`);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(3_000);
+
+    await expect(page.getByText("Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Open the refund modal
+    const refundBtn = page.getByText(/Request Refund/i).first();
+    await expect(refundBtn).toBeVisible({ timeout: 10_000 });
+    await refundBtn.tap();
+
+    await expect(page.getByText("Original Payment Method")).toBeVisible({ timeout: 8_000 });
+
+    // Select "Original Payment Method"
+    const originalPaymentOption = page.getByText("Original Payment Method").first();
+    await originalPaymentOption.tap();
+    await page.waitForTimeout(500);
+
+    // Locate the Pressable submit button via its testID (not just the inner Text node)
+    const submitPressable = page.getByTestId("refund-submit-btn");
+    await expect(submitPressable).toBeVisible({ timeout: 5_000 });
+    await submitPressable.tap();
+
+    // Error from the server should be shown inside the modal
+    await expect(
+      page.getByText("Internal server error")
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The Pressable must be re-enabled (not disabled) so the customer can retry
+    await expect(submitPressable).toBeEnabled({ timeout: 5_000 });
+
+    // Modal stays open
+    await expect(page.getByText(/Submit Refund Request/i)).toBeVisible({ timeout: 3_000 });
+  });
+
   test("Request Refund button is absent when refund is already pending", async ({
     page,
   }) => {

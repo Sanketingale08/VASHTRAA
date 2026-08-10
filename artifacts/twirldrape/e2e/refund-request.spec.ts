@@ -218,6 +218,132 @@ test.describe("Customer refund request — web order detail page", () => {
     });
   });
 
+  test("Shows error message and re-enables submit when API returns 400", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInUser(page, baseURL!, userId);
+
+    // Mock order fetch — return a cancelled order with no refundStatus
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: cancelledOrder }),
+      });
+    });
+
+    // Mock refund POST — return a 400 error
+    await page.route(`**/api/orders/${ORDER_ID}/refund`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Refund is not eligible for this order" }),
+      });
+    });
+
+    await page.goto(`/orders/${ORDER_ID}`);
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Open the refund form
+    const refundBtn = page.locator("button", { hasText: /Request Refund/i }).first();
+    await expect(refundBtn).toBeVisible({ timeout: 10_000 });
+    await refundBtn.click();
+
+    await expect(page.locator("text=Request a Refund")).toBeVisible({ timeout: 5_000 });
+
+    // Select "Store Credit"
+    const storeCreditOption = page.locator("label", { hasText: /Store Credit/i }).first();
+    await storeCreditOption.click();
+
+    // Submit — this should fail
+    const submitBtn = page.locator("button", { hasText: /Submit Refund Request/i }).first();
+    await expect(submitBtn).toBeVisible({ timeout: 5_000 });
+    await submitBtn.click();
+
+    // The error message should be visible
+    await expect(
+      page.locator("text=Refund is not eligible for this order")
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The submit button must be re-enabled (not disabled) so the user can retry
+    await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
+
+    // The order-level "Request Refund" form should still be open (no success transition)
+    await expect(page.locator("text=Request a Refund")).toBeVisible({ timeout: 3_000 });
+  });
+
+  test("Shows error message and re-enables submit when API returns 500", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInUser(page, baseURL!, userId);
+
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: cancelledOrder }),
+      });
+    });
+
+    // Mock refund POST — return a 500 server error
+    await page.route(`**/api/orders/${ORDER_ID}/refund`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Internal server error" }),
+      });
+    });
+
+    await page.goto(`/orders/${ORDER_ID}`);
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Open the refund form
+    const refundBtn = page.locator("button", { hasText: /Request Refund/i }).first();
+    await expect(refundBtn).toBeVisible({ timeout: 10_000 });
+    await refundBtn.click();
+
+    await expect(page.locator("text=Request a Refund")).toBeVisible({ timeout: 5_000 });
+
+    // Select "Original Payment Method"
+    const originalPaymentOption = page.locator("label", { hasText: /Original Payment Method/i }).first();
+    await originalPaymentOption.click();
+
+    const submitBtn = page.locator("button", { hasText: /Submit Refund Request/i }).first();
+    await expect(submitBtn).toBeVisible({ timeout: 5_000 });
+    await submitBtn.click();
+
+    // Error message from the server should be displayed
+    await expect(
+      page.locator("text=Internal server error")
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Submit button must re-enable so the customer can retry
+    await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
+
+    // The refund form should remain open for retry
+    await expect(page.locator("text=Request a Refund")).toBeVisible({ timeout: 3_000 });
+  });
+
   test("Request Refund button appears for a return_requested order", async ({
     page,
     baseURL,

@@ -619,6 +619,7 @@ export default function OrderDetailScreen() {
             ) : null}
 
             <Pressable
+              testID="refund-submit-btn"
               style={[
                 s.modalSubmitBtn,
                 { backgroundColor: refundMethod && !refundSubmitting ? colors.primary : colors.muted },

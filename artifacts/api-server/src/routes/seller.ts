@@ -182,6 +182,8 @@ router.get("/seller/inventory", requireVendorAuth, async (req: any, res: any) =>
         lowStockCount: items.filter((i) => i.isLowStock).length,
         outOfStockCount: items.filter((i) => i.isOutOfStock).length,
         stockValue: products.reduce((sum, p) => sum + p.price * p.stock, 0),
+        totalStock: items.reduce((sum, i) => sum + i.stock, 0),
+        availableStock: items.filter((i) => i.active).reduce((sum, i) => sum + i.stock, 0),
       },
     });
   } catch (err: any) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, PackageX, Check, X, History, ClipboardList, Save } from "lucide-react";
+import { AlertTriangle, PackageX, Check, X, ClipboardList, Save } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -28,6 +28,8 @@ interface Summary {
   lowStockCount: number;
   outOfStockCount: number;
   stockValue: number;
+  totalStock: number;
+  availableStock: number;
 }
 
 function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
@@ -49,52 +51,6 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
   );
 }
 
-function HistoryModal({ productId, productName, onClose }: { productId: string; productName: string; onClose: () => void }) {
-  const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(getApiUrl(`/api/seller/inventory/history/${productId}`), { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setHistory(d.history ?? []))
-      .finally(() => setLoading(false));
-  }, [productId]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[80vh] overflow-y-auto"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Stock History</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">{productName}</p>
-        {loading ? (
-          <div className="py-8 text-center text-sm text-gray-400">Loading…</div>
-        ) : history.length === 0 ? (
-          <div className="py-8 text-center text-sm text-gray-400">No stock changes recorded yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {history.map((h) => (
-              <div key={h.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: CREAM }}>
-                <div>
-                  <p className="text-xs font-semibold text-gray-700 capitalize">{h.source}{h.reason ? ` · ${h.reason}` : ""}</p>
-                  <p className="text-[10px] text-gray-400">{new Date(h.createdAt).toLocaleString("en-IN")}</p>
-                </div>
-                <span className="text-sm font-bold" style={{ color: h.delta >= 0 ? "#166534" : "#991b1b" }}>
-                  {h.delta >= 0 ? "+" : ""}{h.delta}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
-    </div>
-  );
-}
 
 export default function SellerInventory() {
   const { vendor } = useSellerContext();
@@ -105,8 +61,6 @@ export default function SellerInventory() {
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const [historyTarget, setHistoryTarget] = useState<InventoryItem | null>(null);
-
   const showToast = useCallback((message: string, type: "success" | "error") => setToast({ message, type }), []);
 
   async function fetchInventory() {
@@ -175,6 +129,25 @@ export default function SellerInventory() {
           </Link>
         </div>
 
+        {/* Total / Available stock hero */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="rounded-2xl p-5 flex items-center gap-4" style={{ background: MAROON }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">Total Stock</p>
+              <p className="text-3xl font-bold font-serif text-white">{summary?.totalStock ?? "—"}</p>
+              <p className="text-xs text-white/50 mt-1">Units across all products</p>
+            </div>
+          </div>
+          <div className="rounded-2xl p-5 flex items-center gap-4 border" style={{ background: "#fff", borderColor: `${GOLD}44` }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: GOLD }}>Available Stock</p>
+              <p className="text-3xl font-bold font-serif" style={{ color: MAROON }}>{summary?.availableStock ?? "—"}</p>
+              <p className="text-xs text-gray-400 mt-1">Units from active (Available) products</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary summary stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
             { label: "Total Products", value: summary?.totalProducts ?? "—" },
@@ -224,14 +197,13 @@ export default function SellerInventory() {
                   <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Threshold</th>
                   <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Stock</th>
                   <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>Status</th>
-                  <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: "#7a5f4e" }}>History</th>
                 </tr>
               </thead>
               <tbody>
                 {loading
                   ? skeletonRows.map((_, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #F3EDE4" }}>
-                      {Array.from({ length: 5 }).map((__, j) => (
+                      {Array.from({ length: 4 }).map((__, j) => (
                         <td key={j} className="px-4 py-4">
                           <div className="h-4 rounded animate-pulse" style={{ background: "#F3EDE4", width: j === 0 ? "70%" : "50%" }} />
                         </td>
@@ -241,7 +213,7 @@ export default function SellerInventory() {
                   : filtered.length === 0
                     ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-16 text-center">
+                        <td colSpan={4} className="px-4 py-16 text-center">
                           <PackageX size={36} className="mx-auto mb-3 opacity-30" />
                           <p className="text-sm text-gray-400">No products in this view.</p>
                         </td>
@@ -287,11 +259,6 @@ export default function SellerInventory() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => setHistoryTarget(item)} className="p-1.5 rounded-lg hover:bg-[#E6F0EA] transition-colors" title="View stock history">
-                            <History size={14} style={{ color: MAROON }} />
-                          </button>
-                        </td>
                       </tr>
                     ))
                 }
@@ -302,9 +269,6 @@ export default function SellerInventory() {
       </div>
 
       <AnimatePresence>
-        {historyTarget && (
-          <HistoryModal productId={historyTarget.id} productName={historyTarget.name} onClose={() => setHistoryTarget(null)} />
-        )}
         {toast && (
           <Toast key={toast.message} message={toast.message} type={toast.type} onClose={() => setToast(null)} />
         )}

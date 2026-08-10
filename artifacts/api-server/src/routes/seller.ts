@@ -357,6 +357,106 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
+// ── JSON bulk-import (used by the new Excel upload flow) ─────────────────────
+router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, res: any) => {
+  const { rows } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: "rows must be a non-empty array of product objects" });
+  }
+  if (rows.length > 500) {
+    return res.status(400).json({ error: "Maximum 500 rows per upload" });
+  }
+
+  try {
+    const results: Array<{ row: number; success: boolean; error?: string; productId?: string; name?: string }> = [];
+    const toInsert: any[] = [];
+
+    rows.forEach((rowRaw: unknown, idx: number) => {
+      const rowNum = idx + 1;
+
+      // Guard: each element must be a plain object
+      if (!rowRaw || typeof rowRaw !== "object" || Array.isArray(rowRaw)) {
+        results.push({ row: rowNum, success: false, error: "Row must be a plain object" });
+        return;
+      }
+      // Safely coerce every field to string — JSON numbers from xlsx or malformed payloads
+      const row: Record<string, string> = {};
+      for (const [k, v] of Object.entries(rowRaw as Record<string, unknown>)) {
+        row[k] = v != null ? String(v) : "";
+      }
+
+      const name     = row.name?.trim();
+      const price    = parseInt(row.price);
+      const category = row.category?.toLowerCase().trim();
+      const stock    = row.stock?.trim() ? parseInt(row.stock) : 10;
+
+      if (!name) { results.push({ row: rowNum, success: false, error: "Missing name" }); return; }
+      if (!category || !(CATEGORIES as readonly string[]).includes(category)) {
+        results.push({ row: rowNum, success: false, error: `Invalid category (must be one of: ${CATEGORIES.join(", ")})` }); return;
+      }
+      if (!price || isNaN(price) || price <= 0) { results.push({ row: rowNum, success: false, error: "Invalid price" }); return; }
+      if (row.fabric?.trim() && !(FABRICS as readonly string[]).includes(row.fabric.toLowerCase().trim())) {
+        results.push({ row: rowNum, success: false, error: `Invalid fabric` }); return;
+      }
+      if (row.color?.trim() && !(COLORS as readonly string[]).includes(row.color.toLowerCase().trim())) {
+        results.push({ row: rowNum, success: false, error: `Invalid color` }); return;
+      }
+      if (row.occasion?.trim() && !(OCCASIONS as readonly string[]).includes(row.occasion.toLowerCase().trim())) {
+        results.push({ row: rowNum, success: false, error: `Invalid occasion` }); return;
+      }
+      if (!Number.isInteger(stock) || stock < 0) { results.push({ row: rowNum, success: false, error: "Invalid stock" }); return; }
+
+      toInsert.push({
+        _rowNum: rowNum,
+        name,
+        description: row.description?.trim() ?? "",
+        category,
+        subcategory:   row.subcategory?.trim()   || null,
+        brand:         row.brand?.trim()         || null,
+        designPattern: row.designPattern?.trim() || null,
+        fabric:   (row.fabric?.toLowerCase().trim()   || "silk") as any,
+        color:    (row.color?.toLowerCase().trim()    || "red")  as any,
+        occasion: (row.occasion?.toLowerCase().trim() || "festival") as any,
+        price,
+        originalPrice: row.originalPrice?.trim() ? parseInt(row.originalPrice) : null,
+        stock,
+        images: row.images?.trim()
+          ? row.images.split("|").map((s: string) => s.trim()).filter(Boolean)
+          : [],
+        vendorId:   req.vendorId,
+        vendorName: req.vendor.name,
+        active: true,
+      });
+    });
+
+    for (const item of toInsert) {
+      const { _rowNum, ...values } = item;
+      try {
+        const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
+        let categoryPrefix: string = CATEGORY_PREFIX[values.category as keyof typeof CATEGORY_PREFIX] ?? "XX";
+        const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
+        const [product] = await db.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
+        results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
+      } catch {
+        results.push({ row: _rowNum, success: false, error: "Failed to save product" });
+      }
+    }
+
+    results.sort((a, b) => a.row - b.row);
+    res.json({
+      results,
+      summary: {
+        total: rows.length,
+        succeeded: results.filter(r => r.success).length,
+        failed:    results.filter(r => !r.success).length,
+      },
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/products/bulk-import failed");
+    res.status(500).json({ error: "Failed to process bulk import" });
+  }
+});
+
 router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, res: any) => {
   const { csv } = req.body;
   if (!csv || typeof csv !== "string" || !csv.trim()) {

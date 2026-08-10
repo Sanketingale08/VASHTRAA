@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pencil, PackageX, ToggleLeft, ToggleRight, Check, X, Copy, Search, Upload, Loader2 } from "lucide-react";
@@ -6,6 +6,7 @@ import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { CATEGORIES } from "./SellerProductForm";
 import { getApiUrl } from "@/lib/api";
+import SellerBulkUpload from "./SellerBulkUpload";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -51,95 +52,6 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
   );
 }
 
-
-function BulkUploadModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
-  const [csv, setCsv] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
-  const [error, setError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setCsv(String(reader.result ?? ""));
-    reader.readAsText(file);
-  }
-
-  async function handleUpload() {
-    if (!csv.trim()) { setError("Paste or upload CSV content first"); return; }
-    setUploading(true);
-    setError("");
-    try {
-      const res = await fetch(getApiUrl("/api/seller/products/bulk-upload"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ csv }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
-      setResults(data.results ?? []);
-      if (data.summary?.succeeded > 0) onDone(`${data.summary.succeeded} product(s) uploaded`);
-    } catch (err: any) {
-      setError(err.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto"
-      >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Bulk Upload Products</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">
-          CSV columns: name, price, category (paithani/designer), fabric, color, occasion, stock, description, subcategory, brand, designPattern, originalPrice, images (pipe-separated URLs). First row must be a header.
-        </p>
-        <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="mb-3 text-sm" />
-        <textarea
-          className="w-full h-40 px-3 py-2.5 rounded-lg border text-xs font-mono outline-none resize-none"
-          style={{ borderColor: "#D6C9BA" }}
-          value={csv}
-          onChange={(e) => setCsv(e.target.value)}
-          placeholder="name,price,category,fabric,color,occasion,stock&#10;Peacock Paithani,15000,paithani,silk,red,festival,10"
-        />
-        {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
-        {results && (
-          <div className="mt-4 max-h-48 overflow-y-auto space-y-1">
-            {results.map((r) => (
-              <div key={r.row} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded" style={{ background: r.success ? "#DCFCE7" : "#FEE2E2" }}>
-                {r.success ? <Check size={12} className="text-green-600" /> : <X size={12} className="text-red-600" />}
-                <span className="font-medium">Row {r.row}:</span>
-                <span className="truncate">{r.success ? (r.name || "Uploaded") : r.error}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-3 mt-5">
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
-            style={{ background: MAROON, color: IVORY }}
-          >
-            {uploading ? "Uploading…" : "Upload"}
-          </button>
-          <button onClick={onClose} className="px-5 py-2.5 rounded-lg text-sm font-medium border" style={{ borderColor: "#D6C9BA", color: "#6b5b4e" }}>
-            Close
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
 
 function StockCell({ product, onUpdate }: { product: Product; onUpdate: (id: string, stock: number) => void }) {
   const [editing, setEditing] = useState(false);
@@ -523,7 +435,7 @@ export default function SellerProducts() {
 
       <AnimatePresence>
         {showBulkUpload && (
-          <BulkUploadModal
+          <SellerBulkUpload
             onClose={() => setShowBulkUpload(false)}
             onDone={(msg) => { showToast(msg, "success"); fetchProducts(); }}
           />

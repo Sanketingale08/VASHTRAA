@@ -8,6 +8,7 @@ export const emailOutboxTable = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id").notNull(),
     orderId: text("order_id"),
+    vendorId: text("vendor_id"),
     type: text("type").notNull(),
     toEmail: text("to_email").notNull(),
     subject: text("subject").notNull(),

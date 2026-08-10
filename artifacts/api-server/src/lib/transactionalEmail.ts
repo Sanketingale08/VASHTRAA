@@ -192,7 +192,7 @@ function wrapInTemplate(subject: string, body: string): string {
 
 async function attemptSend(
   resend: Resend,
-  entry: { id: string; toEmail: string; subject: string; html: string; attempts: number; orderId: string | null; userId: string }
+  entry: { id: string; toEmail: string; subject: string; html: string; attempts: number; orderId: string | null; userId: string; vendorId?: string | null }
 ): Promise<void> {
   const now = new Date();
   const nextAttempt = entry.attempts + 1;
@@ -223,13 +223,21 @@ async function attemptSend(
         .where(eq(emailOutboxTable.id, entry.id));
 
       // Alert admin so staff can follow up manually
+      const isVendorEmail = entry.vendorId != null;
+      const notifTitle = isVendorEmail ? "Vendor lifecycle email permanently failed" : "Order email permanently failed";
+      const notifBody = isVendorEmail
+        ? `A vendor lifecycle email to ${entry.toEmail} (vendor ${entry.vendorId}) could not be delivered after ${nextAttempt} attempts and requires manual follow-up.`
+        : entry.orderId != null
+          ? `An email to customer (order ${entry.orderId}) could not be delivered after ${nextAttempt} attempts and requires manual follow-up.`
+          : `An email to ${entry.toEmail} could not be delivered after ${nextAttempt} attempts and requires manual follow-up.`;
       insertAdminNotification({
         type: "email_delivery_failed",
-        title: "Order email permanently failed",
-        body: `An email to customer (order ${entry.orderId}) could not be delivered after ${nextAttempt} attempts and requires manual follow-up.`,
+        title: notifTitle,
+        body: notifBody,
         metadata: {
           outboxId: entry.id,
           orderId: entry.orderId,
+          vendorId: entry.vendorId ?? null,
           userId: entry.userId,
           toEmail: entry.toEmail,
           subject: entry.subject,
@@ -237,7 +245,7 @@ async function attemptSend(
           error: errMsg,
         },
       }).catch((notifErr) => {
-        logger.error({ notifErr, orderId: entry.orderId }, "[emailOutbox] Failed to insert admin notification for dead email");
+        logger.error({ notifErr, orderId: entry.orderId, vendorId: entry.vendorId }, "[emailOutbox] Failed to insert admin notification for dead email");
       });
     } else {
       const backoffSeconds = RETRY_BACKOFF_SECONDS[nextAttempt - 1] ?? 300;
@@ -445,6 +453,7 @@ async function sendVendorLifecycleEmail(opts: {
     .values({
       userId: opts.ownerId ?? opts.vendorId,
       orderId: null,
+      vendorId: opts.vendorId,
       type: "vendor_lifecycle",
       toEmail,
       subject: opts.subject,
@@ -458,6 +467,7 @@ async function sendVendorLifecycleEmail(opts: {
   await attemptSend(resend, {
     ...entry,
     orderId: null,
+    vendorId: opts.vendorId,
     userId: opts.ownerId ?? opts.vendorId,
   });
 }

@@ -1,0 +1,64 @@
+Remove "Claim Existing Store" Option Remove the "Claim Existing Store" feature completely from the Seller Portal. Requirements  Remove the "Claim Existing Store" button from the login and registration screens.  Remove any related pages, dialogs, or UI components.  Remove navigation links associated with this feature.  Ensure no broken routes or references remain.  Do not affect the existing Register New Shop workflow. The Seller Portal should support only:  Login  Register New Shop  
+
+There should be no option to claim an existing store.   
+
+2. Seller Login Screen Redesign
+   Redesign the Seller Login page with a modern, premium UI.
+   Requirements:
+    Clean and professional layout.
+    Responsive design.
+    Better typography and spacing.
+    Modern input fields.
+    Attractive login card.
+    Consistent color palette with the platform.
+    Add the platform logo at the top of the login page.
+3. Unified Login UI
+   Make the login screen design identical across all three portals:
+    Customer Portal
+    Seller Portal
+    Super Admin Portal
+   Maintain the same:
+    Layout
+    Branding
+    Typography
+    Buttons
+    Input styles
+
+ Colors  Animations Only portal-specific titles and permissions should differ. 4. Login & Registration Flow Improve the authentication flow. Display two clear options: Login Allow users to log in using:  Email Address  Mobile Number with Password authentication. Register New Shop Provide a clear "Register New Shop" option for new sellers. The registration process should remain connected to the existing approval workflow. Do not modify existing verification logic  
+
+5. Login Methods
+   Support login using:
+    Email + Password
+    Mobile Number + Password
+   Automatically identify whether the entered value is an email or mobile number and authenticate
+   accordingly.
+6.
+   6. Platform Logo
+      Add the official platform logo to:
+       Seller Login
+       Seller Registration
+      Ensure proper sizing and alignment.
+   7. Seller Profile Menu
+      Add a profile menu in the Seller Dashboard header.
+      Include:
+       Profile
+       Settings (if available)
+       Logout
+      Use a clean dropdown design.
+   8. Logout Confirmation
+      When the seller clicks Logout, display a confirmation dialog.
+      Popup message:
+      Title:
+      Logout
+      Message:
+      "Are you sure you want to log out of your seller account?"
+      Buttons:
+       Cancel
+       Logout
+      Only log the seller out after confirmation
+
+
+
+i wanna redesign the seller acess control using replit so give me the proper plan to implement all the things which i provided you
+
+

@@ -62,11 +62,6 @@ export default function SellerPayouts() {
   return (
     <SellerLayout title="Payouts">
       <div className="max-w-5xl mx-auto space-y-8">
-        <div>
-          <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Payouts</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Track your earnings and payout history</p>
-        </div>
-
         {error && (
           <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             {error}

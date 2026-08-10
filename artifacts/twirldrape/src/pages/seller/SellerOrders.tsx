@@ -102,10 +102,6 @@ export default function SellerOrders() {
     <SellerLayout title="Orders">
       <div className="max-w-6xl">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>My Orders</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Orders that contain your products</p>
-          </div>
           {!loading && (
             <div className="flex items-center gap-2">
               {pendingCount > 0 && (

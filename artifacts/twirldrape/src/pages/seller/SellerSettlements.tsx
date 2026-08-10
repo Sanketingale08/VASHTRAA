@@ -260,11 +260,7 @@ export default function SellerSettlements() {
   return (
     <SellerLayout title="Settlements">
       <div className="max-w-5xl mx-auto space-y-8">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Settlements</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Full fee breakdown and payout status for your delivered orders</p>
-          </div>
+        <div className="flex items-start justify-end gap-4 flex-wrap">
           <div className="flex flex-col items-end gap-1.5">
             <button
               onClick={handlePayoutRequest}

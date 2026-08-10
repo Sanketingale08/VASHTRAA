@@ -28,7 +28,7 @@ const NAV_LINKS = [
   { href: "/seller/customers", label: "Customers", icon: Users, group: "/seller/customers" },
   { href: "/seller/notifications", label: "Notifications", icon: Bell, group: "/seller/notifications" },
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
-  { href: "/seller/profile", label: "Store Profile", icon: User },
+  { href: "/seller/profile", label: "Seller Profile", icon: User },
   { href: "/seller/payouts", label: "Payouts", icon: CreditCard, group: "/seller/payouts" },
   { href: "/seller/settlements", label: "Settlements", icon: Landmark, group: "/seller/settlements" },
   { href: "/seller/support", label: "Support", icon: HelpCircle, group: "/seller/support" },
@@ -194,16 +194,21 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
           </h1>
           {vendor && (
             <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "#dcfce7", color: "#166534" }}>
-                ● Approved
-              </span>
-              <Link
-                href={`/stores/${vendor.id}`}
-                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:border-[#C9A84C]"
-                style={{ borderColor: "#C9A84C44", color: MAROON }}
-              >
-                <Store size={12} /> My Store
-              </Link>
+              {/* Approved badge + My Store — only on the dashboard page */}
+              {location === "/seller/dashboard" && (
+                <>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "#dcfce7", color: "#166534" }}>
+                    ● Approved
+                  </span>
+                  <Link
+                    href={`/stores/${vendor.id}`}
+                    className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:border-[#C9A84C]"
+                    style={{ borderColor: "#C9A84C44", color: MAROON }}
+                  >
+                    <Store size={12} /> My Store
+                  </Link>
+                </>
+              )}
 
               {/* Profile menu */}
               <div className="relative" ref={profileRef}>

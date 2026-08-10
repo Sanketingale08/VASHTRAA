@@ -164,11 +164,6 @@ export default function SellerNotifications() {
   return (
     <SellerLayout title="Notifications">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div>
-          <h2 className="font-serif text-xl font-bold" style={{ color: MAROON }}>Notifications</h2>
-          <p className="text-sm text-gray-500">Stay on top of orders, stock levels, and customer requests.</p>
-        </div>
-
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: CREAM }}>
             {TYPE_FILTERS.map(({ key, label }) => (

@@ -101,12 +101,8 @@ export default function SellerAnalytics() {
   return (
     <SellerLayout title="Analytics">
       <div className="max-w-5xl space-y-6">
-        {/* Header */}
+        {/* Period Selector */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="font-serif text-2xl font-bold" style={{ color: MAROON }}>Analytics</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Your store performance overview</p>
-          </div>
           <div className="flex gap-1.5 bg-white rounded-lg border p-1" style={{ borderColor: "#C9A84C33" }}>
             {PERIOD_OPTIONS.map(({ label, value }) => (
               <button key={value} onClick={() => setPeriod(value)}

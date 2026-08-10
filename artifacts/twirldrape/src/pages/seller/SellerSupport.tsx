@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  HelpCircle, Plus, Send, Clock, CheckCircle2, AlertCircle, XCircle,
+  Plus, Send, Clock, CheckCircle2, AlertCircle, XCircle,
   ShieldAlert, Ticket as TicketIcon, MessageSquare,
 } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
@@ -198,13 +198,9 @@ export default function SellerSupport() {
   }
 
   return (
-    <SellerLayout>
+    <SellerLayout title="Support">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <HelpCircle size={20} style={{ color: MAROON }} />
-            <h2 className="font-serif text-xl font-bold" style={{ color: MAROON }}>Seller Support</h2>
-          </div>
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-white"

@@ -345,7 +345,7 @@ export default function SellerProfile() {
   const labelStyle = { color: "#5a3e3e" };
 
   return (
-    <SellerLayout title="Store Profile">
+    <SellerLayout title="Seller Profile">
       <div className="max-w-2xl mx-auto">
         <motion.form
           initial={{ opacity: 0, y: 20 }}

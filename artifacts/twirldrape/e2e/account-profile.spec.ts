@@ -114,8 +114,14 @@ test.describe("Profile Details page", () => {
       // This is the critical scenario: the UI must show the submitted values even when
       // Clerk's session hasn't propagated the new publicMetadata yet (the bug that was
       // previously fixed via the skipNextHydrateRef guard).
+      let capturedPatchBody: Record<string, unknown> | null = null;
       await page.route("**/api/account/profile", async (route) => {
         if (route.request().method() === "PATCH") {
+          try {
+            capturedPatchBody = await route.request().postDataJSON();
+          } catch {
+            capturedPatchBody = null;
+          }
           await route.fulfill({
             status: 200,
             contentType: "application/json",
@@ -167,6 +173,17 @@ test.describe("Profile Details page", () => {
 
       // "Saved" success badge proves the save path completed successfully
       await expect(page.getByText("Saved")).toBeVisible();
+
+      // ── Assert all six fields were sent in the PATCH request body ──
+      // This guards against accidental omissions in the fetch payload.
+      expect(capturedPatchBody, "PATCH request body was not captured — route may not have fired").not.toBeNull();
+      const body = capturedPatchBody as Record<string, unknown>;
+      expect(body, "firstName missing from PATCH body").toHaveProperty("firstName", "Profile");
+      expect(body, "lastName missing from PATCH body").toHaveProperty("lastName", "Tester");
+      expect(body, "gender missing from PATCH body").toHaveProperty("gender", "Female");
+      expect(body, "dateOfBirth missing from PATCH body").toHaveProperty("dateOfBirth", "1995-08-15");
+      expect(body, "location missing from PATCH body").toHaveProperty("location", "Pune, Maharashtra");
+      expect(body, "alternateMobile missing from PATCH body").toHaveProperty("alternateMobile", "9123456789");
     }
   );
 

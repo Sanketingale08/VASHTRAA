@@ -3,76 +3,70 @@ import { SignIn } from "@clerk/react";
 import { ArrowRight, CheckCircle2, Zap } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+
+// Palette drawn from the reference image
+const TEAL   = "#1E6B5A";   // headings, buttons, links
+const GOLD   = "#C9A84C";   // brand accent (TWIRLDRAPE lettering)
+const BG     = "#EFF5F1";   // page mint-cream background
+const CARD   = "#FFFFFF";   // login card
+const INPUT  = "#EBF3EE";   // input field fill
+const BORDER = "#D4E9DC";   // card / input borders
 
 export default function SellerLogin() {
   return (
     <div
       className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a2f5c 100%)` }}
+      style={{ background: BG }}
     >
       <div className="w-full max-w-md">
-        {/* Logo + portal label */}
-        <div className="text-center mb-8">
+
+        {/* ── Logo + portal label ── */}
+        <div className="text-center mb-6">
           <img
             src={`${basePath}/images/logo.png`}
             alt="TwirlDrape"
-            className="h-10 w-auto object-contain brightness-0 invert mx-auto mb-3"
+            className="h-10 w-auto object-contain mx-auto mb-2"
           />
           <p
-            className="text-xs font-bold uppercase tracking-[0.3em]"
+            className="text-[10px] font-semibold uppercase tracking-[0.25em]"
             style={{ color: GOLD }}
           >
-            Seller Portal
-          </p>
-          <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Sign in to manage your store
+            Seller Portal · Authentic Sarees
           </p>
         </div>
 
         {/* ── Sign-in card ── */}
         <div
-          className="rounded-2xl shadow-2xl overflow-hidden"
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            backdropFilter: "blur(12px)",
-          }}
+          className="rounded-2xl shadow-md overflow-hidden"
+          style={{ background: CARD, border: `1px solid ${BORDER}` }}
         >
-          {/* Label hint above Clerk component */}
-          <div className="px-6 pt-5 pb-0">
-            <p
-              className="text-[11px] font-bold uppercase tracking-widest mb-0.5"
-              style={{ color: GOLD }}
-            >
-              Sign In
-            </p>
-            <p
-              className="text-xs"
-              style={{ color: "rgba(255,255,255,0.4)" }}
-            >
-              Enter your email or mobile number
-            </p>
-          </div>
-
           <SignIn
             routing="path"
             path={`${basePath}/seller/login`}
             signUpUrl={`${basePath}/seller/register`}
             forceRedirectUrl={`${basePath}/seller/dashboard`}
             appearance={{
+              variables: {
+                colorPrimary:        TEAL,
+                colorBackground:     CARD,
+                colorInputBackground: INPUT,
+                colorText:           "#1a1a1a",
+                colorTextSecondary:  "#6b7280",
+                colorInputText:      "#1a1a1a",
+                borderRadius:        "0.625rem",
+              },
               elements: {
                 rootBox: "w-full",
                 cardBox:
                   "!w-full !rounded-none !shadow-none !border-none !bg-transparent",
-                card: "!shadow-none !border-none !bg-transparent !rounded-none",
-                footer:
+                card:
                   "!shadow-none !border-none !bg-transparent !rounded-none",
-                // Hide social/OAuth provider buttons and the "or" divider
-                socialButtonsBlock: { display: "none" },
+                // Hide Clerk's built-in footer (we show our own CTA below)
+                footer: "!hidden",
+                // Hide social / OAuth buttons and the "or" divider
+                socialButtonsBlock:       { display: "none" },
                 socialButtonsBlockButton: { display: "none" },
-                dividerRow: { display: "none" },
+                dividerRow:               { display: "none" },
               },
             }}
           />
@@ -80,27 +74,21 @@ export default function SellerLogin() {
 
         {/* ── Register New Shop CTA ── */}
         <div
-          className="mt-4 rounded-xl px-5 py-4 flex items-center justify-between gap-4"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
+          className="mt-3 rounded-xl px-5 py-4 flex items-center justify-between gap-4"
+          style={{ background: CARD, border: `1px solid ${BORDER}` }}
         >
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white">
+            <p className="text-sm font-semibold" style={{ color: TEAL }}>
               New to TwirlDrape?
             </p>
-            <p
-              className="text-xs mt-0.5"
-              style={{ color: "rgba(255,255,255,0.4)" }}
-            >
+            <p className="text-xs mt-0.5 text-gray-500">
               Register your store and start selling
             </p>
           </div>
           <a
             href={`${basePath}/seller/register`}
-            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-xs transition-all hover:opacity-90"
-            style={{ background: GOLD, color: NAVY }}
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-xs text-white transition-all hover:opacity-90"
+            style={{ background: TEAL }}
           >
             Register New Shop <ArrowRight size={13} />
           </a>
@@ -108,19 +96,20 @@ export default function SellerLogin() {
 
         {/* ── Trust badges ── */}
         <div
-          className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-1.5 justify-center text-xs"
-          style={{ color: "rgba(255,255,255,0.35)" }}
+          className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 justify-center text-xs"
+          style={{ color: "#9CA3AF" }}
         >
           <span className="flex items-center gap-1.5">
-            <CheckCircle2 size={12} style={{ color: GOLD }} /> Free to join
+            <CheckCircle2 size={12} style={{ color: TEAL }} /> Free to join
           </span>
           <span className="flex items-center gap-1.5">
-            <CheckCircle2 size={12} style={{ color: GOLD }} /> No setup fees
+            <CheckCircle2 size={12} style={{ color: TEAL }} /> No setup fees
           </span>
           <span className="flex items-center gap-1.5">
             <Zap size={12} style={{ color: GOLD }} /> Go live in minutes
           </span>
         </div>
+
       </div>
     </div>
   );

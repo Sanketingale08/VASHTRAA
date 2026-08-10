@@ -265,7 +265,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             vendorId,
             type: "new_order",
             title: "New order received",
-            body: `You have a new order for ${firstItem}${extra} worth ₹${group.vendorTotal.toLocaleString("en-IN")}.`,
+            body: `You have a new order (${order.id}) for ${firstItem}${extra} worth ₹${group.vendorTotal.toLocaleString("en-IN")}.`,
             metadata: { orderId: order.id },
           });
           await insertSellerNotification({
@@ -273,7 +273,7 @@ router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> =>
             vendorId,
             type: "payment_success",
             title: "Payment received",
-            body: `Payment of ₹${group.vendorTotal.toLocaleString("en-IN")} confirmed for your order (${firstItem}${extra}).`,
+            body: `Payment of ₹${group.vendorTotal.toLocaleString("en-IN")} confirmed for order ${order.id} (${firstItem}${extra}).`,
             metadata: { orderId: order.id },
           });
         }

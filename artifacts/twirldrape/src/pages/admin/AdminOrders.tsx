@@ -119,6 +119,7 @@ function OrdersContent() {
     if (!q) return orders;
     return orders.filter((o) => {
       if (o.id.toLowerCase().includes(q)) return true;
+      if (o.displayId && o.displayId.toLowerCase().includes(q)) return true;
       const customerName = o.address?.name ?? "";
       if (customerName.toLowerCase().includes(q)) return true;
       if (o.status.replace(/_/g, " ").includes(q)) return true;

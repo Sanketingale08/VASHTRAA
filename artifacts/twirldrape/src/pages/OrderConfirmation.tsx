@@ -850,6 +850,7 @@ export function OrderConfirmationPage() {
                 <button
                   onClick={() => generateInvoice({
                     id: order.id,
+                    displayId: order.displayId,
                     createdAt: order.createdAt,
                     items: order.items as OrderItem[],
                     address: order.address as OrderAddress,

@@ -175,6 +175,31 @@ function OverviewTab({ summary, dashSummary, onNavigate }: { summary: any; dashS
   );
 }
 
+function statusBadgeProps(status: string) {
+  // Badge label shows what action can be taken (Active customers can be Deactivated, Inactive can be Activated)
+  // But per spec the label is "Activate" for Active state and "Deactivate" for Inactive state.
+  if (status === "Active") return { label: "Activate", bg: "#dcfce7", color: "#166534" };
+  return { label: "Deactivate", bg: "#f3f4f6", color: "#9ca3af" };
+}
+
+function OrderStatusPill({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string }> = {
+    pending:    { bg: "#fef9c3", color: "#854d0e" },
+    confirmed:  { bg: "#dbeafe", color: "#1e40af" },
+    processing: { bg: "#e0f2fe", color: "#0369a1" },
+    shipped:    { bg: "#f3e8ff", color: "#7e22ce" },
+    delivered:  { bg: "#dcfce7", color: "#166534" },
+    cancelled:  { bg: "#fee2e2", color: "#991b1b" },
+    returned:   { bg: "#fce7f3", color: "#9d174d" },
+  };
+  const style = map[status?.toLowerCase()] ?? { bg: "#f3f4f6", color: "#6b7280" };
+  return (
+    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize" style={{ background: style.bg, color: style.color }}>
+      {status}
+    </span>
+  );
+}
+
 function CustomersTab({ onSelect }: { onSelect: (userId: string) => void }) {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,57 +221,133 @@ function CustomersTab({ onSelect }: { onSelect: (userId: string) => void }) {
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeUp} className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
+      {/* Search bar */}
       <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email or phone"
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#C9A84C]"
+            placeholder="Search by name, mobile, email, or address…"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/30 focus:border-[#C9A84C]"
           />
         </div>
-        <span className="text-xs text-gray-400 ml-auto">{customers.length} customers</span>
+        <span className="text-xs text-gray-400 shrink-0">{customers.length} customers</span>
       </div>
 
       {loading ? (
         <div className="p-5 space-y-3">
-          {[1, 2, 3].map((n) => <div key={n} className="h-14 rounded-xl bg-gray-100 animate-pulse" />)}
+          {[1, 2, 3].map((n) => <div key={n} className="h-16 rounded-xl bg-gray-100 animate-pulse" />)}
         </div>
       ) : customers.length === 0 ? (
         <div className="py-16 text-center text-gray-400 text-sm">
           <Users size={32} className="mx-auto mb-3 opacity-30" />
-          No customers yet.
+          {search ? "No customers match your search." : "No customers yet."}
         </div>
       ) : (
-        <div className="divide-y divide-gray-50">
-          {customers.map((c) => (
-            <button
-              key={c.userId}
-              onClick={() => onSelect(c.userId)}
-              className="w-full px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-            >
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0" style={{ background: GOLD }}>
-                {c.name[0]?.toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-700 truncate">{c.name}</p>
-                <p className="text-[11px] text-gray-400 truncate">{c.email || c.phone || "—"}</p>
-              </div>
-              <div className="hidden sm:block text-right shrink-0">
-                <p className="text-xs font-bold" style={{ color: MAROON }}>{formatMoney(c.totalSpent)}</p>
-                <p className="text-[10px] text-gray-400">{c.totalOrders} orders</p>
-              </div>
-              <span
-                className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0"
-                style={{ background: c.status === "Active" ? "#dcfce7" : "#f3f4f6", color: c.status === "Active" ? "#166534" : "#6b7280" }}
-              >
-                {c.status}
-              </span>
-              <ChevronRight size={14} className="text-gray-300 shrink-0" />
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Desktop table header */}
+          <div className="hidden lg:grid grid-cols-[1fr_140px_180px_160px_100px_80px_90px] gap-3 px-5 py-2.5 border-b border-gray-100 bg-gray-50/60">
+            {["Name", "Mobile", "Email", "Address", "Orders", "Status", ""].map((h) => (
+              <p key={h} className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{h}</p>
+            ))}
+          </div>
+
+          <div className="divide-y divide-gray-50">
+            {customers.map((c) => {
+              const badge = statusBadgeProps(c.status);
+              const address = [c.city, c.state].filter(Boolean).join(", ") || "—";
+
+              return (
+                <div key={c.userId} className="px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                  {/* Desktop row */}
+                  <div className="hidden lg:grid grid-cols-[1fr_140px_180px_160px_100px_80px_90px] gap-3 items-center">
+                    {/* Name + avatar */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: GOLD }}>
+                        {c.name[0]?.toUpperCase()}
+                      </div>
+                      <p className="text-sm font-semibold text-gray-700 truncate">{c.name}</p>
+                    </div>
+                    {/* Mobile */}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
+                      <Phone size={11} className="shrink-0 text-gray-400" />
+                      <span className="truncate">{c.phone || "—"}</span>
+                    </div>
+                    {/* Email */}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
+                      <Mail size={11} className="shrink-0 text-gray-400" />
+                      <span className="truncate">{c.email || "—"}</span>
+                    </div>
+                    {/* Address */}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
+                      <MapPin size={11} className="shrink-0 text-gray-400" />
+                      <span className="truncate">{address}</span>
+                    </div>
+                    {/* Orders + spend */}
+                    <div className="text-right">
+                      <p className="text-xs font-bold" style={{ color: MAROON }}>{formatMoney(c.totalSpent)}</p>
+                      <p className="text-[10px] text-gray-400">{c.totalOrders} orders</p>
+                    </div>
+                    {/* Status badge */}
+                    <div>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: badge.bg, color: badge.color }}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    {/* View Details button */}
+                    <div>
+                      <button
+                        onClick={() => onSelect(c.userId)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors hover:border-[#1E6B5A]/40 hover:text-[#1E6B5A]"
+                        style={{ borderColor: "#e5e7eb", color: "#6b7280" }}
+                      >
+                        View <ChevronRight size={11} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Mobile card */}
+                  <div className="lg:hidden flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0" style={{ background: GOLD }}>
+                      {c.name[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-700 truncate">{c.name}</p>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: badge.bg, color: badge.color }}>
+                          {badge.label}
+                        </span>
+                      </div>
+                      {c.phone && (
+                        <p className="text-[11px] text-gray-500 flex items-center gap-1"><Phone size={10} /> {c.phone}</p>
+                      )}
+                      {c.email && (
+                        <p className="text-[11px] text-gray-500 flex items-center gap-1"><Mail size={10} /> {c.email}</p>
+                      )}
+                      {(c.city || c.state) && (
+                        <p className="text-[11px] text-gray-500 flex items-center gap-1"><MapPin size={10} /> {address}</p>
+                      )}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <div>
+                          <span className="text-xs font-bold" style={{ color: MAROON }}>{formatMoney(c.totalSpent)}</span>
+                          <span className="text-[10px] text-gray-400 ml-1.5">· {c.totalOrders} orders</span>
+                        </div>
+                        <button
+                          onClick={() => onSelect(c.userId)}
+                          className="text-[11px] font-semibold flex items-center gap-1 hover:opacity-70"
+                          style={{ color: MAROON }}
+                        >
+                          View Details <ChevronRight size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </motion.div>
   );
@@ -257,6 +358,8 @@ function CustomerDetailModal({ userId, onClose }: { userId: string; onClose: () 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
+    setData(null);
     apiGet(`/api/seller/customers/${userId}`)
       .then(setData)
       .catch(() => {})
@@ -264,92 +367,175 @@ function CustomerDetailModal({ userId, onClose }: { userId: string; onClose: () 
   }, [userId]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    /* Slide-over panel from the right */
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      {/* Scrim */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
+        className="absolute inset-0 bg-black/40"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 320, damping: 34 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto"
+        className="relative bg-white w-full max-w-lg h-full overflow-y-auto flex flex-col shadow-2xl"
       >
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
-          <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Customer Profile</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        {/* Sticky header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+          <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Customer Details</h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
         </div>
 
         {loading ? (
-          <div className="p-6 space-y-3">
-            {[1, 2, 3].map((n) => <div key={n} className="h-12 rounded-xl bg-gray-100 animate-pulse" />)}
+          <div className="p-6 space-y-4 flex-1">
+            {[1, 2, 3, 4].map((n) => <div key={n} className="h-14 rounded-xl bg-gray-100 animate-pulse" />)}
           </div>
         ) : !data ? (
-          <div className="p-10 text-center text-gray-400 text-sm">Could not load customer.</div>
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm p-10 text-center">
+            Could not load customer details.
+          </div>
         ) : (
-          <div className="p-6 space-y-6">
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white shrink-0" style={{ background: MAROON }}>
-                {data.name[0]?.toUpperCase()}
+          <div className="flex-1 overflow-y-auto">
+            {/* Profile hero */}
+            <div className="px-6 py-5" style={{ background: `linear-gradient(135deg, ${MAROON}12, ${GOLD}0a)` }}>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white shrink-0 shadow-sm" style={{ background: MAROON }}>
+                  {data.name[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-serif text-lg font-bold text-gray-800">{data.name}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Customer since {data.orders.length > 0 ? formatDate(data.orders[data.orders.length - 1].createdAt) : "—"}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-serif text-lg font-bold text-gray-800">{data.name}</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
-                  {data.email && <span className="flex items-center gap-1"><Mail size={11} /> {data.email}</span>}
-                  {data.phone && <span className="flex items-center gap-1"><Phone size={11} /> {data.phone}</span>}
-                  {data.city && <span className="flex items-center gap-1"><MapPin size={11} /> {data.city}, {data.state}</span>}
+
+              {/* Stats row */}
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="bg-white/80 rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold" style={{ color: MAROON }}>{data.totalOrders}</p>
+                  <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1"><ShoppingBag size={10} /> Orders</p>
+                </div>
+                <div className="bg-white/80 rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold" style={{ color: MAROON }}>{formatMoney(data.totalSpent)}</p>
+                  <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1"><IndianRupee size={10} /> Spent with you</p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl p-4" style={{ background: CREAM }}>
-                <p className="text-lg font-bold" style={{ color: MAROON }}>{data.totalOrders}</p>
-                <p className="text-[11px] text-gray-500 flex items-center gap-1"><ShoppingBag size={11} /> Total Orders</p>
-              </div>
-              <div className="rounded-xl p-4" style={{ background: CREAM }}>
-                <p className="text-lg font-bold" style={{ color: MAROON }}>{formatMoney(data.totalSpent)}</p>
-                <p className="text-[11px] text-gray-500 flex items-center gap-1"><IndianRupee size={11} /> Total Spent</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-bold text-gray-700 mb-2">Purchase History</h4>
-              <div className="space-y-2">
-                {data.orders.map((o: any) => (
-                  <div key={o.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-700 truncate">
-                        {o.vendorItems.map((i: any) => i.name).join(", ")}
-                      </p>
-                      <p className="text-[10px] text-gray-400">{formatDate(o.createdAt)}</p>
+            <div className="p-6 space-y-6">
+              {/* Contact information */}
+              <section>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Contact Information</h4>
+                <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <Mail size={14} className="text-gray-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-400 font-medium">Email</p>
+                      <p className="text-sm text-gray-700">{data.email || "—"}</p>
                     </div>
-                    <span className="text-xs font-bold shrink-0" style={{ color: MAROON }}>{formatMoney(o.vendorTotal)}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {data.reviews.length > 0 && (
-              <div>
-                <h4 className="text-sm font-bold text-gray-700 mb-2">Reviews</h4>
-                <div className="space-y-2">
-                  {data.reviews.map((r: any) => (
-                    <div key={r.id} className="p-3 rounded-xl border border-gray-100 text-xs text-gray-600">
-                      <div className="flex items-center gap-1 mb-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star key={i} size={11} className={i < r.rating ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-200"} />
-                        ))}
-                      </div>
-                      {r.comment}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <Phone size={14} className="text-gray-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-400 font-medium">Mobile Number</p>
+                      <p className="text-sm text-gray-700">{data.phone || "—"}</p>
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <MapPin size={14} className="text-gray-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-gray-400 font-medium">Address</p>
+                      <p className="text-sm text-gray-700">
+                        {[data.city, data.state].filter(Boolean).join(", ") || "—"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              </section>
 
-            {(data.queries.length > 0 || data.tickets.length > 0) && (
-              <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
-                <div>{data.queries.length} product queries</div>
-                <div>{data.tickets.length} support tickets</div>
-              </div>
-            )}
+              {/* Order history */}
+              <section>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+                  Order History <span className="normal-case font-normal text-gray-300">({data.orders.length})</span>
+                </h4>
+                {data.orders.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No orders yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {data.orders.map((o: any) => (
+                      <div key={o.id} className="rounded-xl border border-gray-100 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-700 truncate">
+                              {o.vendorItems.map((i: any) => i.name).join(", ")}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(o.createdAt)}</p>
+                          </div>
+                          <div className="text-right shrink-0 space-y-1">
+                            <p className="text-xs font-bold" style={{ color: MAROON }}>{formatMoney(o.vendorTotal)}</p>
+                            <OrderStatusPill status={o.status} />
+                          </div>
+                        </div>
+                        {o.vendorItems.length > 1 && (
+                          <div className="mt-2 space-y-1">
+                            {o.vendorItems.map((item: any, idx: number) => (
+                              <div key={idx} className="flex items-center justify-between text-[11px] text-gray-500 pl-2 border-l border-gray-200">
+                                <span className="truncate">{item.name} × {item.quantity}</span>
+                                <span className="shrink-0 ml-2">{formatMoney(item.price * item.quantity)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Reviews */}
+              {data.reviews.length > 0 && (
+                <section>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+                    Reviews <span className="normal-case font-normal text-gray-300">({data.reviews.length})</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {data.reviews.map((r: any) => (
+                      <div key={r.id} className="p-3 rounded-xl border border-gray-100">
+                        <div className="flex items-center gap-1 mb-1.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} size={11} className={i < r.rating ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-200"} />
+                          ))}
+                          <span className="text-[10px] text-gray-400 ml-1">{formatDate(r.createdAt)}</span>
+                        </div>
+                        <p className="text-xs text-gray-600 leading-relaxed">{r.comment || "—"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Account activity summary */}
+              <section>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Activity</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 rounded-xl p-3 text-center">
+                    <p className="text-base font-bold text-gray-700">{data.queries.length}</p>
+                    <p className="text-[10px] text-gray-400">Product Queries</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-3 text-center">
+                    <p className="text-base font-bold text-gray-700">{data.tickets.length}</p>
+                    <p className="text-[10px] text-gray-400">Support Tickets</p>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
         )}
       </motion.div>

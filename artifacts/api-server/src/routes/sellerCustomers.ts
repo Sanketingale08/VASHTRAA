@@ -101,7 +101,9 @@ router.get("/seller/customers", requireVendorAuth, async (req: any, res: any) =>
         (c) =>
           c.name.toLowerCase().includes(search) ||
           c.email.toLowerCase().includes(search) ||
-          c.phone.toLowerCase().includes(search)
+          c.phone.toLowerCase().includes(search) ||
+          c.city.toLowerCase().includes(search) ||
+          c.state.toLowerCase().includes(search)
       );
     }
 

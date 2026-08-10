@@ -61,7 +61,20 @@ vi.mock("@workspace/db", () => {
   };
 
   const dbMock = {
-    select: vi.fn(() => makeChain(state.dbSelectRows)),
+    select: vi.fn(() => ({
+      from: vi.fn((table: any) => {
+        // isCustomer middleware queries vendorsTable — always return [] so the
+        // test user is treated as a customer (not a vendor).
+        const rows = table?._t === "vendors" ? [] : state.dbSelectRows;
+        return {
+          where: vi.fn(() => ({
+            limit: vi.fn(() => Promise.resolve(rows)),
+            for: vi.fn(() => Promise.resolve(rows)),
+          })),
+          for: vi.fn(() => Promise.resolve(rows)),
+        };
+      }),
+    })),
     insert: vi.fn((_table: unknown) => ({
       values: vi.fn((vals: Record<string, unknown>) => ({
         returning: vi.fn(() =>
@@ -100,6 +113,8 @@ vi.mock("@workspace/db", () => {
     notificationsTable: { _t: "notifications", userId: "userId", type: "type", title: "title", body: "body", metadata: "metadata", id: "id" },
     notificationPreferencesTable: { _t: "notificationPreferences", userId: "userId", orderUpdates: "orderUpdates", offerAlerts: "offerAlerts" },
     stockHistoryTable: { _t: "stockHistory", productId: "productId", change: "change", reason: "reason", orderId: "orderId" },
+    vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId" },
+    supportTicketsTable: { _t: "supportTickets", id: "id", userId: "userId" },
   };
 });
 

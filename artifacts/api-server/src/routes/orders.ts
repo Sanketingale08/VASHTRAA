@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/isAuthenticated";
+import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
 import {
   ordersTable, cartItemsTable, productsTable, couponsTable,
@@ -54,7 +55,7 @@ function computeShipping(deliveryMethod: string, afterDiscount: number): number 
   return afterDiscount >= 5000 ? 0 : 199;
 }
 
-router.post("/orders", requireAuth, async (req: any, res: any): Promise<void> => {
+router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => {
   try {
     const {
       items: clientItems,

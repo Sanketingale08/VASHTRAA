@@ -244,6 +244,7 @@ vi.mock("@workspace/db", () => {
       actorId: "actorId",
       orderId: "orderId",
     },
+    vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId" },
     ADMIN_NOTIFICATION_USER_ID: "admin-notifications-user",
   };
 });

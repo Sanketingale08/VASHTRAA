@@ -4,7 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
 
-export const CATEGORIES = ["paithani", "designer"] as const;
+export const CATEGORIES = ["paithani", "designer", "bridal", "party"] as const;
 export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"] as const;
 export const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"] as const;
 export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"] as const;
@@ -13,6 +13,8 @@ export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purp
 export const CATEGORY_PREFIX: Record<typeof CATEGORIES[number], string> = {
   paithani: "PS",
   designer: "DS",
+  bridal: "BS",
+  party: "PW",
 };
 
 export type ProductVariant = {

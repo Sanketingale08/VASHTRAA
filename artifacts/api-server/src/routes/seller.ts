@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS } from "@workspace/db";
+import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
 import { eq, desc, asc, inArray, and, sql } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
@@ -425,7 +425,11 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
       const { _rowNum, ...values } = item;
       try {
         const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
-        const categoryPrefix = values.category === "paithani" ? "PS" : "DS";
+        let categoryPrefix: string = CATEGORY_PREFIX[values.category as keyof typeof CATEGORY_PREFIX];
+        if (!categoryPrefix) {
+          req.log.warn({ category: values.category }, "Unknown product category on bulk upload — falling back to 'XX' prefix");
+          categoryPrefix = "XX";
+        }
         const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
         const [product] = await db.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
         results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });

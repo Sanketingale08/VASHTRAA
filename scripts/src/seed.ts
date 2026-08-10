@@ -1,5 +1,5 @@
 import { db, pool } from "@workspace/db";
-import { vendorsTable, productsTable } from "@workspace/db/schema";
+import { vendorsTable, productsTable, CATEGORY_PREFIX } from "@workspace/db/schema";
 
 async function seed() {
   console.log("Seeding vendors...");
@@ -651,7 +651,11 @@ async function seed() {
   const productsWithIds: any[] = [];
   for (const row of productRows) {
     const { rows } = await pool.query("SELECT nextval('product_id_seq') AS seq");
-    const prefix = row.category === "paithani" ? "PS" : "DS";
+    const knownPrefix = CATEGORY_PREFIX[row.category as keyof typeof CATEGORY_PREFIX];
+    if (!knownPrefix) {
+      console.warn(`[seed] Unknown product category "${row.category}" — falling back to 'XX' prefix`);
+    }
+    const prefix = knownPrefix ?? "XX";
     productsWithIds.push({ id: `${prefix}${rows[0].seq}`, ...row });
   }
   await db.insert(productsTable).values(productsWithIds);

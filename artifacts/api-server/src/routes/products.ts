@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
-import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable } from "@workspace/db";
+import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable, CATEGORY_PREFIX } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
@@ -453,7 +453,11 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
 
   try {
     const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
-    const categoryPrefix = category === "paithani" ? "PS" : "DS";
+    let categoryPrefix: string = CATEGORY_PREFIX[category as keyof typeof CATEGORY_PREFIX];
+    if (!categoryPrefix) {
+      req.log.warn({ category }, "Unknown product category — falling back to 'XX' prefix");
+      categoryPrefix = "XX";
+    }
     const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
 
     const [product] = await db
@@ -622,7 +626,11 @@ router.post("/products/:id/duplicate", requireVendorAuth, async (req: any, res: 
     if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
 
     const dupSeq = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
-    const dupPrefix = existing.category === "paithani" ? "PS" : "DS";
+    let dupPrefix: string = CATEGORY_PREFIX[existing.category as keyof typeof CATEGORY_PREFIX];
+    if (!dupPrefix) {
+      req.log.warn({ category: existing.category }, "Unknown product category on duplicate — falling back to 'XX' prefix");
+      dupPrefix = "XX";
+    }
     const dupId = `${dupPrefix}${(dupSeq as any).rows[0].seq}`;
 
     const [copy] = await db

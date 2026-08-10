@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useUser } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
 import { useLocation } from "wouter";
 import { getApiUrl } from "@/lib/api";
 
@@ -42,6 +42,7 @@ interface SellerGuardProps {
 
 export function SellerGuard({ children }: SellerGuardProps) {
   const { isSignedIn, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const [, setLocation] = useLocation();
   const [vendor, setVendor] = useState<VendorProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,7 +167,7 @@ export function SellerGuard({ children }: SellerGuardProps) {
         <div className="max-w-md w-full bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-10 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3" style={{ color: "#1E6B5A" }}>No Vendor Account</h2>
           <p className="text-sm text-gray-500 mb-6">
-            You don't have a vendor account linked to this login yet. Register a new store to get started.
+            This account doesn't have a seller store yet. Register a new store, or sign in with your seller account.
           </p>
           <div className="flex flex-col gap-3">
             <a
@@ -176,12 +177,20 @@ export function SellerGuard({ children }: SellerGuardProps) {
             >
               Register New Store
             </a>
-            <a
-              href={basePath || "/"}
-              className="inline-flex items-center justify-center gap-2 py-3 px-8 font-semibold text-sm rounded-sm border border-[#C9A84C]/40 hover:bg-[#E6F0EA] transition-colors"
+            <button
+              onClick={() =>
+                signOut({ redirectUrl: `${basePath}/seller/login` })
+              }
+              className="inline-flex items-center justify-center gap-2 py-3 px-8 font-semibold text-sm rounded-sm border border-[#C9A84C]/40 hover:bg-[#E6F0EA] transition-colors w-full"
               style={{ color: "#1E6B5A" }}
             >
-              Back to Shopping
+              Sign in with a different account
+            </button>
+            <a
+              href={basePath || "/"}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Back to shopping
             </a>
           </div>
         </div>

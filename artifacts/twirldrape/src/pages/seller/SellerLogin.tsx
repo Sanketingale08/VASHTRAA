@@ -1,6 +1,5 @@
-import React, { useEffect } from "react";
-import { SignIn, useUser } from "@clerk/react";
-import { useLocation } from "wouter";
+import React from "react";
+import { SignIn } from "@clerk/react";
 import { ArrowRight, CheckCircle2, Zap } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -8,20 +7,6 @@ const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
 export default function SellerLogin() {
-  const { isSignedIn } = useUser();
-  const [, setLocation] = useLocation();
-
-  // Silently redirect already-authenticated users to the dashboard;
-  // SellerGuard will handle approval / no-vendor states from there.
-  useEffect(() => {
-    if (isSignedIn) {
-      setLocation("/seller/dashboard");
-    }
-  }, [isSignedIn]);
-
-  // Render nothing while the redirect is in flight
-  if (isSignedIn) return null;
-
   return (
     <div
       className="min-h-screen flex items-center justify-center px-4 py-12"

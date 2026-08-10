@@ -1,0 +1,352 @@
+
+
+==================================================
+1. SELLER REACTIVATION WELCOME POPUP
+==================================================
+
+When a Super Admin reactivates a previously deactivated seller account, show a one-time welcome popup immediately after that seller successfully logs in.
+
+Popup:
+
+Title:
+Welcome Back!
+
+Message:
+"Your seller account has been reactivated successfully. Welcome back! You can now continue managing your store."
+
+Requirements:
+
+- Show the popup only when the seller was previously deactivated and has been reactivated by Super Admin.
+- Show it immediately after the seller logs in successfully.
+- Display it only ONCE for that reactivation event.
+- Do not show it on every subsequent login.
+- Do not show it for newly approved sellers.
+- Do not show it for sellers who were never deactivated.
+- After the popup has been displayed, mark the reactivation welcome notification as handled.
+- If the seller logs in again after the popup has already been displayed, do not show it again.
+
+Use a reliable database/server-side state rather than only localStorage/sessionStorage so the one-time behavior works consistently across devices and sessions.
+
+Do not modify the existing seller authentication, approval, or password logic.
+
+==================================================
+2. VENDOR ID GENERATION
+==================================================
+
+Automatically generate a unique Vendor ID when a seller account is APPROVED.
+
+Example format:
+
+TDV000001
+TDV000002
+TDV000003
+TDV000004
+
+Requirements:
+
+- Vendor ID must be unique.
+- Vendor ID must never change after creation.
+- Vendor ID must be permanently stored in the database.
+- Vendor ID must not be regenerated during login.
+- Vendor ID must not change when seller information is edited.
+- Vendor ID must not change when seller is deactivated.
+- Vendor ID must not change when seller is reactivated.
+- Vendor ID must not be reused.
+- Deleted/inactive sellers must not release their Vendor ID for reuse.
+- Generate the ID automatically when the seller is approved.
+- Continue the sequence automatically for every new approved seller.
+- Use a scalable format that supports a large number of sellers.
+
+Preferred format:
+
+TDV + 6-digit sequential number
+
+Example:
+
+TDV000001
+TDV000002
+TDV000003
+
+If the sequence reaches 999999, extend the numeric portion safely without breaking existing Vendor IDs.
+
+==================================================
+3. DATABASE IMPLEMENTATION
+==================================================
+
+Inspect the existing seller/vendor database model.
+
+Add a permanent Vendor ID field if one does not already exist.
+
+The Vendor ID must:
+
+- Be stored permanently.
+- Have a unique database constraint/index.
+- Be generated safely.
+- Never be overwritten.
+- Never be regenerated unnecessarily.
+
+IMPORTANT:
+
+Do not use the seller's database primary key directly as the displayed Vendor ID unless it is already compatible with the required format.
+
+Do not generate Vendor IDs using timestamps or random values.
+
+Use a safe sequential generation mechanism that prevents duplicate IDs during concurrent seller approvals.
+
+For example, if two sellers are approved at the same time, they must still receive different Vendor IDs.
+
+==================================================
+4. SELLER APPROVAL WORKFLOW
+==================================================
+
+Integrate Vendor ID generation into the EXISTING seller approval workflow.
+
+Flow:
+
+Seller Registration
+        ↓
+Verification/KYC
+        ↓
+Super Admin Approval
+        ↓
+Generate Vendor ID
+        ↓
+Store Vendor ID permanently
+        ↓
+Seller becomes approved
+        ↓
+Vendor ID available in Seller Profile and Admin Panel
+
+Do not change the existing verification or approval logic unnecessarily.
+
+Vendor ID should be generated only when appropriate according to the existing approval workflow.
+
+If the seller is already approved and already has a Vendor ID:
+
+DO NOT generate another ID.
+
+==================================================
+5. SELLER DEACTIVATION / REACTIVATION
+==================================================
+
+Vendor ID must remain unchanged throughout the seller lifecycle.
+
+Example:
+
+Seller approved:
+TDV000125
+
+Seller deactivated:
+TDV000125
+
+Seller reactivated:
+TDV000125
+
+Seller profile edited:
+TDV000125
+
+The Vendor ID must remain exactly the same.
+
+If a seller is deleted or permanently removed, their Vendor ID must NEVER be assigned to another seller.
+
+==================================================
+6. SELLER PROFILE
+==================================================
+
+Display the Vendor ID clearly in the Seller Profile.
+
+Example:
+
+Vendor ID:
+TDV000125
+
+The Vendor ID should be:
+
+- Clearly visible
+- Read-only
+- Not editable by the seller
+- Consistent with the database value
+
+Do not allow sellers to modify their Vendor ID.
+
+Place it appropriately with the seller's primary account/profile information.
+
+==================================================
+7. SUPER ADMIN PANEL
+==================================================
+
+Synchronize Vendor ID with the Super Admin Panel.
+
+The Super Admin must be able to see the Vendor ID for every approved seller.
+
+Display it in:
+
+- Seller/Vendor list
+- Seller/Vendor profile/details
+- Relevant seller management views
+
+Use the same Vendor ID stored in the database.
+
+Do not create a separate Admin-side Vendor ID.
+
+==================================================
+8. ADMIN → SELLER ID DISPLAY
+==================================================
+
+On the Admin/Super Admin side, display the Seller ID/Vendor ID clearly in the seller/vendor profile.
+
+Example:
+
+Seller Name: ABC Sarees
+Vendor ID: TDV000125
+Email: seller@example.com
+Mobile: 9876543210
+
+The same Vendor ID must be displayed on the Seller Profile.
+
+There must be only ONE source of truth for the Vendor ID.
+
+Do not generate a different ID for Admin and Seller portals.
+
+==================================================
+9. CROSS-PORTAL SYNCHRONIZATION
+==================================================
+
+Vendor ID must be synchronized between:
+
+Seller Portal
+        ↕
+Super Admin Portal
+
+When a Vendor ID is generated after seller approval:
+
+- Seller Portal should receive the Vendor ID.
+- Super Admin Panel should receive the Vendor ID.
+- Seller Profile should display the Vendor ID.
+- Admin Seller/Vendor list should display the Vendor ID.
+- Admin Seller/Vendor profile should display the Vendor ID.
+
+If the application supports real-time synchronization, update both portals without requiring a manual page refresh.
+
+Do not create duplicate Vendor ID records.
+
+The database must remain the single source of truth.
+
+==================================================
+10. REACTIVATION + VENDOR ID BEHAVIOR
+==================================================
+
+When Super Admin reactivates a seller:
+
+Existing Vendor ID:
+TDV000125
+
+After reactivation:
+TDV000125
+
+DO NOT generate a new Vendor ID.
+
+After the seller logs in:
+
+Show:
+
+Welcome Back!
+
+"Your seller account has been reactivated successfully. Welcome back! You can now continue managing your store."
+
+Show this popup only once for that reactivation event.
+
+==================================================
+11. SECURITY AND DATA INTEGRITY
+==================================================
+
+Do not allow:
+
+- Seller editing Vendor ID
+- Admin manually changing Vendor ID
+- Duplicate Vendor IDs
+- Vendor ID reuse
+- Vendor ID regeneration
+- Vendor ID changes during profile updates
+
+Protect the Vendor ID at the backend/database level, not only through frontend UI.
+
+
+==================================================
+13. TESTING
+==================================================
+
+Test the complete flow.
+
+NEW SELLER:
+
+Register
+→ Verification
+→ Super Admin Approval
+→ Vendor ID generated
+→ Vendor ID stored
+→ Seller Profile displays Vendor ID
+→ Admin Panel displays same Vendor ID
+
+DEACTIVATION:
+
+Seller approved:
+TDV000001
+
+Deactivate seller:
+TDV000001
+
+REACTIVATION:
+
+Reactivate seller:
+TDV000001
+
+Seller logs in:
+Show Welcome Back popup
+
+Close popup:
+Do not show again on next login.
+
+PROFILE UPDATE:
+
+Seller updates profile:
+Vendor ID remains unchanged.
+
+ADMIN:
+
+Admin views seller:
+Same Vendor ID appears.
+
+CONCURRENT APPROVAL:
+
+Approve multiple sellers at the same time:
+Every seller receives a unique Vendor ID.
+
+DELETED/INACTIVE:
+
+Deactivate/delete seller:
+Vendor ID must never be reused.
+
+==================================================
+14. FINAL CODEBASE AUDIT
+==================================================
+
+After implementation:
+
+- Search for all Vendor ID references.
+- Verify Seller and Admin use the same database field.
+- Verify no duplicate Vendor ID generation exists.
+- Verify Vendor ID cannot be edited.
+- Verify Vendor ID does not change after reactivation.
+- Verify the reactivation popup appears only once.
+- Verify no authentication logic was broken.
+- Verify no approval workflow was broken.
+- Verify no database relationships were broken.
+- Verify Seller and Admin data synchronization.
+- Check console errors.
+- Check API errors.
+- Check database errors.
+- Test desktop and mobile layouts.
+
+Do not mark this task complete until the complete Seller → Admin Vendor ID flow and Seller Reactivation Popup have been implemented and tested successfully.
+

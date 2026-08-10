@@ -333,6 +333,7 @@ export async function sendVendorApprovalEmail(opts: {
 export async function sendVendorSuspensionEmail(opts: {
   toEmail: string;
   vendorName: string;
+  reason?: string;
 }): Promise<void> {
   const resend = getResendClient();
   if (!resend) {
@@ -340,11 +341,12 @@ export async function sendVendorSuspensionEmail(opts: {
     return;
   }
 
-  const { toEmail, vendorName } = opts;
+  const { toEmail, vendorName, reason } = opts;
   const subject = `Your TwirlDrape store has been suspended`;
   const body = `
     <p>We regret to inform you that your store <strong>${vendorName}</strong> has been <strong>suspended</strong> by the TwirlDrape team.</p>
     <p>Your store listings are no longer visible to shoppers while the suspension is in effect.</p>
+    ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
     <p>If you believe this is an error or would like to appeal, please contact our support team with your store details and we will review your case.</p>
     <p>We appreciate your understanding and hope to resolve this as quickly as possible.</p>
   `;
@@ -365,6 +367,7 @@ export async function sendVendorSuspensionEmail(opts: {
 export async function sendVendorRejectionEmail(opts: {
   toEmail: string;
   vendorName: string;
+  reason?: string;
 }): Promise<void> {
   const resend = getResendClient();
   if (!resend) {
@@ -372,11 +375,12 @@ export async function sendVendorRejectionEmail(opts: {
     return;
   }
 
-  const { toEmail, vendorName } = opts;
+  const { toEmail, vendorName, reason } = opts;
   const subject = `Update on your TwirlDrape seller application`;
   const body = `
     <p>Thank you for your interest in selling on TwirlDrape.</p>
     <p>After reviewing your application for <strong>${vendorName}</strong>, we are unable to approve your store at this time.</p>
+    ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
     <p>If you have questions about this decision or would like guidance on reapplying, please reach out to our support team — we are happy to help.</p>
     <p>Thank you for your understanding.</p>
   `;
@@ -487,11 +491,13 @@ export async function sendVendorSuspensionEmailForVendor(opts: {
   vendorName: string;
   contactEmail: string | null;
   ownerId: string | null;
+  reason?: string;
 }): Promise<void> {
   const subject = `Your TwirlDrape store has been suspended`;
   const body = `
     <p>We regret to inform you that your store <strong>${opts.vendorName}</strong> has been <strong>suspended</strong> by the TwirlDrape team.</p>
     <p>Your store listings are no longer visible to shoppers while the suspension is in effect.</p>
+    ${opts.reason ? `<p><strong>Reason:</strong> ${opts.reason}</p>` : ""}
     <p>If you believe this is an error or would like to appeal, please contact our support team with your store details and we will review your case.</p>
     <p>We appreciate your understanding and hope to resolve this as quickly as possible.</p>
   `;
@@ -503,11 +509,13 @@ export async function sendVendorRejectionEmailForVendor(opts: {
   vendorName: string;
   contactEmail: string | null;
   ownerId: string | null;
+  reason?: string;
 }): Promise<void> {
   const subject = `Update on your TwirlDrape seller application`;
   const body = `
     <p>Thank you for your interest in selling on TwirlDrape.</p>
     <p>After reviewing your application for <strong>${opts.vendorName}</strong>, we are unable to approve your store at this time.</p>
+    ${opts.reason ? `<p><strong>Reason:</strong> ${opts.reason}</p>` : ""}
     <p>If you have questions about this decision or would like guidance on reapplying, please reach out to our support team — we are happy to help.</p>
     <p>Thank you for your understanding.</p>
   `;

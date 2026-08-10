@@ -446,6 +446,7 @@ router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res:
 
 router.post("/admin/vendors/:id/suspend", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
+  const { reason } = req.body ?? {};
   try {
     const [updated] = await db
       .update(vendorsTable)
@@ -468,6 +469,7 @@ router.post("/admin/vendors/:id/suspend", requireAdminKey, async (req: any, res:
       vendorName: updated.name,
       contactEmail: updated.contactEmail,
       ownerId: updated.ownerId,
+      reason: reason ? String(reason).trim() : undefined,
     }).catch((err) => req.log.warn({ err, vendorId: updated.id }, "Failed to send vendor suspension email"));
 
     writeAuditLog({ action: "vendor_suspended", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
@@ -480,6 +482,7 @@ router.post("/admin/vendors/:id/suspend", requireAdminKey, async (req: any, res:
 
 router.post("/admin/vendors/:id/reject", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
+  const { reason } = req.body ?? {};
   try {
     const [updated] = await db
       .update(vendorsTable)
@@ -501,6 +504,7 @@ router.post("/admin/vendors/:id/reject", requireAdminKey, async (req: any, res: 
       vendorName: updated.name,
       contactEmail: updated.contactEmail,
       ownerId: updated.ownerId,
+      reason: reason ? String(reason).trim() : undefined,
     }).catch((err) => req.log.warn({ err, vendorId: updated.id }, "Failed to send vendor rejection email"));
 
     res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status } });

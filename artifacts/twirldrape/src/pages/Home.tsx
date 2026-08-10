@@ -517,7 +517,7 @@ export default function Home() {
         title="Featured Products"
         subtitle="Handpicked masterpieces — the finest from our entire collection"
         tabs={PAITHANI_DESIGNER_TABS}
-        params={{ sort: "rating_desc", minRating: 4.5, limit: 8 }}
+        params={{ isFeatured: true, limit: 8 }}
         bg={CREAM}
         onQuickView={setQuickViewProduct}
       />

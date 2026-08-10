@@ -113,6 +113,10 @@ minRating?: number;
  * Comma-separated list of product IDs to filter by
  */
 ids?: string;
+/**
+ * When true, return only featured products ordered by featuredOrder ascending
+ */
+isFeatured?: boolean;
 };
 
 export type ListProductsCategory = typeof ListProductsCategory[keyof typeof ListProductsCategory];

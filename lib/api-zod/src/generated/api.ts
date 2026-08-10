@@ -37,7 +37,8 @@ export const ListProductsQueryParams = zod.object({
   "newArrival": zod.coerce.boolean().optional(),
   "hasDiscount": zod.coerce.boolean().optional(),
   "minRating": zod.coerce.number().optional(),
-  "ids": zod.coerce.string().optional().describe('Comma-separated list of product IDs to filter by')
+  "ids": zod.coerce.string().optional().describe('Comma-separated list of product IDs to filter by'),
+  "isFeatured": zod.coerce.boolean().optional().describe('When true, return only featured products ordered by featuredOrder ascending')
 })
 
 export const ListProductsResponse = zod.object({

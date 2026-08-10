@@ -4,7 +4,7 @@ import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable, CATEGORY_PREFIX } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
-import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, inArray } from "drizzle-orm";
+import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, isNull, inArray, lt } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { recordStockChange } from "../lib/stockHistory";
 import { insertSellerNotification } from "../lib/sellerNotifications";
@@ -59,6 +59,7 @@ router.get("/products", async (req, res) => {
       hasDiscount,
       minRating,
       ids,
+      isFeatured,
     } = req.query as Record<string, string>;
 
     const pageNum = Math.max(1, parseInt(page) || 1);
@@ -95,25 +96,40 @@ router.get("/products", async (req, res) => {
       const idList = ids.split(",").map((s) => s.trim()).filter(Boolean);
       if (idList.length > 0) conditions.push(inArray(productsTable.id, idList));
     }
+    if (isFeatured === "true") {
+      conditions.push(eq(productsTable.isFeatured, true));
+      // Exclude products whose featured window has expired
+      conditions.push(
+        or(
+          isNull(productsTable.featuredUntil),
+          gte(productsTable.featuredUntil, sql`NOW()`)
+        )!
+      );
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     let orderBy;
-    switch (sort) {
-      case "price_asc":
-        orderBy = asc(productsTable.price);
-        break;
-      case "price_desc":
-        orderBy = desc(productsTable.price);
-        break;
-      case "rating_desc":
-        orderBy = desc(productsTable.rating);
-        break;
-      case "newest":
-        orderBy = desc(productsTable.isNewArrival);
-        break;
-      default:
-        orderBy = desc(productsTable.isBestSeller);
+    if (isFeatured === "true") {
+      // Featured products: admin-defined order (nulls last), then by rating as tiebreaker
+      orderBy = [asc(sql`${productsTable.featuredOrder} NULLS LAST`), desc(productsTable.rating)];
+    } else {
+      switch (sort) {
+        case "price_asc":
+          orderBy = [asc(productsTable.price)];
+          break;
+        case "price_desc":
+          orderBy = [desc(productsTable.price)];
+          break;
+        case "rating_desc":
+          orderBy = [desc(productsTable.rating)];
+          break;
+        case "newest":
+          orderBy = [desc(productsTable.isNewArrival)];
+          break;
+        default:
+          orderBy = [desc(productsTable.isBestSeller)];
+      }
     }
 
     const [products, countResult] = await Promise.all([
@@ -121,7 +137,7 @@ router.get("/products", async (req, res) => {
         .select()
         .from(productsTable)
         .where(where)
-        .orderBy(orderBy)
+        .orderBy(...orderBy)
         .limit(limitNum)
         .offset(offset),
       db

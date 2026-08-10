@@ -5,7 +5,7 @@ import {
   ticketMessagesTable,
   SELLER_TICKET_CATEGORIES,
 } from "@workspace/db";
-import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, or, gte, lte } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { notifyTicketEvent } from "../lib/ticketSupport";
 
@@ -43,11 +43,30 @@ router.get("/seller/support/tickets", requireVendorAuth, async (req: any, res: a
     const search = (req.query.search as string | undefined)?.trim();
 
     const scope = req.query.scope as string | undefined; // "customer" (routed from customers) | "mine" (raised by seller to admin)
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
     const conditions: any[] = [eq(supportTicketsTable.vendorId, req.vendorId)];
     if (scope === "customer") conditions.push(eq(supportTicketsTable.userType, "customer"));
     else if (scope === "mine") conditions.push(eq(supportTicketsTable.userType, "seller"));
     if (status) conditions.push(eq(supportTicketsTable.status, status as any));
-    if (search) conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
+    if (search) {
+      const searchPat = `%${search}%`;
+      conditions.push(
+        or(
+          ilike(supportTicketsTable.subject, searchPat),
+          // UUID column must be cast to text before a case-insensitive match
+          sql`${supportTicketsTable.id}::text ilike ${searchPat}`,
+          ilike(supportTicketsTable.category, searchPat)
+        )
+      );
+    }
+    if (dateFrom) conditions.push(gte(supportTicketsTable.createdAt, new Date(dateFrom)));
+    if (dateTo) {
+      // Include the full dateTo day
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      conditions.push(lte(supportTicketsTable.createdAt, end));
+    }
     const whereClause = and(...conditions);
 
     const tickets = await db

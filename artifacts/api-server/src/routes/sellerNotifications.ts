@@ -126,4 +126,18 @@ router.delete("/seller/notifications/:id", requireVendorAuth, async (req: any, r
   }
 });
 
+// Bulk-delete all notifications for the current vendor
+router.delete("/seller/notifications", requireVendorAuth, async (req: any, res: any) => {
+  try {
+    const result = await db
+      .delete(notificationsTable)
+      .where(eq(notificationsTable.vendorId, req.vendorId))
+      .returning({ id: notificationsTable.id });
+    res.json({ success: true, deleted: result.length });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/notifications bulk delete failed");
+    res.status(500).json({ error: "Failed to clear notifications" });
+  }
+});
+
 export default router;

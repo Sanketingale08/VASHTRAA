@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Send, Clock, CheckCircle2, AlertCircle, XCircle,
-  ShieldAlert, Ticket as TicketIcon, MessageSquare,
+  ShieldAlert, Ticket as TicketIcon, MessageSquare, Search,
 } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -63,16 +63,21 @@ function formatDateTime(iso: string) {
   });
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function SellerSupport() {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [scopeTab, setScopeTab] = useState<"customer" | "mine">("customer");
   const [showNew, setShowNew] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [form, setForm] = useState({ subject: "", category: "", description: "" });
   const [formError, setFormError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const limit = 10;
 
@@ -87,11 +92,13 @@ export default function SellerSupport() {
   });
 
   const { data, isLoading } = useQuery<{ tickets: Ticket[]; total: number }>({
-    queryKey: ["seller-support-tickets", scopeTab, search, statusFilter, page],
+    queryKey: ["seller-support-tickets", search, statusFilter, dateFrom, dateTo, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ scope: scopeTab, page: String(page), limit: String(limit) });
+      const params = new URLSearchParams({ scope: "customer", page: String(page), limit: String(limit) });
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter) params.set("status", statusFilter);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       const r = await fetch(getApiUrl(`/api/seller/support/tickets?${params.toString()}`), { credentials: "include" });
       if (!r.ok) throw new Error("Failed to load tickets");
       return r.json();
@@ -100,6 +107,7 @@ export default function SellerSupport() {
   const tickets = data?.tickets ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasFilters = !!(search || statusFilter || dateFrom || dateTo);
 
   const { data: detail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: ["seller-support-ticket", selectedId],
@@ -197,71 +205,111 @@ export default function SellerSupport() {
     createTicket.mutate();
   }
 
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  }
+
   return (
     <SellerLayout title="Support">
       <div className="space-y-4">
+
+        {/* Header row */}
         <div className="flex items-center justify-end">
           <button
-            onClick={() => setShowNew(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-white"
+            onClick={() => { setShowNew(true); setSelectedId(null); }}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg text-white"
             style={{ backgroundColor: MAROON }}
           >
             <Plus size={14} /> Raise Ticket to Admin
           </button>
         </div>
 
-        <div className="flex gap-1.5">
-          {(["customer", "mine"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => { setScopeTab(s); setSelectedId(null); setShowNew(false); setPage(1); }}
-              className={cn(
-                "px-4 py-2 text-sm font-semibold rounded-lg border transition-colors",
-                scopeTab === s ? "text-white" : "bg-white text-gray-600 border-gray-200"
-              )}
-              style={scopeTab === s ? { backgroundColor: MAROON, borderColor: MAROON } : {}}
+        {/* Combined filter bar */}
+        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* Free-text search */}
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                placeholder="Search by Ticket ID, subject, or category…"
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/30 focus:border-[#C9A84C]"
+              />
+            </div>
+
+            {/* Status dropdown */}
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              className="px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-[#C9A84C] shrink-0"
             >
-              {s === "customer" ? "Customer Tickets" : "My Tickets to Admin"}
-            </button>
-          ))}
+              <option value="">All statuses</option>
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Waiting for Customer">Waiting for Customer</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </div>
+
+          {/* Date range row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-400 font-medium">Date range:</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+            />
+            <span className="text-xs text-gray-400">–</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+            />
+            {hasFilters && (
+              <button
+                onClick={resetFilters}
+                className="text-xs font-semibold px-2 hover:opacity-70"
+                style={{ color: MAROON }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by subject..."
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-1"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white"
-          >
-            <option value="">All statuses</option>
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Waiting for Customer">Waiting for Customer</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Closed">Closed</option>
-          </select>
-        </div>
-
+        {/* Two-column layout: ticket list + detail panel */}
         <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-4">
+
+          {/* Ticket list */}
           <div className="space-y-2">
             {isLoading ? (
               [...Array(3)].map((_, i) => <div key={i} className="bg-white border rounded-xl p-4 h-[70px] animate-pulse" />)
             ) : tickets.length === 0 ? (
-              <div className="bg-white border rounded-xl p-8 text-center">
+              <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-8 text-center">
                 <TicketIcon size={28} className="mx-auto mb-2" style={{ color: `${GOLD}66` }} />
-                <p className="text-gray-400 text-sm">No customer tickets yet.</p>
+                <p className="text-gray-400 text-sm">
+                  {hasFilters ? "No tickets match your filters." : "No customer tickets yet."}
+                </p>
+                {hasFilters && (
+                  <button onClick={resetFilters} className="text-xs font-semibold mt-2 hover:opacity-70" style={{ color: MAROON }}>
+                    Clear filters
+                  </button>
+                )}
               </div>
             ) : (
               tickets.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setSelectedId(t.id)}
+                  onClick={() => { setSelectedId(t.id); setShowNew(false); }}
                   className={cn(
                     "w-full text-left rounded-xl p-3.5 border transition-all",
                     t.id === selectedId ? "border-[#1E6B5A]/40" : "border-gray-200 hover:border-[#C9A84C]/50"
@@ -274,7 +322,8 @@ export default function SellerSupport() {
                       {statusIcon(t.status)} {t.status}
                     </span>
                   </div>
-                  <p className="text-[11px] mt-1" style={{ color: GOLD }}>{t.category}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: GOLD }}>{t.category}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{formatDate(t.createdAt)}</p>
                 </button>
               ))
             )}
@@ -299,20 +348,21 @@ export default function SellerSupport() {
             )}
           </div>
 
-          <div className="bg-white border rounded-xl overflow-hidden shadow-sm min-h-[300px]">
+          {/* Detail / new ticket panel */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[300px]">
             {showNew ? (
               <form onSubmit={handleCreate} className="p-5 space-y-4">
-                <h3 className="font-serif font-bold" style={{ color: MAROON }}>New Ticket to Super Admin</h3>
+                <h3 className="font-serif font-bold" style={{ color: MAROON }}>New Ticket to Admin</h3>
                 <input
                   type="text" placeholder="Subject"
                   value={form.subject}
                   onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#C9A84C]"
                 />
                 <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-[#C9A84C]"
                 >
                   <option value="">Select a category</option>
                   {categories.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -322,14 +372,14 @@ export default function SellerSupport() {
                   rows={5}
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm resize-none"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[#C9A84C]"
                 />
                 {formError && <p className="text-sm text-red-600">{formError}</p>}
                 <div className="flex gap-2">
                   <button type="submit" disabled={createTicket.isPending} className="px-4 py-2 text-white text-sm font-semibold rounded-lg" style={{ backgroundColor: MAROON }}>
                     {createTicket.isPending ? "Submitting…" : "Submit"}
                   </button>
-                  <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 border text-sm font-semibold rounded-lg">Cancel</button>
+                  <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 border border-gray-200 text-sm font-semibold rounded-lg text-gray-600">Cancel</button>
                 </div>
               </form>
             ) : detailLoading ? (
@@ -340,6 +390,7 @@ export default function SellerSupport() {
                   <div>
                     <p className="font-serif font-bold">{detail.subject}</p>
                     <p className="text-xs" style={{ color: GOLD }}>{detail.category}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">#{detail.id.slice(0, 8).toUpperCase()} · {formatDate(detail.createdAt)}</p>
                   </div>
                   <span className={cn("flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border shrink-0", statusColor(detail.status))}>
                     {statusIcon(detail.status)} {detail.status}
@@ -363,7 +414,7 @@ export default function SellerSupport() {
                         onChange={(e) => setReplyBody(e.target.value)}
                         placeholder="Write a reply…"
                         rows={2}
-                        className="flex-1 resize-none text-sm border rounded-lg px-3 py-2"
+                        className="flex-1 resize-none text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#C9A84C]"
                       />
                       <button type="submit" disabled={!replyBody.trim() || addReply.isPending} className="self-end px-3 py-2 text-white rounded-lg disabled:opacity-40" style={{ backgroundColor: MAROON }}>
                         <Send size={15} />
@@ -375,7 +426,7 @@ export default function SellerSupport() {
                       </button>
                       {!detail.escalated && (
                         <button onClick={() => escalate.mutate()} className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:underline">
-                          <ShieldAlert size={12} /> Escalate to Super Admin
+                          <ShieldAlert size={12} /> Escalate to Admin
                         </button>
                       )}
                     </div>

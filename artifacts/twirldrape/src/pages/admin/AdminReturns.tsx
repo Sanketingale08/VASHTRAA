@@ -22,6 +22,7 @@ interface OrderAddress {
 
 interface AdminOrder {
   id: string;
+  displayId?: string;
   userId: string;
   items: OrderItem[];
   address: OrderAddress | null;
@@ -118,6 +119,13 @@ interface PayoutConfirmState {
   idempotencyKey: string;
 }
 
+interface RejectRefundConfirmState {
+  orderId: string;
+  orderDisplay: string;
+  amount: number;
+  note: string;
+}
+
 function PayoutConfirmModal({
   state,
   onConfirm,
@@ -181,6 +189,69 @@ function PayoutConfirmModal({
   );
 }
 
+function RejectRefundConfirmModal({
+  state,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  state: RejectRefundConfirmState;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <XCircle size={20} className="text-red-600 shrink-0" />
+          <h2 className="text-base font-bold" style={{ color: NAVY }}>Reject refund?</h2>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          You are about to <span className="font-semibold text-red-700">reject</span> this refund request. This action cannot be undone from the UI.
+        </p>
+        <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1.5 text-sm mb-5">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Order</span>
+            <span className="font-mono font-medium text-gray-800">#{state.orderDisplay}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Refund amount</span>
+            <span className="font-semibold" style={{ color: NAVY }}>{fmtMoney(state.amount)}</span>
+          </div>
+          {state.note && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Note</span>
+              <span className="font-medium text-gray-700 text-right max-w-[180px] break-words">{state.note}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+            style={{ background: "#b91c1c", color: "#fff" }}
+          >
+            {loading ? "Rejecting…" : "Reject refund"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReturnsContent() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,6 +262,7 @@ function ReturnsContent() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [payoutConfirm, setPayoutConfirm] = useState<PayoutConfirmState | null>(null);
+  const [rejectRefundConfirm, setRejectRefundConfirm] = useState<RejectRefundConfirmState | null>(null);
   const processingInFlight = useRef<Set<string>>(new Set());
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
@@ -402,6 +474,17 @@ function ReturnsContent() {
         onCancel={() => setPayoutConfirm(null)}
       />
     )}
+    {rejectRefundConfirm && (
+      <RejectRefundConfirmModal
+        state={rejectRefundConfirm}
+        loading={actionLoading === rejectRefundConfirm.orderId + "refundrejected"}
+        onConfirm={() => {
+          reviewRefund(rejectRefundConfirm.orderId, "rejected");
+          setRejectRefundConfirm(null);
+        }}
+        onCancel={() => setRejectRefundConfirm(null)}
+      />
+    )}
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -553,7 +636,12 @@ function ReturnsContent() {
                               label="Reject refund"
                               color="#b91c1c" bg="#fef2f2"
                               loading={actionLoading === o.id + "refundrejected"}
-                              onClick={() => reviewRefund(o.id, "rejected")}
+                              onClick={() => setRejectRefundConfirm({
+                                orderId: o.id,
+                                orderDisplay: o.displayId ?? o.id,
+                                amount: o.total,
+                                note: noteDrafts[o.id] ?? "",
+                              })}
                             />
                           </>
                         )}

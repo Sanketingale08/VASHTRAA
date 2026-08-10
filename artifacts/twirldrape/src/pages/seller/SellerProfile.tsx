@@ -363,6 +363,26 @@ export default function SellerProfile() {
                 )}
               </div>
 
+              {/* Vendor ID — read-only, always shown */}
+              {vendor && (
+                <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+                  <h3 className="font-serif font-bold text-sm mb-3" style={{ color: MAROON }}>Account</h3>
+                  <div className="flex items-start gap-3 py-3" style={{ borderColor: `${GOLD}20` }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${MAROON}12` }}>
+                      <FileText size={13} style={{ color: MAROON }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: "#9a8070" }}>Vendor ID</p>
+                      {vendor.vendorId ? (
+                        <p className="text-sm font-semibold font-mono" style={{ color: "#2d1f14" }}>{vendor.vendorId}</p>
+                      ) : (
+                        <p className="text-sm italic" style={{ color: "#bfae9e" }}>Pending approval</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Contact & Business details */}
               <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
                 <h3 className="font-serif font-bold text-sm mb-3" style={{ color: MAROON }}>Contact & Business</h3>

@@ -225,6 +225,13 @@
       "when": 1755388800000,
       "tag": "0034_add_email_outbox_vendor_id",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1755475200000,
+      "tag": "0035_add_vendor_id",
+      "breakpoints": true
     }
   ]
 }

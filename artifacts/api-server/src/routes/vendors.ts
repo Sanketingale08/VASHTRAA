@@ -17,6 +17,16 @@ import {
 
 const router = Router();
 
+// ── Vendor ID generation ──────────────────────────────────────────────────────
+// Draws the next value from vendor_id_seq and formats it as TDVxxxxxx.
+// db.execute() returns { rows: Row[] } — we read rows[0].
+async function generateVendorId(): Promise<string> {
+  const result = await db.execute(sql`SELECT nextval('vendor_id_seq') AS nextval`);
+  const n = Number((result.rows[0] as any).nextval);
+  const digits = Math.max(6, String(n).length); // extend beyond 6 if sequence > 999999
+  return "TDV" + String(n).padStart(digits, "0");
+}
+
 router.get("/vendors", async (req, res) => {
   try {
     // Return only approved vendors, featured ones first, then sorted by rating desc.
@@ -70,6 +80,7 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
       mobile: v.mobile ?? null,
       status: v.status,
       ownerId: v.ownerId,
+      vendorId: v.vendorId ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch vendor profile");
@@ -404,6 +415,7 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         featured: v.featured,
         revenue: vendorRevenue[v.id] ?? 0,
         totalOrders: vendorOrders[v.id] ?? 0,
+        vendorId: v.vendorId ?? null,
       })),
     });
   } catch (err) {
@@ -415,39 +427,52 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
 router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   try {
-    const [updated] = await db
-      .update(vendorsTable)
-      .set({ status: "approved" })
-      .where(eq(vendorsTable.id, id))
-      .returning({
-        id: vendorsTable.id,
-        name: vendorsTable.name,
-        status: vendorsTable.status,
-        ownerId: vendorsTable.ownerId,
-        contactEmail: vendorsTable.contactEmail,
-      });
+    // Generate a candidate ID from the sequence (atomic; unused IDs are harmless gaps).
+    // The UPDATE uses COALESCE so the candidate is only written when vendor_id IS NULL.
+    // If two concurrent approvals race, both generate unique candidates but only the
+    // first writer's value survives — the second request simply keeps the already-set ID.
+    const candidateVendorId = await generateVendorId();
 
+    const updateResult = await db.execute(sql`
+      UPDATE vendors
+         SET status     = 'approved',
+             vendor_id  = COALESCE(vendor_id, ${candidateVendorId})
+       WHERE id = ${id}
+      RETURNING id, name, status, owner_id, contact_email, vendor_id
+    `);
+
+    const updated = (updateResult.rows[0] as any) ?? null;
     if (!updated) {
       return res.status(404).json({ error: "Vendor not found" });
     }
 
+    // Re-shape snake_case raw columns into camelCase for downstream use
+    const updatedVendor = {
+      id: updated.id,
+      name: updated.name,
+      status: updated.status,
+      ownerId: updated.owner_id,
+      contactEmail: updated.contact_email,
+      vendorId: updated.vendor_id,
+    };
+
     await insertSellerNotification({
-      vendorId: updated.id,
+      vendorId: updatedVendor.id,
       type: "store_approved",
       title: "Your store has been approved",
-      body: `Congratulations! Your store "${updated.name}" has been approved. You can now start listing your products.`,
-      metadata: { vendorId: updated.id },
+      body: `Congratulations! Your store "${updatedVendor.name}" has been approved. You can now start listing your products.`,
+      metadata: { vendorId: updatedVendor.id },
     });
 
     sendVendorApprovalEmailForVendor({
-      vendorId: updated.id,
-      vendorName: updated.name,
-      contactEmail: updated.contactEmail,
-      ownerId: updated.ownerId,
-    }).catch((err) => req.log.warn({ err, vendorId: updated.id }, "Failed to send vendor approval email"));
+      vendorId: updatedVendor.id,
+      vendorName: updatedVendor.name,
+      contactEmail: updatedVendor.contactEmail,
+      ownerId: updatedVendor.ownerId,
+    }).catch((err) => req.log.warn({ err, vendorId: updatedVendor.id }, "Failed to send vendor approval email"));
 
-    writeAuditLog({ action: "vendor_approved", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
-    res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status } });
+    writeAuditLog({ action: "vendor_approved", module: "Vendors", details: { vendorId: updatedVendor.id, vendorName: updatedVendor.name }, ipAddress: getIp(req) }).catch(() => {});
+    res.json({ vendor: { id: updatedVendor.id, name: updatedVendor.name, status: updatedVendor.status } });
   } catch (err) {
     req.log.error({ err }, "Failed to approve vendor");
     res.status(500).json({ error: "Failed to approve vendor" });
@@ -855,6 +880,7 @@ router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => 
       commissionEarned: Math.round(totalRevenue * COMMISSION_RATE),
       statusBreakdown,
       monthlyRevenue: sortedMonths.map(m => ({ month: m, revenue: monthlyRevenue[m] })),
+      vendorId: vendor.vendorId ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch admin vendor detail");

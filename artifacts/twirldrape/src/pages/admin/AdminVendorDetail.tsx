@@ -49,6 +49,7 @@ interface VendorDetail {
   commissionEarned: number;
   statusBreakdown: Record<string, number>;
   monthlyRevenue: { month: string; revenue: number }[];
+  vendorId: string | null;
 }
 
 function fmt(n: number) {
@@ -260,6 +261,13 @@ function VendorDetailContent() {
                   )}
                 </div>
               </div>
+
+              {vendor.vendorId && (
+                <div className="mb-4 px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: GOLD }}>Vendor ID</span>
+                  <span className="text-sm font-mono font-semibold ml-auto" style={{ color: NAVY }}>{vendor.vendorId}</span>
+                </div>
+              )}
 
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-center gap-2.5 text-gray-600">

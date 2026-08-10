@@ -19,6 +19,7 @@ interface VendorProfile {
   mobile: string | null;
   status: "pending" | "approved" | "suspended";
   ownerId: string | null;
+  vendorId: string | null;
 }
 
 interface SellerContextValue {

@@ -36,6 +36,7 @@ export const vendorsTable = pgTable("vendors", {
   shopPincode: text("shop_pincode"),
   termsAcceptedAt: timestamp("terms_accepted_at"),
   featured: boolean("featured").notNull().default(false),
+  vendorId: text("vendor_id"),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

@@ -23,6 +23,7 @@ interface Vendor {
   totalOrders: number;
   kycVerified: boolean;
   featured: boolean;
+  vendorId: string | null;
 }
 
 function fmt(n: number) {
@@ -180,6 +181,7 @@ function VendorsContent() {
                 <tr className="border-b border-gray-100">
                   <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Shop</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Vendor ID</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Location</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">GSTIN</th>
@@ -212,6 +214,11 @@ function VendorsContent() {
                       {v.contactEmail && (
                         <div className="text-xs text-gray-400 mt-0.5">{v.contactEmail}</div>
                       )}
+                    </td>
+                    <td className="px-4 py-3.5 hidden md:table-cell">
+                      {v.vendorId
+                        ? <span className="text-xs font-mono font-semibold" style={{ color: NAVY }}>{v.vendorId}</span>
+                        : <span className="text-xs italic text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3.5"><StatusBadge status={v.status} /></td>
                     <td className="px-4 py-3.5 text-xs text-gray-500 hidden md:table-cell">{v.location}</td>

@@ -232,6 +232,13 @@
       "when": 1755475200000,
       "tag": "0035_add_vendor_id",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1755561600000,
+      "tag": "0036_add_reactivation_welcome_pending",
+      "breakpoints": true
     }
   ]
 }

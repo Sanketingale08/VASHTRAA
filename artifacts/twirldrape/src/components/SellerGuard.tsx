@@ -20,6 +20,7 @@ interface VendorProfile {
   status: "pending" | "approved" | "suspended";
   ownerId: string | null;
   vendorId: string | null;
+  reactivationWelcomePending: boolean;
 }
 
 interface SellerContextValue {
@@ -49,6 +50,7 @@ export function SellerGuard({ children }: SellerGuardProps) {
   const [vendor, setVendor] = useState<VendorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<"loading" | "approved" | "pending" | "suspended" | "none" | "unauthenticated">("loading");
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
 
   async function fetchVendor() {
     if (!isSignedIn) {
@@ -90,6 +92,9 @@ export function SellerGuard({ children }: SellerGuardProps) {
       const data = await res.json();
       setVendor(data);
       setStatus(data.status);
+      if (data.reactivationWelcomePending) {
+        setShowWelcomeBack(true);
+      }
       setLoading(false);
     } catch {
       setStatus("none");
@@ -200,9 +205,68 @@ export function SellerGuard({ children }: SellerGuardProps) {
     );
   }
 
+  async function dismissWelcomeBack() {
+    setShowWelcomeBack(false);
+    try {
+      await fetch(getApiUrl("/api/seller/reactivation-welcome/dismiss"), {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Best-effort — if the network call fails the popup won't reappear
+      // until the next page load (flag is still true server-side), which is acceptable.
+    }
+  }
+
+  const MAROON = "#1E6B5A";
+  const GOLD = "#C9A84C";
+
   return (
     <SellerContext.Provider value={{ vendor, loading, refresh: fetchVendor }}>
       {children}
+
+      {/* One-time "Welcome Back!" popup shown after a seller is reactivated */}
+      {showWelcomeBack && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center"
+            style={{ border: `1px solid ${GOLD}44` }}
+          >
+            {/* Icon */}
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: `${MAROON}15` }}
+            >
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z" stroke={MAROON} strokeWidth="1.8"/>
+                <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke={MAROON} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+
+            <h2
+              className="font-serif text-2xl font-bold mb-3"
+              style={{ color: MAROON }}
+            >
+              Welcome Back!
+            </h2>
+
+            <p className="text-sm text-gray-500 mb-7 leading-relaxed">
+              Your seller account has been reactivated successfully. Welcome back! You can now continue managing your store.
+            </p>
+
+            <button
+              onClick={dismissWelcomeBack}
+              className="w-full py-3 rounded-xl font-bold text-sm tracking-wide transition-opacity hover:opacity-90"
+              style={{ background: MAROON, color: "#F3F8F5" }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
     </SellerContext.Provider>
   );
 }

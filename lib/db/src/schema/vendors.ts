@@ -37,6 +37,7 @@ export const vendorsTable = pgTable("vendors", {
   termsAcceptedAt: timestamp("terms_accepted_at"),
   featured: boolean("featured").notNull().default(false),
   vendorId: text("vendor_id"),
+  reactivationWelcomePending: boolean("reactivation_welcome_pending").notNull().default(false),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

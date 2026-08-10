@@ -81,6 +81,7 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
       status: v.status,
       ownerId: v.ownerId,
       vendorId: v.vendorId ?? null,
+      reactivationWelcomePending: v.reactivationWelcomePending,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch vendor profile");
@@ -552,11 +553,30 @@ router.post("/admin/vendors/:id/reject", requireAdminKey, async (req: any, res: 
 router.post("/admin/vendors/:id/activate", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   try {
+    // Read the vendor's current status first so we can distinguish a genuine
+    // reactivation (suspended → approved) from a no-op re-call on an already
+    // approved vendor.  The flag must only be set in the suspended→approved case.
+    const [current] = await db
+      .select({ status: vendorsTable.status })
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, id))
+      .limit(1);
+
+    if (!current) return res.status(404).json({ error: "Vendor not found" });
+
+    const isReactivation = current.status === "suspended";
+    const setValues: Record<string, any> = { status: "approved" };
+    if (isReactivation) {
+      // Flag triggers the one-time "Welcome Back!" popup on next seller login.
+      setValues.reactivationWelcomePending = true;
+    }
+
     const [updated] = await db
       .update(vendorsTable)
-      .set({ status: "approved" })
+      .set(setValues)
       .where(eq(vendorsTable.id, id))
       .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status });
+
     if (!updated) return res.status(404).json({ error: "Vendor not found" });
     res.json({ vendor: updated });
   } catch (err) {

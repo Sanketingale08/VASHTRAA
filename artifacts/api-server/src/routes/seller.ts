@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
+import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
 import { eq, desc, asc, inArray, and, sql } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
@@ -1319,6 +1319,23 @@ router.get("/seller/settlements/:settlementId", requireVendorAuth, async (req: a
   } catch (err: any) {
     req.log?.error({ err }, "seller/settlements/:id failed");
     res.status(500).json({ error: "Failed to load settlement" });
+  }
+});
+
+// ── Reactivation welcome dismiss ─────────────────────────────────────────────
+// Called by the frontend after the seller closes the one-time "Welcome Back!" popup.
+// Clears the flag so the popup never shows again for this reactivation event.
+router.post("/seller/reactivation-welcome/dismiss", requireVendorAuth, async (req: any, res: any) => {
+  const vendorId = req.vendorId;
+  try {
+    await db
+      .update(vendorsTable)
+      .set({ reactivationWelcomePending: false })
+      .where(eq(vendorsTable.id, vendorId));
+    res.json({ ok: true });
+  } catch (err: any) {
+    req.log?.error({ err }, "seller/reactivation-welcome/dismiss failed");
+    res.status(500).json({ error: "Failed to dismiss welcome" });
   }
 });
 

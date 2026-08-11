@@ -7,6 +7,7 @@ import {
   couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
   notificationsTable, notificationPreferencesTable,
   supportTicketsTable, vendorsTable, vendorSettlementsTable,
+  savedPaymentMethodsTable,
 } from "@workspace/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { loadActiveCommissionRules, effectiveRateFromRules } from "../lib/commission";
@@ -64,6 +65,7 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
       paymentMethod,
       couponCode,
       isBuyNow,
+      savedPaymentMethodId,
     } = req.body;
 
     if (!clientItems || !Array.isArray(clientItems) || clientItems.length === 0) {
@@ -81,6 +83,33 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
     if (!isValidPaymentMethod(paymentMethod)) {
       res.status(400).json({ error: "Invalid payment method" });
       return;
+    }
+
+    // Validate the saved payment method belongs to the authenticated customer
+    if (savedPaymentMethodId != null) {
+      const spmRows = await db
+        .select({ id: savedPaymentMethodsTable.id, type: savedPaymentMethodsTable.type })
+        .from(savedPaymentMethodsTable)
+        .where(
+          and(
+            eq(savedPaymentMethodsTable.id, String(savedPaymentMethodId)),
+            eq(savedPaymentMethodsTable.userId, req.userId),
+          ),
+        )
+        .limit(1);
+      if (spmRows.length === 0) {
+        res.status(403).json({ error: "Saved payment method not found or does not belong to you" });
+        return;
+      }
+      const spm = spmRows[0];
+      const expectedPaymentMethod = spm.type === "upi" ? "upi" : ["credit_card", "debit_card"];
+      const methodMatches = Array.isArray(expectedPaymentMethod)
+        ? expectedPaymentMethod.includes(paymentMethod)
+        : paymentMethod === expectedPaymentMethod;
+      if (!methodMatches) {
+        res.status(400).json({ error: "Payment method does not match the saved method type" });
+        return;
+      }
     }
 
     const productIds: string[] = clientItems.map((i: any) => i.productId);

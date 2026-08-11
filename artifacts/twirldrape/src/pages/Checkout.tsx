@@ -31,6 +31,17 @@ type Address = {
 };
 type SavedAddress = Address & { id: string; isDefault: boolean };
 type DeliveryMethod = "standard" | "express";
+type SavedPaymentMethod = {
+  id: string;
+  type: "card" | "upi";
+  cardBrand?: string | null;
+  last4?: string | null;
+  cardholderName?: string | null;
+  expiryMonth?: number | null;
+  expiryYear?: number | null;
+  upiId?: string | null;
+  isDefault: boolean;
+};
 type PaymentMethod = "upi" | "credit_card" | "debit_card" | "net_banking" | "wallet" | "cod";
 
 const PAYMENT_OPTIONS: Array<{
@@ -130,6 +141,9 @@ export function CheckoutPage() {
   const [placeError, setPlaceError] = useState("");
   const [stockNotice, setStockNotice] = useState<StockAdjustment[]>([]);
   const orderPlacedRef = React.useRef(false);
+  // Tracks whether the shopper has actively chosen a payment method; prevents
+  // the async saved-methods fetch from overwriting an already-made choice.
+  const paymentChoiceMadeRef = React.useRef(false);
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
@@ -155,6 +169,11 @@ export function CheckoutPage() {
 
   const [bankChoice, setBankChoice] = useState("");
   const [walletChoice, setWalletChoice] = useState("");
+
+  // Saved payment methods (loaded for signed-in users)
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<SavedPaymentMethod[]>([]);
+  const [savedMethodsLoaded, setSavedMethodsLoaded] = useState(false);
+  const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
@@ -313,6 +332,32 @@ export function CheckoutPage() {
       .catch(() => setEnteringNew(true));
   }, [isLoaded, isSignedIn]);
 
+  // Fetch saved payment methods once for signed-in users
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || savedMethodsLoaded) return;
+    setSavedMethodsLoaded(true);
+    fetch("/api/payment-methods", { credentials: "include" })
+      .then(r => r.ok ? r.json() : { paymentMethods: [] })
+      .then(data => {
+        const methods: SavedPaymentMethod[] = data.paymentMethods ?? [];
+        setSavedPaymentMethods(methods);
+        // Only pre-select the default if the shopper hasn't already chosen manually
+        if (!paymentChoiceMadeRef.current) {
+          const def = methods.find(m => m.isDefault);
+          if (def) {
+            setSelectedSavedMethodId(def.id);
+            if (def.type === "upi") {
+              setPaymentMethod("upi");
+              setUpiId(def.upiId ?? "");
+            } else {
+              setPaymentMethod("credit_card");
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isLoaded, isSignedIn, savedMethodsLoaded]);
+
   const orderItems = buyNowItems ?? cartItems;
   const hasOutOfStockItem = orderItems.some((i) => i.stock === 0);
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -347,6 +392,8 @@ export function CheckoutPage() {
   }
 
   function validatePayment(): boolean {
+    // A saved payment method is always valid — server already holds the details
+    if (selectedSavedMethodId !== null) return true;
     switch (paymentMethod) {
       case "upi":
         return /^[\w.\-]+@[\w]+$/.test(upiId.trim());
@@ -427,6 +474,7 @@ export function CheckoutPage() {
           address,
           deliveryMethod,
           paymentMethod,
+          savedPaymentMethodId: selectedSavedMethodId ?? undefined,
           couponCode: appliedCoupon?.code ?? null,
           subtotal,
           discount,
@@ -798,33 +846,106 @@ export function CheckoutPage() {
                     className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 sm:p-6"
                   >
                     <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-5">Payment Method</h2>
+
+                    {/* ── Saved payment methods (signed-in users only) ── */}
+                    {isSignedIn && savedPaymentMethods.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Saved Methods</p>
+                        <div className="space-y-2">
+                          {savedPaymentMethods.map(m => {
+                            const selected = selectedSavedMethodId === m.id;
+                            return (
+                              <button
+                                key={m.id}
+                                onClick={() => {
+                                  paymentChoiceMadeRef.current = true;
+                                  setSelectedSavedMethodId(m.id);
+                                  setUpiError("");
+                                  setCardErrors({});
+                                  if (m.type === "upi") {
+                                    setPaymentMethod("upi");
+                                    setUpiId(m.upiId ?? "");
+                                  } else {
+                                    setPaymentMethod("credit_card");
+                                  }
+                                }}
+                                className={`w-full flex items-center gap-3 sm:gap-4 p-3.5 rounded-xl border-2 transition-all text-left ${
+                                  selected
+                                    ? "border-[#1E6B5A] bg-[#1E6B5A]/5"
+                                    : "border-[#C9A84C]/20 hover:border-[#C9A84C]/50"
+                                }`}
+                              >
+                                <div className={`p-2.5 rounded-full shrink-0 ${selected ? "bg-[#1E6B5A] text-white" : "bg-gray-100 text-gray-500"}`}>
+                                  {m.type === "upi" ? <Smartphone size={18} /> : <CreditCard size={18} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  {m.type === "card" ? (
+                                    <>
+                                      <p className="font-semibold text-sm">
+                                        {m.cardBrand ?? "Card"}
+                                        <span className="font-mono ml-1.5 text-gray-500">•••• {m.last4}</span>
+                                      </p>
+                                      <p className="text-xs text-gray-400 mt-0.5">
+                                        {m.cardholderName} · Exp {String(m.expiryMonth).padStart(2,"0")}/{String(m.expiryYear).slice(-2)}
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="font-semibold text-sm font-mono">{m.upiId}</p>
+                                      <p className="text-xs text-gray-400 mt-0.5">UPI</p>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {m.isDefault && (
+                                    <span className="text-[10px] font-bold text-[#1E6B5A] bg-[#1E6B5A]/10 px-2 py-0.5 rounded-full border border-[#1E6B5A]/20">
+                                      Default
+                                    </span>
+                                  )}
+                                  {selected && <Check size={18} className="text-[#1E6B5A]" />}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-3 my-4">
+                          <div className="flex-1 h-px bg-gray-100" />
+                          <span className="text-xs text-gray-400 font-medium">or add a new method</span>
+                          <div className="flex-1 h-px bg-gray-100" />
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-3">
                       {PAYMENT_OPTIONS.map(opt => (
                         <div key={opt.id}>
                           <button
                             onClick={() => {
+                              paymentChoiceMadeRef.current = true;
                               setPaymentMethod(opt.id);
+                              setSelectedSavedMethodId(null);
+                              setUpiId("");
                               setUpiError("");
                               setCardErrors({});
                             }}
                             className={`w-full flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl border-2 transition-all text-left ${
-                              paymentMethod === opt.id
+                              paymentMethod === opt.id && selectedSavedMethodId === null
                                 ? "border-[#1E6B5A] bg-[#1E6B5A]/5"
                                 : "border-[#C9A84C]/20 hover:border-[#C9A84C]/50"
                             }`}
                           >
-                            <div className={`p-2.5 rounded-full shrink-0 ${paymentMethod === opt.id ? "bg-[#1E6B5A] text-white" : "bg-gray-100 text-gray-500"}`}>
+                            <div className={`p-2.5 rounded-full shrink-0 ${paymentMethod === opt.id && selectedSavedMethodId === null ? "bg-[#1E6B5A] text-white" : "bg-gray-100 text-gray-500"}`}>
                               <opt.Icon size={18} />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm">{opt.title}</p>
                               <p className="text-xs text-gray-500 mt-0.5">{opt.sub}</p>
                             </div>
-                            {paymentMethod === opt.id && <Check size={18} className="text-[#1E6B5A] shrink-0" />}
+                            {paymentMethod === opt.id && selectedSavedMethodId === null && <Check size={18} className="text-[#1E6B5A] shrink-0" />}
                           </button>
 
-                          {/* UPI input */}
-                          {paymentMethod === "upi" && opt.id === "upi" && (
+                          {/* UPI input — only when manually entering (no saved method selected) */}
+                          {paymentMethod === "upi" && opt.id === "upi" && selectedSavedMethodId === null && (
                             <div className="mt-3 px-1">
                               <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">UPI ID *</label>
                               <input
@@ -841,8 +962,8 @@ export function CheckoutPage() {
                             </div>
                           )}
 
-                          {/* Credit / Debit card fields */}
-                          {(paymentMethod === "credit_card" || paymentMethod === "debit_card") && paymentMethod === opt.id && (
+                          {/* Credit / Debit card fields — only when manually entering */}
+                          {(paymentMethod === "credit_card" || paymentMethod === "debit_card") && paymentMethod === opt.id && selectedSavedMethodId === null && (
                             <div className="mt-3 px-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div className="sm:col-span-2">
                                 <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Card Number *</label>
@@ -917,8 +1038,8 @@ export function CheckoutPage() {
                             </div>
                           )}
 
-                          {/* Net Banking bank selector */}
-                          {paymentMethod === "net_banking" && opt.id === "net_banking" && (
+                          {/* Net Banking bank selector — only when manually entering */}
+                          {paymentMethod === "net_banking" && opt.id === "net_banking" && selectedSavedMethodId === null && (
                             <div className="mt-3 px-1">
                               <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Select Bank *</label>
                               <select
@@ -938,8 +1059,8 @@ export function CheckoutPage() {
                             </div>
                           )}
 
-                          {/* Wallet options */}
-                          {paymentMethod === "wallet" && opt.id === "wallet" && (
+                          {/* Wallet options — only when manually entering */}
+                          {paymentMethod === "wallet" && opt.id === "wallet" && selectedSavedMethodId === null && (
                             <div className="mt-3 px-1">
                               <p className="text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-2">Select Wallet *</p>
                               <div className="grid grid-cols-2 gap-2">
@@ -968,8 +1089,8 @@ export function CheckoutPage() {
                             </div>
                           )}
 
-                          {/* COD note */}
-                          {paymentMethod === "cod" && opt.id === "cod" && (
+                          {/* COD note — only when manually selected */}
+                          {paymentMethod === "cod" && opt.id === "cod" && selectedSavedMethodId === null && (
                             <div className="mt-3 px-1">
                               <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                                 <HandCoins size={16} className="text-emerald-600 shrink-0 mt-0.5" />

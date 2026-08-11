@@ -227,7 +227,6 @@ function VendorDetailContent() {
           <h1 className="text-xl font-serif font-bold" style={{ color: NAVY }}>
             {vendor?.name ?? "Vendor Detail"}
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5">Vendor profile & performance</p>
         </div>
       </div>
 

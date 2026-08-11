@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2, Save, RotateCcw, FileText } from "lucide-react";
+import { Loader2, Save, RotateCcw } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -196,19 +196,8 @@ export default function AdminAboutContent() {
       <AdminLayout>
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: NAVY }}
-              >
-                <FileText size={16} style={{ color: GOLD }} />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">About Page Content</h1>
-                <p className="text-xs text-gray-500">
-                  Edit stats, headlines and copy blocks — changes go live immediately.
-                </p>
-              </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">About Page Content</h1>
             </div>
             <div className="flex items-center gap-2">
               <button

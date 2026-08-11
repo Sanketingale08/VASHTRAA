@@ -376,19 +376,8 @@ export default function AdminHeroBanners() {
 
           {/* ── Header ── */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: NAVY }}
-              >
-                <Image size={16} style={{ color: GOLD }} />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">Hero Banner Slider</h1>
-                <p className="text-xs text-gray-500">
-                  Manage the images shown in the homepage hero slideshow.
-                </p>
-              </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">Hero Banner Slider</h1>
             </div>
             <div className="flex items-center gap-2">
               {banners.length > 0 && (

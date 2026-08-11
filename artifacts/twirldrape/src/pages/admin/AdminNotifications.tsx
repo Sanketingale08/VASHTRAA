@@ -235,7 +235,6 @@ function AdminNotificationsContent() {
     <div className="space-y-6">
       <div>
         <h2 className="font-serif text-xl font-bold" style={{ color: NAVY }}>Notifications</h2>
-        <p className="text-sm text-gray-500">Platform-wide alerts: sellers, products, orders, and system events.</p>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">

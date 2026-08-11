@@ -1173,10 +1173,9 @@ function ReportsContent() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-serif font-bold flex items-center gap-2" style={{ color: NAVY }}>
-            <BarChart2 size={20} style={{ color: GOLD }} /> Marketplace Reports
+          <h1 className="text-xl font-serif font-bold" style={{ color: NAVY }}>
+            Reports
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5">Centralised analytics for the entire TwirlDrape platform</p>
         </div>
       </div>
 

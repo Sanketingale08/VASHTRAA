@@ -83,9 +83,6 @@ function DisputesContent() {
         <h1 className="text-xl font-serif font-bold flex items-center gap-2" style={{ color: NAVY }}>
           <ShieldAlert size={18} /> Seller Disputes
         </h1>
-        <p className="text-sm text-gray-400 mt-0.5">
-          Tickets escalated by sellers as disputes needing admin review
-        </p>
       </div>
 
       {error && (

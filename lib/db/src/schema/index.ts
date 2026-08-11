@@ -19,4 +19,5 @@ export * from "./product_categories";
 export * from "./product_brands";
 export * from "./admin_sessions";
 export * from "./admin_recovery_codes";
+export * from "./admin_otp_challenges";
 export * from "./audit_logs";

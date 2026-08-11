@@ -253,6 +253,13 @@
       "when": 1755734400000,
       "tag": "0038_add_vendor_status_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1755820800000,
+      "tag": "0039_add_admin_otp_challenges",
+      "breakpoints": true
     }
   ]
 }

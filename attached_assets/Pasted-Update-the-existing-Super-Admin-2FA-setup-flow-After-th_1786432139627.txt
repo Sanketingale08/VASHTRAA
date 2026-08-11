@@ -1,0 +1,52 @@
+Update the existing Super Admin 2FA setup flow.
+
+After the Super Admin scans the Authenticator App QR code and successfully verifies the 6-digit authenticator OTP, remove the existing “Save Your Recovery Codes” screen completely.
+
+Replace it with a sequential verification flow:
+
+1. Email OTP Verification
+
+Display a modal/card titled “Verify Your Email”.
+Show a masked version of the Super Admin's registered email address.
+Send a 6-digit OTP to the registered email.
+Provide a 6-digit OTP input.
+Add Verify OTP and Resend OTP actions.
+Add a 60-second resend countdown.
+OTP should expire after 5 minutes.
+Show proper validation messages for incorrect, expired, or exceeded-attempt OTPs.
+
+2. SMS OTP Verification
+
+After successful email OTP verification, automatically move to the SMS verification step.
+Display “Verify Your Mobile Number”.
+Show the masked registered mobile number.
+Send a 6-digit OTP through the configured SMS provider.
+Provide OTP input, Verify OTP, Resend OTP, and countdown.
+Apply the same expiration, attempt-limit, and security rules as email OTP.
+
+3. 2FA Successfully Enabled
+
+After successful SMS OTP verification, mark 2FA setup as completed.
+Display a success screen:
+
+Two-Factor Authentication Enabled
+
+“Your account is now protected with an authenticator app, email verification, and SMS verification.”
+
+Add a “Continue to Security Settings” button.
+
+Important requirements:
+
+Completely remove the Recovery Codes UI from this setup flow.
+Do not generate or display recovery codes.
+Do not break the existing Authenticator QR-code generation or verification.
+Keep all existing authentication functionality working.
+Implement OTP generation, expiration, verification, attempt limits, and resend cooldown on the backend.
+Never expose OTP values in frontend code, logs, API responses, or browser storage.
+Mask email and mobile number in the UI.
+Prevent users from bypassing email verification and directly accessing SMS verification.
+Prevent users from bypassing SMS verification and marking 2FA as enabled.
+Update the 2FA database/status only after both Email OTP and SMS OTP are successfully verified.
+Maintain the existing Super Admin UI design, spacing, typography, colors, responsiveness, and components.
+Ensure proper loading, success, error, expired OTP, resend, and rate-limit states.
+Test the complete flow from QR scanning through final 2FA activation and ensure no existing Super Admin functionality is affected.

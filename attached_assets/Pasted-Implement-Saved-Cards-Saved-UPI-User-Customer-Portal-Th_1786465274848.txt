@@ -1,0 +1,474 @@
+Implement Saved Cards & Saved UPI – User/Customer Portal
+The User Portal / Customer Portal already exists and is working.
+
+DO NOT:
+* Remove any existing functionality.
+* Change the existing authentication/RBAC architecture unless required for this feature.
+* Break existing payment, checkout, profile, cart, or order functionality.
+
+Only implement the Saved Payment Methods functionality on the **User/Customer side.
+
+---
+
+# PROJECT GOAL
+
+Implement a secure **Saved Payment Methods feature for customers in customer dashboard.
+
+Customers should be able to:
+
+1. Save a debit/credit card.
+2. Save a UPI ID.
+3. View their saved cards.
+4. View their saved UPI IDs.
+5. Set a default payment method.
+6. Delete a saved payment method.
+7. Use a saved payment method during checkout.
+
+The feature must be associated with the currently authenticated customer.
+
+---
+
+# 1. USER PROFILE – PAYMENT METHODS
+
+Add a new section in the existing Customer/User Portal:
+
+Profile → Payment Methods
+or, if the project already has a suitable location:
+
+Account → Saved Payment Methods
+
+Do not create a completely new design.
+
+Follow the existing application's:
+
+* Colors
+* Typography
+* Buttons
+* Cards
+* Forms
+* Spacing
+* Responsive behavior
+* Icons
+* Component structure
+
+---
+
+# 2. SAVED CARDS
+
+Create a **Saved Cards** section.
+
+Each saved card should display:
+
+* Card brand: Visa / Mastercard / RuPay / Amex etc.
+* Masked card number
+
+  * Example: `•••• •••• •••• 1234`
+* Cardholder name
+* Expiry month/year
+* Default status
+* Delete option
+
+Example UI:
+
+Saved Cards
+
+┌────────────────────────────────────┐
+│ 💳 Visa                            │
+│ •••• •••• •••• 4521                │
+│ John Doe                           │
+│ Expires 12/28                      │
+│                                    │
+│ ✓ Default        [Delete]          │
+└────────────────────────────────────┘
+
+---
+
+# 3. ADD CARD
+
+Provide an **Add Card** button.
+
+The form should contain:
+
+* Cardholder Name
+* Card Number
+* Expiry Month
+* Expiry Year
+* CVV
+* "Set as default" checkbox
+
+Validation:
+
+* Card number must be valid.
+* Expiry date must not be expired.
+* CVV must have the correct format.
+* Cardholder name is required.
+* Prevent duplicate cards where possible.
+* Show clear validation/error messages.
+
+IMPORTANT:
+
+## SECURITY
+
+DO NOT store raw:
+
+* Card number
+* CVV
+* Full payment credentials
+
+in the application's database.
+
+If the application uses a payment provider such as Stripe/Razorpay/etc. use the provider's secure tokenization/payment-method mechanism.
+
+Store only safe information such as:
+
+```text
+paymentProvider
+paymentMethodId / token
+cardBrand
+last4
+expiryMonth
+expiryYear
+cardholderName
+isDefault
+createdAt
+```
+
+CVV must NEVER be stored in the database.
+
+If a payment gateway is already integrated into the project, reuse the existing integration instead of creating another payment system.
+
+---
+
+# 4. SAVED UPI
+
+Create a separate **Saved UPI IDs** section.
+
+Each saved UPI should display:
+
+* Masked/visible UPI ID according to the existing application's design
+* UPI provider/app if available
+* Default status
+* Delete option
+
+Example:
+
+Saved UPI
+
+┌────────────────────────────────────┐
+│ UPI                                │
+│ sanket@upi                         │
+│                                    │
+│ ✓ Default        [Delete]          │
+└────────────────────────────────────┘
+
+---
+
+# 5. ADD UPI
+
+Add an **Add UPI ID** button.
+
+Form:
+
+```text
+UPI ID
+[________________]
+
+☐ Set as default
+
+[Save UPI]
+```
+
+Validation:
+
+* UPI ID is required.
+* Validate standard UPI format such as:
+
+```text
+username@bank
+```
+
+Examples:
+
+```text
+name@oksbi
+name@paytm
+name@ybl
+name@upi
+```
+
+Do not allow obviously invalid UPI IDs.
+
+If the existing payment gateway supports UPI verification/tokenization, use the existing gateway integration.
+
+Do not store unnecessary sensitive payment information.
+
+---
+
+# 6. DATABASE MODEL
+
+Create or extend the existing customer/user payment-method model.
+
+Prefer a structure similar to:
+
+```text
+PaymentMethod
+-------------------------
+id
+userId
+type              // card | upi
+provider
+paymentMethodId
+cardBrand
+last4
+cardholderName
+expiryMonth
+expiryYear
+upiId
+isDefault
+createdAt
+updatedAt
+```
+
+Use the project's existing database technology and ORM/model conventions.
+
+DO NOT create a second database.
+
+Use the existing authenticated user's ID to associate payment methods.
+
+---
+
+
+
+```
+
+A customer must NEVER be able to:
+
+* View another customer's cards.
+* View another customer's UPI IDs.
+* Delete another customer's payment method.
+* Modify another customer's payment method.
+* Set another customer's payment method as default.
+
+---
+
+# 9. DEFAULT PAYMENT METHOD
+
+A customer can have one default payment method.
+
+When the user selects:
+
+```text
+Set as default
+```
+
+the backend should:
+
+1. Find the user's existing default payment method.
+2. Set it to `isDefault = false`.
+3. Set the selected payment method to `isDefault = true`.
+
+Example:
+
+```text
+Card A → false
+Card B → true
+UPI C  → false
+```
+
+Only one payment method should be default.
+
+If the user saves their first payment method, automatically make it the default.
+
+---
+
+# 10. DELETE PAYMENT METHOD
+
+When the user clicks **Delete**:
+
+Show a confirmation:
+
+```text
+Are you sure you want to remove this payment method?
+```
+
+After confirmation:
+
+* Delete/deactivate the payment method.
+* Refresh the payment-method list.
+* Show a success message.
+
+If the deleted method was the default:
+
+* Automatically select another saved method as default if one exists.
+* Otherwise, leave the user with no default payment method.
+
+---
+
+# 11. CHECKOUT INTEGRATION
+
+IMPORTANT:
+
+Do not create a separate checkout system.
+
+Modify the existing Customer checkout/payment flow so that saved payment methods can be selected.
+
+Example:
+
+```text
+Payment Method
+
+○ Visa •••• 4521
+   Default
+
+○ Mastercard •••• 8912
+
+○ UPI
+   sanket@upi
+
+○ Add New Card
+
+○ Add New UPI
+```
+
+If the user selects a saved card/UPI:
+
+* Use the stored secure payment-provider reference/token.
+* Never send/store raw card details unnecessarily.
+* Never expose CVV.
+* Follow the existing payment gateway's secure flow.
+
+---
+
+# 12. BACKEND SECURITY
+
+Implement proper validation and authorization.
+
+Requirements:
+
+* Authentication required for every payment-method API.
+* Validate all request bodies server-side.
+* Never trust frontend validation alone.
+* Never store CVV.
+* Never store full card numbers unless the existing payment provider explicitly requires a secure tokenized mechanism—and preferably use provider tokens instead.
+* Do not expose payment-provider secrets to the frontend.
+* Use environment variables for payment gateway keys.
+* Prevent IDOR/access-control vulnerabilities.
+* Sanitize/validate UPI and card-related input.
+* Return only safe payment-method information to the frontend.
+
+---
+
+# 13. ERROR HANDLING
+
+Provide proper messages for:
+
+* Invalid card number.
+* Expired card.
+* Invalid UPI ID.
+* Duplicate payment method.
+* Payment provider error.
+* Unauthorized request.
+* Payment method not found.
+* Delete failure.
+* Network/server error.
+
+Use the existing application's notification/toast system.
+
+Do not introduce a completely different notification library unless necessary.
+
+---
+
+# 14. RESPONSIVE UI
+
+The Saved Payment Methods page must work correctly on:
+
+* Mobile
+* Tablet
+* Desktop
+
+Follow the existing responsive design system.
+
+Do not redesign the entire profile page.
+
+Only add the required Payment Methods functionality.
+
+---
+
+
+# 16. TESTING
+
+Test all of the following:
+
+### Cards
+
+* Add valid card.
+* Reject invalid card.
+* Reject expired card.
+* Save card securely.
+* Display masked card.
+* Delete card.
+* Set card as default.
+* Change default card.
+
+### UPI
+
+* Add valid UPI.
+* Reject invalid UPI.
+* Display saved UPI.
+* Delete UPI.
+* Set UPI as default.
+
+### Authorization
+
+Test that:
+
+* Customer A cannot access Customer B's payment methods.
+* Customer A cannot delete Customer B's payment method.
+* Customer A cannot modify Customer B's payment method.
+
+### Checkout
+
+Test:
+
+* Existing payment flow still works.
+* Saved card can be selected.
+* Saved UPI can be selected.
+* New card can still be added.
+* New UPI can still be added.
+
+---
+
+# 17. DO NOT BREAK EXISTING FEATURES
+
+After implementation verify that these still work:
+
+* Login
+* Logout
+* Registration
+* Customer profile
+* Edit profile
+* Cart
+* Wishlist
+* Product browsing
+* Checkout
+* Orders
+* Existing payment functionality
+* Customer authentication/RBAC
+* Existing User/Customer UI
+
+---
+
+# FINAL REQUIREMENT
+
+Implement the complete **Saved Cards + Saved UPI** functionality in the existing Customer/User Portal.
+
+The implementation must be:
+
+* Secure
+* Production-ready
+* Fully authenticated
+* Properly authorized
+* Responsive
+* Consistent with the existing UI
+* Checkout-integrated
+

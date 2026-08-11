@@ -231,6 +231,8 @@ function ErrorMsg({ msg }: { msg: string }) {
 }
 
 // ── REVENUE TAB ───────────────────────────────────────────────────────────────
+const REPORTS_POLL_MS = 60_000;
+
 function RevenueTab({ period, from, to }: { period: Period; from: string; to: string }) {
   const adminKey = useAdminKey();
   const [data, setData] = useState<any>(null);
@@ -249,7 +251,11 @@ function RevenueTab({ period, from, to }: { period: Period; from: string; to: st
       .finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REPORTS_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   const s = data?.summary ?? {};
   const trend = data?.trend ?? [];
@@ -424,7 +430,11 @@ function SalesTab({ period, from, to }: { period: Period; from: string; to: stri
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load sales report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to, page]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REPORTS_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   const s = data?.summary ?? {};
   const byCategory = data?.byCategory ?? [];
@@ -587,7 +597,11 @@ function VendorTab({ period, from, to }: { period: Period; from: string; to: str
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load vendor report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REPORTS_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   const s = data?.summary ?? {};
   const top = data?.topVendors ?? [];
@@ -703,7 +717,11 @@ function CustomerTab({ period, from, to }: { period: Period; from: string; to: s
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load customer report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REPORTS_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   const s = data?.summary ?? {};
   const trend = data?.trend ?? [];
@@ -824,7 +842,11 @@ function ProductTab({ period, from, to }: { period: Period; from: string; to: st
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load product report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REPORTS_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   const s = data?.summary ?? {};
   const bestSellers = data?.bestSellers ?? [];
@@ -995,7 +1017,11 @@ function ReturnTab({ period, from, to }: { period: Period; from: string; to: str
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load return report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REPORTS_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   const s = data?.summary ?? {};
   const trend = data?.trend ?? [];

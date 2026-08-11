@@ -280,7 +280,13 @@ function ReturnsContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadOrders(); }, [adminKey]);
+  // Initial load + background poll every 30 s
+  useEffect(() => {
+    loadOrders();
+    const pollId = setInterval(loadOrders, 30_000);
+    return () => clearInterval(pollId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminKey]);
 
   const filtered = useMemo(() => {
     let list = orders;
@@ -321,6 +327,8 @@ function ReturnsContent() {
       if (res.ok) {
         const data = await res.json();
         setOrders((prev) => prev.map((o) => (o.id === orderId ? data.order : o)));
+        // Reload full list to pick up any server-side state changes
+        loadOrders();
       } else {
         const err = await res.json().catch(() => ({}));
         setError(err.error || "Failed to update return status");
@@ -348,6 +356,7 @@ function ReturnsContent() {
       if (res.ok) {
         const data = await res.json();
         setOrders((prev) => prev.map((o) => (o.id === orderId ? data.order : o)));
+        loadOrders();
       } else {
         const err = await res.json().catch(() => ({}));
         setError(err.error || "Failed to update refund status");
@@ -392,6 +401,7 @@ function ReturnsContent() {
         const data = await res.json();
         setOrders((prev) => prev.map((o) => (o.id === orderId ? data.order : o)));
         setNoteDrafts((p) => { const n = { ...p }; delete n[orderId]; return n; });
+        loadOrders();
         succeeded = true;
       } else {
         const err = await res.json().catch(() => ({}));

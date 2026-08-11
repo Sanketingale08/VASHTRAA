@@ -69,13 +69,15 @@ function MetricCard({ label, value, icon: Icon, iconBg, iconColor, sub, alert }:
   );
 }
 
+const DASHBOARD_POLL_MS = 30_000;
+
 function DashboardContent() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
-  useEffect(() => {
+  function loadStats() {
     fetch(`/api/admin/stats`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
@@ -84,6 +86,14 @@ function DashboardContent() {
       .then((d) => setStats(d))
       .catch(() => setError("Failed to load platform stats"))
       .finally(() => setLoading(false));
+  }
+
+  // Initial load + background polling (30 s)
+  useEffect(() => {
+    loadStats();
+    const id = setInterval(loadStats, DASHBOARD_POLL_MS);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminKey]);
 
   const orderStatusData = stats

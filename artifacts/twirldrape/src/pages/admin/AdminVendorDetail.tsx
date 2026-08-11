@@ -13,6 +13,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
+const VENDOR_DETAIL_POLL_MS = 15_000;
 
 interface VendorDetail {
   id: string;
@@ -143,9 +144,8 @@ function VendorDetailContent() {
   const inFlight = useRef<Set<string>>(new Set());
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
-  useEffect(() => {
+  function loadVendor() {
     if (!id) return;
-    setLoading(true);
     fetch(`/api/admin/vendors/${id}`, {
       headers: { "x-admin-key": adminKey },
       credentials: "include",
@@ -154,11 +154,19 @@ function VendorDetailContent() {
         if (!r.ok) throw new Error("Not found");
         return r.json();
       })
-      .then((d) => {
-        setVendor(d);
-      })
+      .then((d) => setVendor(d))
       .catch(() => setError("Failed to load vendor details"))
       .finally(() => setLoading(false));
+  }
+
+  // Initial load + background polling every 15 s (matching Vendor Analytics)
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    loadVendor();
+    const pollId = setInterval(loadVendor, VENDOR_DETAIL_POLL_MS);
+    return () => clearInterval(pollId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, adminKey]);
 
   async function doAction(action: string) {
@@ -174,11 +182,14 @@ function VendorDetailContent() {
       });
       if (res.ok) {
         const data = await res.json();
+        // Optimistic local update for immediate feedback
         setVendor((prev) => prev ? {
           ...prev,
           status: data.vendor.status ?? prev.status,
           featured: data.vendor.featured ?? prev.featured,
         } : prev);
+        // Reload full vendor to sync any server-side side-effects
+        loadVendor();
       }
     } finally {
       inFlight.current.delete(action);
@@ -203,6 +214,7 @@ function VendorDetailContent() {
         setVendor((prev) => prev
           ? { ...prev, kycVerified: data.vendor.kycVerified, kycResubmissionRequested: data.vendor.kycResubmissionRequested }
           : prev);
+        loadVendor();
       }
     } finally {
       inFlight.current.delete(action);

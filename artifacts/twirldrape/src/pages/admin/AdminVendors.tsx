@@ -110,6 +110,7 @@ function VendorsContent() {
       });
       if (res.ok) {
         const data = await res.json();
+        // Optimistic local update for instant feedback
         setVendors((prev) =>
           prev.map((v) => (v.id === id ? {
             ...v,
@@ -117,6 +118,8 @@ function VendorsContent() {
             featured: data.vendor.featured ?? v.featured,
           } : v))
         );
+        // Full reload to pick up any server-side changes (e.g. kycVerified, audit events)
+        loadVendors();
       }
     } finally {
       inFlight.current.delete(key);

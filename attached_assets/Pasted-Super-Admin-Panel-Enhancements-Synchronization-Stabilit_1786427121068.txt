@@ -1,0 +1,229 @@
+Super Admin Panel
+Enhancements, Synchronization & Stability
+You are working on the production version of the Super Admin Panel.
+Important Instructions
+•	Do NOT break any existing functionality, APIs, authentication, authorization, payment flow, shipping flow, database structure, or business logic.
+•	Maintain responsive design across desktop, tablet, and mobile.
+•	Follow the existing design system.
+•	Ensure every change is scalable, production-ready, and optimized.
+•	Every module must remain synchronized with both the Seller Portal and Customer/User Portal in real time.
+________________________________________
+Real-Time Synchronization & Stability
+Implement real-time synchronization across all three portals:
+•	Super Admin Panel
+•	Seller Portal
+•	Customer/User Portal
+Whenever data is updated in any portal, it should immediately reflect in the other relevant portals without requiring manual refresh.
+The synchronization should apply to:
+•	Vendors
+•	Products
+•	Orders
+•	Inventory
+•	Stock
+•	Product Status
+•	Product Specifications
+•	Categories
+•	Coupons
+•	Returns & Refunds
+•	Disputes
+•	Settlements
+•	Notifications
+•	Reports
+•	Financial Data
+•	Analytics
+•	Customer Information
+•	Vendor Information
+Stability Requirements
+•	Prevent duplicate API requests.
+•	Prevent race conditions.
+•	Handle concurrent updates correctly.
+•	Maintain transactional consistency.
+•	Optimize database queries.
+•	Implement efficient caching where applicable.
+•	Ensure high performance with thousands of products, sellers, and customers.
+•	Keep UI updates smooth without unnecessary page reloads.
+•	Preserve data integrity across all modules.
+________________________________________
+1. Custom Icons (Entire Super Admin Dashboard)
+Replace the default icons with modern custom icons throughout the Super Admin Panel wherever applicable.
+Requirements
+•	Consistent icon style.
+•	Professional appearance.
+•	Match the existing design language.
+•	Do not affect existing functionality.
+________________________________________
+2. Vendor Profile
+Under the seller shop name, remove:
+•	Vendor Profile
+•	Performance
+Display only the required seller/shop information.
+Ensure vendor information remains synchronized with the Seller Profile.
+________________________________________
+3. Remove Module Header Icons
+Across every Super Admin module:
+•	Remove large decorative header icons.
+•	Keep only:
+o	Module title
+o	Action buttons
+•	Maintain proper spacing and alignment.
+________________________________________
+4. Vendor Analytics
+Remove the word:
+Sort
+Keep only the filter functionality.
+Replace the filter icon with a modern custom icon.
+Ensure analytics update automatically whenever seller data changes.
+________________________________________
+5. Business Intelligence
+Top Products
+•	Display products according to the selected filter.
+•	Update sorting dynamically when filters change.
+•	Optimize for large datasets.
+Remove Icons
+Remove icons from:
+•	Top Vendors
+•	Top Products
+•	Most Viewed Products
+•	Most Searched Keywords
+•	Highest Revenue Shops
+Ensure all analytics remain synchronized with Seller and Customer activity.
+________________________________________
+6. Financial Management
+Actions Column
+Fix the Actions column so that all action buttons display correctly and function properly.
+Remove Subtitle
+Remove:
+"Precedence: vendor-specific > category > global. Default flat commission is 10% until an active rule overrides it."
+Improve Revenue Report
+Improve:
+•	Text contrast
+•	Readability
+•	Font visibility
+•	Spacing
+•	Alignment
+•	Financial data emphasis
+Ensure revenue updates automatically whenever:
+•	Orders change
+•	Refunds occur
+•	Settlements update
+•	Commissions change
+________________________________________
+7. Returns & Refunds
+Implement Export as PDF.
+Export should include
+•	Return ID
+•	Order ID
+•	Customer Name
+•	Seller Name
+•	Product Name
+•	Return Status
+•	Refund Status
+•	Refund Amount
+•	Return Date
+•	Last Updated
+Requirements:
+•	Export filtered records.
+•	Preserve sorting.
+•	Generate a professional PDF.
+Ensure return and refund status remains synchronized with Seller and Customer portals.
+________________________________________
+8. Seller Disputes
+Remove subtitle:
+"Tickets escalated by sellers as disputes needing admin review."
+Keep only:
+Seller Disputes
+Maintain proper spacing.
+Ensure dispute updates are synchronized with both Seller and Admin.
+________________________________________
+9. Coupon Management
+Improve UI alignment.
+Requirements:
+•	Align title
+•	Search bar
+•	Filters
+•	Buttons
+•	Table headers
+•	Table rows
+•	Responsive spacing
+Ensure coupon updates immediately reflect on Seller and Customer portals.
+________________________________________
+10. Notifications
+Remove subtitle:
+"Platform-wide alerts: sellers, products, orders, and system events."
+Keep only:
+Notifications
+Maintain spacing.
+Ensure notifications are synchronized across:
+•	Admin
+•	Seller
+•	Customer
+Deliver notifications in real time whenever relevant events occur.
+________________________________________
+11. About Page
+Remove the following helper text completely:
+"Edit stats, headlines and copy blocks — changes go live immediately."
+Requirements
+•	Keep only the page title and required controls.
+•	Remove only the helper/subtitle text.
+•	Maintain proper spacing and alignment after removing it.
+•	Ensure the page has a clean, modern, and professional appearance.
+________________________________________
+12. Hero Banner Slider
+Remove the following subtitle completely:
+"Manage the images shown in the homepage hero slideshow."
+Requirements
+•	Keep only the page title:
+Hero Banner Slider
+•	Remove only the subtitle.
+•	Do not modify the existing banner management functionality.
+•	Keep image upload, edit, delete, drag-and-drop ordering, and other banner features working as they currently do.
+•	Maintain proper spacing and alignment after removing the subtitle.
+•	Ensure the layout remains responsive across desktop, tablet, and mobile devices.
+13. Products
+Remove the following sub-tagline from the Products section:
+“Manage all marketplace products, categories, and brands”
+Keep the Products section name unchanged.
+14. Marketplace Reports
+Rename “Marketplace Reports” to:
+“Reports”
+Update the name consistently wherever it appears in the navigation, page title, or related UI.
+15. Settings – Audit Logs
+In the Audit Logs section, add the following two buttons:
+1.	View All / View Less – Allow users to expand or collapse the audit log list. 
+2.	Clear – Allow users to clear the displayed audit logs, with a confirmation popup before clearing. 
+Do not modify the existing Audit Logs functionality or data structure unnecessarily.
+
+________________________________________
+Synchronization Requirements for Every Module
+Every module in the Super Admin Panel must automatically synchronize with Seller and Customer portals.
+Examples include:
+•	Vendor approval/deactivation
+•	Product creation, update, or deletion
+•	Inventory changes
+•	Stock quantity updates
+•	Product availability
+•	Order status updates
+•	Payment updates
+•	Refund processing
+•	Coupon creation and modification
+•	Notification delivery
+•	Settlement updates
+•	Analytics and reports
+•	Financial data changes
+•	Customer information updates
+•	Vendor profile updates
+No manual refresh should be required for updated data to appear.
+________________________________________
+Final Verification
+After completing all changes:
+•	Verify every Super Admin module.
+•	Verify synchronization with Seller and Customer portals.
+•	Ensure layouts remain responsive.
+•	Ensure all APIs continue functioning correctly.
+•	Ensure authentication and authorization remain secure.
+•	Ensure database operations remain optimized.
+•	Verify there are no UI regressions.
+•	Verify real-time synchronization works correctly across all portals.
+•	Verify the platform remains stable under concurrent operations.
+•	Deliver a clean, scalable, secure, production-ready Super Admin Panel with consistent UI, high stability, and complete real-time synchronization across Admin, Seller, and Customer modules.
+•	Deliver a clean, scalable, production-ready interface with improved UI consistency.

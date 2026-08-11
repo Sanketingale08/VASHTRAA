@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { deleteExpiredRegistrationDrafts } from "./routes/sellerRegistrationDraft";
 import { bootstrapDatabase } from "./lib/bootstrapDatabase";
 import { startEmailOutboxWorker, startSellerRegistrationNudgeWorker } from "./lib/transactionalEmail";
+import { startWeeklyAdminReportWorker } from "./workers/weeklyAdminReport";
 import { db } from "@workspace/db";
 import { productsTable } from "@workspace/db";
 import { eq, and, isNotNull, lt, sql } from "drizzle-orm";
@@ -34,6 +35,7 @@ bootstrapDatabase()
       startDraftExpiryWorker();
       startSellerRegistrationNudgeWorker();
       startFeaturedExpiryWorker();
+      startWeeklyAdminReportWorker();
     });
   })
   .catch((err) => {

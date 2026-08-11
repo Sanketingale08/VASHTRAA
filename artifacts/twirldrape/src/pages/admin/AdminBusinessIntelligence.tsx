@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingBag, Package, Users, Store,
-  Search, Eye, Award, LineChart as LineChartIcon,
+  Award, LineChart as LineChartIcon,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -245,8 +245,7 @@ function BusinessIntelligenceContent() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                <Store size={15} style={{ color: GOLD }} />
+              <div className="px-5 py-4 border-b border-gray-100">
                 <h3 className="text-sm font-bold" style={{ color: NAVY }}>Top Vendors</h3>
               </div>
               <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
@@ -266,12 +265,8 @@ function BusinessIntelligenceContent() {
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Package size={15} style={{ color: GOLD }} />
-                  <h3 className="text-sm font-bold" style={{ color: NAVY }}>Top Products</h3>
-                </div>
+                <h3 className="text-sm font-bold" style={{ color: NAVY }}>Top Products</h3>
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] uppercase text-gray-400 mr-1">Sort:</span>
                   {([
                     { key: "revenue", label: "Revenue" },
                     { key: "unitsSold", label: "Units" },
@@ -305,8 +300,7 @@ function BusinessIntelligenceContent() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                <Eye size={15} style={{ color: GOLD }} />
+              <div className="px-5 py-4 border-b border-gray-100">
                 <h3 className="text-sm font-bold" style={{ color: NAVY }}>Most Viewed Products</h3>
               </div>
               <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
@@ -318,17 +312,14 @@ function BusinessIntelligenceContent() {
                       <div className="text-sm font-semibold truncate" style={{ color: NAVY }}>{p.name}</div>
                       <div className="text-xs text-gray-400">{p.vendorName} · {p.conversionRate}% conversion</div>
                     </div>
-                    <div className="text-sm font-semibold flex items-center gap-1" style={{ color: NAVY }}>
-                      <Eye size={12} className="text-gray-400" /> {p.totalViews}
-                    </div>
+                    <div className="text-sm font-semibold" style={{ color: NAVY }}>{p.totalViews}</div>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                <Search size={15} style={{ color: GOLD }} />
+              <div className="px-5 py-4 border-b border-gray-100">
                 <h3 className="text-sm font-bold" style={{ color: NAVY }}>Most Searched Keywords</h3>
               </div>
               <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
@@ -346,8 +337,7 @@ function BusinessIntelligenceContent() {
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-              <TrendingUp size={15} style={{ color: GOLD }} />
+            <div className="px-5 py-4 border-b border-gray-100">
               <h3 className="text-sm font-bold" style={{ color: NAVY }}>Highest Revenue Shops</h3>
             </div>
             <ResponsiveContainer width="100%" height={240}>

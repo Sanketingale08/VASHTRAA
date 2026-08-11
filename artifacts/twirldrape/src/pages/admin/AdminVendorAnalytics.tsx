@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   Search, Star, ChevronLeft, ChevronRight, Download, Printer, FileSpreadsheet,
-  BarChart3, ArrowUpDown, Filter,
+  BarChart3, ArrowUpDown, SlidersHorizontal,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -272,10 +272,9 @@ function AnalyticsContent() {
             />
           </div>
           <button onClick={() => setShowFilters((s) => !s)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-            <Filter size={13} /> Filters
+            <SlidersHorizontal size={13} /> Filters
           </button>
           <div className="flex gap-1.5 sm:ml-auto items-center">
-            <span className="text-xs text-gray-400">Sort:</span>
             {SORT_OPTIONS.map((opt) => (
               <button
                 key={opt.value}

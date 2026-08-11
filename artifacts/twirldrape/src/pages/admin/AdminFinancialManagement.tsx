@@ -248,7 +248,7 @@ function SettlementsPanel() {
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Net Payout</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Date</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase min-w-[180px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -473,7 +473,6 @@ function CommissionRulesPanel() {
         </div>
         {error && <div className="text-xs text-red-500 mt-2">{error}</div>}
         {editingId && <p className="text-xs text-amber-600 mt-2">Editing rule — saving will deactivate the original and create a new dated version (kept for history).</p>}
-        <p className="text-xs text-gray-400 mt-3">Precedence: vendor-specific &gt; category &gt; global. Default flat commission is 10% until an active rule overrides it.</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -615,46 +614,46 @@ function RevenueReportPanel() {
       {data && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-              <span className="text-xs font-bold uppercase text-gray-400">Gross Revenue</span>
-              <div className="text-lg font-serif font-bold mt-1" style={{ color: NAVY }}>{fmt(data.summary.grossRevenue)}</div>
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Gross Revenue</span>
+              <div className="text-xl font-serif font-bold mt-2" style={{ color: NAVY }}>{fmt(data.summary.grossRevenue)}</div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-              <span className="text-xs font-bold uppercase text-gray-400">Net Revenue</span>
-              <div className="text-lg font-serif font-bold mt-1" style={{ color: NAVY }}>{fmt(data.summary.netRevenue)}</div>
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Net Revenue</span>
+              <div className="text-xl font-serif font-bold mt-2" style={{ color: NAVY }}>{fmt(data.summary.netRevenue)}</div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-              <span className="text-xs font-bold uppercase text-gray-400">Platform Commission</span>
-              <div className="text-lg font-serif font-bold mt-1" style={{ color: NAVY }}>{fmt(data.summary.platformRevenue)}</div>
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Platform Commission</span>
+              <div className="text-xl font-serif font-bold mt-2" style={{ color: NAVY }}>{fmt(data.summary.platformRevenue)}</div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-              <span className="text-xs font-bold uppercase text-gray-400">Vendor Revenue</span>
-              <div className="text-lg font-serif font-bold mt-1" style={{ color: NAVY }}>{fmt(data.summary.vendorRevenue)}</div>
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Vendor Revenue</span>
+              <div className="text-xl font-serif font-bold mt-2" style={{ color: NAVY }}>{fmt(data.summary.vendorRevenue)}</div>
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto max-h-96">
+            <div className="overflow-x-auto max-h-[480px]">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b border-gray-100">
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Order</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Date</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Total</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Commission</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Vendor Rev.</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Payment</th>
+                <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_#f3f4f6]">
+                  <tr>
+                    <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Order</th>
+                    <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                    <th className="px-4 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Commission</th>
+                    <th className="px-4 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Vendor Rev.</th>
+                    <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Payment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {data.rows.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-xs text-gray-400">No orders in this range</td></tr>}
+                  {data.rows.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-xs text-gray-400">No orders in this range</td></tr>}
                   {data.rows.map((r) => (
                     <tr key={r.orderId} className="hover:bg-gray-50/60">
-                      <td className="px-4 py-3 text-xs text-gray-500">{r.orderId?.startsWith("TD") ? r.orderId : r.orderId ? `TD-${r.orderId.replace(/-/g,"").slice(0,8).toUpperCase()}` : "—"}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400">{new Date(r.date).toLocaleDateString("en-IN")}</td>
-                      <td className="px-4 py-3 text-right font-semibold" style={{ color: NAVY }}>{fmt(r.total)}</td>
-                      <td className="px-4 py-3 text-right text-xs text-gray-600">{fmt(r.commission)}</td>
-                      <td className="px-4 py-3 text-right text-xs text-gray-600">{fmt(r.vendorRevenue)}</td>
-                      <td className="px-4 py-3 text-xs capitalize text-gray-500">{r.paymentMethod}</td>
+                      <td className="px-4 py-3.5 text-xs font-mono text-gray-600">{r.orderId?.startsWith("TD") ? r.orderId : r.orderId ? `TD-${r.orderId.replace(/-/g,"").slice(0,8).toUpperCase()}` : "—"}</td>
+                      <td className="px-4 py-3.5 text-xs text-gray-500 whitespace-nowrap">{new Date(r.date).toLocaleDateString("en-IN")}</td>
+                      <td className="px-4 py-3.5 text-right font-bold text-base" style={{ color: NAVY }}>{fmt(r.total)}</td>
+                      <td className="px-4 py-3.5 text-right text-xs font-semibold text-gray-700">{fmt(r.commission)}</td>
+                      <td className="px-4 py-3.5 text-right text-xs font-semibold text-gray-700">{fmt(r.vendorRevenue)}</td>
+                      <td className="px-4 py-3.5 text-xs capitalize text-gray-500">{r.paymentMethod}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1137,7 +1136,7 @@ function ReportSchedulesPanel() {
                         {s.active ? "Active" : "Paused"}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1.5">
                         <button onClick={() => toggle(s.id)} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
                           {s.active ? "Pause" : "Resume"}

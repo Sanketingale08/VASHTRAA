@@ -377,8 +377,8 @@ function CouponsContent() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <div className="relative sm:w-64">
+        <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}

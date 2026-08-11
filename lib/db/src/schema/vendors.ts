@@ -38,6 +38,7 @@ export const vendorsTable = pgTable("vendors", {
   featured: boolean("featured").notNull().default(false),
   vendorId: text("vendor_id"),
   reactivationWelcomePending: boolean("reactivation_welcome_pending").notNull().default(false),
+  statusReason: text("status_reason"),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

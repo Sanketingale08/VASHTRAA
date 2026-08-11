@@ -79,6 +79,7 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
       gstin: v.gstin ?? null,
       mobile: v.mobile ?? null,
       status: v.status,
+      statusReason: v.statusReason ?? null,
       ownerId: v.ownerId,
       vendorId: v.vendorId ?? null,
       reactivationWelcomePending: v.reactivationWelcomePending,
@@ -486,7 +487,7 @@ router.post("/admin/vendors/:id/suspend", requireAdminKey, async (req: any, res:
   try {
     const [updated] = await db
       .update(vendorsTable)
-      .set({ status: "suspended" })
+      .set({ status: "suspended", statusReason: reason ? String(reason).trim() : null })
       .where(eq(vendorsTable.id, id))
       .returning({
         id: vendorsTable.id,
@@ -522,7 +523,7 @@ router.post("/admin/vendors/:id/reject", requireAdminKey, async (req: any, res: 
   try {
     const [updated] = await db
       .update(vendorsTable)
-      .set({ status: "suspended" as any })
+      .set({ status: "suspended" as any, statusReason: reason ? String(reason).trim() : null })
       .where(eq(vendorsTable.id, id))
       .returning({
         id: vendorsTable.id,
@@ -570,6 +571,8 @@ router.post("/admin/vendors/:id/activate", requireAdminKey, async (req: any, res
       // Flag triggers the one-time "Welcome Back!" popup on next seller login.
       setValues.reactivationWelcomePending = true;
     }
+
+    setValues.statusReason = null;
 
     const [updated] = await db
       .update(vendorsTable)

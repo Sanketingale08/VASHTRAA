@@ -246,6 +246,13 @@
       "when": 1755648000000,
       "tag": "0037_add_admin_2fa",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1755734400000,
+      "tag": "0038_add_vendor_status_reason",
+      "breakpoints": true
     }
   ]
 }

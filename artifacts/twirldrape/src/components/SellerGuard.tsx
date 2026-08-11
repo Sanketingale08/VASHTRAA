@@ -18,6 +18,7 @@ interface VendorProfile {
   gstin: string | null;
   mobile: string | null;
   status: "pending" | "approved" | "suspended";
+  statusReason: string | null;
   ownerId: string | null;
   vendorId: string | null;
   reactivationWelcomePending: boolean;
@@ -160,9 +161,15 @@ export function SellerGuard({ children }: SellerGuardProps) {
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#ef4444" strokeWidth="2"/><path d="M15 9l-6 6M9 9l6 6" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/></svg>
           </div>
           <h2 className="font-serif text-2xl font-bold mb-3 text-red-700">Account Suspended</h2>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-4">
             Your vendor account has been suspended. Please contact <a href="/contact" className="text-[#1E6B5A] underline">TwirlDrape support</a> for assistance.
           </p>
+          {vendor?.statusReason && (
+            <div className="mt-2 mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-left">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-500 mb-1">Reason</p>
+              <p className="text-sm text-red-800 leading-relaxed">{vendor.statusReason}</p>
+            </div>
+          )}
         </div>
       </div>
     );

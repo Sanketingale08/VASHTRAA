@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, PackageX, ToggleLeft, ToggleRight, Check, X, Copy, Search, Upload, Loader2 } from "lucide-react";
+import { Plus, Pencil, PackageX, ToggleLeft, ToggleRight, Check, X, Copy, Search, Upload, Download, Loader2 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { CATEGORIES } from "./SellerProductForm";
 import { getApiUrl } from "@/lib/api";
-import SellerBulkUpload from "./SellerBulkUpload";
+import SellerBulkUpload, { PRODUCT_FIELDS } from "./SellerBulkUpload";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -222,6 +223,25 @@ export default function SellerProducts() {
     else { setSortKey(key); setSortDir("asc"); }
   }
 
+  function downloadCatalogue() {
+    const headers = PRODUCT_FIELDS.map((f) => f.key);
+    const rows = products.map((p) => {
+      const record = p as Record<string, any>;
+      return PRODUCT_FIELDS.map((f) => {
+        const val = record[f.key];
+        if (f.key === "images") {
+          return Array.isArray(val) ? val.join("|") : (val ?? "");
+        }
+        return val != null ? String(val) : "";
+      });
+    });
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = headers.map(() => ({ wch: 22 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+    XLSX.writeFile(wb, "twirldrape_catalogue.xlsx");
+  }
+
   const skeletonRows = Array.from({ length: 5 });
 
   return (
@@ -229,6 +249,15 @@ export default function SellerProducts() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-end mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-2">
+            <button
+              onClick={downloadCatalogue}
+              disabled={products.length === 0}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-40"
+              style={{ borderColor: "#D6C9BA", color: MAROON }}
+              title={products.length === 0 ? "No products to export" : `Download ${products.length} product(s) as Excel`}
+            >
+              <Download size={15} /> Download Catalogue
+            </button>
             <button
               onClick={() => setShowBulkUpload(true)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors"

@@ -260,6 +260,13 @@
       "when": 1755820800000,
       "tag": "0039_add_admin_otp_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1755907200000,
+      "tag": "0040_add_saved_payment_methods",
+      "breakpoints": true
     }
   ]
 }

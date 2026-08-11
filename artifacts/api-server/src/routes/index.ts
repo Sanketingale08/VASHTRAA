@@ -32,6 +32,7 @@ import adminBrandsRouter from "./adminBrands";
 import adminReportsRouter from "./adminReports";
 import adminSettingsRouter from "./adminSettings";
 import admin2faRouter from "./admin2fa";
+import paymentMethodsRouter from "./paymentMethods";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(adminBrandsRouter);
 router.use(adminReportsRouter);
 router.use(adminSettingsRouter);
 router.use(admin2faRouter);
+router.use(paymentMethodsRouter);
 
 export default router;

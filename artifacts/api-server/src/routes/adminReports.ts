@@ -58,6 +58,96 @@ function truncSql(groupBy: "day" | "week" | "month", col: string) {
   return sql.raw(`date_trunc('day', ${col})`);
 }
 
+/**
+ * Build a single aligned period-over-period comparison query.
+ *
+ * Strategy:
+ *   1. The prior period is [prevStart, start) — the same elapsed duration as
+ *      [start, end], ending strictly before the current period starts.
+ *      parsePeriod() computes prevStart = start - duration  (D = start - prevStart).
+ *
+ *   2. Current-period buckets are generated via
+ *        generate_series(trunc(start), trunc(end), interval)   (calendar-aligned).
+ *      Each bucket i spans: [b_i, b_i + 1 unit).
+ *
+ *   3. Prior bucket i is defined by an **explicit range join**:
+ *        prior orders with  created_at ∈ [b_i - D,  b_i + 1 unit - D)
+ *      This maps every prior order to exactly one bucket — the one whose
+ *      calendar window, when shifted back by the period duration, contains
+ *      the order. No date_trunc is applied to prior orders, so orders at
+ *      week/month boundaries are never split across two buckets.
+ *
+ *   4. The guard  AND o.created_at ∈ [prevStart, start)  ensures we only
+ *      count orders in the prior period even if the shifted bucket range
+ *      extends slightly beyond that window at the edges.
+ *
+ *   5. The prev_date label for current bucket b_i is  (b_i - D)::date.
+ *
+ * Returns exactly N rows — one per current-period bucket — with both current
+ * and prior revenue/orders embedded.
+ *
+ * groupBy is allowlisted to "day"|"week"|"month" — safe to embed as sql.raw.
+ */
+function alignedComparisonSql(
+  groupBy: "day" | "week" | "month",
+  start: Date,
+  end: Date,
+  prevStart: Date,
+) {
+  const u = groupBy; // already allowlisted — never user-supplied
+  return sql`
+    WITH current_buckets AS (
+      SELECT
+        gs                                                                AS bucket_start,
+        gs + ${sql.raw(`'1 ${u}'::interval`)}                             AS bucket_end,
+        gs::date                                                          AS bucket,
+        (row_number() OVER (ORDER BY gs) - 1)::int                        AS idx
+      FROM generate_series(
+        ${sql.raw(`date_trunc('${u}',`)} ${start}::timestamptz),
+        ${sql.raw(`date_trunc('${u}',`)} ${end}::timestamptz),
+        ${sql.raw(`'1 ${u}'::interval`)}
+      ) AS gs
+    ),
+    current_agg AS (
+      SELECT ${sql.raw(`date_trunc('${u}',`)} created_at)::date AS bucket,
+             count(*)::int                                AS orders,
+             coalesce(sum(total), 0)::bigint              AS revenue
+      FROM   orders
+      WHERE  created_at >= ${start} AND created_at <= ${end}
+      GROUP  BY 1
+    ),
+    prior_agg AS (
+      -- Explicit range join: prior bucket i covers orders in
+      --   [b_i - D,  b_i + 1 unit - D)   where D = start − prevStart.
+      -- Each prior order maps to exactly one bucket — no date_trunc splitting
+      -- at week/month boundaries when D is not a whole multiple of the unit.
+      SELECT
+        cb.bucket,
+        count(o.id)::int                                  AS orders,
+        coalesce(sum(o.total), 0)::bigint                 AS revenue
+      FROM   current_buckets cb
+      LEFT   JOIN orders o
+             ON  o.created_at >= cb.bucket_start - (${start}::timestamptz - ${prevStart}::timestamptz)
+             AND o.created_at <  cb.bucket_end   - (${start}::timestamptz - ${prevStart}::timestamptz)
+             AND o.created_at >= ${prevStart}
+             AND o.created_at <  ${start}::timestamptz
+      GROUP  BY cb.bucket
+    )
+    SELECT
+      cb.bucket::text                                                        AS date,
+      coalesce(ca.orders,  0)::int                                           AS orders,
+      coalesce(ca.revenue, 0)::bigint                                        AS revenue,
+      (cb.bucket_start - (${start}::timestamptz - ${prevStart}::timestamptz))::date::text
+                                                                             AS prev_date,
+      coalesce(pa.orders,  0)::int                                           AS prev_orders,
+      coalesce(pa.revenue, 0)::bigint                                        AS prev_revenue
+    FROM   current_buckets cb
+    LEFT   JOIN current_agg ca ON ca.bucket = cb.bucket
+    LEFT   JOIN prior_agg   pa ON pa.bucket = cb.bucket
+    ORDER  BY cb.idx
+  `;
+}
+
 function rows(result: any): any[] {
   return result?.rows ?? [];
 }
@@ -88,7 +178,7 @@ router.get("/admin/reports/revenue", requireAdminKey, async (req: any, res: any)
       `),
       db.execute(sql`
         SELECT coalesce(sum(total), 0)::bigint AS gross_revenue
-        FROM orders WHERE created_at >= ${prevStart} AND created_at <= ${prevEnd}
+        FROM orders WHERE created_at >= ${prevStart} AND created_at < ${start}::timestamptz
       `),
       db.execute(sql`
         SELECT
@@ -110,17 +200,10 @@ router.get("/admin/reports/revenue", requireAdminKey, async (req: any, res: any)
     const vendorEarnings = Number(comm.vendor_earnings ?? 0);
     const growthPct = prevGross > 0 ? Math.round(((gross - prevGross) / prevGross) * 1000) / 10 : 0;
 
-    // Use sql.raw for date_trunc unit — bind parameters are rejected by PostgreSQL
-    const trunc = truncSql(groupBy, "created_at");
-    const trendRes = await db.execute(sql`
-      SELECT
-        ${trunc}::date::text                   AS date,
-        count(*)::int                          AS orders,
-        coalesce(sum(total), 0)::bigint        AS revenue
-      FROM orders
-      WHERE created_at >= ${start} AND created_at <= ${end}
-      GROUP BY 1 ORDER BY 1
-    `);
+    // Single aligned query: N current buckets + N prior buckets at the same
+    // relative elapsed position. Both series are guaranteed identical-length.
+    const compRes = await db.execute(alignedComparisonSql(groupBy, start, end, prevStart));
+    const compRows = rows(compRes);
 
     res.json({
       summary: {
@@ -135,8 +218,11 @@ router.get("/admin/reports/revenue", requireAdminKey, async (req: any, res: any)
         avgOrderValue: Number(s.avg_order_value ?? 0),
         growthPct,
       },
-      trend: rows(trendRes).map((r) => ({
+      trend: compRows.map((r) => ({
         date: r.date, orders: Number(r.orders), revenue: Number(r.revenue),
+      })),
+      prevTrend: compRows.map((r) => ({
+        date: r.prev_date, orders: Number(r.prev_orders), revenue: Number(r.prev_revenue),
       })),
     });
   } catch (err) {
@@ -149,7 +235,7 @@ router.get("/admin/reports/revenue", requireAdminKey, async (req: any, res: any)
 router.get("/admin/reports/sales", requireAdminKey, async (req: any, res: any) => {
   try {
     const { period = "30d", from, to, page = "1", limit = "20" } = req.query;
-    const { start, end, groupBy } = parsePeriod(period as string, from as string, to as string);
+    const { start, end, prevStart, groupBy } = parsePeriod(period as string, from as string, to as string);
     const pageNum = Math.max(1, parseInt(page as string) || 1);
     const limitNum = Math.min(100, parseInt(limit as string) || 20);
     const offset = (pageNum - 1) * limitNum;
@@ -195,13 +281,10 @@ router.get("/admin/reports/sales", requireAdminKey, async (req: any, res: any) =
       `),
     ]);
 
-    const trunc = truncSql(groupBy, "created_at");
-    const trendRes = await db.execute(sql`
-      SELECT ${trunc}::date::text AS date, count(*)::int AS orders,
-        coalesce(sum(total), 0)::bigint AS revenue
-      FROM orders WHERE created_at >= ${start} AND created_at <= ${end}
-      GROUP BY 1 ORDER BY 1
-    `);
+    // Single aligned query: N current buckets + N prior buckets at the same
+    // relative elapsed position. Both series are guaranteed identical-length.
+    const compRes = await db.execute(alignedComparisonSql(groupBy, start, end, prevStart));
+    const compRows = rows(compRes);
 
     const s = row(summaryRes);
     const total = Number(row(totalRes).total ?? 0);
@@ -219,8 +302,11 @@ router.get("/admin/reports/sales", requireAdminKey, async (req: any, res: any) =
       byPaymentMethod: rows(byMethodRes).map((r) => ({
         method: r.method, count: Number(r.cnt), amount: Number(r.amount),
       })),
-      trend: rows(trendRes).map((r) => ({
+      trend: compRows.map((r) => ({
         date: r.date, orders: Number(r.orders), revenue: Number(r.revenue),
+      })),
+      prevTrend: compRows.map((r) => ({
+        date: r.prev_date, orders: Number(r.prev_orders), revenue: Number(r.prev_revenue),
       })),
       orders: rows(ordersRes).map((r) => ({
         id: r.id, date: r.date, total: Number(r.total), status: r.status,

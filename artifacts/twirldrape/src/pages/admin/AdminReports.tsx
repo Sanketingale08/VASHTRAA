@@ -253,6 +253,14 @@ function RevenueTab({ period, from, to }: { period: Period; from: string; to: st
 
   const s = data?.summary ?? {};
   const trend = data?.trend ?? [];
+  const prevTrend: any[] = data?.prevTrend ?? [];
+
+  // Merge prior-period revenue into each current-period data point by index
+  // so the chart can draw both lines on the same x-axis positions.
+  const mergedTrend = trend.map((r: any, i: number) => ({
+    ...r,
+    prevRevenue: prevTrend[i]?.revenue ?? null,
+  }));
 
   function exportPdf() {
     const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
@@ -333,12 +341,18 @@ function RevenueTab({ period, from, to }: { period: Period; from: string; to: st
             <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No data for this period</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={trend} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+              <LineChart data={mergedTrend} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9CA3AF" }} tickFormatter={fmtDate} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: "#9CA3AF" }} tickFormatter={fmt} width={56} />
-                <Tooltip formatter={(v: number) => [fmt(v), "Revenue"]} labelFormatter={fmtDate} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
-                <Line type="monotone" dataKey="revenue" stroke={GOLD} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: GOLD }} />
+                <Tooltip
+                  formatter={(v: number, name: string) => [fmt(v), name === "revenue" ? "This Period" : "Prior Period"]}
+                  labelFormatter={fmtDate}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => v === "revenue" ? "This Period" : "Prior Period"} />
+                <Line type="monotone" dataKey="revenue" stroke={GOLD} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: GOLD }} name="revenue" />
+                <Line type="monotone" dataKey="prevRevenue" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 3, fill: "#9CA3AF" }} name="prevRevenue" connectNulls />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -416,6 +430,11 @@ function SalesTab({ period, from, to }: { period: Period; from: string; to: stri
   const byCategory = data?.byCategory ?? [];
   const byMethod = data?.byPaymentMethod ?? [];
   const trend = data?.trend ?? [];
+  const prevTrend: any[] = data?.prevTrend ?? [];
+  const mergedTrend = trend.map((r: any, i: number) => ({
+    ...r,
+    prevRevenue: prevTrend[i]?.revenue ?? null,
+  }));
   const orders = (data?.orders ?? []).filter((o: any) =>
     !search || o.id?.toLowerCase().includes(search.toLowerCase()) || o.status?.includes(search.toLowerCase())
   );
@@ -465,14 +484,23 @@ function SalesTab({ period, from, to }: { period: Period; from: string; to: stri
           <h3 className="font-serif font-bold text-sm mb-4" style={{ color: NAVY }}>Daily Sales Trend</h3>
           {trend.length === 0 ? <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No data</div> : (
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={trend} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+              <LineChart data={mergedTrend} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9CA3AF" }} tickFormatter={fmtDate} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: "#9CA3AF" }} tickFormatter={fmt} width={56} />
-                <Tooltip formatter={(v: number, n: string) => [n === "revenue" ? fmt(v) : v, n === "revenue" ? "Revenue" : "Orders"]} labelFormatter={fmtDate} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <Tooltip
+                  formatter={(v: number, n: string) => {
+                    if (n === "revenue") return [fmt(v), "This Period"];
+                    if (n === "prevRevenue") return [fmt(v), "Prior Period"];
+                    return [v, "Orders"];
+                  }}
+                  labelFormatter={fmtDate}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => v === "revenue" ? "This Period" : v === "prevRevenue" ? "Prior Period" : "Orders"} />
                 <Line type="monotone" dataKey="revenue" stroke={GOLD} strokeWidth={2} dot={false} name="revenue" />
+                <Line type="monotone" dataKey="prevRevenue" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="prevRevenue" connectNulls />
                 <Line type="monotone" dataKey="orders" stroke="#3B82F6" strokeWidth={1.5} dot={false} name="orders" />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
               </LineChart>
             </ResponsiveContainer>
           )}

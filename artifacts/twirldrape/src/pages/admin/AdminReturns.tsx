@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download, ArrowUpDown } from "lucide-react";
+import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download, ArrowUpDown, FileText } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -418,6 +420,51 @@ function ReturnsContent() {
     refunds: orders.filter((o) => !!o.refundStatus).length,
   }), [orders]);
 
+  function exportPdf() {
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+    const tabLabel = tab === "all" ? "All" : tab === "returns" ? "Returns" : "Refunds";
+    doc.setFontSize(14);
+    doc.setTextColor(13, 27, 54);
+    doc.text(`TwirlDrape — Returns & Refunds Report (${tabLabel})`, 14, 14);
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(
+      `Exported ${new Date().toLocaleString("en-IN")} · ${filtered.length} record${filtered.length !== 1 ? "s" : ""}`,
+      14, 20,
+    );
+    autoTable(doc, {
+      startY: 26,
+      head: [[
+        "Return ID", "Customer Name", "Product(s)", "Return Status",
+        "Refund Status", "Refund Amount", "Return Date", "Last Updated",
+      ]],
+      body: filtered.map((o) => [
+        o.displayId ?? o.id,
+        o.address?.name ?? "—",
+        o.items.map((i) => i.name).join("; ").slice(0, 60) + (o.items.map((i) => i.name).join("; ").length > 60 ? "…" : ""),
+        o.status.replace(/_/g, " "),
+        o.refundStatus ? o.refundStatus.replace(/_/g, " ") : "—",
+        fmtMoney(o.total),
+        new Date(o.returnRequestedAt).toLocaleDateString("en-IN"),
+        new Date(o.updatedAt).toLocaleDateString("en-IN"),
+      ]),
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [13, 27, 54], textColor: [201, 168, 76], fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 28 },
+        1: { cellWidth: 28 },
+        2: { cellWidth: 55 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 24 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 24 },
+        7: { cellWidth: 24 },
+      },
+    });
+    doc.save(`returns-${tab}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
   function exportCSV() {
     const headers = ["Order ID", "Customer Name", "Item Names", "Total (₹)", "Status", "Refund Status", "Requested Date", "Updated Date"];
     const rows = filtered.map((o) => [
@@ -501,6 +548,15 @@ function ReturnsContent() {
             title="Toggle sort order"
           >
             <ArrowUpDown size={13} /> {sortOrder === "oldest" ? "Oldest first" : "Newest first"}
+          </button>
+          <button
+            onClick={exportPdf}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: NAVY }}
+            title="Export current view to PDF"
+          >
+            <FileText size={13} /> Export PDF
           </button>
           <button
             onClick={exportCSV}

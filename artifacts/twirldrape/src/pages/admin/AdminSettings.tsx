@@ -758,28 +758,119 @@ function formatAction(action: string) {
   return action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Server hard-caps limit at 100; we page in 100-row batches when fetching all.
+const AUDIT_LOG_PAGE = 10;  // rows shown per page and fetched per paginated request
+const AUDIT_API_BATCH = 100; // max the server accepts per request
+
 function AuditLogsSection() {
+  const { toast } = useToast();
   const [moduleFilter, setModuleFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [offset, setOffset] = useState(0);
-  const LIMIT = 20;
+  const [showAll, setShowAll] = useState(false);
+  // allLogs is populated by multi-page fetch when showAll is toggled on.
+  const [allLogs, setAllLogs] = useState<AuditLog[] | null>(null);
+  const [allLogsLoading, setAllLogsLoading] = useState(false);
+  // cleared=true means the user hit "Clear view" — show empty table until they interact again.
+  const [cleared, setCleared] = useState(false);
+  // Monotonically-incrementing generation; loadAllLogs checks it after every await
+  // so that filter changes or toggleShowAll(off) cancel in-flight multi-page fetches.
+  const fetchGenRef = useRef(0);
 
+  // Paginated query: always fetches AUDIT_LOG_PAGE rows starting at offset.
   const { data, isLoading, error } = useQuery<{ logs: AuditLog[]; total: number }>({
     queryKey: ["admin-audit-logs", moduleFilter, fromDate, toDate, offset],
     queryFn: () => {
-      const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
+      const params = new URLSearchParams({ limit: String(AUDIT_LOG_PAGE), offset: String(offset) });
       if (moduleFilter !== "all") params.set("module", moduleFilter);
       if (fromDate) params.set("from", fromDate);
       if (toDate) params.set("to", toDate);
       return apiFetch(`/api/admin/audit-logs?${params}`);
     },
+    enabled: !cleared,
   });
 
-  const logs = data?.logs ?? [];
+  const pageLogs = data?.logs ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const currentPage = Math.floor(offset / LIMIT) + 1;
+  const totalPages = Math.max(1, Math.ceil(total / AUDIT_LOG_PAGE));
+  const currentPage = Math.floor(offset / AUDIT_LOG_PAGE) + 1;
+
+  // Fetch every record in batches of AUDIT_API_BATCH (server hard-cap per request).
+  // Uses fetchGenRef to detect stale fetches: if filters change or the user collapses
+  // before all pages arrive, the in-flight loop detects the generation mismatch and
+  // abandons without committing partial results to state.
+  async function loadAllLogs() {
+    const gen = ++fetchGenRef.current;
+    setAllLogsLoading(true);
+    try {
+      const accumulated: AuditLog[] = [];
+      let batchOffset = 0;
+      while (true) {
+        if (fetchGenRef.current !== gen) return; // cancelled by filter change or collapse
+        const params = new URLSearchParams({ limit: String(AUDIT_API_BATCH), offset: String(batchOffset) });
+        if (moduleFilter !== "all") params.set("module", moduleFilter);
+        if (fromDate) params.set("from", fromDate);
+        if (toDate) params.set("to", toDate);
+        const d: { logs: AuditLog[]; total: number } = await apiFetch(`/api/admin/audit-logs?${params}`);
+        if (fetchGenRef.current !== gen) return; // cancelled after await
+        accumulated.push(...(d.logs ?? []));
+        // Stop when we have every record or the server returned a short page (EOF).
+        if (accumulated.length >= (d.total ?? 0) || (d.logs ?? []).length < AUDIT_API_BATCH) break;
+        batchOffset += AUDIT_API_BATCH;
+      }
+      if (fetchGenRef.current !== gen) return; // cancelled just before commit
+      setAllLogs(accumulated);
+    } catch {
+      if (fetchGenRef.current !== gen) return; // ignore errors from cancelled fetches
+      toast({ title: "Failed to load all logs", description: "Please try again.", variant: "destructive" });
+      setShowAll(false);
+    } finally {
+      if (fetchGenRef.current === gen) setAllLogsLoading(false);
+    }
+  }
+
+  async function toggleShowAll() {
+    if (showAll) {
+      fetchGenRef.current++; // cancel any in-flight fetch
+      setShowAll(false);
+      setAllLogs(null);
+    } else {
+      setCleared(false);
+      setShowAll(true);
+      await loadAllLogs();
+    }
+  }
+
+  function handleClear() {
+    if (window.confirm(
+      "Are you sure you want to clear the audit log view?\n\n" +
+      "This only clears the display — log records are preserved in the database."
+    )) {
+      setCleared(true);
+      setShowAll(false);
+      setAllLogs(null);
+      toast({ title: "Audit log view cleared", description: "Records remain in the database." });
+    }
+  }
+
+  function resetAndReload() {
+    fetchGenRef.current++; // cancel any in-flight all-logs fetch
+    setModuleFilter("all"); setFromDate(""); setToDate(""); setOffset(0);
+    setShowAll(false); setAllLogs(null); setCleared(false);
+  }
+
+  function onFilterChange(setter: (v: string) => void) {
+    return (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+      fetchGenRef.current++; // cancel any in-flight all-logs fetch
+      setter(e.target.value); setOffset(0); setShowAll(false); setAllLogs(null); setCleared(false);
+    };
+  }
+
+  // Determine what to render: cleared → empty; showAll → allLogs; else → pageLogs.
+  const displayLogs: AuditLog[] = cleared ? [] : showAll ? (allLogs ?? []) : pageLogs;
+  const tableLoading = showAll ? allLogsLoading : isLoading;
+  const isEmpty = !tableLoading && !error && displayLogs.length === 0;
 
   return (
     <SectionCard id="audit-logs">
@@ -787,33 +878,33 @@ function AuditLogsSection() {
       <div className="px-6 py-4">
         {/* Filters */}
         <div className="flex flex-wrap gap-3 mb-4">
-          <select
-            value={moduleFilter}
-            onChange={e => { setModuleFilter(e.target.value); setOffset(0); }}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white"
-          >
+          <select value={moduleFilter} onChange={onFilterChange(setModuleFilter)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white">
             {AUDIT_MODULES.map(m => <option key={m} value={m}>{m === "all" ? "All Modules" : m}</option>)}
           </select>
-          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setOffset(0); }}
+          <input type="date" value={fromDate} onChange={onFilterChange(setFromDate)}
             className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white" />
-          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setOffset(0); }}
+          <input type="date" value={toDate} onChange={onFilterChange(setToDate)}
             className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white" />
           {(moduleFilter !== "all" || fromDate || toDate) && (
-            <Btn variant="secondary" onClick={() => { setModuleFilter("all"); setFromDate(""); setToDate(""); setOffset(0); }}>
-              Clear
-            </Btn>
+            <Btn variant="secondary" onClick={resetAndReload}>Clear filters</Btn>
           )}
         </div>
 
-        {isLoading ? (
-          <div className="flex gap-2 items-center text-sm text-gray-400 py-6"><Loader2 size={14} className="animate-spin" />Loading…</div>
+        {tableLoading ? (
+          <div className="flex gap-2 items-center text-sm text-gray-400 py-6">
+            <Loader2 size={14} className="animate-spin" />
+            {showAll ? "Loading all records…" : "Loading…"}
+          </div>
         ) : error ? (
           <p className="text-sm text-red-600 py-4">Unable to load audit logs.</p>
-        ) : logs.length === 0 ? (
+        ) : isEmpty ? (
           <div className="text-center py-10">
             <BookOpen size={28} className="text-gray-200 mx-auto mb-2" />
             <p className="text-sm text-gray-400">
-              {total === 0
+              {cleared
+                ? "View cleared. Change a filter or refresh to reload."
+                : total === 0
                 ? "No audit logs yet. Admin actions will appear here automatically."
                 : "No logs match the current filters."}
             </p>
@@ -833,7 +924,7 @@ function AuditLogsSection() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {logs.map((log) => (
+                  {displayLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{fmtDate(log.createdAt)}</td>
                       <td className="px-4 py-3 text-gray-900 font-medium text-xs">{log.actor}</td>
@@ -854,16 +945,35 @@ function AuditLogsSection() {
                 </tbody>
               </table>
             </div>
-            {total > LIMIT && (
-              <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
-                <p className="text-xs text-gray-400">Showing {offset + 1}–{Math.min(offset + LIMIT, total)} of {total}</p>
-                <div className="flex items-center gap-2">
-                  <Btn variant="secondary" disabled={offset === 0} onClick={() => setOffset(o => Math.max(0, o - LIMIT))}>Previous</Btn>
-                  <span className="text-xs text-gray-500 px-1">Page {currentPage} / {totalPages}</span>
-                  <Btn variant="secondary" disabled={offset + LIMIT >= total} onClick={() => setOffset(o => o + LIMIT)}>Next</Btn>
-                </div>
+
+            {/* Controls row */}
+            <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                {/* Only show View All when paginated view has more rows available */}
+                {!showAll && total > AUDIT_LOG_PAGE && (
+                  <Btn variant="secondary" onClick={toggleShowAll}>
+                    View All ({total})
+                  </Btn>
+                )}
+                {showAll && (
+                  <Btn variant="secondary" onClick={toggleShowAll}>
+                    View Less
+                  </Btn>
+                )}
+                <Btn variant="danger" onClick={handleClear}>Clear view</Btn>
               </div>
-            )}
+              {/* Pagination — only in page mode */}
+              {!showAll && total > AUDIT_LOG_PAGE && (
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-gray-400">
+                    Showing {offset + 1}–{Math.min(offset + AUDIT_LOG_PAGE, total)} of {total}
+                  </p>
+                  <Btn variant="secondary" disabled={offset === 0} onClick={() => setOffset(o => Math.max(0, o - AUDIT_LOG_PAGE))}>Previous</Btn>
+                  <span className="text-xs text-gray-500 px-1">Page {currentPage} / {totalPages}</span>
+                  <Btn variant="secondary" disabled={offset + AUDIT_LOG_PAGE >= total} onClick={() => setOffset(o => o + AUDIT_LOG_PAGE)}>Next</Btn>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

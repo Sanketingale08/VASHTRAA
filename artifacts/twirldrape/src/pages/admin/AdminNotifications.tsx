@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, Trash2, CheckCheck, CheckCircle, Search, UserPlus, FileCheck,
   FileClock, IndianRupee, MessageSquareWarning, ServerCrash, Wallet, CreditCard, Circle, ExternalLink, RefreshCw,
+  Mail, AlertTriangle, RotateCcw, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,19 @@ interface AdminNotification {
   read: boolean;
   createdAt: string;
   metadata?: Record<string, any> | null;
+}
+
+interface DeadEmailEntry {
+  id: string;
+  orderId: string | null;
+  userId: string | null;
+  toEmail: string;
+  subject: string;
+  type: string;
+  attempts: number;
+  lastAttemptAt: string | null;
+  errorMessage: string | null;
+  createdAt: string;
 }
 
 function deepLinkFor(n: AdminNotification): string | null {
@@ -77,6 +91,214 @@ const TYPE_FILTERS = [
   { key: "seller_support_request", label: "Support" },
   { key: "system_error_alert,payment_gateway_issue,payout_failed", label: "System" },
 ];
+
+function EmailOutboxSection({ adminKey }: { adminKey: string }) {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkState, setBulkState] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const [bulkResult, setBulkResult] = useState<{ retried: number; skipped: number } | null>(null);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin-email-outbox-dead", page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      const r = await fetch(`/api/admin/email-outbox/dead?${params}`, {
+        headers: { "x-admin-key": adminKey },
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Failed");
+      return r.json() as Promise<{ entries: DeadEmailEntry[]; total: number; page: number; limit: number }>;
+    },
+    staleTime: 15000,
+    refetchInterval: 30000,
+  });
+
+  const entries = data?.entries ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / (data?.limit ?? 20)));
+
+  const allPageIds = entries.map((e) => e.id);
+  const allSelected = allPageIds.length > 0 && allPageIds.every((id) => selected.has(id));
+  const someSelected = selected.size > 0;
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected((s) => { const n = new Set(s); allPageIds.forEach((id) => n.delete(id)); return n; });
+    } else {
+      setSelected((s) => { const n = new Set(s); allPageIds.forEach((id) => n.add(id)); return n; });
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  async function bulkRetry() {
+    if (bulkState === "pending" || selected.size === 0) return;
+    setBulkState("pending");
+    setBulkResult(null);
+    const ids = Array.from(selected);
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/admin/email-outbox/${id}/retry`, {
+          method: "POST",
+          headers: { "x-admin-key": adminKey },
+          credentials: "include",
+        })
+      )
+    );
+    let retried = 0;
+    let skipped = 0;
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        if (r.value.status === 200) retried++;
+        else skipped++;
+      } else {
+        skipped++;
+      }
+    }
+    setBulkState("done");
+    setBulkResult({ retried, skipped });
+    setSelected(new Set());
+    // Refresh the list
+    await refetch();
+    qc.invalidateQueries({ queryKey: ["admin-email-outbox-dead"] });
+    setTimeout(() => { setBulkState("idle"); setBulkResult(null); }, 5000);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="font-serif text-xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
+            <Mail size={18} />
+            Email Outbox
+          </h2>
+          <p className="text-sm text-gray-500 mt-0.5">Dead emails that failed all delivery attempts — select and retry in bulk.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {bulkResult && (
+            <span className="text-xs font-medium px-2 py-1 rounded-lg" style={{ background: bulkResult.skipped === 0 ? "#f0fdf4" : "#fffbeb", color: bulkResult.skipped === 0 ? "#16a34a" : "#d97706" }}>
+              {bulkResult.retried} queued{bulkResult.skipped > 0 ? `, ${bulkResult.skipped} skipped` : ""}
+            </span>
+          )}
+          <button
+            onClick={bulkRetry}
+            disabled={!someSelected || bulkState === "pending" || bulkState === "done"}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+            style={{ background: someSelected && bulkState === "idle" ? GOLD : "#e5e7eb", color: someSelected && bulkState === "idle" ? "#fff" : "#9ca3af" }}
+            title={someSelected ? `Retry ${selected.size} selected email(s)` : "Select entries to retry"}
+          >
+            <RotateCcw size={14} className={bulkState === "pending" ? "animate-spin" : ""} />
+            {bulkState === "pending" ? "Retrying…" : bulkState === "done" ? "Done!" : `Retry${someSelected ? ` (${selected.size})` : ""}`}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        {isLoading ? (
+          <div className="p-4 space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex gap-3 animate-pulse items-center">
+                <div className="w-5 h-5 rounded bg-gray-100 shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 bg-gray-100 rounded w-1/3" />
+                  <div className="h-2.5 bg-gray-100 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center px-4">
+            <Mail size={34} className="text-gray-200 mb-3" />
+            <p className="text-sm font-medium text-gray-400">No dead emails</p>
+            <p className="text-xs text-gray-300 mt-1">All emails delivered successfully.</p>
+          </div>
+        ) : (
+          <>
+            {/* Header row */}
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400" style={{ background: CREAM }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="w-4 h-4 rounded accent-[#0D1B36] shrink-0 cursor-pointer"
+                title={allSelected ? "Deselect all" : "Select all"}
+              />
+              <span className="w-44 shrink-0">Recipient</span>
+              <span className="flex-1">Subject</span>
+              <span className="w-20 shrink-0 hidden sm:block">Type</span>
+              <span className="w-14 shrink-0 text-right hidden md:block">Attempts</span>
+              <span className="w-28 shrink-0 text-right hidden lg:block">Last tried</span>
+            </div>
+
+            {entries.map((e) => (
+              <div
+                key={e.id}
+                className={cn(
+                  "flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-0 transition-colors cursor-pointer",
+                  selected.has(e.id) ? "bg-amber-50/60" : "hover:bg-gray-50"
+                )}
+                onClick={() => toggleOne(e.id)}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(e.id)}
+                  onChange={() => toggleOne(e.id)}
+                  onClick={(ev) => ev.stopPropagation()}
+                  className="w-4 h-4 rounded accent-[#0D1B36] shrink-0 mt-0.5 cursor-pointer"
+                />
+                <div className="w-44 shrink-0 min-w-0">
+                  <p className="text-xs font-semibold text-gray-800 truncate" title={e.toEmail}>{e.toEmail}</p>
+                  {e.errorMessage && (
+                    <p className="text-[10px] text-red-400 truncate mt-0.5 flex items-center gap-0.5" title={e.errorMessage}>
+                      <AlertTriangle size={9} className="shrink-0" />
+                      {e.errorMessage}
+                    </p>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-700 truncate" title={e.subject}>{e.subject}</p>
+                  <p className="text-[10px] text-gray-300 mt-0.5">{relativeTime(e.createdAt)}</p>
+                </div>
+                <span className="w-20 shrink-0 hidden sm:block">
+                  <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate max-w-full" style={{ background: "#fef3c7", color: "#b45309" }}>{e.type}</span>
+                </span>
+                <span className="w-14 shrink-0 text-right text-xs text-gray-500 hidden md:block">{e.attempts}×</span>
+                <span className="w-28 shrink-0 text-right text-[10px] text-gray-400 hidden lg:block">
+                  {e.lastAttemptAt ? relativeTime(e.lastAttemptAt) : "—"}
+                </span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => { setPage((p) => Math.max(1, p - 1)); setSelected(new Set()); }}
+            disabled={page === 1}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg disabled:opacity-40"
+            style={{ color: NAVY }}
+          >
+            <ChevronLeft size={13} /> Prev
+          </button>
+          <span className="text-xs text-gray-500">Page {page} of {totalPages} · {total} dead</span>
+          <button
+            onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); setSelected(new Set()); }}
+            disabled={page === totalPages}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg disabled:opacity-40"
+            style={{ color: NAVY }}
+          >
+            Next <ChevronRight size={13} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AdminNotificationsContent() {
   const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
@@ -431,6 +653,10 @@ function AdminNotificationsContent() {
           </button>
         </div>
       )}
+
+      <div className="pt-4 border-t border-gray-100">
+        <EmailOutboxSection adminKey={adminKey} />
+      </div>
     </div>
   );
 }

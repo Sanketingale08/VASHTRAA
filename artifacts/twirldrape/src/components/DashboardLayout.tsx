@@ -14,6 +14,7 @@ import {
   Gift,
   Bell,
   HelpCircle,
+  CreditCard,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const navItems: { href: string; icon: React.ComponentType<{ size?: number; class
   { href: "/account/profile", icon: User, label: "Profile" },
   { href: "/account/orders", icon: Package, label: "My Orders" },
   { href: "/account/addresses", icon: MapPin, label: "Addresses" },
+  { href: "/account/payment-methods", icon: CreditCard, label: "Payment Methods" },
   { href: "/account/wishlist", icon: Heart, label: "Wishlist" },
   { href: "/account/coupons", icon: Tag, label: "Coupons & Offers" },
   { href: "/account/rewards", icon: Gift, label: "Rewards" },

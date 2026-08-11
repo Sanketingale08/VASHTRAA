@@ -34,6 +34,7 @@ import { AccountWishlistPage } from "@/pages/account/AccountWishlist";
 import { AccountRewardsPage } from "@/pages/account/Rewards";
 import { AccountNotificationsPage } from "@/pages/account/Notifications";
 import { AccountSupportPage } from "@/pages/account/Support";
+import { AccountPaymentMethodsPage } from "@/pages/account/PaymentMethods";
 import Contact from "@/pages/Contact";
 import About from "@/pages/About";
 import NewArrivals from "@/pages/NewArrivals";
@@ -250,6 +251,7 @@ function Router() {
       <Route path="/account/rewards" component={AccountRewardsPage} />
       <Route path="/account/notifications" component={AccountNotificationsPage} />
       <Route path="/account/support" component={AccountSupportPage} />
+      <Route path="/account/payment-methods" component={AccountPaymentMethodsPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/bridal" component={BridalCollection} />
       <Route path="/party-wear" component={PartyWear} />

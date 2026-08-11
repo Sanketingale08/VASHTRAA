@@ -12,6 +12,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -140,7 +141,7 @@ function SettlementsPanel() {
     if (!adminKey) return;
     setLoading(true);
     const q = statusFilter !== "all" ? `?status=${statusFilter}` : "";
-    fetch(`/api/admin/financial/settlements${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/settlements${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));
@@ -353,7 +354,7 @@ function CommissionRulesPanel() {
   function load() {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`/api/admin/financial/commission-rules`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/commission-rules`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json())
       .then((d) => setRules(d.rules ?? []))
       .finally(() => setLoading(false));
@@ -413,7 +414,7 @@ function CommissionRulesPanel() {
     try {
       await fetch(`/api/admin/financial/commission-rules/${id}/deactivate`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       load();
@@ -563,7 +564,7 @@ function RevenueReportPanel() {
   usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`/api/admin/financial/reports/revenue?${query}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/reports/revenue?${query}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, query]);
 
@@ -675,7 +676,7 @@ function PaymentReportPanel() {
   usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`/api/admin/financial/reports/payments?${query}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/reports/payments?${query}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, query]);
 
@@ -777,7 +778,7 @@ function RefundReportPanel() {
   usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`/api/admin/financial/reports/refunds?${query}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/reports/refunds?${query}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, query]);
 
@@ -884,7 +885,7 @@ function ProfitAnalysisPanel() {
   usePolling(() => {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`/api/admin/financial/profit-analysis?period=${period}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/profit-analysis?period=${period}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json()).then(setData).finally(() => setLoading(false));
   }, [adminKey, period]);
 
@@ -1013,7 +1014,7 @@ function ReportSchedulesPanel() {
   function load() {
     if (!adminKey) return;
     setLoading(true);
-    fetch(`/api/admin/financial/report-schedules`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`/api/admin/financial/report-schedules`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => r.json())
       .then((d) => setSchedules(d.schedules ?? []))
       .finally(() => setLoading(false));
@@ -1051,7 +1052,7 @@ function ReportSchedulesPanel() {
     try {
       await fetch(`/api/admin/financial/report-schedules/${id}/toggle`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       load();
@@ -1067,7 +1068,7 @@ function ReportSchedulesPanel() {
     try {
       await fetch(`/api/admin/financial/report-schedules/${id}`, {
         method: "DELETE",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       load();

@@ -8,6 +8,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { cn } from "@/lib/utils";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -70,7 +71,6 @@ const STATUS_TABS = ["all", "Open", "In Progress", "Waiting for Customer", "Reso
 
 function AdminSupportContent() {
   const qc = useQueryClient();
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scopeTab, setScopeTab] = useState<"customer" | "seller">("customer");
   const [statusTab, setStatusTab] = useState<string>("all");
@@ -88,7 +88,7 @@ function AdminSupportContent() {
       if (statusTab !== "all") params.set("status", statusTab);
       if (search.trim()) params.set("search", search.trim());
       const r = await fetch(`/api/admin/support/tickets?${params}`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (!r.ok) throw new Error("Failed to load tickets");
@@ -103,7 +103,7 @@ function AdminSupportContent() {
     queryKey: ["admin-support-ticket", selectedId],
     queryFn: async () => {
       const r = await fetch(`/api/admin/support/tickets/${selectedId}`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (!r.ok) throw new Error("Failed to load ticket");
@@ -116,7 +116,7 @@ function AdminSupportContent() {
     mutationFn: async () => {
       const r = await fetch(`/api/admin/support/tickets/${selectedId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ body: replyBody, internal }),
       });
@@ -134,7 +134,7 @@ function AdminSupportContent() {
     mutationFn: async (status: string) => {
       const r = await fetch(`/api/admin/support/tickets/${selectedId}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ status }),
       });
@@ -156,7 +156,7 @@ function AdminSupportContent() {
     mutationFn: async (assignedAdmin: string) => {
       const r = await fetch(`/api/admin/support/tickets/${selectedId}/assign`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ assignedAdmin }),
       });

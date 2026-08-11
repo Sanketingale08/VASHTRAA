@@ -3,6 +3,7 @@ import { ShoppingBag, Search, Download, RefreshCw } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 
 interface OrderItem {
@@ -95,7 +96,7 @@ function OrdersContent() {
     setError("");
     const qs = status ? `?status=${encodeURIComponent(status)}` : "";
     fetch(`/api/admin/orders${qs}`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then(async (r) => {
@@ -137,7 +138,7 @@ function OrdersContent() {
       if (search.trim()) params.set("search", search.trim());
       const qs = params.toString() ? `?${params.toString()}` : "";
       const r = await fetch(`/api/admin/orders/export.csv${qs}`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (!r.ok) {

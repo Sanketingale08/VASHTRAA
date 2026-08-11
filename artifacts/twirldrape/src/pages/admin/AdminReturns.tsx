@@ -5,6 +5,7 @@ import autoTable from "jspdf-autotable";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 
 interface OrderItem {
@@ -266,12 +267,11 @@ function ReturnsContent() {
   const [payoutConfirm, setPayoutConfirm] = useState<PayoutConfirmState | null>(null);
   const [rejectRefundConfirm, setRejectRefundConfirm] = useState<RejectRefundConfirmState | null>(null);
   const processingInFlight = useRef<Set<string>>(new Set());
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadOrders() {
     setLoading(true);
     fetch(`/api/admin/returns`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => r.json())
@@ -286,7 +286,7 @@ function ReturnsContent() {
     const pollId = setInterval(loadOrders, 30_000);
     return () => clearInterval(pollId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminKey]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let list = orders;
@@ -320,7 +320,7 @@ function ReturnsContent() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/return`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ decision, note: noteDrafts[orderId] || undefined }),
       });
@@ -349,7 +349,7 @@ function ReturnsContent() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/refund`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ decision, note: noteDrafts[orderId] || undefined }),
       });
@@ -393,7 +393,7 @@ function ReturnsContent() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/refund/process`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ reference: noteDrafts[orderId] || undefined, idempotencyKey }),
       });

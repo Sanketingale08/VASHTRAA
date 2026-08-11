@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders, adminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -119,7 +120,6 @@ function AnalyticsContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
 
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -139,10 +139,10 @@ function AnalyticsContent() {
   }, [search, status, verification, orderStatus, dateFrom, dateTo, revenueMin, revenueMax, sortBy, sortDir, page]);
 
   function load() {
-    if (!adminKey) return;
+    if (!adminKey()) return;
     setLoading(true);
     fetch(`/api/admin/vendor-analytics?${query}`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
@@ -151,11 +151,11 @@ function AnalyticsContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [query, adminKey]);
+  useEffect(() => { load(); }, [query]);
   useEffect(() => {
     const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, [query, adminKey]);
+  }, [query]);
 
   function toggleSort(field: string) {
     if (sortBy === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));

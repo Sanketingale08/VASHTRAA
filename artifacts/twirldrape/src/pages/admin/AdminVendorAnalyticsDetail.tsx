@@ -11,6 +11,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders, adminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -84,13 +85,12 @@ function DetailContent() {
   const [settlementBusy, setSettlementBusy] = useState(false);
   const inFlight = useRef<Set<string>>(new Set());
 
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function load() {
     if (!id || !adminKey) return;
     setLoading(true);
     fetch(`/api/admin/vendor-analytics/${id}?granularity=${granularity}`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
@@ -99,11 +99,11 @@ function DetailContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [id, granularity, adminKey]);
+  useEffect(() => { load(); }, [id, granularity]);
   useEffect(() => {
     const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, [id, granularity, adminKey]);
+  }, [id, granularity]);
 
   async function doVerification(field: "kyc" | "pan" | "gst" | "bank", action: "verify" | "reject" | "request_documents") {
     if (!id) return;
@@ -114,7 +114,7 @@ function DetailContent() {
     try {
       const res = await fetch(`/api/admin/vendor-analytics/${id}/verification`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ field, action }),
       });
@@ -134,7 +134,7 @@ function DetailContent() {
     try {
       const res = await fetch(`/api/admin/vendor-analytics/${id}/settlements`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ amount: Number(settlementAmount), type, note: settlementNote || undefined }),
       });

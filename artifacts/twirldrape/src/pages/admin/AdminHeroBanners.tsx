@@ -6,6 +6,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { HeroBannerSlider } from "@/components/HeroBannerSlider";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -88,7 +89,6 @@ function PreviewModal({ banners, onClose }: { banners: HeroBanner[]; onClose: ()
 }
 
 export default function AdminHeroBanners() {
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   const [banners, setBanners] = useState<HeroBanner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +111,7 @@ export default function AdminHeroBanners() {
   async function fetchBanners() {
     try {
       const r = await fetch(`/api/admin/hero-banners`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (r.ok) setBanners(await r.json());
@@ -123,7 +123,7 @@ export default function AdminHeroBanners() {
   async function fetchSettings() {
     try {
       const r = await fetch(`/api/admin/hero-settings`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (r.ok) {
@@ -146,7 +146,7 @@ export default function AdminHeroBanners() {
       const ms = Math.max(2, Math.min(30, globalIntervalSec)) * 1000;
       const r = await fetch(`/api/admin/hero-settings`, {
         method: "PUT",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ globalIntervalMs: ms }),
         credentials: "include",
       });
@@ -169,7 +169,7 @@ export default function AdminHeroBanners() {
     try {
       const uploadRes = await fetch(`/api/admin/upload/hero-image`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": file.type },
+        headers: { ...adminHeaders(), "Content-Type": file.type },
         body: file,
         credentials: "include",
       });
@@ -182,7 +182,7 @@ export default function AdminHeroBanners() {
       const globalMs = Math.max(2, Math.min(30, globalIntervalSec)) * 1000;
       const createRes = await fetch(`/api/admin/hero-banners`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ imageUrl: publicUrl, slideIntervalMs: globalMs }),
         credentials: "include",
       });
@@ -209,7 +209,7 @@ export default function AdminHeroBanners() {
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ isActive: !current }),
         credentials: "include",
       });
@@ -231,7 +231,7 @@ export default function AdminHeroBanners() {
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ isDefault: !currentIsDefault }),
         credentials: "include",
       });
@@ -260,7 +260,7 @@ export default function AdminHeroBanners() {
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ [field]: value }),
         credentials: "include",
       });
@@ -283,7 +283,7 @@ export default function AdminHeroBanners() {
     try {
       const r = await fetch(`/api/admin/hero-banners/${id}`, {
         method: "DELETE",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (r.ok) {
@@ -319,7 +319,7 @@ export default function AdminHeroBanners() {
     try {
       await fetch(`/api/admin/hero-banners/reorder`, {
         method: "PUT",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ ids }),
         credentials: "include",
       });

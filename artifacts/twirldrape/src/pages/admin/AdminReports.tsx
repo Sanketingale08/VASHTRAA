@@ -14,6 +14,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders, adminKey as getAdminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 const PIE_COLORS = [GOLD, "#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4", "#84CC16"];
@@ -42,9 +43,7 @@ function toCsv(rows: unknown[][]): string {
   return rows.map((r) => r.map(csvEscape).join(",")).join("\n");
 }
 
-function useAdminKey() {
-  return typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
-}
+function useAdminKey() { return getAdminKey(); }
 
 // ── Period selector ───────────────────────────────────────────────────────────
 const PERIODS = [
@@ -244,7 +243,7 @@ function RevenueTab({ period, from, to }: { period: Period; from: string; to: st
     setLoading(true);
     setError("");
     const q = new URLSearchParams({ period, ...(period === "custom" && from ? { from } : {}), ...(period === "custom" && to ? { to } : {}) });
-    fetch(`${basePath}/api/admin/reports/revenue?${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`${basePath}/api/admin/reports/revenue?${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(setData)
       .catch((e: any) => setError(`Failed to load revenue report${e?.message ? `: ${e.message}` : ""}`))
@@ -426,7 +425,7 @@ function SalesTab({ period, from, to }: { period: Period; from: string; to: stri
     if (!adminKey) return;
     setLoading(true); setError("");
     const q = new URLSearchParams({ period, page: String(page), ...(period === "custom" && from ? { from } : {}), ...(period === "custom" && to ? { to } : {}) });
-    fetch(`${basePath}/api/admin/reports/sales?${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`${basePath}/api/admin/reports/sales?${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load sales report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to, page]);
 
@@ -593,7 +592,7 @@ function VendorTab({ period, from, to }: { period: Period; from: string; to: str
     if (!adminKey) return;
     setLoading(true); setError("");
     const q = new URLSearchParams({ period, ...(period === "custom" && from ? { from } : {}), ...(period === "custom" && to ? { to } : {}) });
-    fetch(`${basePath}/api/admin/reports/vendors?${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`${basePath}/api/admin/reports/vendors?${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load vendor report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
@@ -713,7 +712,7 @@ function CustomerTab({ period, from, to }: { period: Period; from: string; to: s
     if (!adminKey) return;
     setLoading(true); setError("");
     const q = new URLSearchParams({ period, ...(period === "custom" && from ? { from } : {}), ...(period === "custom" && to ? { to } : {}) });
-    fetch(`${basePath}/api/admin/reports/customers?${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`${basePath}/api/admin/reports/customers?${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load customer report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
@@ -838,7 +837,7 @@ function ProductTab({ period, from, to }: { period: Period; from: string; to: st
     if (!adminKey) return;
     setLoading(true); setError("");
     const q = new URLSearchParams({ period, ...(period === "custom" && from ? { from } : {}), ...(period === "custom" && to ? { to } : {}) });
-    fetch(`${basePath}/api/admin/reports/products?${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`${basePath}/api/admin/reports/products?${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load product report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 
@@ -1013,7 +1012,7 @@ function ReturnTab({ period, from, to }: { period: Period; from: string; to: str
     if (!adminKey) return;
     setLoading(true); setError("");
     const q = new URLSearchParams({ period, ...(period === "custom" && from ? { from } : {}), ...(period === "custom" && to ? { to } : {}) });
-    fetch(`${basePath}/api/admin/reports/returns?${q}`, { headers: { "x-admin-key": adminKey }, credentials: "include" })
+    fetch(`${basePath}/api/admin/reports/returns?${q}`, { headers: adminHeaders(), credentials: "include" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(setData).catch((e: any) => setError(`Failed to load return report${e?.message ? `: ${e.message}` : ""}`)).finally(() => setLoading(false));
   }, [adminKey, period, from, to]);
 

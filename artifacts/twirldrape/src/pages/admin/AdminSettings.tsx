@@ -290,9 +290,442 @@ function ChangeKeyModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── 2FA Setup Modal ─────────────────────────────────────────────────────────
+function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [accessKeyInput, setAccessKeyInput] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [manualKey, setManualKey] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function handleConfirmKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessKeyInput.trim()) { setError("Access key is required"); return; }
+    setLoading(true); setError("");
+    try {
+      const data = await apiFetch("/api/admin/2fa/setup/start", {
+        method: "POST",
+        body: JSON.stringify({ accessKey: accessKeyInput.trim() }),
+      });
+      setQrDataUrl(data.qrDataUrl);
+      setManualKey(data.manualKey);
+      setStep(2);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to start 2FA setup");
+    } finally { setLoading(false); }
+  }
+
+  async function handleVerifyTOTP(e: React.FormEvent) {
+    e.preventDefault();
+    if (totpCode.replace(/\s/g, "").length < 6) { setError("Enter the 6-digit code"); return; }
+    setLoading(true); setError("");
+    try {
+      const data = await apiFetch("/api/admin/2fa/setup/verify", {
+        method: "POST",
+        body: JSON.stringify({ code: totpCode.replace(/\s/g, "") }),
+      });
+      setRecoveryCodes(data.recoveryCodes ?? []);
+      // Store the verified session token issued after successful setup
+      if (data.tokenHash && data.sessionId) {
+        sessionStorage.setItem("td_admin_session_token", data.tokenHash);
+        sessionStorage.setItem("td_admin_session_id", data.sessionId);
+      }
+      setStep(4);
+    } catch (err: any) {
+      setError(err.message ?? "Invalid code. Please try again.");
+      setTotpCode("");
+    } finally { setLoading(false); }
+  }
+
+  function copyAll() {
+    navigator.clipboard.writeText(recoveryCodes.join("\n")).then(() => {
+      setCopied(true);
+      toast({ title: "Copied", description: "Recovery codes copied to clipboard" });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function downloadAll() {
+    const blob = new Blob(
+      ["TwirlDrape Super Admin Recovery Codes\n" + "Generated: " + new Date().toISOString() + "\n\n" + recoveryCodes.join("\n")],
+      { type: "text/plain" }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "admin-recovery-codes.txt";
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,27,54,0.7)" }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Smartphone size={16} style={{ color: GOLD }} />
+            <h3 className="font-serif font-bold text-base" style={{ color: NAVY }}>
+              {step === 4 ? "Save Your Recovery Codes" : "Enable Two-Factor Authentication"}
+            </h3>
+          </div>
+          {step !== 4 && <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>}
+        </div>
+
+        {/* Step indicator */}
+        {step < 4 && (
+          <div className="px-6 pt-4 flex items-center gap-2">
+            {([1, 2, 3] as const).map((s) => (
+              <React.Fragment key={s}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step >= s ? "text-white" : "text-gray-400 bg-gray-100"}`}
+                  style={{ background: step >= s ? NAVY : undefined }}>
+                  {s}
+                </div>
+                {s < 3 && <div className={`flex-1 h-0.5 ${step > s ? "" : "bg-gray-100"}`} style={{ background: step > s ? GOLD : undefined }} />}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+
+        <div className="px-6 py-5">
+          {/* Step 1: Confirm Access Key */}
+          {step === 1 && (
+            <form onSubmit={handleConfirmKey} className="space-y-4">
+              <p className="text-sm text-gray-600">To enable 2FA, first confirm your Admin Access Key as an additional security step.</p>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Admin Access Key</label>
+                <div className="relative">
+                  <input type={showKey ? "text" : "password"} value={accessKeyInput}
+                    onChange={(e) => { setAccessKeyInput(e.target.value); setError(""); }}
+                    placeholder="Enter your admin key"
+                    className="w-full px-3 py-2.5 pr-9 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 transition"
+                    style={{ ["--tw-ring-color" as any]: GOLD }} autoFocus />
+                  <button type="button" onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={onClose} className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+                <button type="submit" disabled={loading}
+                  className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ background: NAVY, color: "white" }}>
+                  {loading && <RefreshCw size={13} className="animate-spin" />}
+                  {loading ? "Confirming…" : "Confirm & Continue"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Step 2: Scan QR code */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">Open your authenticator app (Google Authenticator, Authy, etc.) and scan this QR code.</p>
+              {qrDataUrl && (
+                <div className="flex justify-center">
+                  <img src={qrDataUrl} alt="2FA QR Code" className="w-48 h-48 rounded-lg border border-gray-200" />
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Or enter manually:</p>
+                <div className="bg-gray-50 rounded-lg px-3 py-2 font-mono text-xs text-gray-700 break-all select-all border border-gray-200">{manualKey}</div>
+              </div>
+              <button onClick={() => setStep(3)}
+                className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors"
+                style={{ background: NAVY, color: "white" }}>
+                I've Scanned the Code →
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Verify TOTP */}
+          {step === 3 && (
+            <form onSubmit={handleVerifyTOTP} className="space-y-4">
+              <p className="text-sm text-gray-600">Enter the 6-digit code shown in your authenticator app to verify the setup.</p>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Verification Code</label>
+                <input type="text" inputMode="numeric" maxLength={6} value={totpCode}
+                  onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+                  placeholder="000000"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-center text-lg tracking-[0.5em] outline-none focus:border-amber-400 transition"
+                  autoFocus />
+              </div>
+              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => { setStep(2); setError(""); }}
+                  className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                <button type="submit" disabled={loading || totpCode.length < 6}
+                  className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ background: NAVY, color: "white" }}>
+                  {loading && <RefreshCw size={13} className="animate-spin" />}
+                  {loading ? "Activating…" : "Activate 2FA"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Step 4: Recovery codes */}
+          {step === 4 && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <p className="text-xs font-bold text-amber-800 mb-1">⚠ Save these codes now</p>
+                <p className="text-xs text-amber-700">These recovery codes are shown only once. Each code can be used once to sign in if you lose access to your authenticator app.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {recoveryCodes.map((c, i) => (
+                  <div key={i} className="bg-gray-50 rounded-lg px-3 py-2 font-mono text-xs text-gray-800 border border-gray-200 text-center select-all">{c}</div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={copyAll}
+                  className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5">
+                  <CheckCircle size={14} className={copied ? "text-green-500" : "text-gray-400"} />
+                  {copied ? "Copied!" : "Copy Codes"}
+                </button>
+                <button onClick={downloadAll}
+                  className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  Download
+                </button>
+              </div>
+              <button onClick={onSuccess}
+                className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors"
+                style={{ background: NAVY, color: "white" }}>
+                Done — I've Saved My Codes
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 2FA Manage Modal ─────────────────────────────────────────────────────────
+function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [view, setView] = useState<"menu" | "disable" | "regen" | "newCodes">("menu");
+  const [totpCode, setTotpCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [newCodes, setNewCodes] = useState<string[]>([]);
+  const [confirmDisable, setConfirmDisable] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function reset() { setTotpCode(""); setError(""); setConfirmDisable(false); }
+
+  async function handleDisable(e: React.FormEvent) {
+    e.preventDefault();
+    if (!confirmDisable) { setConfirmDisable(true); return; }
+    setLoading(true); setError("");
+    try {
+      await apiFetch("/api/admin/2fa/disable", {
+        method: "POST",
+        body: JSON.stringify({ code: totpCode.replace(/\s/g, "") }),
+      });
+      // Clear the verified session (no longer needed without 2FA)
+      sessionStorage.removeItem("td_admin_session_token");
+      sessionStorage.removeItem("td_admin_session_id");
+      toast({ title: "2FA disabled", description: "Two-factor authentication has been turned off." });
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message ?? "Failed to disable 2FA"); setConfirmDisable(false);
+    } finally { setLoading(false); }
+  }
+
+  async function handleRegen(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setError("");
+    try {
+      const data = await apiFetch("/api/admin/2fa/regenerate-codes", {
+        method: "POST",
+        body: JSON.stringify({ code: totpCode.replace(/\s/g, "") }),
+      });
+      setNewCodes(data.recoveryCodes ?? []);
+      setView("newCodes");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to regenerate codes");
+    } finally { setLoading(false); }
+  }
+
+  function copyAll() {
+    navigator.clipboard.writeText(newCodes.join("\n")).then(() => {
+      setCopied(true);
+      toast({ title: "Copied", description: "Recovery codes copied to clipboard" });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function downloadAll() {
+    const blob = new Blob(
+      ["TwirlDrape Super Admin Recovery Codes\n" + "Generated: " + new Date().toISOString() + "\n\n" + newCodes.join("\n")],
+      { type: "text/plain" }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "admin-recovery-codes.txt";
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  const totpInput = (
+    <div>
+      <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Authenticator Code</label>
+      <input type="text" inputMode="numeric" maxLength={6} value={totpCode}
+        onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+        placeholder="000000"
+        className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-center text-lg tracking-[0.5em] outline-none focus:border-amber-400 transition"
+        autoFocus />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(13,27,54,0.7)" }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Shield size={16} style={{ color: GOLD }} />
+            <h3 className="font-serif font-bold text-base" style={{ color: NAVY }}>Manage Two-Factor Authentication</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+        </div>
+
+        <div className="px-6 py-5">
+          {/* Menu */}
+          {view === "menu" && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 mb-4">Two-factor authentication is currently <strong>enabled</strong>. Choose an action below.</p>
+              <button onClick={() => { reset(); setView("regen"); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "rgba(201,168,76,0.12)" }}>
+                  <RefreshCw size={15} style={{ color: GOLD }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Regenerate Recovery Codes</p>
+                  <p className="text-xs text-gray-500">Invalidate old codes and create new ones</p>
+                </div>
+              </button>
+              <button onClick={() => { reset(); setView("disable"); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50">
+                  <Lock size={15} className="text-red-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-red-700">Disable Two-Factor Authentication</p>
+                  <p className="text-xs text-red-500">This will reduce your account security</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Disable flow */}
+          {view === "disable" && (
+            <form onSubmit={handleDisable} className="space-y-4">
+              {!confirmDisable ? (
+                <>
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                    <p className="text-xs font-bold text-red-800 mb-1">⚠ Reducing security</p>
+                    <p className="text-xs text-red-700">Disabling two-factor authentication will remove the extra security layer from your admin account.</p>
+                  </div>
+                  {totpInput}
+                  {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={() => setView("menu")} className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                    <button type="submit" disabled={loading || totpCode.length < 6}
+                      className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                      style={{ background: "#dc2626", color: "white" }}>
+                      {loading && <RefreshCw size={13} className="animate-spin" />}
+                      Continue
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 font-medium">Are you sure you want to disable Two-Factor Authentication?</p>
+                  <p className="text-xs text-gray-500">This will make your admin account less secure. You can re-enable it at any time.</p>
+                  {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={() => setConfirmDisable(false)} className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+                    <button type="submit" disabled={loading}
+                      className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                      style={{ background: "#dc2626", color: "white" }}>
+                      {loading && <RefreshCw size={13} className="animate-spin" />}
+                      {loading ? "Disabling…" : "Yes, Disable 2FA"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          )}
+
+          {/* Regenerate flow */}
+          {view === "regen" && (
+            <form onSubmit={handleRegen} className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <p className="text-xs font-bold text-amber-800 mb-1">⚠ This will invalidate all existing recovery codes</p>
+                <p className="text-xs text-amber-700">After generating new codes, your old recovery codes will no longer work.</p>
+              </div>
+              {totpInput}
+              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setView("menu")} className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                <button type="submit" disabled={loading || totpCode.length < 6}
+                  className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ background: NAVY, color: "white" }}>
+                  {loading && <RefreshCw size={13} className="animate-spin" />}
+                  {loading ? "Generating…" : "Generate New Codes"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* New codes display */}
+          {view === "newCodes" && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <p className="text-xs font-bold text-amber-800 mb-1">⚠ Save these codes now</p>
+                <p className="text-xs text-amber-700">These are your new recovery codes. Your old codes have been permanently invalidated.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {newCodes.map((c, i) => (
+                  <div key={i} className="bg-gray-50 rounded-lg px-3 py-2 font-mono text-xs text-gray-800 border border-gray-200 text-center select-all">{c}</div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={copyAll} className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5">
+                  <CheckCircle size={14} className={copied ? "text-green-500" : "text-gray-400"} />
+                  {copied ? "Copied!" : "Copy Codes"}
+                </button>
+                <button onClick={downloadAll} className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Download</button>
+              </div>
+              <button onClick={onClose} className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors" style={{ background: NAVY, color: "white" }}>
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Security & Access ────────────────────────────────────────────────────────
 function SecuritySection() {
+  const qc = useQueryClient();
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [show2faSetup, setShow2faSetup] = useState(false);
+  const [show2faManage, setShow2faManage] = useState(false);
+
+  const { data: twoFaStatus, isLoading: twoFaLoading } = useQuery<{ enabled: boolean; enabledAt: string | null }>({
+    queryKey: ["admin-2fa-status"],
+    queryFn: () => apiFetch("/api/admin/2fa/status"),
+    staleTime: 10_000,
+  });
+  const twoFaEnabled = twoFaStatus?.enabled ?? false;
+
+  function refresh2fa() { qc.invalidateQueries({ queryKey: ["admin-2fa-status"] }); }
+
   return (
     <SectionCard id="security">
       <SectionHeader icon={Shield} title="Security & Access" desc="Admin access key, two-factor authentication and session controls" />
@@ -308,19 +741,31 @@ function SecuritySection() {
             <Btn variant="secondary" onClick={() => setShowKeyModal(true)}>Change Key</Btn>
           </div>
         </div>
+
         {/* 2FA */}
         <div className="px-6 py-4 flex items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-gray-900">Two-Factor Authentication</p>
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(201,168,76,0.12)", color: "#9a7a30" }}>Coming Soon</span>
+              {twoFaLoading ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-400">Checking…</span>
+              ) : twoFaEnabled ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(201,168,76,0.15)", color: "#7a5700" }}>Enabled</span>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">Disabled</span>
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">Add an extra layer of security to admin login.</p>
           </div>
-          <div className="w-10 h-5 rounded-full bg-gray-200 relative shrink-0 opacity-40 cursor-not-allowed">
-            <div className="w-4 h-4 rounded-full bg-white absolute top-0.5 left-0.5 shadow-sm" />
+          <div className="shrink-0">
+            {twoFaEnabled ? (
+              <Btn variant="secondary" onClick={() => setShow2faManage(true)}>Manage 2FA</Btn>
+            ) : (
+              <Btn onClick={() => setShow2faSetup(true)}>Enable 2FA</Btn>
+            )}
           </div>
         </div>
+
         {/* Session Timeout */}
         <div className="px-6 py-4 flex items-center justify-between gap-4">
           <div>
@@ -329,11 +774,12 @@ function SecuritySection() {
           </div>
           <span className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">Browser session</span>
         </div>
+
         {/* Login Protection */}
         <div className="px-6 py-4 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-gray-900">Login Protection</p>
-            <p className="text-xs text-gray-500 mt-0.5">Key-based authentication is active.</p>
+            <p className="text-xs text-gray-500 mt-0.5">{twoFaEnabled ? "Key + authenticator app required." : "Key-based authentication is active."}</p>
           </div>
           <div className="flex items-center gap-1.5 text-emerald-600">
             <CheckCircle size={15} />
@@ -341,7 +787,20 @@ function SecuritySection() {
           </div>
         </div>
       </div>
+
       {showKeyModal && <ChangeKeyModal onClose={() => setShowKeyModal(false)} />}
+      {show2faSetup && (
+        <TwoFASetupModal
+          onClose={() => setShow2faSetup(false)}
+          onSuccess={() => { setShow2faSetup(false); refresh2fa(); }}
+        />
+      )}
+      {show2faManage && (
+        <TwoFAManageModal
+          onClose={() => setShow2faManage(false)}
+          onSuccess={() => { setShow2faManage(false); refresh2fa(); }}
+        />
+      )}
     </SectionCard>
   );
 }

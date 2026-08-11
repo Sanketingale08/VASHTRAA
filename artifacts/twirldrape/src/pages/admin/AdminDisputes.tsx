@@ -3,6 +3,7 @@ import { ShieldAlert, ExternalLink, Store } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 
 interface AdminTicket {
@@ -55,13 +56,12 @@ function DisputesContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("needs_admin");
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadTickets(f: string) {
     setLoading(true);
     const qs = f === "needs_admin" ? "?disputeStatus=needs_admin" : "";
     fetch(`/api/admin/tickets${qs}`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => r.json())
@@ -70,7 +70,7 @@ function DisputesContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadTickets(filter); }, [adminKey, filter]);
+  useEffect(() => { loadTickets(filter); }, [filter]);
 
   const needsAdminCount = useMemo(
     () => tickets.filter((t) => t.disputeStatus === "needs_admin").length,

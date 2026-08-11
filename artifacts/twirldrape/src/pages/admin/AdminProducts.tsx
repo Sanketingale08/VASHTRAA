@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight,
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
+import { adminHeaders } from '@/lib/adminApi';
 
 // ─── constants ───────────────────────────────────────────────────────────────
 const NAVY = "#0D1B36";

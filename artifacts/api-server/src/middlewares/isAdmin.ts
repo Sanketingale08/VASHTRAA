@@ -6,12 +6,16 @@
  *  1. If site_settings contains admin_key_hash, compare SHA-256(provided) against it.
  *  2. Otherwise fall back to plain-text comparison against ADMIN_API_KEY env var.
  *
- * Session check (if x-admin-session-token header is present):
- *  - The token hash is looked up in admin_login_sessions.
- *  - If the session has been revoked (revokedAt is not null), the request is rejected
- *    with 403 and code SESSION_REVOKED so the frontend can clear local auth and redirect.
+ * 2FA gate (when admin_2fa_enabled = "true" in site_settings):
+ *  - All admin routes EXCEPT /api/admin/2fa/login/* and /api/admin/2fa/status
+ *    require x-admin-session-token pointing to a session with two_factor_verified = true.
+ *  - Missing or unverified session → 403 { error: "Forbidden", code: "2FA_REQUIRED" }.
  *
- * The key hash result is cached for 30 s to avoid a DB round-trip on every admin request.
+ * Session revocation check (when 2FA is disabled):
+ *  - If x-admin-session-token is supplied, verify it is not revoked.
+ *
+ * Both caches use a 30 s TTL to avoid DB round-trips on every admin request.
+ * Call clearAdminKeyCache() / clearAdmin2faCache() after the relevant setting changes.
  *
  * Also exported as `requireAdminKey` for backwards-compatible use.
  */
@@ -25,18 +29,13 @@ export function sha256hex(s: string): string {
 }
 
 // ── Key hash cache ────────────────────────────────────────────────────────────
-// undefined  = not yet loaded
-// null       = loaded, no custom hash stored → use env var
-// string     = loaded, this is the stored hash
 let _cachedHash: string | null | undefined = undefined;
 let _cacheExpiry = 0;
 const CACHE_TTL_MS = 30_000;
 
 async function getStoredHash(): Promise<string | null> {
   const now = Date.now();
-  if (_cachedHash !== undefined && now < _cacheExpiry) {
-    return _cachedHash;
-  }
+  if (_cachedHash !== undefined && now < _cacheExpiry) return _cachedHash;
   const [row] = await db
     .select({ value: siteSettingsTable.value })
     .from(siteSettingsTable)
@@ -46,10 +45,41 @@ async function getStoredHash(): Promise<string | null> {
   return _cachedHash;
 }
 
-/** Call this after changing the stored hash so the next request re-reads it. */
 export function clearAdminKeyCache(): void {
   _cachedHash = undefined;
   _cacheExpiry = 0;
+}
+
+// ── 2FA enabled cache ─────────────────────────────────────────────────────────
+let _cached2fa: boolean | undefined = undefined;
+let _cache2faExpiry = 0;
+
+async function get2faEnabled(): Promise<boolean> {
+  const now = Date.now();
+  if (_cached2fa !== undefined && now < _cache2faExpiry) return _cached2fa;
+  // Do NOT catch here — let DB errors propagate so callers can fail closed.
+  const [row] = await db
+    .select({ value: siteSettingsTable.value })
+    .from(siteSettingsTable)
+    .where(eq(siteSettingsTable.key, "admin_2fa_enabled"));
+  _cached2fa = row?.value === "true";
+  _cache2faExpiry = now + CACHE_TTL_MS;
+  return _cached2fa;
+}
+
+export function clearAdmin2faCache(): void {
+  _cached2fa = undefined;
+  _cache2faExpiry = 0;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Returns true if the request path is exempt from the 2FA session requirement. */
+function is2faExemptPath(req: any): boolean {
+  const url: string = req.originalUrl ?? req.url ?? "";
+  // The login endpoints create the verified session — they only need the key.
+  // The status endpoint is called during the login flow before any session exists.
+  return url.includes("/api/admin/2fa/login/") || url.includes("/api/admin/2fa/status");
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -58,6 +88,7 @@ export async function isAdmin(req: any, res: any, next: any) {
   if (!provided) {
     return res.status(403).json({ error: "Forbidden" });
   }
+
   try {
     // ── 1. Verify the admin key ──────────────────────────────────────────────
     const storedHash = await getStoredHash();
@@ -72,7 +103,28 @@ export async function isAdmin(req: any, res: any, next: any) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    // ── 2. If a session token is supplied, verify it is not revoked ──────────
+    // ── 2. 2FA gate ───────────────────────────────────────────────────────────
+    const twoFaEnabled = await get2faEnabled();
+    if (twoFaEnabled && !is2faExemptPath(req)) {
+      const sessionToken = req.headers["x-admin-session-token"] as string | undefined;
+      if (!sessionToken) {
+        return res.status(403).json({ error: "Forbidden", code: "2FA_REQUIRED" });
+      }
+      const [session] = await db
+        .select({
+          revokedAt: adminLoginSessionsTable.revokedAt,
+          twoFactorVerified: adminLoginSessionsTable.twoFactorVerified,
+        })
+        .from(adminLoginSessionsTable)
+        .where(eq(adminLoginSessionsTable.sessionTokenHash, sessionToken));
+
+      if (!session || session.revokedAt || !session.twoFactorVerified) {
+        return res.status(403).json({ error: "Forbidden", code: "2FA_REQUIRED" });
+      }
+      return next();
+    }
+
+    // ── 3. When 2FA is off, still check for revoked sessions ─────────────────
     const sessionToken = req.headers["x-admin-session-token"] as string | undefined;
     if (sessionToken) {
       const [session] = await db
@@ -81,19 +133,16 @@ export async function isAdmin(req: any, res: any, next: any) {
         .where(eq(adminLoginSessionsTable.sessionTokenHash, sessionToken));
 
       if (session?.revokedAt) {
-        // Session was explicitly revoked — tell the client to clear its auth
         return res.status(403).json({ error: "Session revoked", code: "SESSION_REVOKED" });
       }
     }
 
     next();
   } catch {
-    // DB unavailable — fall back to env-var key check only; skip session check
-    const adminKey = process.env.ADMIN_API_KEY;
-    if (adminKey && provided === adminKey) return next();
-    return res.status(403).json({ error: "Forbidden" });
+    // DB unavailable — fail closed. We cannot verify 2FA status or session
+    // validity, so we must not grant access regardless of the access key.
+    return res.status(503).json({ error: "Service unavailable" });
   }
 }
 
-/** Alias kept for backwards compatibility inside route files. */
 export const requireAdminKey = isAdmin;

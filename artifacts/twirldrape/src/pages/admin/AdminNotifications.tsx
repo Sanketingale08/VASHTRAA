@@ -10,6 +10,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { cn } from "@/lib/utils";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 const CREAM = "#F1F5F9";
@@ -92,7 +93,7 @@ const TYPE_FILTERS = [
   { key: "system_error_alert,payment_gateway_issue,payout_failed", label: "System" },
 ];
 
-function EmailOutboxSection({ adminKey }: { adminKey: string }) {
+function EmailOutboxSection() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -104,7 +105,7 @@ function EmailOutboxSection({ adminKey }: { adminKey: string }) {
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       const r = await fetch(`/api/admin/email-outbox/dead?${params}`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (!r.ok) throw new Error("Failed");
@@ -143,7 +144,7 @@ function EmailOutboxSection({ adminKey }: { adminKey: string }) {
       ids.map((id) =>
         fetch(`/api/admin/email-outbox/${id}/retry`, {
           method: "POST",
-          headers: { "x-admin-key": adminKey },
+          headers: adminHeaders(),
           credentials: "include",
         })
       )
@@ -301,7 +302,6 @@ function EmailOutboxSection({ adminKey }: { adminKey: string }) {
 }
 
 function AdminNotificationsContent() {
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
   const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -323,7 +323,7 @@ function AdminNotificationsContent() {
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
       const r = await fetch(`/api/admin/notifications?${params}`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (!r.ok) throw new Error("Failed");
@@ -337,7 +337,7 @@ function AdminNotificationsContent() {
     mutationFn: async (id: string) => {
       await fetch(`/api/admin/notifications/${id}/read`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
     },
@@ -351,7 +351,7 @@ function AdminNotificationsContent() {
     mutationFn: async (id: string) => {
       await fetch(`/api/admin/notifications/${id}/unread`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
     },
@@ -365,7 +365,7 @@ function AdminNotificationsContent() {
     mutationFn: async () => {
       await fetch(`/api/admin/notifications/read-all`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
     },
@@ -379,7 +379,7 @@ function AdminNotificationsContent() {
     mutationFn: async (id: string) => {
       await fetch(`/api/admin/notifications/${id}`, {
         method: "DELETE",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
     },
@@ -397,7 +397,7 @@ function AdminNotificationsContent() {
     try {
       const r = await fetch(`/api/admin/email-outbox/${outboxId}/retry`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (r.status === 409) {
@@ -655,7 +655,7 @@ function AdminNotificationsContent() {
       )}
 
       <div className="pt-4 border-t border-gray-100">
-        <EmailOutboxSection adminKey={adminKey} />
+        <EmailOutboxSection />
       </div>
     </div>
   );

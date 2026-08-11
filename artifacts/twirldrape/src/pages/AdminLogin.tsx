@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { Shield, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { storeAdminSession } from "@/lib/adminApi";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -9,7 +10,7 @@ const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
 export default function AdminLogin() {
-  const [adminKey, setAdminKey] = useState("");
+  const [adminKey, setAdminKeyState] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [adminError, setAdminError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,23 +18,46 @@ export default function AdminLogin() {
 
   async function handleAdminLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!adminKey.trim()) {
+    const key = adminKey.trim();
+    if (!key) {
       setAdminError("Please enter your admin key");
       return;
     }
     setLoading(true);
+    setAdminError("");
     try {
-      const res = await fetch(`/api/admin/vendors`, {
-        headers: { "x-admin-key": adminKey.trim() },
+      // Validate the key AND check 2FA status in a single request.
+      // /api/admin/2fa/status is always accessible with just the key — it is
+      // the 2FA-exempt endpoint defined in the middleware, so it will never
+      // return 2FA_REQUIRED; a 403 here means the key itself is invalid.
+      const statusRes = await fetch(`/api/admin/2fa/status`, {
+        headers: { "x-admin-key": key },
         credentials: "include",
       });
-      if (res.status === 403) {
-        setAdminError("Invalid admin key. Please try again.");
+
+      if (!statusRes.ok) {
+        // 403 = bad key; anything else = server problem
+        if (statusRes.status === 403) {
+          setAdminError("Invalid admin key. Please try again.");
+        } else {
+          setAdminError("Server error. Please try again.");
+        }
         return;
       }
-      sessionStorage.setItem("td_admin_key", adminKey.trim());
-      setAdminError("");
-      setLocation("/admin/dashboard");
+
+      const { enabled } = await statusRes.json();
+
+      // Key is valid — store it now.
+      sessionStorage.setItem("td_admin_key", key);
+
+      if (enabled) {
+        // 2FA is on — go to verification screen before granting panel access.
+        sessionStorage.setItem("td_admin_2fa_pending", "true");
+        setLocation("/admin/2fa-verify");
+      } else {
+        // No 2FA — proceed straight to the dashboard.
+        setLocation("/admin/dashboard");
+      }
     } catch {
       setAdminError("Connection error. Please try again.");
     } finally {
@@ -99,7 +123,7 @@ export default function AdminLogin() {
                 <input
                   type={showKey ? "text" : "password"}
                   value={adminKey}
-                  onChange={(e) => { setAdminKey(e.target.value); setAdminError(""); }}
+                  onChange={(e) => { setAdminKeyState(e.target.value); setAdminError(""); }}
                   placeholder="Enter your admin key"
                   className="w-full px-4 py-3 pr-10 rounded-lg text-sm outline-none transition"
                   style={{

@@ -112,7 +112,7 @@ router.get("/products", async (req, res) => {
     let orderBy;
     if (isFeatured === "true") {
       // Featured products: admin-defined order (nulls last), then by rating as tiebreaker
-      orderBy = [asc(sql`${productsTable.featuredOrder} NULLS LAST`), desc(productsTable.rating)];
+      orderBy = [sql`${productsTable.featuredOrder} asc NULLS LAST`, desc(productsTable.rating)];
     } else {
       switch (sort) {
         case "price_asc":

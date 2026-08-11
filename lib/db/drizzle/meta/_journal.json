@@ -239,6 +239,13 @@
       "when": 1755561600000,
       "tag": "0036_add_reactivation_welcome_pending",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1755648000000,
+      "tag": "0037_add_admin_2fa",
+      "breakpoints": true
     }
   ]
 }

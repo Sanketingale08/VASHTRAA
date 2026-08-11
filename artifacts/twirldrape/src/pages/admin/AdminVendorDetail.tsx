@@ -11,6 +11,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 const VENDOR_DETAIL_POLL_MS = 15_000;
@@ -106,8 +107,8 @@ const ORDER_STATUS_META: Record<string, { label: string; color: string; icon: Re
   returned: { label: "Returned", color: "#8B5CF6", icon: <RotateCcw size={14} /> },
 };
 
-function KycDocButton({ label, objectPath, adminKey, className }: {
-  label: string; objectPath: string; adminKey: string; className: string;
+function KycDocButton({ label, objectPath, className }: {
+  label: string; objectPath: string; className: string;
 }) {
   const [loading, setLoading] = useState(false);
   async function open() {
@@ -115,7 +116,7 @@ function KycDocButton({ label, objectPath, adminKey, className }: {
     try {
       const res = await fetch(
         `/api/admin/storage/signed-url?path=${encodeURIComponent(objectPath)}`,
-        { headers: { "x-admin-key": adminKey } }
+        { headers: adminHeaders() }
       );
       if (!res.ok) { alert("Could not load document — access denied or file missing."); return; }
       const { signedUrl } = await res.json();
@@ -142,12 +143,11 @@ function VendorDetailContent() {
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const inFlight = useRef<Set<string>>(new Set());
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadVendor() {
     if (!id) return;
     fetch(`/api/admin/vendors/${id}`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => {
@@ -167,7 +167,7 @@ function VendorDetailContent() {
     const pollId = setInterval(loadVendor, VENDOR_DETAIL_POLL_MS);
     return () => clearInterval(pollId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, adminKey]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function doAction(action: string) {
     if (!vendor) return;
@@ -177,7 +177,7 @@ function VendorDetailContent() {
     try {
       const res = await fetch(`/api/admin/vendors/${vendor.id}/${action}`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (res.ok) {
@@ -205,7 +205,7 @@ function VendorDetailContent() {
     try {
       const res = await fetch(`/api/admin/vendors/${vendor.id}/kyc`, {
         method: "PATCH",
-        headers: { "x-admin-key": adminKey, "Content-Type": "application/json" },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify({ action }),
       });
@@ -436,11 +436,11 @@ function VendorDetailContent() {
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">KYC Documents</p>
                   <div className="flex flex-wrap gap-2">
                     {vendor.panCardUrl && (
-                      <KycDocButton label="View PAN Card" objectPath={vendor.panCardUrl} adminKey={adminKey}
+                      <KycDocButton label="View PAN Card" objectPath={vendor.panCardUrl}
                         className="text-[#1d4ed8] border-[#bfdbfe] hover:bg-blue-50" />
                     )}
                     {vendor.gstCertUrl && (
-                      <KycDocButton label="View GST Certificate" objectPath={vendor.gstCertUrl} adminKey={adminKey}
+                      <KycDocButton label="View GST Certificate" objectPath={vendor.gstCertUrl}
                         className="text-[#166534] border-[#bbf7d0] hover:bg-green-50" />
                     )}
                   </div>

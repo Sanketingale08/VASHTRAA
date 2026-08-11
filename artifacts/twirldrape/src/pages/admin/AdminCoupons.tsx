@@ -5,6 +5,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -237,13 +238,12 @@ function CouponsContent() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const inFlight = useRef<Set<string>>(new Set());
 
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadCoupons() {
     setLoading(true);
     setError("");
     fetch(`/api/admin/coupons`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => {
@@ -257,7 +257,7 @@ function CouponsContent() {
 
   useEffect(() => {
     loadCoupons();
-  }, [adminKey]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     if (!search.trim()) return coupons;
@@ -291,7 +291,7 @@ function CouponsContent() {
     try {
       const res = await fetch(`/api/admin/coupons`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify(buildPayload(form)),
       });
@@ -320,7 +320,7 @@ function CouponsContent() {
     try {
       const res = await fetch(`/api/admin/coupons/${editing.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify(buildPayload(form)),
       });
@@ -348,7 +348,7 @@ function CouponsContent() {
     try {
       const res = await fetch(`/api/admin/coupons/${coupon.id}`, {
         method: "DELETE",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (res.ok) {

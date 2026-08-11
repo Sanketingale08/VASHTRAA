@@ -37,7 +37,8 @@ import { AccountSupportPage } from "@/pages/account/Support";
 import Contact from "@/pages/Contact";
 import About from "@/pages/About";
 import NewArrivals from "@/pages/NewArrivals";
-import AdminLogin from "@/pages/admin/AdminLogin";
+import AdminLogin from "@/pages/AdminLogin";
+import Admin2FAVerify from "@/pages/Admin2FAVerify";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminVendors from "@/pages/admin/AdminVendors";
 import AdminVendorAnalytics from "@/pages/admin/AdminVendorAnalytics";
@@ -261,6 +262,7 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/about" component={About} />
       <Route path="/admin/login" component={AdminLogin} />
+      <Route path="/admin/2fa-verify" component={Admin2FAVerify} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/vendors/:id" component={AdminVendorDetail} />
       <Route path="/admin/vendors" component={AdminVendors} />

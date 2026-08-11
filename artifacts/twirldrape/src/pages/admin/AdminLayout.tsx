@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders, adminKey } from '@/lib/adminApi';
 
 const NAVY = "#0D1B36";
 const NAVY2 = "#091429";
@@ -89,19 +90,18 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   const { data: countData } = useQuery({
     queryKey: ["admin-notif-count"],
     queryFn: async () => {
       const r = await fetch(`/api/admin/notifications/unread-count`, {
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (!r.ok) return { count: 0 };
       return r.json() as Promise<{ count: number }>;
     },
-    enabled: !!adminKey,
+    enabled: !!adminKey(),
     refetchInterval: 8000,
     staleTime: 30000,
   });

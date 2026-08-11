@@ -18,4 +18,5 @@ export * from "./hero_banners";
 export * from "./product_categories";
 export * from "./product_brands";
 export * from "./admin_sessions";
+export * from "./admin_recovery_codes";
 export * from "./audit_logs";

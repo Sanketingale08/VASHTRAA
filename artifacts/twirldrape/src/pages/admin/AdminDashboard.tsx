@@ -10,6 +10,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -75,11 +76,10 @@ function DashboardContent() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadStats() {
     fetch(`/api/admin/stats`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => r.json())
@@ -94,7 +94,7 @@ function DashboardContent() {
     const id = setInterval(loadStats, DASHBOARD_POLL_MS);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminKey]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const orderStatusData = stats
     ? [

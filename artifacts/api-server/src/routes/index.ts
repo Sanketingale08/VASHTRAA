@@ -31,6 +31,7 @@ import adminCategoriesRouter from "./adminCategories";
 import adminBrandsRouter from "./adminBrands";
 import adminReportsRouter from "./adminReports";
 import adminSettingsRouter from "./adminSettings";
+import admin2faRouter from "./admin2fa";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(adminCategoriesRouter);
 router.use(adminBrandsRouter);
 router.use(adminReportsRouter);
 router.use(adminSettingsRouter);
+router.use(admin2faRouter);
 
 export default router;

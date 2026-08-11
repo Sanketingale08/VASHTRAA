@@ -11,6 +11,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders, adminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 
@@ -136,7 +137,6 @@ function BusinessIntelligenceContent() {
   const [error, setError] = useState("");
   const [productSort, setProductSort] = useState<"revenue" | "unitsSold" | "rating" | "category">("revenue");
 
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -147,11 +147,11 @@ function BusinessIntelligenceContent() {
   }, [period, from, to]);
 
   function load() {
-    if (!adminKey) return;
+    if (!adminKey()) return;
     if (period === "custom" && (!from || !to)) return;
     setLoading(true);
     fetch(`/api/admin/bi/dashboard?${query}`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
@@ -160,11 +160,11 @@ function BusinessIntelligenceContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [query, adminKey]);
+  useEffect(() => { load(); }, [query]);
   useEffect(() => {
     const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
-  }, [query, adminKey]);
+  }, [query]);
 
   const ov = data?.overview;
 

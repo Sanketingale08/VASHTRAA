@@ -6,6 +6,7 @@ import {
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
 const PAGE_SIZE = 15;
@@ -62,12 +63,11 @@ function VendorsContent() {
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const inFlight = useRef<Set<string>>(new Set());
-  const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
 
   function loadVendors() {
     setLoading(true);
     fetch(`/api/admin/vendors`, {
-      headers: { "x-admin-key": adminKey },
+      headers: adminHeaders(),
       credentials: "include",
     })
       .then((r) => r.json())
@@ -76,7 +76,7 @@ function VendorsContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadVendors(); }, [adminKey]);
+  useEffect(() => { loadVendors(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let v = vendors;
@@ -105,7 +105,7 @@ function VendorsContent() {
     try {
       const res = await fetch(`/api/admin/vendors/${id}/${action}`, {
         method: "POST",
-        headers: { "x-admin-key": adminKey },
+        headers: adminHeaders(),
         credentials: "include",
       });
       if (res.ok) {

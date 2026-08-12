@@ -158,15 +158,27 @@ function maskMobile(mobile: string): string {
   return `${stripped.slice(0, 3)}${stars}${stripped.slice(-3)}`;
 }
 
-/** Sends the 2FA setup OTP via email. Falls back to console log in dev. */
+/**
+ * Sends the 2FA setup OTP via email.
+ * - Production (RESEND_API_KEY set): delivers via Resend and throws on failure.
+ * - Development  (no RESEND_API_KEY): prints the code to the server console so
+ *   the setup flow can be completed without a real mail transport.
+ */
 async function sendAdminEmailOtp(email: string, otp: string): Promise<void> {
   const resend = getResend();
   if (!resend) {
-    // Never log the OTP value — it is a secret.
-    logger.warn({ email }, "[admin2fa] RESEND_API_KEY not configured — email OTP not delivered");
+    if (process.env.NODE_ENV === "production") {
+      // In production a missing key is a hard misconfiguration — surface it.
+      throw new Error("RESEND_API_KEY is not configured; cannot deliver admin 2FA email OTP");
+    }
+    // Development fallback: log to the server console (never do this in prod).
+    logger.warn(
+      { email },
+      `[admin2fa] DEV — RESEND_API_KEY not set. Email OTP for ${email}: ${otp}`,
+    );
     return;
   }
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: "TwirlDrape <orders@twirldrape.com>",
     to: [email],
     subject: "TwirlDrape Admin — Your 2FA Verification Code",
@@ -177,6 +189,10 @@ async function sendAdminEmailOtp(email: string, otp: string): Promise<void> {
       <p style="color:#888;font-size:12px;">This code expires in <strong>5 minutes</strong>. Do not share it with anyone.</p>
     </div>`,
   });
+  if (error) {
+    logger.error({ error, email }, "[admin2fa] Resend failed to deliver email OTP");
+    throw new Error(`Email delivery failed: ${error.message}`);
+  }
 }
 
 /**

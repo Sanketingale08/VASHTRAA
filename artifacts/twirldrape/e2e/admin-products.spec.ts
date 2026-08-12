@@ -864,3 +864,212 @@ test.describe("Admin Products — brand CRUD", () => {
     await expect(page.locator("text=Brand deleted").first()).toBeVisible({ timeout: 5_000 });
   });
 });
+
+// ── 9. Featured reorder ───────────────────────────────────────────────────────
+
+const FEAT_ID_1 = "feat-prod-001";
+const FEAT_ID_2 = "feat-prod-002";
+
+const featuredProduct1 = {
+  ...baseProduct,
+  id: FEAT_ID_1,
+  name: "Kanjivaram Silk Saree",
+  status: "approved" as const,
+  active: true,
+  isFeatured: true,
+  featuredOrder: 1,
+};
+
+const featuredProduct2 = {
+  ...baseProduct,
+  id: FEAT_ID_2,
+  name: "Banarasi Silk Saree",
+  vendorId: "vendor-002",
+  vendorName: "Banaras Weaves",
+  status: "approved" as const,
+  active: true,
+  isFeatured: true,
+  featuredOrder: 2,
+};
+
+test.describe("Admin Products — featured reorder", () => {
+  test("clicking the down arrow on the first featured product PATCHes featured-order with the correct body", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+
+    await page.route("**/api/admin/products/stats", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockStats) })
+    );
+
+    // The FeaturedTab queries: /api/admin/products?status=approved&limit=100&sort=newest
+    // The All Products tab queries without status=approved.
+    // Return featured products for every GET on the products list endpoint.
+    await page.route("**/api/admin/products?**", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          products: [featuredProduct1, featuredProduct2],
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+        }),
+      });
+    });
+
+    await page.route("**/api/admin/categories", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ categories: [] }) });
+    });
+    await page.route("**/api/admin/brands", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ brands: [] }) });
+    });
+
+    let patchCallCount = 0;
+    let sentOrderBody: { order?: Record<string, number> } = {};
+
+    await page.route("**/api/admin/products/featured-order", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      patchCallCount++;
+      sentOrderBody = route.request().postDataJSON() ?? {};
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+    });
+
+    await page.goto("/admin/products");
+    await expect(page.locator("h1", { hasText: /Products/i })).toBeVisible({ timeout: 20_000 });
+
+    // Switch to the Featured tab
+    const featuredTab = page.locator("button", { hasText: "Featured" }).first();
+    await expect(featuredTab).toBeVisible({ timeout: 10_000 });
+    await featuredTab.click();
+
+    // Both featured products must appear in the list
+    await expect(
+      page.locator("p", { hasText: "Kanjivaram Silk Saree" }).first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.locator("p", { hasText: "Banarasi Silk Saree" }).first()
+    ).toBeVisible({ timeout: 5_000 });
+
+    // No PATCH has been sent yet
+    expect(patchCallCount).toBe(0);
+
+    // Find the first draggable row (Kanjivaram — position 1) and click its down-arrow.
+    // Each row renders three action buttons: [ChevronUp (disabled at idx=0), ChevronDown, X].
+    const firstRow = page.locator('[draggable="true"]', { hasText: "Kanjivaram Silk Saree" }).first();
+    await expect(firstRow).toBeVisible({ timeout: 5_000 });
+
+    // button index 0 = up (disabled), 1 = down, 2 = remove
+    const downBtn = firstRow.locator("button").nth(1);
+    await expect(downBtn).toBeVisible({ timeout: 5_000 });
+    await downBtn.click();
+
+    // Wait for the async PATCH request to complete
+    await page.waitForTimeout(500);
+
+    // Exactly one PATCH must have been made
+    expect(patchCallCount).toBe(1);
+
+    // After swapping, the new order is: [feat-prod-002 at 1, feat-prod-001 at 2]
+    expect(sentOrderBody.order).toEqual({
+      [FEAT_ID_1]: 2,
+      [FEAT_ID_2]: 1,
+    });
+
+    // A success toast must appear
+    await expect(page.locator("text=Order saved").first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("clicking the up arrow on the second featured product PATCHes featured-order with the correct body", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+
+    await page.route("**/api/admin/products/stats", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockStats) })
+    );
+    await page.route("**/api/admin/products?**", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          products: [featuredProduct1, featuredProduct2],
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+        }),
+      });
+    });
+    await page.route("**/api/admin/categories", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ categories: [] }) });
+    });
+    await page.route("**/api/admin/brands", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ brands: [] }) });
+    });
+
+    let patchCallCount = 0;
+    let sentOrderBody: { order?: Record<string, number> } = {};
+
+    await page.route("**/api/admin/products/featured-order", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      patchCallCount++;
+      sentOrderBody = route.request().postDataJSON() ?? {};
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+    });
+
+    await page.goto("/admin/products");
+    await expect(page.locator("h1", { hasText: /Products/i })).toBeVisible({ timeout: 20_000 });
+
+    // Switch to the Featured tab
+    const featuredTab = page.locator("button", { hasText: "Featured" }).first();
+    await expect(featuredTab).toBeVisible({ timeout: 10_000 });
+    await featuredTab.click();
+
+    // Both featured products must appear
+    await expect(
+      page.locator("p", { hasText: "Kanjivaram Silk Saree" }).first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.locator("p", { hasText: "Banarasi Silk Saree" }).first()
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Find the second row (Banarasi — position 2) and click its up-arrow.
+    // button index 0 = up (enabled for idx > 0), 1 = down (disabled at last), 2 = remove
+    const secondRow = page.locator('[draggable="true"]', { hasText: "Banarasi Silk Saree" }).first();
+    await expect(secondRow).toBeVisible({ timeout: 5_000 });
+
+    const upBtn = secondRow.locator("button").nth(0);
+    await expect(upBtn).toBeVisible({ timeout: 5_000 });
+    await upBtn.click();
+
+    await page.waitForTimeout(500);
+
+    // Exactly one PATCH
+    expect(patchCallCount).toBe(1);
+
+    // Moving second product up produces the same swap: [feat-prod-002 at 1, feat-prod-001 at 2]
+    expect(sentOrderBody.order).toEqual({
+      [FEAT_ID_1]: 2,
+      [FEAT_ID_2]: 1,
+    });
+
+    // Success toast
+    await expect(page.locator("text=Order saved").first()).toBeVisible({ timeout: 5_000 });
+  });
+});

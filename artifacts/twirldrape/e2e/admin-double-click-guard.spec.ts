@@ -19,6 +19,9 @@
  *   - AdminReturns → reviewReturn (Reject return)
  *   - AdminReturns → reviewRefund (Approve refund)
  *   - AdminVendors → doAction (Approve vendor)
+ *   - AdminVendorDetail → doAction (Approve Vendor)
+ *   - AdminVendorDetail → doKycAction (Mark KYC Verified)
+ *   - AdminCoupons → handleDeactivate (Deactivate coupon)
  */
 
 import { test, expect } from "@playwright/test";
@@ -300,6 +303,242 @@ test.describe("AdminVendors — doAction double-click guard", () => {
     // After approval the Suspend button replaces Approve
     await expect(
       page.locator("button", { hasText: /^Suspend$/i }).first(),
+    ).toBeVisible({ timeout: 15_000 });
+
+    expect(callCount).toBe(1);
+  });
+});
+
+// ── AdminVendorDetail fixtures ──────────────────────────────────────────────
+
+const pendingVendorDetail = {
+  id: VENDOR_ID,
+  name: "Silk House Weaves",
+  location: "Varanasi, UP",
+  rating: 4.2,
+  sareesCount: 12,
+  avatar: "/images/artisan-1.png",
+  bio: null,
+  tagline: null,
+  contactEmail: "silk@example.com",
+  gstin: null,
+  status: "pending",
+  ownerId: "owner-001",
+  kycVerified: false,
+  kycResubmissionRequested: false,
+  mobile: null,
+  panNumber: null,
+  panCardUrl: null,
+  gstCertUrl: null,
+  bankHolder: null,
+  bankName: null,
+  bankAccount: null,
+  bankIfsc: null,
+  shopStreet: null,
+  shopCity: null,
+  shopState: null,
+  shopPincode: null,
+  termsAcceptedAt: null,
+  featured: false,
+  totalProducts: 12,
+  activeProducts: 10,
+  totalRevenue: 0,
+  commissionEarned: 0,
+  statusBreakdown: {},
+  monthlyRevenue: [],
+  vendorId: "VND-001",
+};
+
+const approvedVendorDetail = { ...pendingVendorDetail, status: "approved" };
+const kycVerifiedVendorDetail = { ...pendingVendorDetail, kycVerified: true, kycResubmissionRequested: false };
+
+// ── AdminVendorDetail — doAction ────────────────────────────────────────────
+
+test.describe("AdminVendorDetail — doAction double-click guard", () => {
+  test("rapid double-click on Approve Vendor fires exactly one POST", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+
+    // Track current vendor state so the re-fetch after doAction sees updated data
+    let currentVendorDetail = { ...pendingVendorDetail };
+
+    // Stub the vendor detail endpoint (also handles polling re-fetches)
+    await page.route(`**/api/admin/vendors/${VENDOR_ID}`, async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(currentVendorDetail),
+      });
+    });
+
+    let callCount = 0;
+
+    await page.route(`**/api/admin/vendors/${VENDOR_ID}/approve`, async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      callCount++;
+      // Hold the response so the second click fires while the first is in-flight
+      await new Promise((r) => setTimeout(r, 350));
+      // Advance shared state so the subsequent loadVendor() GET returns approved data
+      currentVendorDetail = { ...approvedVendorDetail };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ vendor: approvedVendorDetail }),
+      });
+    });
+
+    await page.goto(`/admin/vendors/${VENDOR_ID}`);
+
+    const approveBtn = page.locator("button", { hasText: /Approve Vendor/i }).first();
+    await expect(approveBtn).toBeVisible({ timeout: 20_000 });
+
+    await approveBtn.dblclick();
+
+    // After approval, Suspend Vendor button replaces the Approve Vendor button
+    await expect(
+      page.locator("button", { hasText: /Suspend Vendor/i }).first(),
+    ).toBeVisible({ timeout: 15_000 });
+
+    expect(callCount).toBe(1);
+  });
+});
+
+// ── AdminVendorDetail — doKycAction ────────────────────────────────────────
+
+test.describe("AdminVendorDetail — doKycAction double-click guard", () => {
+  test("rapid double-click on Mark KYC Verified fires exactly one PATCH", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+
+    // Track current vendor state so the re-fetch after doKycAction sees updated data
+    let currentVendorDetail = { ...pendingVendorDetail };
+
+    // Stub the vendor detail endpoint
+    await page.route(`**/api/admin/vendors/${VENDOR_ID}`, async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(currentVendorDetail),
+      });
+    });
+
+    let callCount = 0;
+
+    await page.route(`**/api/admin/vendors/${VENDOR_ID}/kyc`, async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue();
+        return;
+      }
+      callCount++;
+      // Hold the response so the second click fires while the first is in-flight
+      await new Promise((r) => setTimeout(r, 350));
+      // Advance shared state so the subsequent loadVendor() GET returns KYC-verified data
+      currentVendorDetail = { ...kycVerifiedVendorDetail };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ vendor: kycVerifiedVendorDetail }),
+      });
+    });
+
+    await page.goto(`/admin/vendors/${VENDOR_ID}`);
+
+    const kycBtn = page.locator("button", { hasText: /Mark KYC Verified/i }).first();
+    await expect(kycBtn).toBeVisible({ timeout: 20_000 });
+
+    await kycBtn.dblclick();
+
+    // After verify the button becomes disabled (kycVerified = true disables it)
+    await expect(kycBtn).toBeDisabled({ timeout: 15_000 });
+
+    expect(callCount).toBe(1);
+  });
+});
+
+// ── AdminCoupons fixtures ───────────────────────────────────────────────────
+
+const COUPON_ID = "e2e-dblclick-coupon-001";
+
+const activeCoupon = {
+  id: COUPON_ID,
+  code: "FESTIVE20",
+  type: "percent",
+  value: 20,
+  description: "Festive discount",
+  active: true,
+  expiresAt: null,
+  maxUses: null,
+  usedCount: 0,
+  createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+};
+
+const deactivatedCoupon = { ...activeCoupon, active: false };
+
+// ── AdminCoupons — handleDeactivate ────────────────────────────────────────
+
+test.describe("AdminCoupons — handleDeactivate double-click guard", () => {
+  test("rapid double-click on Deactivate coupon fires exactly one DELETE", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+
+    // Suppress window.confirm so neither click is blocked by a native dialog
+    await page.addInitScript(() => {
+      window.confirm = () => true;
+    });
+
+    await page.route("**/api/admin/coupons", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ coupons: [activeCoupon] }),
+      });
+    });
+
+    let callCount = 0;
+
+    await page.route(`**/api/admin/coupons/${COUPON_ID}`, async (route) => {
+      if (route.request().method() !== "DELETE") {
+        await route.continue();
+        return;
+      }
+      callCount++;
+      // Hold the response so the second click fires while the first is in-flight
+      await new Promise((r) => setTimeout(r, 350));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ coupon: deactivatedCoupon }),
+      });
+    });
+
+    await page.goto("/admin/coupons");
+
+    const deactivateBtn = page.locator("button", { hasText: /Deactivate/i }).first();
+    await expect(deactivateBtn).toBeVisible({ timeout: 20_000 });
+
+    await deactivateBtn.dblclick();
+
+    // After deactivation the status pill changes to "Inactive"
+    await expect(
+      page.locator("span", { hasText: /^Inactive$/i }).first(),
     ).toBeVisible({ timeout: 15_000 });
 
     expect(callCount).toBe(1);

@@ -355,8 +355,14 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       setMaskedEmail(data.maskedEmail ?? "");
       setStep(4);
     } catch (err: any) {
-      setError(err.message ?? "Invalid code. Please try again.");
-      setTotpCode("");
+      const code = err.code as string | undefined;
+      if (code === "EMAIL_DELIVERY_UNAVAILABLE") {
+        // Don't clear the TOTP code — the server issue isn't the admin's fault.
+        setError(err.message ?? "Email delivery is not available. Please contact your system administrator.");
+      } else {
+        setError(err.message ?? "Invalid code. Please try again.");
+        setTotpCode("");
+      }
     } finally { setLoading(false); }
   }
 
@@ -414,7 +420,13 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       let secs = 60;
       const id = setInterval(() => { secs -= 1; setCountdown(secs); if (secs <= 0) clearInterval(id); }, 1000);
     } catch (err: any) {
+      const code = err.code as string | undefined;
       setError(err.message ?? "Failed to resend. Please try again.");
+      // If email delivery is unavailable the admin cannot proceed — prompt restart
+      // so they can fix the server configuration and begin again.
+      if (code === "EMAIL_DELIVERY_UNAVAILABLE") {
+        setNeedsRestart(true);
+      }
     } finally { setResendLoading(false); }
   }
 

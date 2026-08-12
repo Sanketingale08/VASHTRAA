@@ -425,6 +425,16 @@ router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: an
       });
     }
 
+    // Pre-flight: verify Resend is configured BEFORE generating an OTP that
+    // can never be delivered. Generating and storing an un-deliverable OTP
+    // would leave the admin waiting for a code that will never arrive.
+    if (!getResend()) {
+      return res.status(503).json({
+        error: "Email delivery is not configured on this server. Please ask your system administrator to set RESEND_API_KEY before enabling 2FA.",
+        code: "EMAIL_DELIVERY_UNAVAILABLE",
+      });
+    }
+
     const otp = await upsertOtpChallenge("email");
     await sendAdminEmailOtp(email, otp);
     // Record that TOTP was verified — gates subsequent email OTP operations.
@@ -434,7 +444,7 @@ router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: an
     res.json({ step: "email_otp", maskedEmail: maskEmail(email) });
   } catch (err) {
     logger.error({ err }, "[admin2fa] setup/verify error");
-    res.status(500).json({ error: "Failed to proceed with 2FA setup" });
+    res.status(500).json({ error: "Failed to send verification email. Please try again." });
   }
 });
 
@@ -577,12 +587,20 @@ router.post("/admin/2fa/setup/resend-email-otp", requireAdminKey, async (req: an
     if (!email) {
       return res.status(400).json({ error: "No admin email configured.", code: "EMAIL_NOT_CONFIGURED" });
     }
+    // Pre-flight: same guard as the initial send — don't generate an OTP
+    // that cannot be delivered.
+    if (!getResend()) {
+      return res.status(503).json({
+        error: "Email delivery is not configured on this server. Please ask your system administrator to set RESEND_API_KEY.",
+        code: "EMAIL_DELIVERY_UNAVAILABLE",
+      });
+    }
     const otp = await upsertOtpChallenge("email");
     await sendAdminEmailOtp(email, otp);
     res.json({ ok: true, maskedEmail: maskEmail(email) });
   } catch (err) {
     logger.error({ err }, "[admin2fa] resend-email-otp error");
-    res.status(500).json({ error: "Failed to resend email OTP" });
+    res.status(500).json({ error: "Failed to resend email OTP. Please try again." });
   }
 });
 

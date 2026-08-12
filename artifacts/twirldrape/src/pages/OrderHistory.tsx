@@ -105,16 +105,18 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
   return (
     <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#1E2329]">
       <div className="container mx-auto px-4 py-10 max-w-3xl">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] mb-1">My Orders</h1>
-          <p className="text-sm text-gray-500 mb-8">
-            {orders.length === 0 ? "You haven't placed any orders yet." : `${orders.length} order${orders.length !== 1 ? "s" : ""} placed`}
-          </p>
-        </motion.div>
+        {!dashboardMode && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] mb-1">My Orders</h1>
+            <p className="text-sm text-gray-500 mb-8">
+              {orders.length === 0 ? "You haven't placed any orders yet." : `${orders.length} order${orders.length !== 1 ? "s" : ""} placed`}
+            </p>
+          </motion.div>
+        )}
 
         {orders.length === 0 ? (
           <motion.div

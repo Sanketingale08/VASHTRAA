@@ -112,15 +112,17 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
 
   return (
     <div className="container mx-auto px-4 lg:px-8 py-10">
-      <div className="flex items-center gap-3 mb-8">
-        <Heart size={28} className="fill-[#1E6B5A] text-[#1E6B5A]" />
-        <h1 className="font-serif text-3xl md:text-4xl text-[#1E6B5A]">My Wishlist</h1>
-        {items.length > 0 && (
-          <span className="ml-auto text-sm text-[#7a5f4e]">
-            {items.length} {items.length === 1 ? "item" : "items"} saved
-          </span>
-        )}
-      </div>
+      {!dashboardMode && (
+        <div className="flex items-center gap-3 mb-8">
+          <Heart size={28} className="fill-[#1E6B5A] text-[#1E6B5A]" />
+          <h1 className="font-serif text-3xl md:text-4xl text-[#1E6B5A]">My Wishlist</h1>
+          {items.length > 0 && (
+            <span className="ml-auto text-sm text-[#7a5f4e]">
+              {items.length} {items.length === 1 ? "item" : "items"} saved
+            </span>
+          )}
+        </div>
+      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">

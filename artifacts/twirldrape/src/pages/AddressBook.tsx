@@ -448,8 +448,7 @@ export function AddressBookPage() {
     <DashboardLayout>
       <div>
         <div className="mb-6">
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">My Address Book</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{addresses.length} saved address{addresses.length !== 1 ? "es" : ""}</p>
+          <p className="text-sm text-gray-500">{addresses.length} saved address{addresses.length !== 1 ? "es" : ""}</p>
         </div>
 
           {error && (

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useUser, useClerk } from "@clerk/react";
+import { useUser } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Pencil, Save, X, Loader2, CheckCircle, ExternalLink,
-  User, KeyRound,
+  Pencil, Save, X, Loader2, CheckCircle,
+  User,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ChangePhoneModal } from "./ChangePhoneModal";
@@ -139,7 +139,7 @@ function EditField({
 
 export function AccountProfilePage() {
   const { user, isLoaded } = useUser();
-  const { openUserProfile } = useClerk();
+
 
   /** Displayed (view-mode) form values. */
   const [form, setForm] = useState<ProfileForm>({
@@ -284,19 +284,15 @@ export function AccountProfilePage() {
   return (
     <DashboardLayout>
       <div className="space-y-4 max-w-xl">
-        {/* Page heading */}
-        <div className="flex items-center justify-between">
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Profile Details</h2>
-          {saved && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full"
-            >
-              <CheckCircle size={12} /> Saved
-            </motion.div>
-          )}
-        </div>
+        {saved && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full self-start"
+          >
+            <CheckCircle size={12} /> Saved
+          </motion.div>
+        )}
 
         {/* ── Profile Details Card ──────────────────────────────── */}
         <motion.div
@@ -508,25 +504,6 @@ export function AccountProfilePage() {
           </AnimatePresence>
         </motion.div>
 
-        {/* ── Account Security (compact) ────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.06 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm px-4 sm:px-6 py-4"
-        >
-          <p className="text-xs text-gray-400 mb-3">
-            Manage your password, two-factor authentication, and connected accounts.
-          </p>
-          <button
-            onClick={() => openUserProfile()}
-            className="flex items-center gap-2 text-sm font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
-          >
-            <KeyRound size={14} />
-            Manage account security
-            <ExternalLink size={12} className="text-gray-300" />
-          </button>
-        </motion.div>
       </div>
 
       {/* ── Modals ───────────────────────────────────────────────── */}

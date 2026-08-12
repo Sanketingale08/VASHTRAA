@@ -70,15 +70,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="min-h-screen bg-[#F3F8F5]">
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 lg:py-8">
           <div className="mb-5 lg:mb-7">
-            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#1E6B5A]">My Account</h1>
-            {user && (
-              <p className="text-sm text-[#7a5f4e] mt-0.5 truncate">
-                {[user.firstName, user.lastName].filter(Boolean).join(" ")}
-                {user.primaryEmailAddress?.emailAddress && (
-                  <span className="text-gray-400"> · {user.primaryEmailAddress.emailAddress}</span>
-                )}
-              </p>
-            )}
+            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#1E6B5A]">
+              Welcome, {[user?.firstName, user?.lastName].filter(Boolean).join(" ")}
+            </h1>
           </div>
 
           <div className="flex gap-6 lg:gap-8 items-start">

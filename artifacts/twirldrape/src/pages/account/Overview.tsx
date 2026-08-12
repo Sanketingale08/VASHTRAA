@@ -160,18 +160,9 @@ export function AccountOverviewPage() {
 
   const loading = ordersLoading || wishlistLoading || couponsLoading;
 
-  const firstName = user?.firstName ?? "there";
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-0.5">
-            Welcome back, {firstName}!
-          </h2>
-          <p className="text-sm text-gray-500">Here's a snapshot of your TwirlDrape account.</p>
-        </div>
-
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4">
           <StatCard
             icon={Package}

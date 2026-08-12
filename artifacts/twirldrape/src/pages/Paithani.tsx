@@ -1,6 +1,6 @@
 import React from "react";
 import { Layout } from "@/components/Layout";
-import { HeroSlider } from "@/components/HeroSlider";
+import { CategoryCard } from "@/components/CategoryCard";
 import { StatsBar } from "@/components/StatsBar";
 import { SectionHeading } from "@/components/SectionHeading";
 import { ProductCard } from "@/components/ProductCard";
@@ -9,28 +9,29 @@ import { useListProducts } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 
-const slides = [
+const PAITHANI_CARDS = [
   {
-    id: "s1",
-    image: "/images/hero-paithani-1.png",
-    title: "The Royal Paithani Collection",
-    subtitle: "Heritage Woven in Silk",
-    cta: "Explore Collection"
-  },
-  {
-    id: "s2",
+    label: "Wedding Paithani",
+    tagline: "For Your Most Important Day",
+    description:
+      "Handwoven Paithani silks with rich zari borders and peacock motifs — chosen by brides across India for generations.",
     image: "/images/hero-paithani-2.png",
-    title: "Masterpieces of Yeola",
-    subtitle: "Authentic Zari Work",
-    cta: "Shop Authentic"
+    fallback: "/images/product-1.png",
+    bg: "#3D2210",
+    chipLabel: "Bridal Edit",
+    href: "/paithani/shop?occasion=bridal",
   },
   {
-    id: "s3",
+    label: "Festival Paithani",
+    tagline: "Celebrate Every Occasion",
+    description:
+      "Vivid colours, authentic zari, and the timeless craft of Yeola — ready for Diwali, Navratri, and every festive moment.",
     image: "/images/hero-paithani-3.png",
-    title: "Bridal Elegance",
-    subtitle: "For Your Most Important Day",
-    cta: "View Bridal"
-  }
+    fallback: "/images/product-2.png",
+    bg: "#12342A",
+    chipLabel: "Festive Collection",
+    href: "/paithani/shop?occasion=festival",
+  },
 ];
 
 function BrowseAllLink({ href }: { href: string }) {
@@ -47,7 +48,21 @@ export default function Paithani() {
 
   return (
     <Layout>
-      <HeroSlider slides={slides} />
+      {/* Category Cards */}
+      <section className="py-10 md:py-14" style={{ background: "#F3F8F5" }}>
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
+            {PAITHANI_CARDS.map((item, i) => (
+              <CategoryCard
+                key={item.label}
+                card={item}
+                index={i}
+                href={item.href}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
       <StatsBar />
 
       <div className="bg-[#F3F8F5] texture-overlay py-16 md:py-24">

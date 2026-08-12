@@ -1,6 +1,6 @@
 import React from "react";
 import { Layout } from "@/components/Layout";
-import { HeroSlider } from "@/components/HeroSlider";
+import { CategoryCard } from "@/components/CategoryCard";
 import { StatsBar } from "@/components/StatsBar";
 import { SectionHeading } from "@/components/SectionHeading";
 import { ProductCard } from "@/components/ProductCard";
@@ -10,28 +10,29 @@ import { motion } from "framer-motion";
 import { Star } from "lucide-react";
 import { Link } from "wouter";
 
-const slides = [
+const DESIGNER_CARDS = [
   {
-    id: "d1",
-    image: "/images/hero-designer-1.png",
-    title: "Contemporary Elegance",
-    subtitle: "Modern Designer Sarees",
-    cta: "Shop The Look"
-  },
-  {
-    id: "d2",
+    label: "Bollywood Sarees",
+    tagline: "Glamour Redefined",
+    description:
+      "Star-studded styles and screen-inspired designs — bold drapes for the woman who commands attention.",
     image: "/images/hero-designer-2.png",
-    title: "Bollywood Inspired",
-    subtitle: "Glamour Redefined",
-    cta: "Explore Collection"
+    fallback: "/images/product-1.png",
+    bg: "#1A1A2E",
+    chipLabel: "Bollywood Edit",
+    href: "/designer/shop",
   },
   {
-    id: "d3",
+    label: "Contemporary Silk",
+    tagline: "Modern Elegance",
+    description:
+      "Clean silhouettes, premium fabrics, and artisan embellishments for the confident modern woman.",
     image: "/images/hero-designer-1.png",
-    title: "Cocktail Nights",
-    subtitle: "Sequin & Net Masterpieces",
-    cta: "View Party Wear"
-  }
+    fallback: "/images/product-2.png",
+    bg: "#1E2329",
+    chipLabel: "New Season",
+    href: "/designer/shop",
+  },
 ];
 
 function BrowseAllLink({ href }: { href: string }) {
@@ -48,7 +49,21 @@ export default function Designer() {
 
   return (
     <Layout>
-      <HeroSlider slides={slides} />
+      {/* Category Cards */}
+      <section className="py-10 md:py-14" style={{ background: "#F3F8F5" }}>
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
+            {DESIGNER_CARDS.map((item, i) => (
+              <CategoryCard
+                key={item.label}
+                card={item}
+                index={i}
+                href={item.href}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
       <StatsBar />
 
       <div className="bg-[#F3F8F5] texture-overlay py-16 md:py-24">
@@ -149,7 +164,7 @@ export default function Designer() {
             </div>
           </section>
 
-          {/* 7. Designer Spotlight — styled like Paithani Artisan Stories */}
+          {/* 7. Designer Spotlight */}
           <section className="relative z-10 bg-[#E6F0EA] py-16 px-4 md:px-8 rounded-xl border border-[#C9A84C]/20">
             <SectionHeading title="Designer Spotlight" subtitle="Masters of Modern Drape" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -180,7 +195,7 @@ export default function Designer() {
             </div>
           </section>
 
-          {/* 8. Influencer Looks — styled like Paithani Celebrity Inspired Looks */}
+          {/* 8. Influencer Looks */}
           <section className="relative z-10">
             <SectionHeading title="Influencer Looks" subtitle="Spotted on Instagram" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

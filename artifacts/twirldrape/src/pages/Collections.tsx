@@ -7,24 +7,6 @@ export default function Collections() {
   return (
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
-        {/* Page Header */}
-        <div className="bg-[#1E6B5A] py-16 md:py-24 text-center relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10"
-            style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
-          />
-          <div className="relative z-10">
-            <p className="text-[#C9A84C] uppercase tracking-[0.35em] text-xs font-bold mb-4">Curated for You</p>
-            <h1 className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold tracking-wide">
-              Our Exclusive Collections
-            </h1>
-            <div className="mt-6 flex items-center justify-center gap-3">
-              <div className="h-px w-16 bg-[#C9A84C]/50" />
-              <div className="w-2 h-2 rounded-full bg-[#C9A84C]" />
-              <div className="h-px w-16 bg-[#C9A84C]/50" />
-            </div>
-          </div>
-        </div>
-
         {/* Two Banner Cards */}
         <div className="container mx-auto px-4 py-16 md:py-24">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">

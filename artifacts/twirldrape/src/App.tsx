@@ -79,6 +79,7 @@ import Weavers from "@/pages/Weavers";
 import WeaverProfile from "@/pages/WeaverProfile";
 import BridalCollection from "@/pages/BridalCollection";
 import PartyWear from "@/pages/PartyWear";
+import Festival from "@/pages/Festival";
 import FAQs from "@/pages/FAQs";
 import ShippingInfo from "@/pages/ShippingInfo";
 import SizeGuide from "@/pages/SizeGuide";
@@ -254,6 +255,7 @@ function Router() {
       <Route path="/account/payment-methods" component={AccountPaymentMethodsPage} />
       <Route path="/account/addresses" component={AddressBookPage} />
       <Route path="/bridal" component={BridalCollection} />
+      <Route path="/festival" component={Festival} />
       <Route path="/party-wear" component={PartyWear} />
       <Route path="/faqs" component={FAQs} />
       <Route path="/shipping-info" component={ShippingInfo} />

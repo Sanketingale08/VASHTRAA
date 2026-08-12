@@ -71,7 +71,7 @@ const categories = [
   { label: "Designer Sarees", image: "/images/hero-designer-1.png", href: "/designer" },
   { label: "Bridal Collection", image: "/images/hero-paithani-2.png", href: "/paithani/shop" },
   { label: "Party Wear", image: "/images/hero-designer-2.png", href: "/designer/shop" },
-  { label: "Festival Collection", image: "/images/hero-paithani-3.png", href: "/paithani/shop?occasion=festival" },
+  { label: "Festival Collection", image: "/images/hero-paithani-3.png", href: "/festival" },
   { label: "New Arrivals", image: "/images/product-1.png", href: "/paithani/shop?newArrival=true" },
 ];
 

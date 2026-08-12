@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
+import { CategoryCard } from "@/components/CategoryCard";
 
 const GOLD = "#C9A84C";
 const GREEN = "#1E6B5A";
@@ -39,6 +40,31 @@ const FEATURES = [
   },
 ];
 
+const PARTY_CARDS = [
+  {
+    label: "Cocktail Sarees",
+    tagline: "Evening Chic",
+    description:
+      "Sequin, net, and embellished masterpieces crafted for your most glamorous evening occasions.",
+    image: "/images/hero-designer-2.png",
+    fallback: "/images/product-1.png",
+    bg: "#1A1A2E",
+    chipLabel: "Cocktail Edit",
+    href: "/designer/shop",
+  },
+  {
+    label: "Festive Party Wear",
+    tagline: "Celebrate in Style",
+    description:
+      "Rich zari borders, bold jewel tones, and vibrant drapes made for every celebration on the calendar.",
+    image: "/images/hero-paithani-3.png",
+    fallback: "/images/product-2.png",
+    bg: "#3D1515",
+    chipLabel: "Festival Picks",
+    href: "/festival",
+  },
+];
+
 function SkeletonCard() {
   return (
     <div className="rounded-xl overflow-hidden bg-[#E6F0EA] animate-pulse">
@@ -68,23 +94,19 @@ export default function PartyWear() {
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
 
-        {/* Hero */}
-        <section className="relative bg-[#3D1515] py-24 md:py-32 overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-10"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            }}
-          />
-          <div className="relative z-10 container mx-auto px-4 text-center">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-4">TwirlDrape</p>
-            <h1 className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold mb-6 leading-tight">
-              Party Wear
-            </h1>
-            <p className="text-[#E6C9C9] max-w-2xl mx-auto text-base md:text-lg leading-relaxed mb-8">
-              Sarees that are made for celebrations. Vibrant colours, rich textures, and statement weaves
-              that ensure you're the best-dressed person in the room.
-            </p>
+        {/* Category Cards */}
+        <section className="py-10 md:py-14" style={{ background: "#F3F8F5" }}>
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
+              {PARTY_CARDS.map((item, i) => (
+                <CategoryCard
+                  key={item.label}
+                  card={item}
+                  index={i}
+                  href={item.href}
+                />
+              ))}
+            </div>
           </div>
         </section>
 

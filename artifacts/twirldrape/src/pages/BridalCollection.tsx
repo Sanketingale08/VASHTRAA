@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
+import { CategoryCard } from "@/components/CategoryCard";
 
 const GOLD = "#C9A84C";
 const GREEN = "#1E6B5A";
@@ -24,6 +25,31 @@ const FEATURES = [
   { icon: <Star className="w-6 h-6" style={{ color: GOLD }} />, title: "Curated for Brides", desc: "Every piece in our bridal edit is hand-picked by our curation team for richness of weave and elegance of drape." },
   { icon: <Heart className="w-6 h-6" style={{ color: GOLD }} />, title: "Heirloom Quality", desc: "Paithani and Kanjivaram silks woven to last generations — the same saree you wear on your wedding can pass to your daughter." },
   { icon: <Sparkles className="w-6 h-6" style={{ color: GOLD }} />, title: "Styling Assistance", desc: "Not sure which saree suits your skin tone or lehenga palette? Reach out to our styling team for personalised guidance." },
+];
+
+const BRIDAL_CARDS = [
+  {
+    label: "Paithani Bridal",
+    tagline: "Heritage Woven in Silk",
+    description:
+      "Authentic Paithani silks with intricate zari borders — the traditional bride's first choice for generations.",
+    image: "/images/hero-paithani-1.png",
+    fallback: "/images/product-1.png",
+    bg: "#1E6B5A",
+    chipLabel: "Heritage Bridal",
+    href: "/paithani/shop?occasion=bridal",
+  },
+  {
+    label: "Designer Bridal",
+    tagline: "Contemporary Elegance",
+    description:
+      "Modern cuts and luxurious fabrics for the contemporary bride who wants glamour with grace.",
+    image: "/images/hero-designer-1.png",
+    fallback: "/images/product-2.png",
+    bg: "#1A1A2E",
+    chipLabel: "Modern Bridal",
+    href: "/designer/shop?occasion=bridal",
+  },
 ];
 
 function SkeletonCard() {
@@ -55,23 +81,19 @@ export default function BridalCollection() {
     <Layout>
       <div className="bg-[#F3F8F5] min-h-screen">
 
-        {/* Hero */}
-        <section className="relative bg-[#1E6B5A] py-24 md:py-32 overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-10"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            }}
-          />
-          <div className="relative z-10 container mx-auto px-4 text-center">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-4">TwirlDrape</p>
-            <h1 className="font-serif text-4xl md:text-6xl text-[#F3F8F5] font-bold mb-6 leading-tight">
-              Bridal Collection
-            </h1>
-            <p className="text-[#E6F0EA] max-w-2xl mx-auto text-base md:text-lg leading-relaxed mb-8">
-              Discover sarees worthy of your most important day. Each piece is chosen for its weave quality,
-              richness of colour, and the story it carries from the loom to you.
-            </p>
+        {/* Category Cards */}
+        <section className="py-10 md:py-14" style={{ background: "#F3F8F5" }}>
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
+              {BRIDAL_CARDS.map((item, i) => (
+                <CategoryCard
+                  key={item.label}
+                  card={item}
+                  index={i}
+                  href={item.href}
+                />
+              ))}
+            </div>
           </div>
         </section>
 

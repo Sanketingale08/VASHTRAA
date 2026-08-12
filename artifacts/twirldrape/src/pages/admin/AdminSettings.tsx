@@ -295,36 +295,14 @@ function ChangeKeyModal({ onClose }: { onClose: () => void }) {
 
 // ─── 2FA Setup Modal ─────────────────────────────────────────────────────────
 function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [accessKeyInput, setAccessKeyInput] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [manualKey, setManualKey] = useState("");
   const [totpCode, setTotpCode] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [maskedEmail, setMaskedEmail] = useState("");
-  const [maskedMobile, setMaskedMobile] = useState("");
-  const [countdown, setCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
-  const [needsRestart, setNeedsRestart] = useState(false);
-
-  // Countdown timer — starts fresh whenever the OTP step changes
-  useEffect(() => {
-    if (step !== 4 && step !== 5) return;
-    setCountdown(60);
-    setOtpCode("");
-    setError("");
-    setNeedsRestart(false);
-    let secs = 60;
-    const id = setInterval(() => {
-      secs -= 1;
-      setCountdown(secs);
-      if (secs <= 0) clearInterval(id);
-    }, 1000);
-    return () => clearInterval(id);
-  }, [step]);
 
   async function handleConfirmKey(e: React.FormEvent) {
     e.preventDefault();
@@ -352,112 +330,25 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         method: "POST",
         body: JSON.stringify({ code: totpCode.replace(/\s/g, "") }),
       });
-      setMaskedEmail(data.maskedEmail ?? "");
-      setStep(4);
-    } catch (err: any) {
-      const code = err.code as string | undefined;
-      if (code === "EMAIL_DELIVERY_UNAVAILABLE") {
-        // Don't clear the TOTP code — the server issue isn't the admin's fault.
-        setError(err.message ?? "Email delivery is not available. Please contact your system administrator.");
-      } else {
-        setError(err.message ?? "Invalid code. Please try again.");
-        setTotpCode("");
-      }
-    } finally { setLoading(false); }
-  }
-
-  async function handleVerifyEmailOtp(e: React.FormEvent) {
-    e.preventDefault();
-    if (otpCode.replace(/\s/g, "").length < 6) { setError("Enter the 6-digit code"); return; }
-    setLoading(true); setError("");
-    try {
-      const data = await apiFetch("/api/admin/2fa/setup/verify-email-otp", {
-        method: "POST",
-        body: JSON.stringify({ code: otpCode.replace(/\s/g, "") }),
-      });
-      setMaskedMobile(data.maskedMobile ?? "");
-      setStep(5);
-    } catch (err: any) {
-      const code = err.code as string | undefined;
-      setError(err.message ?? "Incorrect code. Please try again.");
-      setOtpCode("");
-      if (code === "OTP_EXPIRED" || code === "TOO_MANY_ATTEMPTS" || code === "NO_CHALLENGE") {
-        setNeedsRestart(true);
-      }
-    } finally { setLoading(false); }
-  }
-
-  async function handleVerifySmsOtp(e: React.FormEvent) {
-    e.preventDefault();
-    if (otpCode.replace(/\s/g, "").length < 6) { setError("Enter the 6-digit code"); return; }
-    setLoading(true); setError("");
-    try {
-      const data = await apiFetch("/api/admin/2fa/setup/verify-sms-otp", {
-        method: "POST",
-        body: JSON.stringify({ code: otpCode.replace(/\s/g, "") }),
-      });
+      // Persist the verified session issued by the server.
       if (data.tokenHash && data.sessionId) {
         sessionStorage.setItem("td_admin_session_token", data.tokenHash);
         sessionStorage.setItem("td_admin_session_id", data.sessionId);
       }
-      setStep(6);
+      setStep(4);
     } catch (err: any) {
-      const code = err.code as string | undefined;
-      setError(err.message ?? "Incorrect code. Please try again.");
-      setOtpCode("");
-      if (code === "OTP_EXPIRED" || code === "TOO_MANY_ATTEMPTS" || code === "NO_CHALLENGE") {
-        setNeedsRestart(true);
-      }
+      setError(err.message ?? "Invalid code. Please try again.");
+      setTotpCode("");
     } finally { setLoading(false); }
   }
 
-  async function handleResendEmailOtp() {
-    setResendLoading(true); setError("");
-    try {
-      const data = await apiFetch("/api/admin/2fa/setup/resend-email-otp", { method: "POST" });
-      setMaskedEmail(data.maskedEmail ?? maskedEmail);
-      setCountdown(60);
-      let secs = 60;
-      const id = setInterval(() => { secs -= 1; setCountdown(secs); if (secs <= 0) clearInterval(id); }, 1000);
-    } catch (err: any) {
-      const code = err.code as string | undefined;
-      setError(err.message ?? "Failed to resend. Please try again.");
-      // If email delivery is unavailable the admin cannot proceed — prompt restart
-      // so they can fix the server configuration and begin again.
-      if (code === "EMAIL_DELIVERY_UNAVAILABLE") {
-        setNeedsRestart(true);
-      }
-    } finally { setResendLoading(false); }
-  }
-
-  async function handleResendSmsOtp() {
-    setResendLoading(true); setError("");
-    try {
-      const data = await apiFetch("/api/admin/2fa/setup/resend-sms-otp", { method: "POST" });
-      setMaskedMobile(data.maskedMobile ?? maskedMobile);
-      setCountdown(60);
-      let secs = 60;
-      const id = setInterval(() => { secs -= 1; setCountdown(secs); if (secs <= 0) clearInterval(id); }, 1000);
-    } catch (err: any) {
-      setError(err.message ?? "Failed to resend. Please try again.");
-    } finally { setResendLoading(false); }
-  }
-
-  function restart() {
-    setStep(1); setError(""); setOtpCode(""); setTotpCode("");
-    setMaskedEmail(""); setMaskedMobile(""); setNeedsRestart(false);
-    setAccessKeyInput(""); setCountdown(0);
-  }
-
-  const STEP_LABELS = ["Key", "Scan QR", "Verify App", "Verify Email", "Verify SMS"];
-  const canClose = step !== 6;
+  const STEP_LABELS = ["Key", "Scan QR", "Verify App"];
+  const canClose = step !== 4;
   const titleMap: Record<number, string> = {
     1: "Enable Two-Factor Authentication",
     2: "Enable Two-Factor Authentication",
     3: "Enable Two-Factor Authentication",
-    4: "Verify Your Email",
-    5: "Verify Your Mobile Number",
-    6: "Two-Factor Authentication Enabled",
+    4: "Two-Factor Authentication Enabled",
   };
 
   return (
@@ -467,10 +358,9 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            {step === 4 ? <Mail size={16} style={{ color: GOLD }} /> :
-             step === 5 ? <Smartphone size={16} style={{ color: GOLD }} /> :
-             step === 6 ? <CheckCircle size={16} className="text-green-500" /> :
-             <Shield size={16} style={{ color: GOLD }} />}
+            {step === 4
+              ? <CheckCircle size={16} className="text-green-500" />
+              : <Shield size={16} style={{ color: GOLD }} />}
             <h3 className="font-serif font-bold text-base" style={{ color: NAVY }}>
               {titleMap[step]}
             </h3>
@@ -478,8 +368,8 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           {canClose && <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>}
         </div>
 
-        {/* Step indicator — shown for setup steps 1–5 */}
-        {step >= 1 && step <= 5 && (
+        {/* Step indicator — shown for setup steps 1–3 */}
+        {step >= 1 && step <= 3 && (
           <div className="px-6 pt-4 flex items-center gap-1.5">
             {STEP_LABELS.map((_, i) => {
               const s = i + 1;
@@ -580,88 +470,8 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             </form>
           )}
 
-          {/* Step 4: Email OTP */}
+          {/* Step 4: Success */}
           {step === 4 && (
-            <form onSubmit={handleVerifyEmailOtp} className="space-y-4">
-              <p className="text-sm text-gray-600">
-                We've sent a 6-digit code to <span className="font-semibold text-gray-800">{maskedEmail}</span>.
-                Enter it below to continue.
-              </p>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Email Verification Code</label>
-                <input
-                  type="text" inputMode="numeric" maxLength={6} value={otpCode}
-                  onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); setNeedsRestart(false); }}
-                  placeholder="000000"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-center text-lg tracking-[0.5em] outline-none focus:border-amber-400 transition"
-                  autoFocus disabled={needsRestart} />
-              </div>
-              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
-              {needsRestart ? (
-                <button type="button" onClick={restart}
-                  className="w-full py-2.5 text-sm font-bold rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700">
-                  ← Restart Setup
-                </button>
-              ) : (
-                <>
-                  <button type="submit" disabled={loading || otpCode.length < 6}
-                    className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                    style={{ background: NAVY, color: "white" }}>
-                    {loading && <RefreshCw size={13} className="animate-spin" />}
-                    {loading ? "Verifying…" : "Verify Email OTP"}
-                  </button>
-                  <button type="button" onClick={handleResendEmailOtp}
-                    disabled={countdown > 0 || resendLoading}
-                    className="w-full py-2 text-xs font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors">
-                    {resendLoading ? "Sending…" : countdown > 0 ? `Resend OTP in ${countdown}s` : "Resend OTP"}
-                  </button>
-                </>
-              )}
-            </form>
-          )}
-
-          {/* Step 5: SMS OTP */}
-          {step === 5 && (
-            <form onSubmit={handleVerifySmsOtp} className="space-y-4">
-              <p className="text-sm text-gray-600">
-                We've sent a 6-digit code via SMS to <span className="font-semibold text-gray-800">{maskedMobile}</span>.
-                Enter it below to activate 2FA.
-              </p>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">SMS Verification Code</label>
-                <input
-                  type="text" inputMode="numeric" maxLength={6} value={otpCode}
-                  onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); setNeedsRestart(false); }}
-                  placeholder="000000"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-center text-lg tracking-[0.5em] outline-none focus:border-amber-400 transition"
-                  autoFocus disabled={needsRestart} />
-              </div>
-              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
-              {needsRestart ? (
-                <button type="button" onClick={restart}
-                  className="w-full py-2.5 text-sm font-bold rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700">
-                  ← Restart Setup
-                </button>
-              ) : (
-                <>
-                  <button type="submit" disabled={loading || otpCode.length < 6}
-                    className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                    style={{ background: NAVY, color: "white" }}>
-                    {loading && <RefreshCw size={13} className="animate-spin" />}
-                    {loading ? "Activating…" : "Verify SMS & Activate 2FA"}
-                  </button>
-                  <button type="button" onClick={handleResendSmsOtp}
-                    disabled={countdown > 0 || resendLoading}
-                    className="w-full py-2 text-xs font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors">
-                    {resendLoading ? "Sending…" : countdown > 0 ? `Resend OTP in ${countdown}s` : "Resend OTP"}
-                  </button>
-                </>
-              )}
-            </form>
-          )}
-
-          {/* Step 6: Success */}
-          {step === 6 && (
             <div className="space-y-5 text-center py-2">
               <div className="flex justify-center">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#f0fdf4" }}>
@@ -673,7 +483,7 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                   Two-Factor Authentication Enabled
                 </h4>
                 <p className="text-sm text-gray-600">
-                  Your account is now protected with an authenticator app, email verification, and SMS verification.
+                  Your account is now protected with your authenticator app.
                 </p>
               </div>
               <button onClick={onSuccess}

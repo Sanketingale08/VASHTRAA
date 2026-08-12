@@ -259,10 +259,6 @@ export function AccountNotificationsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-5">
-        {/* Heading — no subtitle */}
-        <div>
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Notifications</h2>
-        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-[#E6F0EA] rounded-xl w-fit">

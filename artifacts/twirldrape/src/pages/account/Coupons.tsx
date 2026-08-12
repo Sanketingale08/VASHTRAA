@@ -351,12 +351,7 @@ export function AccountCouponsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-5">
-        <div>
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Coupons & Offers</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Your exclusive discounts and coupon history
-          </p>
-        </div>
+        <p className="text-sm text-gray-500">Your exclusive discounts and coupon history</p>
 
         <div className="flex gap-1 bg-white rounded-xl border border-[#C9A84C]/15 p-1 shadow-sm">
           {TABS.map((tab) => (

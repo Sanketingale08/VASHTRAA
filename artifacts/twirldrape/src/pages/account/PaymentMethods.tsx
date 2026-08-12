@@ -755,15 +755,12 @@ export function AccountPaymentMethodsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Payment Methods</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {methods.length > 0
-              ? `${methods.length} saved method${methods.length !== 1 ? "s" : ""}`
-              : "Save cards and UPI IDs for faster checkout"}
-          </p>
-        </div>
+        {/* Method count / empty hint */}
+        <p className="text-sm text-gray-500">
+          {methods.length > 0
+            ? `${methods.length} saved method${methods.length !== 1 ? "s" : ""}`
+            : "Save cards and UPI IDs for faster checkout"}
+        </p>
 
         {loadError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-600 flex items-center gap-2">

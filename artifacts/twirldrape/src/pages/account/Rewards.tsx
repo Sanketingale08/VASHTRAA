@@ -189,10 +189,7 @@ export function AccountRewardsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-0.5">Rewards & Loyalty</h2>
-          <p className="text-sm text-gray-500">Earn points with every purchase and unlock exclusive benefits.</p>
-        </div>
+        <p className="text-sm text-gray-500">Earn points with every purchase and unlock exclusive benefits.</p>
 
         {/* Balance + tier card */}
         <motion.div

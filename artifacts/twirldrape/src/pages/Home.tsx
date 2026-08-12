@@ -331,14 +331,15 @@ export default function Home() {
   return (
     <Layout>
       {/* ── HERO ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden" style={{ minHeight: "580px" }}>
+      <section className="relative overflow-hidden" style={{ minHeight: "580px", background: "#F5E8DC" }}>
 
-        {/* Full-bleed background slider */}
-        <HeroBannerSlider
-          banners={heroBanners}
-          fallbackSrc="/images/home-paithani.png"
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
-        />
+        {/* Full-bleed background slider — only when admin has uploaded banners */}
+        {heroBanners.length > 0 && (
+          <HeroBannerSlider
+            banners={heroBanners}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+          />
+        )}
 
         {/* Gradient overlay — cream panel fades out so the image dominates the right */}
         <div
@@ -457,7 +458,9 @@ export default function Home() {
       </section>
 
       {/* ── STATS ────────────────────────────────────────── */}
-      <StatsBar />
+      <section style={{ borderTop: "2px solid rgba(212,175,55,0.22)" }}>
+        <StatsBar />
+      </section>
 
       {/* ── SHOP BY CATEGORY ─────────────────────────────── */}
       <section className="py-16 md:py-20 bg-white">

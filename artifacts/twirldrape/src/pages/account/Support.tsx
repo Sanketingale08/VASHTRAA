@@ -858,8 +858,6 @@ export function AccountSupportPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HelpCircle size={20} className="text-[#1E6B5A]" />
-            <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">Support Center</h2>
             {openCount > 0 && (
               <span className="text-[10px] bg-[#1E6B5A] text-white font-bold px-1.5 py-0.5 rounded-full">
                 {openCount} open

@@ -1,0 +1,73 @@
+Update the **User Homepage Hero Section** and **User Dashboard** according to the following requirements:
+
+### 1. Remove the Default Hero Background Image
+
+* Remove the **default background image** that is currently displayed first in the Hero Section.
+* Do not replace it with another default or dummy image.
+* Ensure the Hero Section remains visually clean and properly structured after removing the image.
+* Make sure the removal does not affect the existing Hero Section content, responsiveness, animations, buttons, or functionality.
+
+### 2. Separate the Trust/Service Cards from the Hero Section
+
+The following cards/content should **not be part of the Hero Section**:
+
+* **1000+ — Trusted Vendors**
+* **50K+ — Happy Customers**
+* **10K+ — Authentic Products**
+* **Secure — Payments**
+* **Easy — Returns**
+* **Pan India — Delivery**
+
+Move these cards into a **separate section immediately below the Hero Section**.
+
+Ensure that:
+
+* The cards are visually separated from the Hero Section.
+* They have their own independent container/section.
+* The cards are properly aligned and evenly spaced.
+* The layout is fully responsive across desktop, tablet, and mobile.
+* Do not change the existing UI color scheme or branding.
+* Do not add default, dummy, or hardcoded values where actual system data already exists.
+
+### 3. User Dashboard – Remove Section Page Headings
+
+When the user opens any dashboard section, do **not** display the respective section name again as an additional heading at the top of the opened page.
+
+This applies to, but is not limited to:
+
+* Payment Method
+* Watchlist
+* Coupons & Offers
+* Rewards
+* Notifications
+* Support
+* My Orders
+* Profile
+* Addresses
+* Any other User Dashboard section
+
+Keep the existing sidebar/navigation labels unchanged. Only remove the **duplicate heading displayed inside the opened section/page**.
+
+### 4. Preserve Existing Functionality and UI
+
+* Do not change the existing dashboard or website color scheme.
+* Do not modify existing navigation, authentication, APIs, database functionality, or business logic.
+* Ensure all existing buttons, links, filters, forms, cards, and interactions continue to work correctly.
+* Do not introduce any default or dummy data.
+
+### 5. Testing Requirement
+
+Thoroughly test the updated Hero Section and complete User Dashboard after implementation.
+
+Verify:
+
+* Default Hero background image is removed.
+* Trust/service cards are displayed in a separate section.
+* All six cards are correctly aligned and responsive.
+* Duplicate section headings are removed from every applicable dashboard section.
+* Dashboard navigation continues to work correctly.
+* All existing data is displayed correctly.
+* No console, runtime, layout, or API errors occur.
+* No existing functionality is broken.
+
+Ensure the final implementation is **fully functional, responsive, clean, and production-ready**.

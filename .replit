@@ -70,3 +70,8 @@ externalPort = 3002
 [[ports]]
 localPort = 24296
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+ADMIN_API_KEY = "Admin@123"

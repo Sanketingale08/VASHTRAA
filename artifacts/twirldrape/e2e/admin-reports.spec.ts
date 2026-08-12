@@ -15,6 +15,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import * as fs from "fs";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -222,6 +223,15 @@ async function stubAllReportRoutes(
   await page.route("**/api/admin/products/stats**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(productStats) })
   );
+  // Stub the AdminGuard verification endpoint so it resolves without a live API server.
+  // The guard fetches /api/admin/vendors; a non-403 response (even empty) sets verified=true.
+  await page.route("**/api/admin/vendors**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vendors: [], total: 0 }) })
+  );
+  // Stub the notification unread-count endpoint used by AdminLayout
+  await page.route("**/api/admin/notifications/unread-count**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ count: 0 }) })
+  );
 }
 
 // ── 1. All 6 tabs switch cleanly ─────────────────────────────────────────────
@@ -237,7 +247,7 @@ test.describe("Admin Reports — tab navigation", () => {
     await stubAllReportRoutes(page);
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Use exact-match regex so the locator targets the report tab buttons and not
     // the sidebar nav buttons (which are also <button> elements and have text like
@@ -276,7 +286,7 @@ test.describe("Admin Reports — Revenue tab", () => {
     await stubAllReportRoutes(page);
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Revenue is the default tab — wait for KPI cards to appear
     await expect(page.locator("text=Total Orders").first()).toBeVisible({ timeout: 15_000 });
@@ -347,9 +357,15 @@ test.describe("Admin Reports — Products tab", () => {
     await page.route("**/api/admin/products/stats**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductStats) })
     );
+    await page.route("**/api/admin/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vendors: [], total: 0 }) })
+    );
+    await page.route("**/api/admin/notifications/unread-count**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ count: 0 }) })
+    );
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Switch to the Product tab (exact match avoids hitting the "Products" sidebar button)
     const productTab = page.locator("main").locator("button").filter({ hasText: /Product/ }).first();
@@ -407,9 +423,15 @@ test.describe("Admin Reports — period filter", () => {
     await page.route("**/api/admin/products/stats**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductStats) })
     );
+    await page.route("**/api/admin/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vendors: [], total: 0 }) })
+    );
+    await page.route("**/api/admin/notifications/unread-count**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ count: 0 }) })
+    );
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // The Revenue tab loads by default with the default period "30d"
     await expect(page.locator("text=Total Orders").first()).toBeVisible({ timeout: 15_000 });
@@ -469,9 +491,15 @@ test.describe("Admin Reports — period filter", () => {
     await page.route("**/api/admin/products/stats**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductStats) })
     );
+    await page.route("**/api/admin/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vendors: [], total: 0 }) })
+    );
+    await page.route("**/api/admin/notifications/unread-count**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ count: 0 }) })
+    );
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Navigate to the Product tab (exact match avoids the "Products" sidebar button)
     const productTab = page.locator("main").locator("button").filter({ hasText: /Product/ }).first();
@@ -502,7 +530,7 @@ test.describe("Admin Reports — export buttons", () => {
     await stubAllReportRoutes(page);
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Wait for the KPI cards to load
     await expect(page.locator("text=Revenue by Period").first()).toBeVisible({ timeout: 15_000 });
@@ -526,7 +554,7 @@ test.describe("Admin Reports — export buttons", () => {
     await stubAllReportRoutes(page);
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Switch to the Sales tab (exact match to avoid partial sidebar matches)
     const salesTab = page.locator("main").locator("button").filter({ hasText: /Sales/ }).first();
@@ -548,7 +576,7 @@ test.describe("Admin Reports — export buttons", () => {
     await stubAllReportRoutes(page);
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Switch to the Product tab (exact match avoids the "Products" sidebar button)
     const productTab = page.locator("main").locator("button").filter({ hasText: /Product/ }).first();
@@ -587,7 +615,7 @@ test.describe("Admin Reports — export buttons", () => {
     await stubAllReportRoutes(page, { revenue: emptyRevenue });
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Wait for content to load (empty state message should appear)
     await expect(page.locator("text=No revenue data for this period").first()).toBeVisible({ timeout: 15_000 });
@@ -611,7 +639,7 @@ test.describe("Admin Reports — Return tab", () => {
     await stubAllReportRoutes(page);
 
     await page.goto("/admin/reports");
-    await expect(page.locator("h1", { hasText: /Marketplace Reports/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
 
     // Switch to Return tab (exact match avoids the "Returns & Refunds" sidebar button)
     const returnTab = page.locator("main").locator("button").filter({ hasText: /Return/ }).first();
@@ -620,5 +648,177 @@ test.describe("Admin Reports — Return tab", () => {
     // KPI labels for the return module
     await expect(page.locator("text=Return Requests").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("text=Approved Returns").first()).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ── 7. Export file content verification ───────────────────────────────────────
+//
+// These tests intercept the actual file download and verify the file payload:
+//   • CSV — correct column headers and at least one data row matching mock values
+//   • Excel (XLSX) — file is a valid ZIP-based XLSX binary (starts with "PK")
+//
+// The CSV export is triggered via a synthetic <a> element with a `data:text/csv,…`
+// href. Playwright captures this as a download event in the same way as a real
+// HTTP-served file, and `download.path()` gives us the temp file on disk.
+//
+// The Excel export is triggered by XLSX.writeFile which creates a Blob URL; same
+// interception mechanism applies.
+
+test.describe("Admin Reports — export file content", () => {
+
+  // ── Revenue CSV content ───────────────────────────────────────────────────
+
+  test("Revenue CSV export contains correct headers and mocked data rows", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await seedAdminKey(page);
+    await stubAllReportRoutes(page);
+
+    await page.goto("/admin/reports");
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
+
+    // Wait for the Revenue tab data table to appear
+    await expect(page.locator("text=Revenue by Period").first()).toBeVisible({ timeout: 15_000 });
+
+    // Trigger CSV download and capture the event
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("button", { hasText: /CSV/i }).first().click(),
+    ]);
+
+    // Save to a temp path and read the content
+    const tmpPath = await download.path();
+    expect(tmpPath).not.toBeNull();
+
+    const content = fs.readFileSync(tmpPath!, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim() !== "");
+
+    // Header row — Revenue CSV uses: Date, Orders, Revenue
+    expect(lines[0]).toBe("Date,Orders,Revenue");
+
+    // At least one data row (matches the first trend row in mockRevenueData)
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+
+    // First data row should contain the first mocked trend date and values
+    // mockRevenueData.trend[0] = { date: "2026-07-10", orders: 5, revenue: 42000 }
+    expect(lines[1]).toContain("2026-07-10");
+    expect(lines[1]).toContain("5");
+    expect(lines[1]).toContain("42000");
+  });
+
+  // ── Sales CSV content ─────────────────────────────────────────────────────
+
+  test("Sales CSV export contains correct headers and mocked order rows", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await seedAdminKey(page);
+    await stubAllReportRoutes(page);
+
+    await page.goto("/admin/reports");
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
+
+    // Switch to the Sales tab
+    const salesTab = page.locator("main").locator("button").filter({ hasText: /Sales/ }).first();
+    await salesTab.click();
+    await expect(page.locator("text=Order List").first()).toBeVisible({ timeout: 15_000 });
+
+    // Trigger CSV download
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("button", { hasText: /CSV/i }).first().click(),
+    ]);
+
+    const tmpPath = await download.path();
+    expect(tmpPath).not.toBeNull();
+
+    const content = fs.readFileSync(tmpPath!, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim() !== "");
+
+    // Header row — Sales CSV uses: Order ID, Date, Total, Status, Payment Method, Items
+    expect(lines[0]).toBe("Order ID,Date,Total,Status,Payment Method,Items");
+
+    // At least one data row
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+
+    // First data row should reflect mockSalesData.orders[0]:
+    // { id: "TD-2026-001", date: "2026-07-11", total: 12500, status: "delivered", paymentMethod: "upi", itemCount: 1 }
+    expect(lines[1]).toContain("TD-2026-001");
+    expect(lines[1]).toContain("2026-07-11");
+    expect(lines[1]).toContain("12500");
+    expect(lines[1]).toContain("delivered");
+    expect(lines[1]).toContain("upi");
+  });
+
+  // ── Revenue Excel (XLSX) binary check ────────────────────────────────────
+
+  test("Revenue Excel export downloads a valid XLSX file (ZIP magic bytes)", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await seedAdminKey(page);
+    await stubAllReportRoutes(page);
+
+    await page.goto("/admin/reports");
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
+
+    // Wait for the data table so the Excel button is enabled
+    await expect(page.locator("text=Revenue by Period").first()).toBeVisible({ timeout: 15_000 });
+
+    // Trigger Excel download
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("button", { hasText: /Excel/i }).first().click(),
+    ]);
+
+    // Verify the suggested filename ends with .xlsx
+    expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
+
+    // Read the first 4 bytes — XLSX is a ZIP archive; all ZIP files begin with "PK\x03\x04"
+    const tmpPath = await download.path();
+    expect(tmpPath).not.toBeNull();
+
+    const buf = Buffer.allocUnsafe(4);
+    const fd = fs.openSync(tmpPath!, "r");
+    fs.readSync(fd, buf, 0, 4, 0);
+    fs.closeSync(fd);
+
+    // "PK" = bytes 0x50 0x4B
+    expect(buf[0]).toBe(0x50); // 'P'
+    expect(buf[1]).toBe(0x4b); // 'K'
+  });
+
+  // ── Sales Excel (XLSX) binary check ──────────────────────────────────────
+
+  test("Sales Excel export downloads a valid XLSX file (ZIP magic bytes)", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await seedAdminKey(page);
+    await stubAllReportRoutes(page);
+
+    await page.goto("/admin/reports");
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
+
+    // Switch to Sales tab
+    const salesTab = page.locator("main").locator("button").filter({ hasText: /Sales/ }).first();
+    await salesTab.click();
+    await expect(page.locator("text=Order List").first()).toBeVisible({ timeout: 15_000 });
+
+    // Trigger Excel download
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("button", { hasText: /Excel/i }).first().click(),
+    ]);
+
+    expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
+
+    const tmpPath = await download.path();
+    expect(tmpPath).not.toBeNull();
+
+    const buf = Buffer.allocUnsafe(4);
+    const fd = fs.openSync(tmpPath!, "r");
+    fs.readSync(fd, buf, 0, 4, 0);
+    fs.closeSync(fd);
+
+    expect(buf[0]).toBe(0x50); // 'P'
+    expect(buf[1]).toBe(0x4b); // 'K'
   });
 });

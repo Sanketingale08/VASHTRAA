@@ -11,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,7 +26,10 @@ type Order = {
   id: string; userId: string; items: OrderItem[]; address: OrderAddress;
   deliveryMethod: "standard" | "express"; paymentMethod: "upi" | "card" | "cod";
   couponCode: string | null; subtotal: number; discount: number; shipping: number; tax: number; total: number;
-  status: string; createdAt: string;
+  status: string; createdAt: string; updatedAt: string;
+  cancelReason?: string | null;
+  returnReason?: string | null;
+  deliveredAt?: string | null;
   refundStatus?: string | null;
   refundProcessedAt?: string | null;
   refundReference?: string | null;
@@ -82,6 +86,23 @@ const REFUND_OPTIONS = [
   },
 ];
 
+const CANCEL_REASONS = [
+  "Changed my mind",
+  "Found a better price elsewhere",
+  "Ordered by mistake",
+  "Delivery time too long",
+  "Other",
+];
+
+const RETURN_REASONS = [
+  "Product is damaged or defective",
+  "Wrong item received",
+  "Product does not match description",
+  "Size or fit issue",
+  "Quality not as expected",
+  "Other",
+];
+
 export default function OrderDetailScreen() {
   const { id: orderId, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const isFromHistory = from === "history";
@@ -98,6 +119,22 @@ export default function OrderDetailScreen() {
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [refundError, setRefundError] = useState("");
   const [refundSuccess, setRefundSuccess] = useState("");
+
+  // Cancel flow
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelCustom, setCancelCustom] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSuccess, setCancelSuccess] = useState("");
+
+  // Return flow
+  const [returnModalVisible, setReturnModalVisible] = useState(false);
+  const [returnReason, setReturnReason] = useState("");
+  const [returnCustom, setReturnCustom] = useState("");
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnError, setReturnError] = useState("");
+  const [returnSuccess, setReturnSuccess] = useState("");
 
   useEffect(() => {
     if (!isLoaded || !orderId) return;
@@ -121,6 +158,60 @@ export default function OrderDetailScreen() {
       router.replace("/(tabs)");
     }
   };
+
+  async function handleCancelSubmit() {
+    if (!order) return;
+    const effective = cancelReason === "Other" ? cancelCustom.trim() : cancelReason;
+    if (!effective) { setCancelError("Please select a reason."); return; }
+    setCancelError("");
+    setCancelSubmitting(true);
+    try {
+      const token = await getToken();
+      const r = await fetch(`${API_BASE}/api/orders/${order.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: effective }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Failed to cancel order");
+      setOrder((prev) => prev ? { ...prev, status: "cancelled", cancelReason: effective } : prev);
+      setCancelModalVisible(false);
+      setCancelReason("");
+      setCancelCustom("");
+      setCancelSuccess("Your order has been cancelled. Stock has been restored.");
+    } catch (e: any) {
+      setCancelError(e.message);
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }
+
+  async function handleReturnSubmit() {
+    if (!order) return;
+    const effective = returnReason === "Other" ? returnCustom.trim() : returnReason;
+    if (!effective) { setReturnError("Please select a reason."); return; }
+    setReturnError("");
+    setReturnSubmitting(true);
+    try {
+      const token = await getToken();
+      const r = await fetch(`${API_BASE}/api/orders/${order.id}/return`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: effective }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Failed to request return");
+      setOrder((prev) => prev ? { ...prev, status: "return_requested", returnReason: effective } : prev);
+      setReturnModalVisible(false);
+      setReturnReason("");
+      setReturnCustom("");
+      setReturnSuccess("Your return request has been submitted. Our team will reach out within 2 business days with pickup details.");
+    } catch (e: any) {
+      setReturnError(e.message);
+    } finally {
+      setReturnSubmitting(false);
+    }
+  }
 
   async function handleRefundSubmit() {
     if (!refundMethod || !order) return;
@@ -307,6 +398,60 @@ export default function OrderDetailScreen() {
     },
     modalCancelText: { fontFamily: "DMSans_500Medium", fontSize: 14, color: colors.mutedForeground },
     errorText: { fontFamily: "DMSans_400Regular", fontSize: 12, color: "#D93025", marginTop: 8, textAlign: "center" },
+    cancelBtn: {
+      borderWidth: 1,
+      borderColor: "#D93025" + "66",
+      borderRadius: colors.radius,
+      paddingVertical: 13,
+      alignItems: "center" as const,
+      flexDirection: "row" as const,
+      justifyContent: "center" as const,
+      gap: 6,
+    },
+    cancelBtnText: { fontFamily: "DMSans_700Bold", fontSize: 14, color: "#D93025" },
+    returnBtn: {
+      borderWidth: 1,
+      borderColor: "#E68A00" + "66",
+      borderRadius: colors.radius,
+      paddingVertical: 13,
+      alignItems: "center" as const,
+      flexDirection: "row" as const,
+      justifyContent: "center" as const,
+      gap: 6,
+    },
+    returnBtnText: { fontFamily: "DMSans_700Bold", fontSize: 14, color: "#E68A00" },
+    reasonOption: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 10,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border + "22",
+    },
+    reasonText: { fontFamily: "DMSans_400Regular", fontSize: 14, color: colors.foreground, flex: 1 },
+    radioOuter: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    radioInner: { width: 10, height: 10, borderRadius: 5 },
+    customReasonInput: {
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: colors.border + "66",
+      borderRadius: colors.radius,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontFamily: "DMSans_400Regular",
+      fontSize: 14,
+      color: colors.foreground,
+      backgroundColor: colors.card,
+      minHeight: 72,
+      textAlignVertical: "top" as const,
+    },
   });
 
   const headerTitle = isFromHistory ? "Order Details" : "Order Confirmed!";
@@ -354,6 +499,13 @@ export default function OrderDetailScreen() {
   const totalItems = (order.items as OrderItem[]).reduce((s, i) => s + i.quantity, 0);
   const sc = statusColor(order.status);
 
+  const canCancel = ["confirmed", "processing"].includes(order.status);
+  const deliveryTimestamp = order.deliveredAt
+    ? new Date(order.deliveredAt)
+    : new Date(order.updatedAt);
+  const canReturn =
+    order.status === "delivered" &&
+    (Date.now() - deliveryTimestamp.getTime()) / (1000 * 60 * 60 * 24) <= 7;
   const canRefund = ["cancelled", "return_requested"].includes(order.status) && !order.refundStatus;
 
   return (
@@ -552,6 +704,18 @@ export default function OrderDetailScreen() {
       </ScrollView>
 
       <View style={s.ctaArea}>
+        {canCancel && (
+          <Pressable style={s.cancelBtn} onPress={() => { setCancelModalVisible(true); setCancelError(""); setCancelReason(""); setCancelCustom(""); }}>
+            <Ionicons name="close-circle-outline" size={16} color="#D93025" />
+            <Text style={s.cancelBtnText}>Cancel Order</Text>
+          </Pressable>
+        )}
+        {canReturn && (
+          <Pressable style={s.returnBtn} onPress={() => { setReturnModalVisible(true); setReturnError(""); setReturnReason(""); setReturnCustom(""); }}>
+            <Ionicons name="return-down-back-outline" size={16} color="#E68A00" />
+            <Text style={s.returnBtnText}>Request Return</Text>
+          </Pressable>
+        )}
         {canRefund && (
           <Pressable style={s.refundBtn} onPress={() => { setRefundModalVisible(true); setRefundError(""); setRefundMethod(""); }}>
             <Ionicons name="refresh-outline" size={16} color="#3B82F6" />
@@ -568,6 +732,156 @@ export default function OrderDetailScreen() {
           </Pressable>
         )}
       </View>
+
+      {/* Cancel order modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !cancelSubmitting && setCancelModalVisible(false)}
+      >
+        <Pressable style={s.modalOverlay} onPress={() => !cancelSubmitting && setCancelModalVisible(false)}>
+          <Pressable style={s.modalSheet} onPress={() => {}}>
+            <Text style={s.modalTitle}>Why do you want to cancel?</Text>
+            <Text style={s.modalSub}>Please select a reason for cancellation.</Text>
+
+            {CANCEL_REASONS.map((r) => (
+              <Pressable
+                key={r}
+                style={s.reasonOption}
+                onPress={() => setCancelReason(r)}
+              >
+                <View style={[
+                  s.radioOuter,
+                  { borderColor: cancelReason === r ? colors.primary : colors.border + "88" },
+                ]}>
+                  {cancelReason === r && (
+                    <View style={[s.radioInner, { backgroundColor: colors.primary }]} />
+                  )}
+                </View>
+                <Text style={s.reasonText}>{r}</Text>
+              </Pressable>
+            ))}
+
+            {cancelReason === "Other" && (
+              <TextInput
+                style={s.customReasonInput}
+                placeholder="Please describe your reason…"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                value={cancelCustom}
+                onChangeText={setCancelCustom}
+              />
+            )}
+
+            {cancelError ? (
+              <Text style={s.errorText}>{cancelError}</Text>
+            ) : null}
+
+            {(() => {
+              const cancelReady = !!cancelReason && (cancelReason !== "Other" || cancelCustom.trim().length > 0) && !cancelSubmitting;
+              return (
+                <Pressable
+                  testID="cancel-submit-btn"
+                  style={[
+                    s.modalSubmitBtn,
+                    { backgroundColor: cancelReady ? "#D93025" : colors.muted, marginTop: 14 },
+                  ]}
+                  onPress={handleCancelSubmit}
+                  disabled={!cancelReady}
+                >
+                  <Text style={[s.modalSubmitText, { color: cancelReady ? "#fff" : colors.mutedForeground }]}>
+                    {cancelSubmitting ? "Please wait…" : "Confirm Cancellation"}
+                  </Text>
+                </Pressable>
+              );
+            })()}
+
+            <Pressable
+              style={s.modalCancelBtn}
+              onPress={() => setCancelModalVisible(false)}
+              disabled={cancelSubmitting}
+            >
+              <Text style={s.modalCancelText}>Keep Order</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Return request modal */}
+      <Modal
+        visible={returnModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !returnSubmitting && setReturnModalVisible(false)}
+      >
+        <Pressable style={s.modalOverlay} onPress={() => !returnSubmitting && setReturnModalVisible(false)}>
+          <Pressable style={s.modalSheet} onPress={() => {}}>
+            <Text style={s.modalTitle}>Why do you want to return?</Text>
+            <Text style={s.modalSub}>Returns accepted within 7 days of delivery.</Text>
+
+            {RETURN_REASONS.map((r) => (
+              <Pressable
+                key={r}
+                style={s.reasonOption}
+                onPress={() => setReturnReason(r)}
+              >
+                <View style={[
+                  s.radioOuter,
+                  { borderColor: returnReason === r ? colors.primary : colors.border + "88" },
+                ]}>
+                  {returnReason === r && (
+                    <View style={[s.radioInner, { backgroundColor: colors.primary }]} />
+                  )}
+                </View>
+                <Text style={s.reasonText}>{r}</Text>
+              </Pressable>
+            ))}
+
+            {returnReason === "Other" && (
+              <TextInput
+                style={s.customReasonInput}
+                placeholder="Please describe your reason…"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                value={returnCustom}
+                onChangeText={setReturnCustom}
+              />
+            )}
+
+            {returnError ? (
+              <Text style={s.errorText}>{returnError}</Text>
+            ) : null}
+
+            {(() => {
+              const returnReady = !!returnReason && (returnReason !== "Other" || returnCustom.trim().length > 0) && !returnSubmitting;
+              return (
+                <Pressable
+                  testID="return-submit-btn"
+                  style={[
+                    s.modalSubmitBtn,
+                    { backgroundColor: returnReady ? "#E68A00" : colors.muted, marginTop: 14 },
+                  ]}
+                  onPress={handleReturnSubmit}
+                  disabled={!returnReady}
+                >
+                  <Text style={[s.modalSubmitText, { color: returnReady ? "#fff" : colors.mutedForeground }]}>
+                    {returnSubmitting ? "Please wait…" : "Submit Return Request"}
+                  </Text>
+                </Pressable>
+              );
+            })()}
+
+            <Pressable
+              style={s.modalCancelBtn}
+              onPress={() => setReturnModalVisible(false)}
+              disabled={returnSubmitting}
+            >
+              <Text style={s.modalCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Refund method selector modal */}
       <Modal

@@ -160,23 +160,16 @@ function maskMobile(mobile: string): string {
 
 /**
  * Sends the 2FA setup OTP via email.
- * - Production (RESEND_API_KEY set): delivers via Resend and throws on failure.
- * - Development  (no RESEND_API_KEY): prints the code to the server console so
- *   the setup flow can be completed without a real mail transport.
+ * Requires RESEND_API_KEY to be configured in all environments.
+ * The OTP is a security credential and must never be written to logs or errors.
  */
 async function sendAdminEmailOtp(email: string, otp: string): Promise<void> {
   const resend = getResend();
   if (!resend) {
-    if (process.env.NODE_ENV === "production") {
-      // In production a missing key is a hard misconfiguration — surface it.
-      throw new Error("RESEND_API_KEY is not configured; cannot deliver admin 2FA email OTP");
-    }
-    // Development fallback: log to the server console (never do this in prod).
-    logger.warn(
-      { email },
-      `[admin2fa] DEV — RESEND_API_KEY not set. Email OTP for ${email}: ${otp}`,
-    );
-    return;
+    // RESEND_API_KEY is required in every environment — admin 2FA OTP delivery
+    // cannot fall back to logs because logs are broadly accessible and durable.
+    // Configure RESEND_API_KEY in the environment secrets to enable this flow.
+    throw new Error("RESEND_API_KEY is not configured; cannot deliver admin 2FA email OTP");
   }
   const { error } = await resend.emails.send({
     from: "TwirlDrape <orders@twirldrape.com>",

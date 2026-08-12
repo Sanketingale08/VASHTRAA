@@ -1,6 +1,5 @@
 import React from "react";
 import { Navbar } from "./Navbar";
-import { NewsletterSection } from "./NewsletterSection";
 import { Footer } from "./Footer";
 
 interface LayoutProps {
@@ -14,7 +13,6 @@ export function Layout({ children }: LayoutProps) {
       <main className="flex-grow">
         {children}
       </main>
-      <NewsletterSection />
       <Footer />
     </div>
   );

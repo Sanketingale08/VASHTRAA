@@ -76,7 +76,13 @@ function VendorsContent() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadVendors(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial load + background poll every 30 s (keeps list fresh without manual reload)
+  useEffect(() => {
+    loadVendors();
+    const pollId = setInterval(loadVendors, 30_000);
+    return () => clearInterval(pollId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let v = vendors;

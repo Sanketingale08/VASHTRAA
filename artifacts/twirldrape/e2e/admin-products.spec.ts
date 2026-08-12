@@ -18,7 +18,8 @@ import { test, expect } from "@playwright/test";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
-const PRODUCT_ID = "e2e-admin-prod-001";
+const PRODUCT_ID  = "e2e-admin-prod-001";
+const PRODUCT_ID2 = "e2e-admin-prod-002";
 
 const baseProduct = {
   id: PRODUCT_ID,
@@ -48,6 +49,14 @@ const baseProduct = {
   featuredOrder: null,
   featuredUntil: null,
   description: "A beautiful handwoven Kanjivaram silk saree.",
+};
+
+const baseProduct2 = {
+  ...baseProduct,
+  id: PRODUCT_ID2,
+  name: "Banarasi Silk Saree",
+  vendorId: "vendor-002",
+  vendorName: "Banaras Weaves",
 };
 
 const approvedProduct = { ...baseProduct, status: "approved" as const, active: true };
@@ -550,6 +559,171 @@ test.describe("Admin Products — category CRUD", () => {
 
     // Toast
     await expect(page.locator("text=Category deleted").first()).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ── 7. Bulk approve ──────────────────────────────────────────────────────────
+
+test.describe("Admin Products — bulk approve", () => {
+  test("selecting 2 products and clicking Approve sends one bulk POST with correct ids", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+    await stubBaseRoutes(page, { products: [baseProduct, baseProduct2] });
+
+    let bulkCallCount = 0;
+    let sentBulkBody: { ids?: string[]; action?: string } = {};
+
+    await page.route("**/api/admin/products/bulk", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      bulkCallCount++;
+      sentBulkBody = route.request().postDataJSON() ?? {};
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, count: 2 }),
+      });
+    });
+
+    await page.goto("/admin/products");
+
+    // Wait for both product rows to render
+    await expect(
+      page.locator("p", { hasText: "Kanjivaram Silk Saree" }).first()
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.locator("p", { hasText: "Banarasi Silk Saree" }).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Select both rows via the select-all checkbox in the header
+    const selectAllCheckbox = page.locator("thead input[type='checkbox']").first();
+    await expect(selectAllCheckbox).toBeVisible({ timeout: 10_000 });
+    await selectAllCheckbox.check();
+
+    // Bulk action bar should now show "2 selected"
+    await expect(page.locator("text=2 selected").first()).toBeVisible({ timeout: 5_000 });
+
+    // No bulk request has been sent yet
+    expect(bulkCallCount).toBe(0);
+
+    // Click the bulk "✓ Approve" button
+    const bulkApproveBtn = page.locator("button", { hasText: /✓ Approve/i }).first();
+    await expect(bulkApproveBtn).toBeVisible({ timeout: 5_000 });
+    await bulkApproveBtn.click();
+
+    // Confirmation dialog must appear before the request is made
+    await expect(
+      page.locator("h3", { hasText: /Approve 2 products/i })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Still no request yet
+    expect(bulkCallCount).toBe(0);
+
+    // Confirm the action
+    const confirmBtn = page.locator("button", { hasText: /^Confirm$/i }).first();
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await confirmBtn.click();
+
+    // Exactly one POST must have been sent
+    await page.waitForTimeout(500);
+    expect(bulkCallCount).toBe(1);
+
+    // The request body must contain both product ids and the "approve" action
+    expect(sentBulkBody.action).toBe("approve");
+    expect(new Set(sentBulkBody.ids)).toEqual(new Set([PRODUCT_ID, PRODUCT_ID2]));
+
+    // Toast notification
+    await expect(
+      page.locator("text=Bulk approve applied").first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ── 8. Bulk reject ───────────────────────────────────────────────────────────
+
+test.describe("Admin Products — bulk reject", () => {
+  test("selecting products and clicking Reject shows the confirmation dialog before sending the request", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedAdminKey(page);
+    await stubBaseRoutes(page, { products: [baseProduct, baseProduct2] });
+
+    let bulkCallCount = 0;
+    let sentBulkBody: { ids?: string[]; action?: string } = {};
+
+    await page.route("**/api/admin/products/bulk", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      bulkCallCount++;
+      sentBulkBody = route.request().postDataJSON() ?? {};
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, count: 2 }),
+      });
+    });
+
+    await page.goto("/admin/products");
+
+    // Wait for product rows
+    await expect(
+      page.locator("p", { hasText: "Kanjivaram Silk Saree" }).first()
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.locator("p", { hasText: "Banarasi Silk Saree" }).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Select both products individually via row checkboxes
+    const rowCheckboxes = page.locator("tbody input[type='checkbox']");
+    await rowCheckboxes.nth(0).check();
+    await rowCheckboxes.nth(1).check();
+
+    // Bulk action bar should now show "2 selected"
+    await expect(page.locator("text=2 selected").first()).toBeVisible({ timeout: 5_000 });
+
+    // No request yet
+    expect(bulkCallCount).toBe(0);
+
+    // Click the bulk "✕ Reject" button
+    const bulkRejectBtn = page.locator("button", { hasText: /✕ Reject/i }).first();
+    await expect(bulkRejectBtn).toBeVisible({ timeout: 5_000 });
+    await bulkRejectBtn.click();
+
+    // The confirmation dialog must appear — request must NOT be sent yet
+    await expect(
+      page.locator("h3", { hasText: /Reject 2 products/i })
+    ).toBeVisible({ timeout: 5_000 });
+    expect(bulkCallCount).toBe(0);
+
+    // Dismiss with Cancel — verify no request is made
+    const cancelBtn = page.locator("button", { hasText: /^Cancel$/i }).first();
+    await expect(cancelBtn).toBeVisible({ timeout: 5_000 });
+    await cancelBtn.click();
+
+    // Dialog closes without a network call
+    await expect(
+      page.locator("h3", { hasText: /Reject 2 products/i })
+    ).not.toBeVisible({ timeout: 5_000 });
+    expect(bulkCallCount).toBe(0);
+
+    // Now actually confirm the reject
+    await bulkRejectBtn.click();
+    await expect(
+      page.locator("h3", { hasText: /Reject 2 products/i })
+    ).toBeVisible({ timeout: 5_000 });
+
+    const confirmBtn = page.locator("button", { hasText: /^Confirm$/i }).first();
+    await confirmBtn.click();
+
+    // Exactly one POST must have been sent
+    await page.waitForTimeout(500);
+    expect(bulkCallCount).toBe(1);
+    expect(sentBulkBody.action).toBe("reject");
+    expect(new Set(sentBulkBody.ids)).toEqual(new Set([PRODUCT_ID, PRODUCT_ID2]));
+
+    // Toast notification
+    await expect(
+      page.locator("text=Bulk reject applied").first()
+    ).toBeVisible({ timeout: 5_000 });
   });
 });
 

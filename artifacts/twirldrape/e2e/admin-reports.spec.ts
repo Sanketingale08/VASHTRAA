@@ -822,3 +822,95 @@ test.describe("Admin Reports — export file content", () => {
     expect(buf[1]).toBe(0x4b); // 'K'
   });
 });
+
+// ── 8. Refresh button sends a clean period value ───────────────────────────────
+//
+// Previously, the Refresh button incremented `refreshKey` which was embedded into
+// the period string as `"30d__1"` (via `periodStr = \`${period}__${refreshKey}\``).
+// This non-enum string bypassed TypeScript and reached the API where parsePeriod()
+// silently fell through to the 30d default — the user saw data but for potentially
+// the wrong period, with no error surfaced.
+//
+// After the fix:
+//   - The `div key` forces a remount via `refreshKey` without touching the period.
+//   - `parsePeriod()` now rejects unknown period strings with a 400 error.
+//   - The API must receive a clean, allowlisted period value after Refresh is clicked.
+//
+
+test.describe("Admin Reports — Refresh button sends clean period to API", () => {
+  test("Refresh button re-fetches with the exact period string (no embedded __key suffix)", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await seedAdminKey(page);
+
+    // Capture every period value received by the revenue endpoint
+    const capturedPeriods: string[] = [];
+
+    await page.route("**/api/admin/reports/revenue**", (route) => {
+      const url = new URL(route.request().url());
+      capturedPeriods.push(url.searchParams.get("period") ?? "");
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockRevenueData) });
+    });
+    await page.route("**/api/admin/reports/sales**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockSalesData) }),
+    );
+    await page.route("**/api/admin/reports/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockVendorData) }),
+    );
+    await page.route("**/api/admin/reports/customers**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockCustomerData) }),
+    );
+    await page.route("**/api/admin/reports/products**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductData) }),
+    );
+    await page.route("**/api/admin/reports/returns**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockReturnData) }),
+    );
+    await page.route("**/api/admin/products/stats**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductStats) }),
+    );
+    await page.route("**/api/admin/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vendors: [], total: 0 }) }),
+    );
+    await page.route("**/api/admin/notifications/unread-count**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ count: 0 }) }),
+    );
+
+    await page.goto("/admin/reports");
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
+
+    // Revenue tab loads by default — wait for KPI cards
+    await expect(page.locator("text=Total Orders").first()).toBeVisible({ timeout: 15_000 });
+
+    // Switch to "Last 7 Days" so we have a non-default period to check
+    const last7Btn = page.locator("button", { hasText: "Last 7 Days" }).first();
+    await expect(last7Btn).toBeVisible({ timeout: 5_000 });
+    await last7Btn.click();
+    await page.waitForTimeout(500);
+
+    // Clear captured periods so we only look at what the Refresh sends
+    capturedPeriods.length = 0;
+
+    // Click Refresh
+    const refreshBtn = page.locator("button", { hasText: /Refresh/i }).first();
+    await expect(refreshBtn).toBeVisible({ timeout: 5_000 });
+    await refreshBtn.click();
+    await page.waitForTimeout(800);
+
+    // At least one request must have been made after the Refresh click
+    expect(capturedPeriods.length).toBeGreaterThanOrEqual(1);
+
+    // Every period value must be a plain allowlisted string — no "__" suffix
+    for (const period of capturedPeriods) {
+      expect(period, `period "${period}" must not contain "__" (embedded refreshKey)`).not.toContain("__");
+      expect(
+        ["today", "7d", "30d", "monthly", "quarterly", "yearly", "custom"].includes(period),
+        `period "${period}" must be one of the allowlisted values`,
+      ).toBe(true);
+    }
+
+    // The period sent must be "7d" (the filter we selected before clicking Refresh)
+    const refreshPeriod = capturedPeriods[capturedPeriods.length - 1];
+    expect(refreshPeriod).toBe("7d");
+  });
+});

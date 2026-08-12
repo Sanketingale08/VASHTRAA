@@ -1190,9 +1190,6 @@ function ReportsContent() {
     setRefreshKey((k) => k + 1);
   }
 
-  // Pass refreshKey as part of period prop to child tabs (forces reload)
-  const periodStr = `${period}__${refreshKey}` as Period;
-
   return (
     <div className="space-y-5">
       {/* Header */}

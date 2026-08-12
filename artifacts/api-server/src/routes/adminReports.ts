@@ -5,6 +5,16 @@ import { requireAdminKey } from "../middlewares/isAdmin";
 
 const router = Router();
 
+// ── Period validation ─────────────────────────────────────────────────────────
+const VALID_PERIODS = new Set(["today", "7d", "30d", "monthly", "quarterly", "yearly", "custom"]);
+
+class PeriodError extends Error {
+  readonly statusCode = 400;
+  constructor(period: string) {
+    super(`Invalid period "${period}". Must be one of: today, 7d, 30d, monthly, quarterly, yearly, custom`);
+  }
+}
+
 // ── Period helper ─────────────────────────────────────────────────────────────
 function parsePeriod(period: string, from?: string, to?: string) {
   const now = new Date();
@@ -34,7 +44,9 @@ function parsePeriod(period: string, from?: string, to?: string) {
       start = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
       if (to) { end = new Date(to); end.setHours(23, 59, 59, 999); }
       break;
-    default: // 30d — normalize to calendar day boundary
+    default:
+      if (!VALID_PERIODS.has(period)) throw new PeriodError(period);
+      // Fallback for "30d" (already handled above but kept for safety)
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
   }
   // Ensure start is always start-of-day for rolling periods
@@ -226,6 +238,7 @@ router.get("/admin/reports/revenue", requireAdminKey, async (req: any, res: any)
       })),
     });
   } catch (err) {
+    if (err instanceof PeriodError) return res.status(400).json({ error: err.message });
     req.log.error({ err }, "Revenue report failed");
     res.status(500).json({ error: "Failed to fetch revenue report" });
   }
@@ -317,6 +330,7 @@ router.get("/admin/reports/sales", requireAdminKey, async (req: any, res: any) =
       totalPages: Math.ceil(total / limitNum),
     });
   } catch (err) {
+    if (err instanceof PeriodError) return res.status(400).json({ error: err.message });
     req.log.error({ err }, "Sales report failed");
     res.status(500).json({ error: "Failed to fetch sales report" });
   }
@@ -388,6 +402,7 @@ router.get("/admin/reports/vendors", requireAdminKey, async (req: any, res: any)
       },
     });
   } catch (err) {
+    if (err instanceof PeriodError) return res.status(400).json({ error: err.message });
     req.log.error({ err }, "Vendor report failed");
     res.status(500).json({ error: "Failed to fetch vendor report" });
   }
@@ -457,6 +472,7 @@ router.get("/admin/reports/customers", requireAdminKey, async (req: any, res: an
       })),
     });
   } catch (err) {
+    if (err instanceof PeriodError) return res.status(400).json({ error: err.message });
     req.log.error({ err }, "Customer report failed");
     res.status(500).json({ error: "Failed to fetch customer report" });
   }
@@ -539,6 +555,7 @@ router.get("/admin/reports/products", requireAdminKey, async (req: any, res: any
       })),
     });
   } catch (err) {
+    if (err instanceof PeriodError) return res.status(400).json({ error: err.message });
     req.log.error({ err }, "Product report failed");
     res.status(500).json({ error: "Failed to fetch product report" });
   }
@@ -725,6 +742,7 @@ router.get("/admin/reports/returns", requireAdminKey, async (req: any, res: any)
       })),
     });
   } catch (err) {
+    if (err instanceof PeriodError) return res.status(400).json({ error: err.message });
     req.log.error({ err }, "Return report failed");
     res.status(500).json({ error: "Failed to fetch return report" });
   }

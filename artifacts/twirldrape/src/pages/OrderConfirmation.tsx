@@ -724,8 +724,14 @@ export function OrderConfirmationPage() {
             transition={{ duration: 0.4 }}
             className="text-center mb-8"
           >
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${order.status === "cancelled" ? "bg-red-100" : order.status === "return_requested" ? "bg-orange-100" : "bg-green-100"}`}>
-              {order.status === "cancelled"
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              order.status === "cancelled" || order.status === "return_rejected"
+                ? "bg-red-100"
+                : order.status === "return_requested"
+                ? "bg-orange-100"
+                : "bg-green-100"
+            }`}>
+              {order.status === "cancelled" || order.status === "return_rejected"
                 ? <XCircle size={40} className="text-red-500" />
                 : order.status === "return_requested"
                 ? <RotateCcw size={40} className="text-orange-500" />
@@ -737,6 +743,8 @@ export function OrderConfirmationPage() {
                 ? "Order Cancelled"
                 : order.status === "return_requested"
                 ? "Return Requested"
+                : order.status === "return_rejected"
+                ? "Return Rejected"
                 : isNewOrder
                 ? "Order Confirmed!"
                 : "Order Details"
@@ -747,6 +755,8 @@ export function OrderConfirmationPage() {
                 ? "Your order has been cancelled and stock has been restored."
                 : order.status === "return_requested"
                 ? "We've received your return request. Our team will reach out soon."
+                : order.status === "return_rejected"
+                ? "We're sorry — your return request was not approved."
                 : isNewOrder
                 ? "Thank you for shopping with TwirlDrape. Your order has been placed successfully."
                 : "Here are the details for your order."
@@ -755,6 +765,44 @@ export function OrderConfirmationPage() {
           </motion.div>
 
           <div className="space-y-5">
+            {/* Return Rejected notice */}
+            {order.status === "return_rejected" && (() => {
+              const rejectedEntry = (order.statusHistory ?? []).slice().reverse().find((e: StatusHistoryEntry) => e.status === "return_rejected");
+              const rejectionNote = rejectedEntry?.note;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 }}
+                  className="flex items-start gap-4 p-5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl"
+                >
+                  <div className="shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-800/40 flex items-center justify-center mt-0.5">
+                    <XCircle size={22} className="text-red-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-red-700 dark:text-red-300 text-base leading-snug">
+                      Return Request Rejected
+                    </p>
+                    {rejectionNote ? (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                        <span className="font-medium">Reason: </span>{rejectionNote}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-red-600/80 dark:text-red-400/80">
+                        Unfortunately your return request could not be approved. Please contact our support team if you have questions.
+                      </p>
+                    )}
+                    <a
+                      href="mailto:support@twirldrape.com"
+                      className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                    >
+                      Contact Support
+                    </a>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
             {/* Order meta */}
             <motion.div
               initial={{ opacity: 0, y: 16 }}

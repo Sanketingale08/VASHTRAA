@@ -100,6 +100,10 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      // pdfkit's dependency fontkit uses @swc/helpers which can't be bundled;
+      // externalise the whole chain so Node resolves it from node_modules.
+      "pdfkit",
+      "fontkit",
     ],
     sourcemap: "linked",
     plugins: [

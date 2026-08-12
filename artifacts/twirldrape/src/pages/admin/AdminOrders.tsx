@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ShoppingBag, Search, Download, RefreshCw } from "lucide-react";
+import { ShoppingBag, Search, Download, RefreshCw, FileText } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -86,6 +86,7 @@ function OrdersContent() {
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
+  const [pdfExportLoading, setPdfExportLoading] = useState(false);
   const adminKey =
     typeof window !== "undefined"
       ? sessionStorage.getItem("td_admin_key") ?? ""
@@ -128,6 +129,37 @@ function OrdersContent() {
       return false;
     });
   }, [orders, search]);
+
+  async function exportPDF() {
+    setPdfExportLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter) params.set("status", statusFilter);
+      if (search.trim()) params.set("search", search.trim());
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const r = await fetch(`/api/admin/orders/export.pdf${qs}`, {
+        headers: adminHeaders(),
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error || `Export failed (${r.status})`);
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const suffix = statusFilter || "all";
+      a.download = `orders-${suffix}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || "PDF export failed");
+    } finally {
+      setPdfExportLoading(false);
+    }
+  }
 
   async function exportCSV() {
     setExportLoading(true);
@@ -186,12 +218,21 @@ function OrdersContent() {
           </button>
           <button
             onClick={exportCSV}
-            disabled={exportLoading}
+            disabled={exportLoading || pdfExportLoading}
             className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ color: NAVY }}
             title="Export all matching orders to CSV"
           >
             <Download size={13} /> {exportLoading ? "Exporting…" : "Export CSV"}
+          </button>
+          <button
+            onClick={exportPDF}
+            disabled={pdfExportLoading || exportLoading}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: NAVY }}
+            title="Export all matching orders to PDF"
+          >
+            <FileText size={13} /> {pdfExportLoading ? "Exporting…" : "Export PDF"}
           </button>
         </div>
       </div>

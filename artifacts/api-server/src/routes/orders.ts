@@ -1,4 +1,5 @@
 import { Router } from "express";
+import PDFDocument from "pdfkit";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
@@ -1269,6 +1270,209 @@ router.get("/admin/orders/export.csv", requireAdminKey, async (req: any, res: an
   } catch (err) {
     req.log.error({ err }, "Failed to export admin orders CSV");
     res.status(500).json({ error: "Failed to export orders" });
+  }
+});
+
+// GET /admin/orders/export.pdf — full order history export as a formatted PDF
+router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: any): Promise<void> => {
+  try {
+    const { status, search } = req.query;
+    const conditions = status ? [eq(ordersTable.status, String(status) as any)] : [];
+
+    const rows = await db
+      .select()
+      .from(ordersTable)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(ordersTable.createdAt));
+
+    // Apply the same search filter as the CSV export
+    let filtered: any[] = rows;
+    const q = search ? String(search).trim().toLowerCase() : "";
+    if (q) {
+      filtered = rows.filter((o: any) => {
+        if (String(o.id).toLowerCase().includes(q)) return true;
+        if (o.displayId && String(o.displayId).toLowerCase().includes(q)) return true;
+        const addr = (o.address as any) ?? {};
+        if (String(addr.name ?? "").toLowerCase().includes(q)) return true;
+        const items: any[] = Array.isArray(o.items) ? o.items : [];
+        if (items.some((i: any) => String(i.name ?? "").toLowerCase().includes(q))) return true;
+        return false;
+      });
+    }
+
+    // ── PDF layout constants ────────────────────────────────────────────────────
+    const NAVY   = "#0D1B36";
+    const GOLD   = "#C9A84C";
+    const LGRAY  = "#F5F5F5";
+    const DGRAY  = "#6B7280";
+    const BORDER = "#E5E7EB";
+
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape",
+      margin: 36,
+      bufferPages: true,   // needed for page-number post-processing
+    });
+
+    const filename = `orders-${status || "all"}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const ml = 36;                       // left margin
+    const tableW = pageW - ml * 2;      // usable table width
+
+    // Column definitions — widths are fractions of tableW
+    const cols = [
+      { label: "Order ID",    w: Math.floor(tableW * 0.115), align: "left"  as const },
+      { label: "Customer",    w: Math.floor(tableW * 0.155), align: "left"  as const },
+      { label: "Items",       w: Math.floor(tableW * 0.260), align: "left"  as const },
+      { label: "Total (Rs.)", w: Math.floor(tableW * 0.085), align: "right" as const },
+      { label: "Status",      w: Math.floor(tableW * 0.115), align: "left"  as const },
+      { label: "Payment",     w: Math.floor(tableW * 0.130), align: "left"  as const },
+      { label: "Date",        w: Math.floor(tableW * 0.105), align: "left"  as const },
+    ];
+
+    const HDR_H  = 20;   // table header row height
+    const ROW_H  = 22;   // data row height
+    const FTR_H  = 20;   // footer reserve at page bottom
+
+    // ── Page header helper ─────────────────────────────────────────────────────
+    function drawPageHeader(): number {
+      let y = ml;
+
+      // Title + subtitle
+      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(18)
+         .text("TwirlDrape", ml, y, { lineBreak: false });
+      const titleEnd = ml + doc.widthOfString("TwirlDrape");
+      doc.fillColor(GOLD).font("Helvetica").fontSize(11)
+         .text("  |  Order Report", titleEnd, y + 4, { lineBreak: false });
+
+      // Generation timestamp (right-aligned)
+      const genDate = new Date().toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata", day: "2-digit", month: "short",
+        year: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+      doc.fillColor(DGRAY).font("Helvetica").fontSize(8)
+         .text(`Generated: ${genDate} IST`, ml, y, { align: "right", width: tableW, lineBreak: false });
+
+      y += 26;
+
+      // Filter description
+      let filterDesc = "All Orders";
+      if (status && q)   filterDesc = `Status: ${String(status).replace(/_/g, " ")}   |   Search: "${q}"`;
+      else if (status)   filterDesc = `Status: ${String(status).replace(/_/g, " ")}`;
+      else if (q)        filterDesc = `Search: "${q}"`;
+
+      doc.fillColor(DGRAY).font("Helvetica").fontSize(9).text(filterDesc, ml, y);
+      y += 16;
+
+      // Summary bar
+      const totalRev = filtered.reduce((s: number, o: any) => s + (o.total ?? 0), 0);
+      const summary  = `${filtered.length} ${filtered.length === 1 ? "order" : "orders"}   |   Total Revenue: Rs. ${(totalRev / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      doc.roundedRect(ml, y, tableW, 20, 3).fill("#EEF2FF");
+      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9).text(summary, ml + 8, y + 6, { lineBreak: false });
+      y += 28;
+
+      // Gold rule
+      doc.moveTo(ml, y).lineTo(ml + tableW, y).strokeColor(GOLD).lineWidth(1.5).stroke();
+      y += 8;
+
+      return y;
+    }
+
+    // ── Table header helper ────────────────────────────────────────────────────
+    function drawTableHeader(y: number): number {
+      doc.rect(ml, y, tableW, HDR_H).fill(NAVY);
+      let x = ml;
+      for (const col of cols) {
+        doc.fillColor("white").font("Helvetica-Bold").fontSize(7.5)
+           .text(col.label, x + 4, y + 6, { width: col.w - 8, align: col.align, lineBreak: false });
+        x += col.w;
+      }
+      return y + HDR_H;
+    }
+
+    // ── Format a single order row ──────────────────────────────────────────────
+    function rowValues(o: any): string[] {
+      const addr  = (o.address as any) ?? {};
+      const items: any[] = Array.isArray(o.items) ? o.items : [];
+      const firstName  = items[0]?.name ?? "—";
+      const moreCount  = items.length > 1 ? ` +${items.length - 1} more` : "";
+      const truncated  = firstName.length > 30 ? firstName.slice(0, 28) + "…" : firstName;
+      const totalQty   = items.reduce((s: number, i: any) => s + (i.quantity ?? 1), 0);
+      const itemsCell  = truncated + moreCount + (totalQty > 1 ? ` (${totalQty})` : "");
+      const orderId    = o.displayId ? `#${o.displayId}` : `#${String(o.id).slice(0, 8)}…`;
+
+      return [
+        orderId,
+        String(addr.name ?? "—").slice(0, 22),
+        itemsCell,
+        (o.total != null ? (o.total / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"),
+        String(o.status ?? "—").replace(/_/g, " "),
+        String(o.paymentMethod ?? "—").replace(/_/g, " "),
+        o.createdAt ? new Date(o.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—",
+      ];
+    }
+
+    // ── First page ─────────────────────────────────────────────────────────────
+    let y = drawPageHeader();
+    y = drawTableHeader(y);
+
+    // ── Rows ───────────────────────────────────────────────────────────────────
+    if (filtered.length === 0) {
+      doc.fillColor(DGRAY).font("Helvetica").fontSize(10)
+         .text("No orders found for the selected filters.", ml, y + 16, { align: "center", width: tableW });
+    } else {
+      for (let i = 0; i < filtered.length; i++) {
+        // Page break — leave room for footer
+        if (y + ROW_H > pageH - ml - FTR_H) {
+          doc.addPage();
+          y = drawPageHeader();
+          y = drawTableHeader(y);
+        }
+
+        // Zebra stripe
+        if (i % 2 === 1) {
+          doc.rect(ml, y, tableW, ROW_H).fill(LGRAY);
+        }
+
+        // Row separator
+        doc.moveTo(ml, y + ROW_H).lineTo(ml + tableW, y + ROW_H)
+           .strokeColor(BORDER).lineWidth(0.4).stroke();
+
+        // Cell text
+        const vals = rowValues(filtered[i]);
+        let x = ml;
+        for (let c = 0; c < cols.length; c++) {
+          const col = cols[c];
+          doc.fillColor(c === 0 ? DGRAY : NAVY)
+             .font(c === 3 ? "Helvetica-Bold" : "Helvetica")
+             .fontSize(8)
+             .text(vals[c] ?? "", x + 4, y + 7, { width: col.w - 8, align: col.align, lineBreak: false });
+          x += col.w;
+        }
+
+        y += ROW_H;
+      }
+    }
+
+    // ── Page numbers (post-process all pages) ──────────────────────────────────
+    const { count: totalPages } = doc.bufferedPageRange();
+    for (let p = 0; p < totalPages; p++) {
+      doc.switchToPage(p);
+      doc.fillColor(DGRAY).font("Helvetica").fontSize(7.5)
+         .text(`Page ${p + 1} of ${totalPages}`, ml, pageH - ml - 8, { align: "right", width: tableW, lineBreak: false });
+    }
+
+    doc.end();
+  } catch (err) {
+    req.log.error({ err }, "Failed to export admin orders PDF");
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to export orders as PDF" });
+    }
   }
 });
 

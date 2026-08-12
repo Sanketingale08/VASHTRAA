@@ -385,6 +385,71 @@ test.describe("Customer refund request — web order detail page", () => {
     await expect(refundBtn).toBeVisible({ timeout: 10_000 });
   });
 
+  test("Inline validation fires without a network request when no method is selected", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInUser(page, baseURL!, userId);
+
+    // Mock order fetch — return a cancelled order with no refundStatus
+    await page.route(`**/api/orders/${ORDER_ID}`, async (route) => {
+      if (route.request().method() !== "GET") { await route.continue(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: cancelledOrder }),
+      });
+    });
+
+    // Track any calls to the refund POST endpoint
+    let refundCallCount = 0;
+    await page.route(`**/api/orders/${ORDER_ID}/refund`, async (route) => {
+      if (route.request().method() !== "POST") { await route.continue(); return; }
+      refundCallCount++;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: pendingRefundOrder }),
+      });
+    });
+
+    await page.goto(`/orders/${ORDER_ID}`);
+    await expect(page.locator("text=Kanjivaram Silk Saree")).toBeVisible({ timeout: 20_000 });
+
+    // Open the refund form without selecting a method
+    const refundBtn = page.locator("button", { hasText: /Request Refund/i }).first();
+    await expect(refundBtn).toBeVisible({ timeout: 10_000 });
+    await refundBtn.click();
+
+    await expect(page.locator("text=Request a Refund")).toBeVisible({ timeout: 5_000 });
+
+    // Click submit WITHOUT selecting a method — JS validation should block the request
+    const submitBtn = page.locator("button", { hasText: /Submit Refund Request/i }).first();
+    await expect(submitBtn).toBeVisible({ timeout: 5_000 });
+    await submitBtn.click();
+
+    // Inline error must appear
+    await expect(
+      page.locator("text=Please select a refund method.")
+    ).toBeVisible({ timeout: 5_000 });
+
+    // No network request must have been made
+    expect(refundCallCount).toBe(0);
+
+    // The form must still be open (no success transition)
+    await expect(page.locator("text=Request a Refund")).toBeVisible({ timeout: 3_000 });
+
+    // Submit button must still be enabled (not stuck in a loading state)
+    await expect(submitBtn).toBeEnabled({ timeout: 3_000 });
+  });
+
   test("Request Refund button is absent when refund is already pending", async ({
     page,
     baseURL,

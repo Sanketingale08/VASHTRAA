@@ -166,16 +166,7 @@ export default function AdminLogin() {
           </p>
         </div>
 
-        <p className="mt-6 text-center text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
-          Are you a seller?{" "}
-          <a
-            href={`${basePath}/seller/login`}
-            className="font-semibold hover:underline"
-            style={{ color: GOLD }}
-          >
-            Go to Seller Portal →
-          </a>
-        </p>
+
       </motion.div>
     </div>
   );

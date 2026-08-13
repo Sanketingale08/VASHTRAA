@@ -2,11 +2,12 @@
  * Admin 2FA routes — integration tests
  *
  * Covers:
- *  - POST /admin/2fa/setup/start  (generates pending secret + QR code)
- *  - POST /admin/2fa/setup/verify (valid TOTP enables 2FA, invalid → 400)
- *  - POST /admin/2fa/login/verify (valid TOTP → verified session; invalid → 403)
- *  - POST /admin/2fa/login/recovery (retired → 410 RECOVERY_CODES_RETIRED)
- *  - POST /admin/2fa/disable       (valid TOTP disables 2FA; no code → 400; bad code → 403)
+ *  - POST /admin/2fa/setup/start     (generates pending secret + QR code)
+ *  - POST /admin/2fa/setup/verify    (valid TOTP enables 2FA, invalid → 400)
+ *  - POST /admin/2fa/login/verify    (valid TOTP → verified session; invalid → 403)
+ *  - POST /admin/2fa/login/recovery  (valid unused code → session; used/invalid → 403)
+ *  - POST /admin/2fa/disable         (valid TOTP disables 2FA; no code → 400; bad code → 403)
+ *  - POST /admin/2fa/regenerate-codes (valid TOTP → 10 new codes, old ones cleared; invalid → 403)
  *  - Rate limiter on /admin/2fa/login/verify kicks in after 5 attempts
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -24,8 +25,8 @@ const state = vi.hoisted(() => ({
   settings: new Map<string, string>(),
   /** inserted admin_login_sessions rows */
   sessions: [] as any[],
-  /** inserted admin_recovery_codes rows */
-  recoveryCodes: [] as any[],
+  /** recovery code rows: { id, codeHash, used, usedAt } */
+  recoveryCodes: [] as { id: string; codeHash: string; used: boolean; usedAt: Date | null }[],
   idCounter: 0,
 }));
 
@@ -45,7 +46,13 @@ vi.mock("@workspace/db", () => {
     twoFactorVerified: "two_factor_verified",
     revokedAt: "revoked_at",
   };
-  const adminRecoveryCodesTable: any = { _t: "admin_recovery_codes" };
+  const adminRecoveryCodesTable: any = {
+    _t: "admin_recovery_codes",
+    id: "rc_id",
+    codeHash: "code_hash",
+    used: "used",
+    usedAt: "used_at",
+  };
 
   function queryResult(rows: unknown[]): any {
     return {
@@ -56,10 +63,10 @@ vi.mock("@workspace/db", () => {
   }
 
   /**
-   * Extract the settings key from an eq(siteSettingsTable.key, <value>) drizzle condition.
-   * drizzle-orm places the literal comparison value at queryChunks[3].
+   * Extract the literal comparison value from an eq(col, value) drizzle condition.
+   * drizzle-orm places the literal value at queryChunks[3].
    */
-  function extractSettingsKey(cond: any): string | null {
+  function extractEqValue(cond: any): string | null {
     const chunks = cond?.queryChunks;
     if (Array.isArray(chunks) && typeof chunks[3] === "string") return chunks[3];
     return null;
@@ -71,7 +78,7 @@ vi.mock("@workspace/db", () => {
         if (table._t === "site_settings") {
           return {
             where: vi.fn((cond: any) => {
-              const key = extractSettingsKey(cond);
+              const key = extractEqValue(cond);
               const value = key ? state.settings.get(key) ?? null : null;
               return queryResult(value !== null ? [{ value }] : []);
             }),
@@ -79,6 +86,19 @@ vi.mock("@workspace/db", () => {
         }
         if (table._t === "admin_login_sessions") {
           return { where: vi.fn(() => queryResult([])) };
+        }
+        if (table._t === "admin_recovery_codes") {
+          return {
+            where: vi.fn((cond: any) => {
+              // Supports eq(codeHash, hash) — extract by hash; or eq(id, id)
+              const val = extractEqValue(cond);
+              if (val) {
+                const found = state.recoveryCodes.find(r => r.codeHash === val || r.id === val);
+                return queryResult(found ? [{ id: found.id, used: found.used }] : []);
+              }
+              return queryResult(state.recoveryCodes.map(r => ({ id: r.id, codeHash: r.codeHash, used: r.used })));
+            }),
+          };
         }
         return queryResult([]);
       }),
@@ -106,7 +126,9 @@ vi.mock("@workspace/db", () => {
         }
         if (table._t === "admin_recovery_codes") {
           const rows = Array.isArray(vals) ? vals : [vals];
-          state.recoveryCodes.push(...rows);
+          for (const r of rows) {
+            state.recoveryCodes.push({ id: `rc-${++state.idCounter}`, codeHash: r.codeHash, used: false, usedAt: null });
+          }
           return Promise.resolve();
         }
         return {
@@ -116,10 +138,28 @@ vi.mock("@workspace/db", () => {
       }),
     })),
 
+    update: vi.fn((table: any) => ({
+      set: vi.fn((vals: any) => ({
+        where: vi.fn((cond: any) => {
+          if (table._t === "admin_recovery_codes") {
+            const val = extractEqValue(cond);
+            if (val) {
+              const idx = state.recoveryCodes.findIndex(r => r.id === val || r.codeHash === val);
+              if (idx !== -1) {
+                if (vals.used !== undefined) state.recoveryCodes[idx].used = vals.used;
+                if (vals.usedAt !== undefined) state.recoveryCodes[idx].usedAt = vals.usedAt;
+              }
+            }
+          }
+          return Promise.resolve();
+        }),
+      })),
+    })),
+
     delete: vi.fn((table: any) => ({
       where: vi.fn((cond: any) => {
         if (table._t === "site_settings") {
-          const key = extractSettingsKey(cond);
+          const key = extractEqValue(cond);
           if (key) state.settings.delete(key);
         }
         return Promise.resolve();
@@ -132,6 +172,9 @@ vi.mock("@workspace/db", () => {
       catch: (fn: any) => Promise.resolve().catch(fn),
     })),
   };
+
+  // transaction proxies through to the same mock db instance
+  db.transaction = vi.fn((fn: any) => fn(db));
 
   return {
     db,
@@ -339,15 +382,79 @@ describe("POST /api/admin/2fa/login/verify", () => {
   });
 });
 
-describe("POST /api/admin/2fa/login/recovery (retired)", () => {
-  it("returns 410 RECOVERY_CODES_RETIRED — the recovery-code flow has been retired", async () => {
+describe("POST /api/admin/2fa/login/recovery", () => {
+  const VALID_CODE = "AAAAA-BBBBB";
+  // sha256hex is mocked as (s) => `sha256:${s}`; codes are normalised to uppercase before hashing
+  const VALID_HASH = `sha256:${VALID_CODE.toUpperCase()}`;
+
+  beforeEach(() => {
+    state.settings.set("admin_2fa_enabled", "true");
+    state.settings.set("admin_2fa_secret", TEST_SECRET);
+    // Unique IP to avoid sharing the rate-limit bucket with login/verify tests
+    mockGetIp.mockReturnValue("10.0.1.2");
+  });
+
+  it("issues a verified session when a valid unused recovery code is provided", async () => {
+    state.recoveryCodes.push({ id: "rc-seed-1", codeHash: VALID_HASH, used: false, usedAt: null });
+
     const res = await request(app)
       .post("/api/admin/2fa/login/recovery")
       .set("x-admin-key", ADMIN_KEY)
-      .send({ code: "AAAAA-BBBBB" });
+      .send({ code: VALID_CODE });
 
-    expect(res.status).toBe(410);
-    expect(res.body.code).toBe("RECOVERY_CODES_RETIRED");
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      sessionId: expect.any(String),
+      tokenHash: expect.any(String),
+    });
+    expect(state.sessions.length).toBe(1);
+    expect(state.sessions[0].twoFactorVerified).toBe(true);
+    // Code must be marked as used
+    const stored = state.recoveryCodes.find(r => r.id === "rc-seed-1");
+    expect(stored?.used).toBe(true);
+  });
+
+  it("returns 403 when the recovery code does not exist", async () => {
+    const res = await request(app)
+      .post("/api/admin/2fa/login/recovery")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "WRONG-12345" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("2FA_INVALID");
+    expect(state.sessions.length).toBe(0);
+  });
+
+  it("returns 403 when the recovery code has already been used", async () => {
+    state.recoveryCodes.push({ id: "rc-seed-1", codeHash: VALID_HASH, used: true, usedAt: new Date() });
+
+    const res = await request(app)
+      .post("/api/admin/2fa/login/recovery")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: VALID_CODE });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("2FA_INVALID");
+    expect(state.sessions.length).toBe(0);
+  });
+
+  it("returns 400 when the code body field is missing", async () => {
+    const res = await request(app)
+      .post("/api/admin/2fa/login/recovery")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 403 when the admin key header is missing", async () => {
+    state.recoveryCodes.push({ id: "rc-seed-1", codeHash: VALID_HASH, used: false, usedAt: null });
+
+    const res = await request(app)
+      .post("/api/admin/2fa/login/recovery")
+      .send({ code: VALID_CODE });
+
+    expect(res.status).toBe(403);
     expect(state.sessions.length).toBe(0);
   });
 });
@@ -393,6 +500,80 @@ describe("POST /api/admin/2fa/disable", () => {
   it("returns 403 when admin key is missing", async () => {
     const res = await request(app)
       .post("/api/admin/2fa/disable")
+      .send({ code: validCode(TEST_SECRET) });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/admin/2fa/regenerate-codes", () => {
+  beforeEach(() => {
+    state.settings.set("admin_2fa_enabled", "true");
+    state.settings.set("admin_2fa_secret", TEST_SECRET);
+    // Pre-seed two existing codes (one used, one not) to confirm they're cleared
+    state.recoveryCodes.push(
+      { id: "old-1", codeHash: "sha256:OLD-UNUSED", used: false, usedAt: null },
+      { id: "old-2", codeHash: "sha256:OLD-USED", used: true, usedAt: new Date() },
+    );
+    mockGetIp.mockReturnValue("10.0.2.1");
+  });
+
+  it("returns 10 new codes and replaces all old ones when TOTP is valid", async () => {
+    const res = await request(app)
+      .post("/api/admin/2fa/regenerate-codes")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: validCode(TEST_SECRET) });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.codes)).toBe(true);
+    expect(res.body.codes).toHaveLength(10);
+    // Each plain code must match the XXXXXXXXXX-XXXXXXXXXX hex format
+    for (const c of res.body.codes as string[]) {
+      expect(c).toMatch(/^[0-9A-F]{10}-[0-9A-F]{10}$/);
+    }
+    // State must have exactly 10 new rows — old ones gone
+    expect(state.recoveryCodes).toHaveLength(10);
+    expect(state.recoveryCodes.find(r => r.id === "old-1")).toBeUndefined();
+    expect(state.recoveryCodes.find(r => r.id === "old-2")).toBeUndefined();
+    // New rows must all be unused
+    expect(state.recoveryCodes.every(r => !r.used)).toBe(true);
+  });
+
+  it("returns 403 and leaves old codes untouched when TOTP is wrong", async () => {
+    const res = await request(app)
+      .post("/api/admin/2fa/regenerate-codes")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: "000000" });
+
+    expect(res.status).toBe(403);
+    expect(state.recoveryCodes).toHaveLength(2); // unchanged
+  });
+
+  it("returns 400 when 2FA is not enabled", async () => {
+    state.settings.set("admin_2fa_enabled", "false");
+
+    const res = await request(app)
+      .post("/api/admin/2fa/regenerate-codes")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: validCode(TEST_SECRET) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not enabled/i);
+  });
+
+  it("returns 400 when authenticator code is missing from body", async () => {
+    const res = await request(app)
+      .post("/api/admin/2fa/regenerate-codes")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 403 when admin key header is missing", async () => {
+    const res = await request(app)
+      .post("/api/admin/2fa/regenerate-codes")
       .send({ code: validCode(TEST_SECRET) });
 
     expect(res.status).toBe(403);

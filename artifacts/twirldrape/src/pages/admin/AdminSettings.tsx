@@ -503,11 +503,13 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
 // ─── 2FA Manage Modal ─────────────────────────────────────────────────────────
 function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const { toast } = useToast();
-  const [view, setView] = useState<"menu" | "disable">("menu");
+  const [view, setView] = useState<"menu" | "disable" | "regen" | "newCodes">("menu");
   const [totpCode, setTotpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [newCodes, setNewCodes] = useState<string[]>([]);
+  const [copied, setCopied] = useState(false);
 
   function reset() { setTotpCode(""); setError(""); setConfirmDisable(false); }
 
@@ -530,6 +532,48 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
     } finally { setLoading(false); }
   }
 
+  async function handleRegen(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setError("");
+    try {
+      const data = await apiFetch("/api/admin/2fa/regenerate-codes", {
+        method: "POST",
+        body: JSON.stringify({ code: totpCode.replace(/\s/g, "") }),
+      });
+      setNewCodes(data.codes ?? []);
+      setCopied(false);
+      setView("newCodes");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to regenerate recovery codes");
+    } finally { setLoading(false); }
+  }
+
+  function handleCopyCodes() {
+    navigator.clipboard.writeText(newCodes.join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  function handleDownloadCodes() {
+    const text = [
+      "TwirlDrape Admin — Recovery Codes",
+      `Generated: ${new Date().toLocaleString("en-IN")}`,
+      "",
+      ...newCodes,
+      "",
+      "Each code can only be used once.",
+      "Store these in a safe place.",
+    ].join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "twirldrape-admin-recovery-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const totpInput = (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Authenticator Code</label>
@@ -546,10 +590,16 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <Shield size={16} style={{ color: GOLD }} />
-            <h3 className="font-serif font-bold text-base" style={{ color: NAVY }}>Manage Two-Factor Authentication</h3>
+            {view === "newCodes"
+              ? <CheckCircle size={16} className="text-green-500" />
+              : <Shield size={16} style={{ color: GOLD }} />}
+            <h3 className="font-serif font-bold text-base" style={{ color: NAVY }}>
+              {view === "newCodes" ? "New Recovery Codes" : "Manage Two-Factor Authentication"}
+            </h3>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+          {view !== "newCodes" && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+          )}
         </div>
 
         <div className="px-6 py-5">
@@ -557,6 +607,20 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
           {view === "menu" && (
             <div className="space-y-3">
               <p className="text-sm text-gray-600 mb-4">Two-factor authentication is currently <strong>enabled</strong>. Choose an action below.</p>
+
+              {/* Regenerate recovery codes */}
+              <button onClick={() => { reset(); setView("regen"); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-100 hover:border-amber-200 hover:bg-amber-50 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "rgba(201,168,76,0.12)" }}>
+                  <RefreshCw size={15} style={{ color: GOLD }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: NAVY }}>Regenerate Recovery Codes</p>
+                  <p className="text-xs text-gray-500">Lost your codes? Generate a new set — old codes are invalidated</p>
+                </div>
+              </button>
+
+              {/* Disable 2FA */}
               <button onClick={() => { reset(); setView("disable"); }}
                 className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors text-left">
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50">
@@ -566,6 +630,65 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                   <p className="text-sm font-semibold text-red-700">Disable Two-Factor Authentication</p>
                   <p className="text-xs text-red-500">This will reduce your account security</p>
                 </div>
+              </button>
+            </div>
+          )}
+
+          {/* Regenerate flow */}
+          {view === "regen" && (
+            <form onSubmit={handleRegen} className="space-y-4">
+              <div className="p-3 rounded-lg border flex gap-2.5" style={{ background: "rgba(201,168,76,0.08)", borderColor: "rgba(201,168,76,0.3)" }}>
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: "#7a5700" }} />
+                <p className="text-xs" style={{ color: "#7a5700" }}>
+                  Generating new recovery codes will <strong>permanently invalidate</strong> your existing ones. Store the new codes somewhere safe immediately.
+                </p>
+              </div>
+              {totpInput}
+              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setView("menu")} className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
+                <button type="submit" disabled={loading || totpCode.length < 6}
+                  className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ background: NAVY, color: "white" }}>
+                  {loading && <RefreshCw size={13} className="animate-spin" />}
+                  {loading ? "Generating…" : "Generate New Codes"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* New codes display */}
+          {view === "newCodes" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Your new recovery codes are below. <strong>Copy or download them now</strong> — they won't be shown again.
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 font-mono text-sm grid grid-cols-2 gap-x-6 gap-y-1.5">
+                {newCodes.map((c, i) => (
+                  <span key={i} className="text-gray-800 tracking-wider">{c}</span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCopyCodes}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  {copied ? <CheckCircle size={14} className="text-green-500" /> : <RefreshCw size={13} />}
+                  {copied ? "Copied!" : "Copy Codes"}
+                </button>
+                <button
+                  onClick={handleDownloadCodes}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg text-white transition-colors"
+                  style={{ background: NAVY }}
+                >
+                  Download .txt
+                </button>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Done
               </button>
             </div>
           )}

@@ -176,14 +176,40 @@ router.post("/admin/2fa/login/verify", loginLimiter, requireAdminKey, async (req
 });
 
 // ── POST /api/admin/2fa/login/recovery ───────────────────────────────────────
-// Recovery-code login has been retired. Recovery codes are no longer issued or
-// accepted. Use your authenticator app to sign in.
+// Authenticates the admin using a one-time recovery code.  Each code can only
+// be used once; it is marked used immediately after a successful lookup.
 
-router.post("/admin/2fa/login/recovery", loginLimiter, requireAdminKey, (_req: any, res: any) => {
-  res.status(410).json({
-    error: "Recovery codes have been retired. Please use your authenticator app to sign in.",
-    code: "RECOVERY_CODES_RETIRED",
-  });
+router.post("/admin/2fa/login/recovery", loginLimiter, requireAdminKey, async (req: any, res: any) => {
+  const { code } = req.body ?? {};
+  if (!code || typeof code !== "string") {
+    return res.status(400).json({ error: "Recovery code is required" });
+  }
+  const ip = getIp(req);
+  try {
+    const codeHash = sha256hex(code.trim().toUpperCase());
+    const [row] = await db
+      .select({ id: adminRecoveryCodesTable.id, used: adminRecoveryCodesTable.used })
+      .from(adminRecoveryCodesTable)
+      .where(eq(adminRecoveryCodesTable.codeHash, codeHash));
+
+    if (!row || row.used) {
+      writeAuditLog({ action: "2fa_recovery_login_failed", module: "Security", ipAddress: ip, status: "failure" }).catch(() => {});
+      return res.status(403).json({ error: "Invalid or already-used recovery code.", code: "2FA_INVALID" });
+    }
+
+    // Mark the code as used (one-time only).
+    await db
+      .update(adminRecoveryCodesTable)
+      .set({ used: true, usedAt: new Date() })
+      .where(eq(adminRecoveryCodesTable.id, row.id));
+
+    const { tokenHash, sessionId } = await createVerifiedSession(req);
+    writeAuditLog({ action: "2fa_recovery_login_success", module: "Security", ipAddress: ip }).catch(() => {});
+    res.json({ sessionId, tokenHash });
+  } catch (err) {
+    logger.error({ err }, "[admin2fa] recovery login error");
+    res.status(500).json({ error: "Recovery login failed" });
+  }
 });
 
 // ── POST /api/admin/2fa/setup/start ──────────────────────────────────────────
@@ -296,13 +322,44 @@ router.post("/admin/2fa/disable", requireAdminKey, async (req: any, res: any) =>
 });
 
 // ── POST /api/admin/2fa/regenerate-codes ─────────────────────────────────────
-// Recovery code regeneration has been retired along with the recovery-code system.
+// Generates a fresh set of recovery codes, invalidating the old ones.
+// Requires: x-admin-key (middleware) + current TOTP code in body.
 
-router.post("/admin/2fa/regenerate-codes", requireAdminKey, (_req: any, res: any) => {
-  res.status(410).json({
-    error: "Recovery codes have been retired and can no longer be regenerated.",
-    code: "RECOVERY_CODES_RETIRED",
-  });
+router.post("/admin/2fa/regenerate-codes", requireAdminKey, async (req: any, res: any) => {
+  const { code } = req.body ?? {};
+  if (!code || typeof code !== "string") {
+    return res.status(400).json({ error: "Authenticator code is required" });
+  }
+  try {
+    const enabled = (await getSetting("admin_2fa_enabled")) === "true";
+    if (!enabled) {
+      return res.status(400).json({ error: "2FA is not enabled." });
+    }
+    const valid = await validateTOTP(code);
+    if (!valid) {
+      return res.status(403).json({ error: "Invalid authenticator code. Please try again." });
+    }
+
+    // Atomically replace all recovery codes so the old set is preserved if the insert fails.
+    const plainCodes: string[] = [];
+    await db.transaction(async (tx: any) => {
+      await tx.delete(adminRecoveryCodesTable);
+      const rows: { codeHash: string }[] = [];
+      for (let i = 0; i < 10; i++) {
+        const plain = generateRecoveryCode();
+        plainCodes.push(plain);
+        rows.push({ codeHash: sha256hex(plain) });
+      }
+      await tx.insert(adminRecoveryCodesTable).values(rows);
+    });
+    const codes = plainCodes;
+
+    writeAuditLog({ action: "2fa_recovery_codes_regenerated", module: "Security", ipAddress: getIp(req) }).catch(() => {});
+    res.json({ ok: true, codes });
+  } catch (err) {
+    logger.error({ err }, "[admin2fa] regenerate-codes error");
+    res.status(500).json({ error: "Failed to regenerate recovery codes. Please try again." });
+  }
 });
 
 export default router;

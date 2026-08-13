@@ -140,7 +140,7 @@ export function Navbar() {
               <img
                 src="/images/logo.png"
                 alt="TwirlDrape"
-                className="w-[160px] md:w-[200px] lg:w-[220px] h-auto object-contain group-hover:opacity-90 transition-opacity"
+                className="h-[52px] md:h-[64px] w-auto max-w-[180px] md:max-w-[220px] object-contain group-hover:opacity-90 transition-opacity"
               />
             </Link>
 

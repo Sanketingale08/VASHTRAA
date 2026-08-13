@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-import { adminHeaders, adminKey } from '@/lib/adminApi';
+import { adminHeaders, adminKey, initAdmin2FAInterceptor } from '@/lib/adminApi';
 
 const NAVY = "#0D1B36";
 const NAVY2 = "#091429";
@@ -45,6 +45,10 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   const [verified, setVerified] = useState(false);
 
   useEffect(() => {
+    // Install the global 2FA intercept so every fetch() on any admin page
+    // is covered, not just calls routed through adminFetch().
+    initAdmin2FAInterceptor();
+
     const key = sessionStorage.getItem("td_admin_key");
     if (!key) {
       setLocation("/admin/login");
@@ -57,11 +61,18 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     fetch(`/api/admin/vendors`, {
       headers,
       credentials: "include",
-    }).then((r) => {
+    }).then(async (r) => {
       if (r.status === 403) {
-        // Key invalid or session revoked — clear all auth and redirect
-        clearAdminSession();
-        setLocation("/admin/login");
+        const body = await r.json().catch(() => ({}));
+        if (body.code === "2FA_REQUIRED") {
+          // Session exists but 2FA verification is required — send to verify screen
+          const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+          setLocation(`/admin/2fa-verify?returnTo=${returnTo}`);
+        } else {
+          // Key invalid or session revoked — clear all auth and redirect to login
+          clearAdminSession();
+          setLocation("/admin/login");
+        }
       } else {
         setVerified(true);
       }

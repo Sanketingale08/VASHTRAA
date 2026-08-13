@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Shield, AlertCircle, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { adminKey, storeAdminSession } from "@/lib/adminApi";
@@ -10,6 +10,7 @@ const GOLD = "#C9A84C";
 
 export default function Admin2FAVerify() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const [mode, setMode] = useState<"totp" | "recovery">("totp");
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [recoveryCode, setRecoveryCode] = useState("");
@@ -18,11 +19,23 @@ export default function Admin2FAVerify() {
   const [locked, setLocked] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Guard: redirect to login if we're not in the 2FA pending state
+  // Parse returnTo from query string (set when redirected mid-session by 2FA guard)
+  const returnTo = (() => {
+    try {
+      const params = new URLSearchParams(search);
+      const raw = params.get("returnTo");
+      return raw ? decodeURIComponent(raw) : "/admin/dashboard";
+    } catch {
+      return "/admin/dashboard";
+    }
+  })();
+
+  // Guard: must have an admin key. The td_admin_2fa_pending flag is only set
+  // during the initial login flow; mid-session redirects won't have it, so we
+  // only require the key itself to be present.
   useEffect(() => {
-    const pending = sessionStorage.getItem("td_admin_2fa_pending");
     const key = adminKey();
-    if (!pending || !key) {
+    if (!key) {
       setLocation("/admin/login");
     }
   }, [setLocation]);
@@ -117,7 +130,8 @@ export default function Admin2FAVerify() {
       // Success — store the verified session
       storeAdminSession(data.tokenHash, data.sessionId);
       sessionStorage.removeItem("td_admin_2fa_pending");
-      setLocation("/admin/dashboard");
+      // Redirect back to the page that triggered the 2FA check, or dashboard
+      setLocation(returnTo);
     } catch {
       setError("Connection error. Please try again.");
     } finally {

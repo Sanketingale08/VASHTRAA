@@ -123,6 +123,52 @@ type ImportResult = {
   allFailed: FailedRow[];
 };
 
+// ── Pure merge helper (exported for unit tests) ───────────────────────────────
+/**
+ * Merges client-side invalid rows and server-rejected rows into a single
+ * deduplicated list sorted by original row index.
+ *
+ * A row can only appear in ONE of the two lists because:
+ *   - clientInvalid rows are those that FAILED validation and were NOT sent to
+ *     the API.
+ *   - serverFailed rows are those that PASSED validation, WERE sent, but the
+ *     server rejected them.
+ * The two sets are therefore disjoint by construction.
+ */
+export function buildAllFailed(
+  reviewRows: ReviewRow[],
+  validRows: ReviewRow[],
+  apiResults: ApiResult[],
+): FailedRow[] {
+  const clientInvalid: FailedRow[] = reviewRows
+    .filter(r => Object.keys(r.errors).length > 0)
+    .map(r => ({
+      rowIndex: r.index,
+      row: r.values,
+      reason: Object.entries(r.errors)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("; "),
+      source: "client" as const,
+    }));
+
+  const serverFailed: FailedRow[] = validRows.flatMap((r, originalIdx) => {
+    const result = apiResults[originalIdx];
+    if (!result || result.success) return [];
+    return [
+      {
+        rowIndex: r.index,
+        row: r.values,
+        reason: result.error ?? "Import failed",
+        source: "server" as const,
+      },
+    ];
+  });
+
+  return [...clientInvalid, ...serverFailed].sort(
+    (a, b) => a.rowIndex - b.rowIndex,
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,7 +272,17 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
   // ── Import ──────────────────────────────────────────────────────────────────
   async function handleImport() {
     const validRows = reviewRows.filter(r => Object.keys(r.errors).length === 0);
-    if (validRows.length === 0) return;
+
+    // When every row fails client validation there is nothing to send to the
+    // server, but the seller still needs to see the error report.  Build the
+    // failed list from the review rows alone and jump to the done screen.
+    if (validRows.length === 0) {
+      const allFailed = buildAllFailed(reviewRows, [], []);
+      setImportResult({ succeeded: 0, failed: allFailed.length, apiResults: [], validRows: [], allFailed });
+      setStep("done");
+      return;
+    }
+
     setImporting(true);
     setImportError("");
     try {
@@ -242,37 +298,16 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
       const apiResults: ApiResult[] = data.results ?? [];
 
       // Rows that failed client-side validation (skipped, not sent to API)
-      const clientInvalid: FailedRow[] = reviewRows
-        .filter(r => Object.keys(r.errors).length > 0)
-        .map(r => ({
-          rowIndex: r.index,
-          row: r.values,
-          reason: Object.entries(r.errors).map(([k, v]) => `${k}: ${v}`).join("; "),
-          source: "client" as const,
-        }));
-
-      // Rows that were sent but the server rejected.
+      // combined with rows the server rejected — deduplicated and sorted.
       // apiResults[originalIdx] corresponds to validRows[originalIdx] — preserve originalIdx
       // across the map so we never confuse it with a post-filter reset index.
-      const serverFailed: FailedRow[] = validRows
-        .flatMap((r, originalIdx) => {
-          const result = apiResults[originalIdx];
-          if (!result || result.success) return [];
-          const entry: FailedRow = {
-            rowIndex: r.index,
-            row: r.values,
-            reason: result.error ?? "Import failed",
-            source: "server",
-          };
-          return [entry];
-        });
-
-      const allFailed: FailedRow[] = [...clientInvalid, ...serverFailed]
-        .sort((a, b) => a.rowIndex - b.rowIndex);
+      const allFailed = buildAllFailed(reviewRows, validRows, apiResults);
 
       setImportResult({
         succeeded: data.summary?.succeeded ?? 0,
-        failed: (data.summary?.failed ?? 0) + clientInvalid.length,
+        // allFailed already contains every client-invalid and server-rejected
+        // row exactly once, so its length is the authoritative failed count.
+        failed: allFailed.length,
         apiResults,
         validRows,
         allFailed,
@@ -547,16 +582,30 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                 <button onClick={() => setStep("map")} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">
                   <ChevronLeft size={15} /> Back
                 </button>
-                <button
-                  onClick={handleImport}
-                  disabled={validCount === 0 || importing}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40"
-                  style={{ background: MAROON }}
-                >
-                  {importing ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                  {importing ? "Importing…" : `Import ${validCount} Valid Row${validCount !== 1 ? "s" : ""}`}
-                </button>
-                {invalidCount > 0 && (
+                {/* When every row is invalid, show a dedicated error-report action instead
+                    of a disabled import button so sellers can still download the report. */}
+                {validCount === 0 ? (
+                  <button
+                    onClick={handleImport}
+                    disabled={importing}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40"
+                    style={{ background: MAROON }}
+                  >
+                    <Download size={15} />
+                    {`View Error Report (${invalidCount} failed row${invalidCount !== 1 ? "s" : ""})`}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleImport}
+                    disabled={importing}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40"
+                    style={{ background: MAROON }}
+                  >
+                    {importing ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                    {importing ? "Importing…" : `Import ${validCount} Valid Row${validCount !== 1 ? "s" : ""}`}
+                  </button>
+                )}
+                {validCount > 0 && invalidCount > 0 && (
                   <p className="text-xs text-amber-600 self-center">
                     {invalidCount} row{invalidCount !== 1 ? "s" : ""} with errors will be skipped
                   </p>

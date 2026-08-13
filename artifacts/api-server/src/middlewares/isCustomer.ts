@@ -1,6 +1,6 @@
 import { getAuth } from "@clerk/express";
 import { db, vendorsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 /**
  * Requires the caller to be an authenticated customer (Clerk session present,
@@ -24,12 +24,12 @@ export async function isCustomer(req: any, res: any, next: any) {
       .json({ error: "Forbidden: admin accounts cannot access customer endpoints" });
   }
 
-  // Reject verified vendor accounts
+  // Reject approved vendor accounts (pending/suspended vendors can still shop as customers)
   try {
     const rows = await db
       .select({ id: vendorsTable.id })
       .from(vendorsTable)
-      .where(eq(vendorsTable.ownerId, userId as string))
+      .where(and(eq(vendorsTable.ownerId, userId as string), eq(vendorsTable.status, "approved")))
       .limit(1);
 
     if (rows.length > 0) {

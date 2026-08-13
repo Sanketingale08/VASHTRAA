@@ -458,7 +458,7 @@ export function Navbar() {
           <div className="relative w-72 max-w-[85vw] h-full bg-[#1E6B5A] text-[#F3F8F5] flex flex-col shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#C9A84C]/20">
-              <img src="/images/logo.png" alt="TwirlDrape" className="h-10 w-auto object-contain brightness-0 invert" />
+              <img src="/images/logo.png" alt="TwirlDrape" className="h-10 w-auto object-contain" />
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-white/10 transition-colors"

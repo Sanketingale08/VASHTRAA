@@ -79,7 +79,7 @@ export default function AdminLogin() {
         <img
           src={`${basePath}/images/logo.png`}
           alt="TwirlDrape"
-          className="h-12 w-auto object-contain mx-auto mb-3 brightness-0 invert"
+          className="h-16 w-auto object-contain mx-auto mb-3"
         />
         <p className="text-xs font-bold uppercase tracking-[0.35em]" style={{ color: GOLD }}>
           Super Admin Portal

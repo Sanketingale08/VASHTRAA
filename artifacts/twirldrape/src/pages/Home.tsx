@@ -328,7 +328,7 @@ export default function Home() {
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
         />
 
-        {/* CTA buttons — overlaid above the banner slider */}
+        {/* CTA button — overlaid above the banner slider */}
         <div
           className="absolute bottom-0 left-0 right-0 flex items-end px-8 pb-10 pt-24 pointer-events-none"
           style={{
@@ -336,20 +336,22 @@ export default function Home() {
             background: "linear-gradient(to top, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.00) 100%)",
           }}
         >
-          <div className="flex flex-col sm:flex-row gap-3 pointer-events-auto">
+          <div className="pointer-events-auto">
             <Link
-              href="/paithani"
-              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:opacity-90 hover:shadow-lg"
-              style={{ background: GOLD, color: "#1a1a1a", padding: "13px 26px", borderRadius: "4px" }}
+              href="/collections"
+              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/30"
+              style={{
+                padding: "13px 30px",
+                borderRadius: "8px",
+                color: "white",
+                border: "1.5px solid rgba(255,255,255,0.55)",
+                background: "rgba(255,255,255,0.15)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+              }}
             >
-              Explore Paithani Sarees →
-            </Link>
-            <Link
-              href="/designer"
-              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/20"
-              style={{ border: "2px solid rgba(255,255,255,0.85)", color: "white", padding: "11px 24px", borderRadius: "4px" }}
-            >
-              Explore Designer Sarees →
+              Explore Collection →
             </Link>
           </div>
         </div>

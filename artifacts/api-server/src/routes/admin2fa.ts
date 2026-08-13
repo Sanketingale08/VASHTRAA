@@ -18,11 +18,13 @@ import crypto from "crypto";
 import { generateSecret, verifySync, generateURI } from "otplib";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
-import { db, siteSettingsTable, adminLoginSessionsTable, adminRecoveryCodesTable } from "@workspace/db";
+import { Resend } from "resend";
+import { db, siteSettingsTable, adminLoginSessionsTable, adminRecoveryCodesTable, adminOtpChallengesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAdminKey, sha256hex, clearAdmin2faCache } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { logger } from "../lib/logger";
+import { sendSms } from "../lib/sms";
 
 const router = Router();
 
@@ -228,11 +230,13 @@ router.post("/admin/2fa/setup/start", requireAdminKey, async (req: any, res: any
     const otpauth = generateURI({ issuer: "TwirlDrape", label: "Super Admin", secret, strategy: "totp" });
     const qrDataUrl = await QRCode.toDataURL(otpauth, { errorCorrectionLevel: "M", width: 240 });
 
-    // Store as pending (not enabled yet — must be verified first)
-    // Clear any leftover setup stage from a previous abandoned attempt.
+    // Store as pending (not enabled yet — must be verified first).
+    // Clear any leftover stage, pending secret, and OTP challenges from a
+    // previous abandoned attempt so the new setup starts from a clean slate.
     await Promise.all([
       upsertSetting("admin_2fa_secret_pending", secret),
       deleteSetting("admin_2fa_setup_stage"),
+      db.delete(adminOtpChallengesTable), // wipe stale email/sms challenges
     ]);
 
     res.json({ qrDataUrl, manualKey: secret, otpauth });
@@ -242,8 +246,9 @@ router.post("/admin/2fa/setup/start", requireAdminKey, async (req: any, res: any
 });
 
 // ── POST /api/admin/2fa/setup/verify ─────────────────────────────────────────
-// Verifies the first TOTP code. On success, sends an email OTP (next step).
-// 2FA is NOT activated here — activation happens only after email + SMS OTP.
+// Step 1 of setup: verifies the first TOTP code, then advances the setup stage
+// to "totp_verified".  2FA is NOT activated here — activation requires email
+// OTP + SMS OTP to follow.
 
 router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: any) => {
   const { code } = req.body ?? {};
@@ -265,7 +270,306 @@ router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: an
       return res.status(400).json({ error: "Invalid verification code. Please try again." });
     }
 
-    // TOTP is valid — activate 2FA immediately. No additional OTP step is required.
+    // TOTP valid — record stage. 2FA is NOT yet enabled.
+    await upsertSetting("admin_2fa_setup_stage", "totp_verified");
+
+    return res.json({ ok: true, next: "email-otp" });
+  } catch (err) {
+    logger.error({ err }, "[admin2fa] setup/verify error");
+    res.status(500).json({ error: "Failed to verify TOTP. Please try again." });
+  }
+});
+
+// ── POST /api/admin/2fa/setup/send-email-otp ─────────────────────────────────
+// Step 2 of setup: generates a 6-digit email OTP and delivers it to the
+// configured admin email address (admin_email site setting).
+// Requires prior TOTP verification (stage = "totp_verified").
+// Enforces a 60-second resend cooldown.
+
+router.post("/admin/2fa/setup/send-email-otp", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const stage = await getSetting("admin_2fa_setup_stage");
+    if (stage !== "totp_verified") {
+      return res.status(400).json({ error: "Complete TOTP verification first.", code: "WRONG_STAGE" });
+    }
+
+    // Resolve admin contact — required for delivery.
+    const adminEmail = await getSetting("admin_email");
+    if (!adminEmail) {
+      return res.status(400).json({
+        error: "Admin email is not configured. Set it in Admin → Settings before enabling 2FA.",
+        code: "EMAIL_NOT_CONFIGURED",
+      });
+    }
+
+    // Require Resend to be available.
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) {
+      return res.status(500).json({
+        error: "Email service is not configured (RESEND_API_KEY missing).",
+        code: "EMAIL_SERVICE_UNAVAILABLE",
+      });
+    }
+
+    const now = new Date();
+    const [existing] = await db
+      .select()
+      .from(adminOtpChallengesTable)
+      .where(eq(adminOtpChallengesTable.type, "email"));
+
+    if (existing) {
+      const msLeft = existing.createdAt.getTime() + 60_000 - now.getTime();
+      if (msLeft > 0) {
+        const secondsRemaining = Math.ceil(msLeft / 1000);
+        return res.status(429).json({
+          error: "Please wait before requesting a new code.",
+          code: "RESEND_COOLDOWN",
+          secondsRemaining,
+        });
+      }
+      // Past cooldown — remove stale challenge before issuing a new one.
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, existing.id));
+    }
+
+    const otp = crypto.randomInt(100_000, 1_000_000).toString();
+    const expiresAt = new Date(now.getTime() + 5 * 60_000);
+
+    await db.insert(adminOtpChallengesTable).values({
+      type: "email",
+      codeHash: sha256hex(otp),
+      expiresAt,
+      attempts: 0,
+    });
+    // Track insertion so the outer catch can roll back the challenge on any
+    // delivery failure (including thrown errors, not only returned error objects).
+    let emailDelivered = false;
+
+    try {
+      // Deliver the OTP via email.  Resend may return an error object instead
+      // of throwing, so we must check the returned value explicitly.
+      const resend = new Resend(resendKey);
+      const { error: sendError } = await resend.emails.send({
+        from: "TwirlDrape Security <security@twirldrape.com>",
+        to: adminEmail,
+        subject: "Your TwirlDrape 2FA setup code",
+        html: `<p>Your 2FA setup verification code is: <strong style="font-size:1.5em">${otp}</strong></p>
+               <p>This code expires in 5 minutes. Do not share it with anyone.</p>`,
+      });
+
+      if (sendError) {
+        logger.error({ sendError }, "[admin2fa] Resend delivery failed for email OTP");
+        return res.status(500).json({ error: "Failed to deliver email OTP. Please try again.", code: "EMAIL_DELIVERY_FAILED" });
+      }
+
+      emailDelivered = true;
+    } finally {
+      if (!emailDelivered) {
+        // Roll back the stored challenge so the caller is not blocked by cooldown.
+        await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.type, "email"));
+      }
+    }
+
+    logger.info("[admin2fa] email OTP sent for 2FA setup");
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[admin2fa] send-email-otp error");
+    res.status(500).json({ error: "Failed to send email OTP." });
+  }
+});
+
+// ── POST /api/admin/2fa/setup/verify-email-otp ───────────────────────────────
+// Step 3 of setup: verifies the email OTP.
+// Gates: stage must be "totp_verified", challenge must exist, not be expired,
+// and attempts must be < 5.
+// On success: deletes the challenge and advances stage to "email_verified".
+
+router.post("/admin/2fa/setup/verify-email-otp", requireAdminKey, async (req: any, res: any) => {
+  const { otp } = req.body ?? {};
+  if (!otp || typeof otp !== "string") {
+    return res.status(400).json({ error: "OTP is required" });
+  }
+  try {
+    // Stage gate: TOTP must have been verified before email OTP can be confirmed.
+    const stage = await getSetting("admin_2fa_setup_stage");
+    if (stage !== "totp_verified") {
+      return res.status(400).json({ error: "Complete TOTP verification first.", code: "WRONG_STAGE" });
+    }
+
+    const [challenge] = await db
+      .select()
+      .from(adminOtpChallengesTable)
+      .where(eq(adminOtpChallengesTable.type, "email"));
+
+    if (!challenge) {
+      return res.status(400).json({ error: "No email OTP challenge found. Request a new code.", code: "NO_CHALLENGE" });
+    }
+
+    const now = new Date();
+    if (challenge.expiresAt <= now) {
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+      return res.status(400).json({ error: "OTP has expired. Please request a new code.", code: "OTP_EXPIRED" });
+    }
+
+    if (challenge.attempts >= 5) {
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+      return res.status(400).json({ error: "Too many failed attempts. Please request a new code.", code: "TOO_MANY_ATTEMPTS" });
+    }
+
+    if (sha256hex(otp.trim()) !== challenge.codeHash) {
+      const newAttempts = challenge.attempts + 1;
+      await db
+        .update(adminOtpChallengesTable)
+        .set({ attempts: newAttempts })
+        .where(eq(adminOtpChallengesTable.id, challenge.id));
+      return res.status(400).json({ error: "Invalid OTP. Please try again.", code: "OTP_INVALID" });
+    }
+
+    // OTP valid — advance stage.
+    await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+    await upsertSetting("admin_2fa_setup_stage", "email_verified");
+
+    return res.json({ ok: true, next: "sms-otp" });
+  } catch (err) {
+    logger.error({ err }, "[admin2fa] verify-email-otp error");
+    res.status(500).json({ error: "Failed to verify email OTP." });
+  }
+});
+
+// ── POST /api/admin/2fa/setup/send-sms-otp ───────────────────────────────────
+// Step 4 of setup: generates a 6-digit SMS OTP and delivers it to the
+// configured admin mobile number (admin_mobile site setting).
+// Requires email OTP to have been verified (stage = "email_verified").
+// Enforces a 60-second resend cooldown.
+
+router.post("/admin/2fa/setup/send-sms-otp", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const stage = await getSetting("admin_2fa_setup_stage");
+    if (stage !== "email_verified") {
+      return res.status(400).json({ error: "Complete email OTP verification first.", code: "WRONG_STAGE" });
+    }
+
+    // Resolve admin mobile number — required for SMS delivery.
+    const adminMobile = await getSetting("admin_mobile");
+    if (!adminMobile) {
+      return res.status(400).json({
+        error: "Admin mobile number is not configured. Set it in Admin → Settings before enabling 2FA.",
+        code: "MOBILE_NOT_CONFIGURED",
+      });
+    }
+
+    // Require Twilio credentials to be present.
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM_NUMBER) {
+      return res.status(500).json({
+        error: "SMS service is not configured (Twilio credentials missing).",
+        code: "SMS_SERVICE_UNAVAILABLE",
+      });
+    }
+
+    const now = new Date();
+    const [existing] = await db
+      .select()
+      .from(adminOtpChallengesTable)
+      .where(eq(adminOtpChallengesTable.type, "sms"));
+
+    if (existing) {
+      const msLeft = existing.createdAt.getTime() + 60_000 - now.getTime();
+      if (msLeft > 0) {
+        const secondsRemaining = Math.ceil(msLeft / 1000);
+        return res.status(429).json({
+          error: "Please wait before requesting a new code.",
+          code: "RESEND_COOLDOWN",
+          secondsRemaining,
+        });
+      }
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, existing.id));
+    }
+
+    const otp = crypto.randomInt(100_000, 1_000_000).toString();
+    const expiresAt = new Date(now.getTime() + 5 * 60_000);
+
+    await db.insert(adminOtpChallengesTable).values({
+      type: "sms",
+      codeHash: sha256hex(otp),
+      expiresAt,
+      attempts: 0,
+    });
+    // Track insertion so the outer catch can roll back on any delivery failure.
+    let smsDelivered = false;
+
+    try {
+      // Deliver the OTP via SMS.
+      await sendSms(adminMobile, `Your TwirlDrape 2FA setup code is: ${otp}. It expires in 5 minutes.`);
+      smsDelivered = true;
+    } finally {
+      if (!smsDelivered) {
+        // Roll back the stored challenge so the caller is not blocked by cooldown.
+        await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.type, "sms"));
+      }
+    }
+
+    logger.info("[admin2fa] SMS OTP sent for 2FA setup");
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[admin2fa] send-sms-otp error");
+    res.status(500).json({ error: "Failed to send SMS OTP." });
+  }
+});
+
+// ── POST /api/admin/2fa/setup/verify-sms-otp ─────────────────────────────────
+// Step 5 (final) of setup: verifies the SMS OTP.
+// Gates: stage must be "email_verified", challenge must exist, not be expired,
+// and attempts must be < 5.
+// On success: enables 2FA, issues a verified session, and returns recovery codes.
+
+router.post("/admin/2fa/setup/verify-sms-otp", requireAdminKey, async (req: any, res: any) => {
+  const { otp } = req.body ?? {};
+  if (!otp || typeof otp !== "string") {
+    return res.status(400).json({ error: "OTP is required" });
+  }
+  try {
+    // Stage gate: email OTP must have been verified before SMS OTP can be confirmed.
+    const stage = await getSetting("admin_2fa_setup_stage");
+    if (stage !== "email_verified") {
+      return res.status(400).json({ error: "Complete email OTP verification first.", code: "WRONG_STAGE" });
+    }
+
+    const [challenge] = await db
+      .select()
+      .from(adminOtpChallengesTable)
+      .where(eq(adminOtpChallengesTable.type, "sms"));
+
+    if (!challenge) {
+      return res.status(400).json({ error: "No SMS OTP challenge found. Request a new code.", code: "NO_CHALLENGE" });
+    }
+
+    const now = new Date();
+    if (challenge.expiresAt <= now) {
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+      return res.status(400).json({ error: "OTP has expired. Please request a new code.", code: "OTP_EXPIRED" });
+    }
+
+    if (challenge.attempts >= 5) {
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+      return res.status(400).json({ error: "Too many failed attempts. Please request a new code.", code: "TOO_MANY_ATTEMPTS" });
+    }
+
+    if (sha256hex(otp.trim()) !== challenge.codeHash) {
+      const newAttempts = challenge.attempts + 1;
+      await db
+        .update(adminOtpChallengesTable)
+        .set({ attempts: newAttempts })
+        .where(eq(adminOtpChallengesTable.id, challenge.id));
+      return res.status(400).json({ error: "Invalid OTP. Please try again.", code: "OTP_INVALID" });
+    }
+
+    // SMS OTP valid — activate 2FA.
+    const pendingSecret = await getSetting("admin_2fa_secret_pending");
+    if (!pendingSecret) {
+      return res.status(400).json({ error: "Setup session expired. Please start again." });
+    }
+
+    await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+
     await Promise.all([
       upsertSetting("admin_2fa_secret", pendingSecret),
       upsertSetting("admin_2fa_enabled", "true"),
@@ -275,18 +579,18 @@ router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: an
     ]);
     clearAdmin2faCache();
 
-    // Refresh recovery codes so the admin has backup access from the start.
+    // Generate fresh recovery codes.
     await db.delete(adminRecoveryCodesTable);
-    await generateAndStoreRecoveryCodes();
+    const codes = await generateAndStoreRecoveryCodes();
 
     writeAuditLog({ action: "2fa_enabled", module: "Security", ipAddress: getIp(req) }).catch(() => {});
 
     // Issue a verified session so the admin isn't locked out immediately.
     const { tokenHash, sessionId } = await createVerifiedSession(req);
-    res.json({ ok: true, sessionId, tokenHash });
+    return res.json({ ok: true, sessionId, tokenHash, codes });
   } catch (err) {
-    logger.error({ err }, "[admin2fa] setup/verify error");
-    res.status(500).json({ error: "Failed to enable 2FA. Please try again." });
+    logger.error({ err }, "[admin2fa] verify-sms-otp error");
+    res.status(500).json({ error: "Failed to complete 2FA setup." });
   }
 });
 

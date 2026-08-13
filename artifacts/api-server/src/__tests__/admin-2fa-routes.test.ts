@@ -27,6 +27,8 @@ const state = vi.hoisted(() => ({
   sessions: [] as any[],
   /** recovery code rows: { id, codeHash, used, usedAt } */
   recoveryCodes: [] as { id: string; codeHash: string; used: boolean; usedAt: Date | null }[],
+  /** OTP challenges keyed by type ("email" | "sms") */
+  challenges: new Map<string, { id: string; type: string; codeHash: string; expiresAt: Date; attempts: number; createdAt: Date }>(),
   idCounter: 0,
 }));
 
@@ -53,6 +55,34 @@ vi.mock("@workspace/db", () => {
     used: "used",
     usedAt: "used_at",
   };
+  const adminOtpChallengesTable: any = {
+    _t: "admin_otp_challenges",
+    id: "id",
+    type: "type_col",
+    codeHash: "code_hash",
+    expiresAt: "expires_at",
+    attempts: "attempts",
+    createdAt: "created_at",
+  };
+
+  /** Find a challenge by type or id */
+  function findChallenge(val: string | null) {
+    if (!val) return undefined;
+    if (state.challenges.has(val)) return state.challenges.get(val);
+    for (const ch of state.challenges.values()) {
+      if (ch.id === val) return ch;
+    }
+    return undefined;
+  }
+
+  /** Delete a challenge by type or id */
+  function deleteChallenge(val: string | null) {
+    if (!val) return;
+    if (state.challenges.has(val)) { state.challenges.delete(val); return; }
+    for (const [type, ch] of state.challenges.entries()) {
+      if (ch.id === val) { state.challenges.delete(type); return; }
+    }
+  }
 
   function queryResult(rows: unknown[]): any {
     return {
@@ -100,6 +130,15 @@ vi.mock("@workspace/db", () => {
             }),
           };
         }
+        if (table._t === "admin_otp_challenges") {
+          return {
+            where: vi.fn((cond: any) => {
+              const val = extractEqValue(cond);
+              const ch = findChallenge(val);
+              return queryResult(ch ? [ch] : []);
+            }),
+          };
+        }
         return queryResult([]);
       }),
     })),
@@ -131,6 +170,12 @@ vi.mock("@workspace/db", () => {
           }
           return Promise.resolve();
         }
+        if (table._t === "admin_otp_challenges") {
+          const v = Array.isArray(vals) ? vals[0] : vals;
+          const id = `otp-${++state.idCounter}`;
+          state.challenges.set(v.type, { id, createdAt: new Date(), ...v });
+          return Promise.resolve();
+        }
         return {
           onConflictDoUpdate: vi.fn(() => Promise.resolve()),
           returning: vi.fn(() => Promise.resolve([{ id: `row-${++state.idCounter}` }])),
@@ -151,26 +196,42 @@ vi.mock("@workspace/db", () => {
               }
             }
           }
+          if (table._t === "admin_otp_challenges") {
+            const val = extractEqValue(cond);
+            const ch = findChallenge(val);
+            if (ch) Object.assign(ch, vals);
+          }
           return Promise.resolve();
         }),
       })),
     })),
 
-    delete: vi.fn((table: any) => ({
-      where: vi.fn((cond: any) => {
-        if (table._t === "site_settings") {
+    delete: vi.fn((table: any) => {
+      const doDelete = (cond?: any) => {
+        if (table._t === "site_settings" && cond) {
           const key = extractEqValue(cond);
           if (key) state.settings.delete(key);
         }
+        if (table._t === "admin_otp_challenges") {
+          if (cond) {
+            const val = extractEqValue(cond);
+            deleteChallenge(val);
+          } else {
+            // db.delete(adminOtpChallengesTable) with no .where() — clear all
+            state.challenges.clear();
+          }
+        }
+        if (table._t === "admin_recovery_codes" && !cond) {
+          state.recoveryCodes.length = 0;
+        }
         return Promise.resolve();
-      }),
-      // db.delete(adminRecoveryCodesTable) awaited directly (no .where)
-      then: (resolve: any, reject: any) => {
-        if (table._t === "admin_recovery_codes") state.recoveryCodes.length = 0;
-        return Promise.resolve().then(resolve, reject);
-      },
-      catch: (fn: any) => Promise.resolve().catch(fn),
-    })),
+      };
+      return {
+        where: vi.fn((cond: any) => doDelete(cond)),
+        then: (resolve: any, reject: any) => doDelete().then(resolve, reject),
+        catch: (fn: any) => doDelete().catch(fn),
+      };
+    }),
   };
 
   // transaction proxies through to the same mock db instance
@@ -181,8 +242,26 @@ vi.mock("@workspace/db", () => {
     siteSettingsTable,
     adminLoginSessionsTable,
     adminRecoveryCodesTable,
+    adminOtpChallengesTable,
   };
 });
+
+// ─── Resend and SMS mocks ─────────────────────────────────────────────────────
+// vi.hoisted is required because vi.mock factories are hoisted above const declarations.
+
+const { mockResendSendRoutes } = vi.hoisted(() => ({
+  mockResendSendRoutes: vi.fn().mockResolvedValue({ id: "mock-email-id" }),
+}));
+
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(function (this: any) {
+    this.emails = { send: mockResendSendRoutes };
+  }),
+}));
+
+vi.mock("../lib/sms", () => ({
+  sendSms: vi.fn().mockResolvedValue(undefined),
+}));
 
 // ─── mock requireAdminKey ──────────────────────────────────────────────────────
 
@@ -218,8 +297,15 @@ beforeEach(() => {
   state.settings.clear();
   state.sessions.length = 0;
   state.recoveryCodes.length = 0;
+  state.challenges.clear();
   state.idCounter = 0;
   mockGetIp.mockReturnValue("127.0.0.1");
+
+  // Make delivery services available by default
+  process.env.RESEND_API_KEY = "test-resend-key";
+  process.env.TWILIO_ACCOUNT_SID = "ACtest";
+  process.env.TWILIO_AUTH_TOKEN = "test-token";
+  process.env.TWILIO_FROM_NUMBER = "+15551234567";
 
   app = express();
   app.use(express.json());
@@ -278,27 +364,25 @@ describe("POST /api/admin/2fa/setup/verify", () => {
     state.settings.set("admin_2fa_secret_pending", TEST_SECRET);
   });
 
-  it("enables 2FA and returns a verified session when TOTP code is valid", async () => {
+  it("advances setup stage to totp_verified and does NOT enable 2FA when TOTP code is valid", async () => {
     const res = await request(app)
       .post("/api/admin/2fa/setup/verify")
       .set("x-admin-key", ADMIN_KEY)
       .send({ code: validCode(TEST_SECRET) });
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      ok: true,
-      sessionId: expect.any(String),
-      tokenHash: expect.any(String),
-    });
-    expect(state.settings.get("admin_2fa_enabled")).toBe("true");
-    expect(state.settings.get("admin_2fa_secret")).toBe(TEST_SECRET);
-    expect(state.settings.has("admin_2fa_secret_pending")).toBe(false);
-    expect(state.sessions.length).toBe(1);
-    expect(state.sessions[0].twoFactorVerified).toBe(true);
-    expect(state.recoveryCodes.length).toBe(10);
+    expect(res.body).toMatchObject({ ok: true, next: "email-otp" });
+    // Stage advanced
+    expect(state.settings.get("admin_2fa_setup_stage")).toBe("totp_verified");
+    // 2FA NOT enabled yet — requires email + SMS OTP to follow
+    expect(state.settings.get("admin_2fa_enabled")).toBeUndefined();
+    // No session issued at this stage
+    expect(state.sessions.length).toBe(0);
+    // Pending secret still in place — needed by verify-sms-otp
+    expect(state.settings.get("admin_2fa_secret_pending")).toBe(TEST_SECRET);
   });
 
-  it("returns 400 and does NOT enable 2FA when TOTP code is wrong", async () => {
+  it("returns 400 and does NOT advance stage when TOTP code is wrong", async () => {
     const res = await request(app)
       .post("/api/admin/2fa/setup/verify")
       .set("x-admin-key", ADMIN_KEY)
@@ -307,6 +391,7 @@ describe("POST /api/admin/2fa/setup/verify", () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/invalid/i);
     expect(state.settings.has("admin_2fa_enabled")).toBe(false);
+    expect(state.settings.has("admin_2fa_setup_stage")).toBe(false);
   });
 
   it("returns 400 when no pending setup is in progress", async () => {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useLocation } from "wouter";
 import {
   Search, Star, ChevronLeft, ChevronRight, Download, Printer, FileSpreadsheet,
@@ -151,11 +152,10 @@ function AnalyticsContent() {
       .finally(() => setLoading(false));
   }
 
+  // Immediate fetch when query changes (initial load + filter changes).
   useEffect(() => { load(); }, [query]);
-  useEffect(() => {
-    const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
-  }, [query]);
+  // Background poll every 15 s, paused while tab is hidden.
+  useVisibilityPolling(load, 15000, { fireOnMount: false });
 
   function toggleSort(field: string) {
     if (sortBy === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));

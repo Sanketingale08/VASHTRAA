@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { CheckCircle, XCircle, Clock, RotateCcw, IndianRupee, BadgeCheck, Search, Download, ArrowUpDown, FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -280,13 +281,8 @@ function ReturnsContent() {
       .finally(() => setLoading(false));
   }
 
-  // Initial load + background poll every 30 s
-  useEffect(() => {
-    loadOrders();
-    const pollId = setInterval(loadOrders, 30_000);
-    return () => clearInterval(pollId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial load + background poll every 30 s, paused while tab is hidden.
+  useVisibilityPolling(loadOrders, 30_000);
 
   const filtered = useMemo(() => {
     let list = orders;

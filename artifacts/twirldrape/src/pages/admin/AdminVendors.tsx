@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useLocation } from "wouter";
 import {
   Search, CheckCircle, Clock, XCircle, Star, ChevronLeft, ChevronRight,
@@ -76,13 +77,8 @@ function VendorsContent() {
       .finally(() => setLoading(false));
   }
 
-  // Initial load + background poll every 30 s (keeps list fresh without manual reload)
-  useEffect(() => {
-    loadVendors();
-    const pollId = setInterval(loadVendors, 30_000);
-    return () => clearInterval(pollId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial load + background poll every 30 s, paused while tab is hidden.
+  useVisibilityPolling(loadVendors, 30_000);
 
   const filtered = useMemo(() => {
     let v = vendors;

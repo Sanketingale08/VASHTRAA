@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, MapPin, Mail, FileText, Star, Package, ShoppingBag,
@@ -99,11 +100,10 @@ function DetailContent() {
       .finally(() => setLoading(false));
   }
 
+  // Immediate fetch when vendor id or granularity changes.
   useEffect(() => { load(); }, [id, granularity]);
-  useEffect(() => {
-    const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
-  }, [id, granularity]);
+  // Background poll every 15 s, paused while tab is hidden.
+  useVisibilityPolling(load, 15000, { fireOnMount: false });
 
   async function doVerification(field: "kyc" | "pan" | "gst" | "bank", action: "verify" | "reject" | "request_documents") {
     if (!id) return;

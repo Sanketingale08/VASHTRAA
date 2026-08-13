@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import {
   TrendingUp, ShoppingBag, Package, Users, Store,
   CheckCircle, XCircle, RotateCcw, Clock, IndianRupee, AlertTriangle,
@@ -88,13 +89,8 @@ function DashboardContent() {
       .finally(() => setLoading(false));
   }
 
-  // Initial load + background polling (30 s)
-  useEffect(() => {
-    loadStats();
-    const id = setInterval(loadStats, DASHBOARD_POLL_MS);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial load + background polling (30 s), paused while tab is hidden.
+  useVisibilityPolling(loadStats, DASHBOARD_POLL_MS);
 
   const orderStatusData = stats
     ? [

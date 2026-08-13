@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useLocation } from "wouter";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingBag, Package, Users, Store,
@@ -160,11 +161,10 @@ function BusinessIntelligenceContent() {
       .finally(() => setLoading(false));
   }
 
+  // Immediate fetch when query changes (initial load + filter changes).
   useEffect(() => { load(); }, [query]);
-  useEffect(() => {
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
-  }, [query]);
+  // Background poll every 30 s, paused while tab is hidden.
+  useVisibilityPolling(load, 30000, { fireOnMount: false });
 
   const ov = data?.overview;
 

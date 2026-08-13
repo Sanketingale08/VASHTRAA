@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import {
   Wallet, CheckCircle, XCircle, Clock, IndianRupee, TrendingUp, TrendingDown,
   Download, FileSpreadsheet, Percent, Receipt, RotateCcw, CreditCard, Printer,
@@ -119,12 +120,13 @@ function useAdminKey() {
 const POLL_INTERVAL_MS = 30000;
 
 function usePolling(fn: () => void, deps: React.DependencyList) {
-  useEffect(() => {
-    fn();
-    const id = setInterval(fn, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  // Fire immediately when deps change (initial fetch + re-fetch on filter change).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fnRef.current(); }, deps);
+  // Background interval paused while tab is hidden; ref ensures latest fn is used.
+  useVisibilityPolling(() => fnRef.current(), POLL_INTERVAL_MS, { fireOnMount: false });
 }
 
 function SettlementsPanel() {

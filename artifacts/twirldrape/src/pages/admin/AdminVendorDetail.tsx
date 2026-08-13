@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, MapPin, Mail, FileText, Star, Package, ShoppingBag,
@@ -159,15 +160,17 @@ function VendorDetailContent() {
       .finally(() => setLoading(false));
   }
 
-  // Initial load + background polling every 15 s (matching Vendor Analytics)
+  // Initial load (and reload when vendor id changes).
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     loadVendor();
-    const pollId = setInterval(loadVendor, VENDOR_DETAIL_POLL_MS);
-    return () => clearInterval(pollId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Background polling every 15 s, paused while tab is hidden.
+  // fireOnMount:false avoids a double-fetch on mount (the effect above handles it).
+  useVisibilityPolling(loadVendor, VENDOR_DETAIL_POLL_MS, { fireOnMount: false });
 
   async function doAction(action: string) {
     if (!vendor) return;

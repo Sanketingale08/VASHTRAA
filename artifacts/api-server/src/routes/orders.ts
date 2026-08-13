@@ -1,5 +1,6 @@
 import { Router } from "express";
 import PDFDocument from "pdfkit";
+import { registerFonts, FONT_REGULAR, FONT_BOLD } from "../lib/pdfFonts.js";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { isCustomer } from "../middlewares/isCustomer";
 import { db } from "@workspace/db";
@@ -1313,6 +1314,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
       margin: 36,
       bufferPages: true,   // needed for page-number post-processing
     });
+    registerFonts(doc);   // embed Noto Sans so ₹ (U+20B9) renders correctly
 
     const filename = `orders-${status || "all"}-${new Date().toISOString().slice(0, 10)}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
@@ -1329,7 +1331,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
       { label: "Order ID",    w: Math.floor(tableW * 0.115), align: "left"  as const },
       { label: "Customer",    w: Math.floor(tableW * 0.155), align: "left"  as const },
       { label: "Items",       w: Math.floor(tableW * 0.260), align: "left"  as const },
-      { label: "Total (Rs.)", w: Math.floor(tableW * 0.085), align: "right" as const },
+      { label: "Total (₹)",   w: Math.floor(tableW * 0.085), align: "right" as const },
       { label: "Status",      w: Math.floor(tableW * 0.115), align: "left"  as const },
       { label: "Payment",     w: Math.floor(tableW * 0.130), align: "left"  as const },
       { label: "Date",        w: Math.floor(tableW * 0.105), align: "left"  as const },
@@ -1344,10 +1346,10 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
       let y = ml;
 
       // Title + subtitle
-      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(18)
+      doc.fillColor(NAVY).font(FONT_BOLD).fontSize(18)
          .text("TwirlDrape", ml, y, { lineBreak: false });
       const titleEnd = ml + doc.widthOfString("TwirlDrape");
-      doc.fillColor(GOLD).font("Helvetica").fontSize(11)
+      doc.fillColor(GOLD).font(FONT_REGULAR).fontSize(11)
          .text("  |  Order Report", titleEnd, y + 4, { lineBreak: false });
 
       // Generation timestamp (right-aligned)
@@ -1355,7 +1357,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
         timeZone: "Asia/Kolkata", day: "2-digit", month: "short",
         year: "numeric", hour: "2-digit", minute: "2-digit",
       });
-      doc.fillColor(DGRAY).font("Helvetica").fontSize(8)
+      doc.fillColor(DGRAY).font(FONT_REGULAR).fontSize(8)
          .text(`Generated: ${genDate} IST`, ml, y, { align: "right", width: tableW, lineBreak: false });
 
       y += 26;
@@ -1366,14 +1368,14 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
       else if (status)   filterDesc = `Status: ${String(status).replace(/_/g, " ")}`;
       else if (q)        filterDesc = `Search: "${q}"`;
 
-      doc.fillColor(DGRAY).font("Helvetica").fontSize(9).text(filterDesc, ml, y);
+      doc.fillColor(DGRAY).font(FONT_REGULAR).fontSize(9).text(filterDesc, ml, y);
       y += 16;
 
       // Summary bar
       const totalRev = filtered.reduce((s: number, o: any) => s + (o.total ?? 0), 0);
-      const summary  = `${filtered.length} ${filtered.length === 1 ? "order" : "orders"}   |   Total Revenue: Rs. ${(totalRev / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const summary  = `${filtered.length} ${filtered.length === 1 ? "order" : "orders"}   |   Total Revenue: ₹${(totalRev / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       doc.roundedRect(ml, y, tableW, 20, 3).fill("#EEF2FF");
-      doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(9).text(summary, ml + 8, y + 6, { lineBreak: false });
+      doc.fillColor(NAVY).font(FONT_BOLD).fontSize(9).text(summary, ml + 8, y + 6, { lineBreak: false });
       y += 28;
 
       // Gold rule
@@ -1388,7 +1390,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
       doc.rect(ml, y, tableW, HDR_H).fill(NAVY);
       let x = ml;
       for (const col of cols) {
-        doc.fillColor("white").font("Helvetica-Bold").fontSize(7.5)
+        doc.fillColor("white").font(FONT_BOLD).fontSize(7.5)
            .text(col.label, x + 4, y + 6, { width: col.w - 8, align: col.align, lineBreak: false });
         x += col.w;
       }
@@ -1423,7 +1425,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
 
     // ── Rows ───────────────────────────────────────────────────────────────────
     if (filtered.length === 0) {
-      doc.fillColor(DGRAY).font("Helvetica").fontSize(10)
+      doc.fillColor(DGRAY).font(FONT_REGULAR).fontSize(10)
          .text("No orders found for the selected filters.", ml, y + 16, { align: "center", width: tableW });
     } else {
       for (let i = 0; i < filtered.length; i++) {
@@ -1449,7 +1451,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
         for (let c = 0; c < cols.length; c++) {
           const col = cols[c];
           doc.fillColor(c === 0 ? DGRAY : NAVY)
-             .font(c === 3 ? "Helvetica-Bold" : "Helvetica")
+             .font(c === 3 ? FONT_BOLD : FONT_REGULAR)
              .fontSize(8)
              .text(vals[c] ?? "", x + 4, y + 7, { width: col.w - 8, align: col.align, lineBreak: false });
           x += col.w;
@@ -1463,7 +1465,7 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
     const { count: totalPages } = doc.bufferedPageRange();
     for (let p = 0; p < totalPages; p++) {
       doc.switchToPage(p);
-      doc.fillColor(DGRAY).font("Helvetica").fontSize(7.5)
+      doc.fillColor(DGRAY).font(FONT_REGULAR).fontSize(7.5)
          .text(`Page ${p + 1} of ${totalPages}`, ml, pageH - ml - 8, { align: "right", width: tableW, lineBreak: false });
     }
 

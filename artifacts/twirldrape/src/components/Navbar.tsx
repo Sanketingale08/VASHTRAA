@@ -93,6 +93,7 @@ export function Navbar() {
 
   const isDark = false;
   const isDesignerDark = false;
+  const isDesigner = location.startsWith("/designer");
 
   const navBg = "bg-[#F3F8F5]/98 text-[#3D1515] border-[#C9A84C]/30";
 

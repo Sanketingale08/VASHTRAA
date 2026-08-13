@@ -48,12 +48,19 @@ vi.mock("@workspace/db", () => ({
   db: { select: (...args: unknown[]) => mockDbSelect(...args) },
   vendorsTable: { id: "id", ownerId: "ownerId", status: "status" },
   commissionRulesTable: { active: "active" },
+  // Required by isAdmin middleware (key-hash and 2FA-enabled lookups)
+  siteSettingsTable: { key: "key", value: "value", updatedAt: "updatedAt" },
+  adminLoginSessionsTable: {
+    sessionTokenHash: "sessionTokenHash",
+    revokedAt: "revokedAt",
+    twoFactorVerified: "twoFactorVerified",
+  },
 }));
 
 // ─── imports (after mocks) ───────────────────────────────────────────────────
 
 import { isAuthenticated } from "../middlewares/isAuthenticated";
-import { isAdmin } from "../middlewares/isAdmin";
+import { isAdmin, clearAdminKeyCache, clearAdmin2faCache } from "../middlewares/isAdmin";
 import { isSeller } from "../middlewares/isSeller";
 import { isCustomer } from "../middlewares/isCustomer";
 
@@ -64,13 +71,18 @@ beforeEach(() => {
 });
 
 // ─── DB chain helper ─────────────────────────────────────────────────────────
+// where() returns a thenable (so it can be directly awaited) that also
+// exposes .limit() for middleware that calls .where().limit().
 
 function chainReturning(rows: unknown[]) {
+  const whereResult = Object.assign(Promise.resolve(rows), {
+    limit: vi.fn(() => Promise.resolve(rows)),
+    for: vi.fn(() => Promise.resolve(rows)),
+  });
   return {
     from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        limit: vi.fn(() => Promise.resolve(rows)),
-      })),
+      where: vi.fn(() => whereResult),
+      for: vi.fn(() => Promise.resolve(rows)),
     })),
   };
 }
@@ -120,37 +132,44 @@ describe("isAuthenticated", () => {
 });
 
 // ─── isAdmin ─────────────────────────────────────────────────────────────────
+// isAdmin is async (queries DB for stored key hash). Tests must await it and
+// mock the DB to return [] (no stored hash) so it falls back to env var comparison.
 
 describe("isAdmin", () => {
   const ORIGINAL_KEY = process.env.ADMIN_API_KEY;
 
   beforeEach(() => {
     process.env.ADMIN_API_KEY = "secret-admin-key";
+    // Clear module-level caches so each test starts with a fresh DB lookup.
+    clearAdminKeyCache();
+    clearAdmin2faCache();
+    // No stored hash → falls back to env var; 2FA disabled → no session check.
+    mockDbSelect.mockReturnValue(chainReturning([]));
   });
 
   afterEach(() => {
     process.env.ADMIN_API_KEY = ORIGINAL_KEY;
   });
 
-  it("returns 403 when no x-admin-key header is present", () => {
+  it("returns 403 when no x-admin-key header is present", async () => {
     const res = mockRes();
-    isAdmin(mockReq({ headers: {} }), res, next);
+    await isAdmin(mockReq({ headers: {} }), res, next);
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("returns 403 for a wrong admin key", () => {
+  it("returns 403 for a wrong admin key", async () => {
     const res = mockRes();
-    isAdmin(mockReq({ headers: { "x-admin-key": "wrong-key" } }), res, next);
+    await isAdmin(mockReq({ headers: { "x-admin-key": "wrong-key" } }), res, next);
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("calls next() for the correct admin key", () => {
+  it("calls next() for the correct admin key", async () => {
     const res = mockRes();
-    isAdmin(
+    await isAdmin(
       mockReq({ headers: { "x-admin-key": "secret-admin-key" } }),
       res,
       next,
@@ -160,10 +179,10 @@ describe("isAdmin", () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it("returns 403 when ADMIN_API_KEY env var is not set", () => {
+  it("returns 403 when ADMIN_API_KEY env var is not set", async () => {
     delete process.env.ADMIN_API_KEY;
     const res = mockRes();
-    isAdmin(mockReq({ headers: { "x-admin-key": "any-key" } }), res, next);
+    await isAdmin(mockReq({ headers: { "x-admin-key": "any-key" } }), res, next);
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
@@ -243,6 +262,8 @@ describe("isSeller", () => {
 });
 
 // ─── isCustomer ──────────────────────────────────────────────────────────────
+// Vendors are NOT blocked: TwirlDrape is a multi-vendor marketplace where
+// sellers can also be buyers. isCustomer only gates on Clerk auth + admin key.
 
 describe("isCustomer", () => {
   const ORIGINAL_KEY = process.env.ADMIN_API_KEY;
@@ -279,26 +300,26 @@ describe("isCustomer", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("returns 403 when caller is a known vendor", async () => {
-    mockGetAuth.mockReturnValue({ userId: "vendor-user" });
-    mockDbSelect.mockReturnValue(chainReturning([{ id: "vendor-uuid" }]));
-    const res = mockRes();
-
-    await isCustomer(mockReq(), res, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
-  });
-
   it("sets req.userId and calls next() for a regular customer", async () => {
     mockGetAuth.mockReturnValue({ userId: "customer-abc" });
-    mockDbSelect.mockReturnValue(chainReturning([])); // no vendor record
     const req = mockReq();
     const res = mockRes();
 
     await isCustomer(req, res, next);
 
     expect((req as any).userId).toBe("customer-abc");
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("sets req.userId and calls next() for an approved vendor (vendors can shop)", async () => {
+    mockGetAuth.mockReturnValue({ userId: "vendor-user" });
+    const req = mockReq();
+    const res = mockRes();
+
+    await isCustomer(req, res, next);
+
+    expect((req as any).userId).toBe("vendor-user");
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });

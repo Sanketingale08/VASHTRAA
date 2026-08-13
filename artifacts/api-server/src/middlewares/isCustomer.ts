@@ -1,10 +1,10 @@
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
 
 /**
- * Requires the caller to be an authenticated customer (Clerk session present,
- * not a known vendor, and not presenting an admin key).
+ * Requires the caller to be an authenticated shopper (Clerk session present,
+ * not presenting an admin key). Vendor accounts may also place orders —
+ * role separation at this layer is wrong for a multi-vendor marketplace where
+ * sellers are also buyers.
  * Sets req.userId on success.
  */
 export async function isCustomer(req: any, res: any, next: any) {
@@ -22,24 +22,6 @@ export async function isCustomer(req: any, res: any, next: any) {
     return res
       .status(403)
       .json({ error: "Forbidden: admin accounts cannot access customer endpoints" });
-  }
-
-  // Reject approved vendor accounts (pending/suspended vendors can still shop as customers)
-  try {
-    const rows = await db
-      .select({ id: vendorsTable.id })
-      .from(vendorsTable)
-      .where(and(eq(vendorsTable.ownerId, userId as string), eq(vendorsTable.status, "approved")))
-      .limit(1);
-
-    if (rows.length > 0) {
-      return res
-        .status(403)
-        .json({ error: "Forbidden: seller accounts cannot access customer-only endpoints" });
-    }
-  } catch (err: any) {
-    req.log?.error({ err }, "isCustomer vendor check failed");
-    return res.status(500).json({ error: "Internal server error" });
   }
 
   next();

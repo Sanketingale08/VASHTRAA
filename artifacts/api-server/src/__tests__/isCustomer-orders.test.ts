@@ -2,10 +2,13 @@
  * Authorization tests for POST /api/orders.
  *
  * Verifies that isCustomer middleware correctly:
- *   - allows authenticated customer accounts through (200)
- *   - blocks seller (vendor) accounts with 403
+ *   - allows authenticated accounts through (200) — including approved vendors
  *   - blocks requests presenting a valid admin key with 403
  *   - blocks unauthenticated requests with 401
+ *
+ * Vendors are NOT blocked: TwirlDrape is a multi-vendor marketplace where
+ * sellers can also be buyers. Role separation happens at the product/order
+ * level, not at this middleware layer.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -18,8 +21,6 @@ import express, { type Express } from "express";
 const state = vi.hoisted(() => ({
   /** When non-null, getAuth returns this userId. */
   userId: "customer-user-123" as string | null,
-  /** When true, db.select returns a vendor row (user is a vendor). */
-  isVendor: false,
 }));
 
 // ---------------------------------------------------------------------------
@@ -50,13 +51,7 @@ vi.mock("@workspace/db", () => {
   }
 
   const dbMock = {
-    select: vi.fn((fields?: any) => {
-      // isCustomer middleware selects { id: vendorsTable.id } — differentiated
-      // by whether "id" is the only selected field key (vendor check).
-      // Simpler: always check state.isVendor for the vendor row.
-      const rows = state.isVendor ? [{ id: "vendor-row-1" }] : [];
-      return makeSelectChain(rows);
-    }),
+    select: vi.fn((_fields?: any) => makeSelectChain([PRODUCT])),
 
     transaction: vi.fn(async (cb: (tx: any) => Promise<unknown>) => {
       let orderSeq = 1;
@@ -172,7 +167,6 @@ describe("POST /api/orders — isCustomer authorization", () => {
   beforeEach(async () => {
     process.env.ADMIN_API_KEY = ADMIN_KEY;
     state.userId = "customer-user-123";
-    state.isVendor = false;
     app = await buildApp();
   });
 
@@ -182,18 +176,17 @@ describe("POST /api/orders — isCustomer authorization", () => {
     expect(res.body.orderId).toBeDefined();
   });
 
-  it("blocks a seller account with 403", async () => {
-    state.isVendor = true;
+  it("allows an approved vendor account to place an order (200)", async () => {
+    // Vendors are also buyers in a multi-vendor marketplace.
+    state.userId = "vendor-user-456";
 
     const res = await request(app).post("/api/orders").send(ORDER_BODY);
 
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/seller/i);
+    expect(res.status).toBe(200);
+    expect(res.body.orderId).toBeDefined();
   });
 
   it("blocks a request presenting the admin key with 403", async () => {
-    state.isVendor = false;
-
     const res = await request(app)
       .post("/api/orders")
       .set("x-admin-key", ADMIN_KEY)

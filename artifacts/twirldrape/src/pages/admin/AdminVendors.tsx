@@ -78,7 +78,7 @@ function VendorsContent() {
   }
 
   // Initial load + background poll every 30 s, paused while tab is hidden.
-  useVisibilityPolling(loadVendors, 30_000);
+  useVisibilityPolling(loadVendors, 15_000);
 
   const filtered = useMemo(() => {
     let v = vendors;

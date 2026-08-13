@@ -15,7 +15,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
-const VENDOR_DETAIL_POLL_MS = 15_000;
+const VENDOR_DETAIL_POLL_MS = 5_000;
 
 interface VendorDetail {
   id: string;

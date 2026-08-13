@@ -321,41 +321,43 @@ export default function Home() {
 
   return (
     <Layout>
-      {/* ── HERO ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden" style={{ minHeight: "580px" }}>
-        <HeroBannerSlider
-          banners={heroBanners}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
-        />
+      {/* ── HERO — only rendered when admin has uploaded banners ── */}
+      {heroBanners.length > 0 && (
+        <section className="relative overflow-hidden" style={{ minHeight: "580px" }}>
+          <HeroBannerSlider
+            banners={heroBanners}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+          />
 
-        {/* CTA button — overlaid above the banner slider */}
-        <div
-          className="absolute bottom-0 left-0 right-0 flex items-end px-8 pb-10 pt-24 pointer-events-none"
-          style={{
-            zIndex: 10,
-            background: "linear-gradient(to top, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.00) 100%)",
-          }}
-        >
-          <div className="pointer-events-auto">
-            <Link
-              href="/collections"
-              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/30"
-              style={{
-                padding: "13px 30px",
-                borderRadius: "8px",
-                color: "white",
-                border: "1.5px solid rgba(255,255,255,0.55)",
-                background: "rgba(255,255,255,0.15)",
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
-              }}
-            >
-              Explore Collection →
-            </Link>
+          {/* CTA button — bottom-left overlay above the banner */}
+          <div
+            className="absolute bottom-0 left-0 right-0 flex items-end px-8 pb-10 pt-24 pointer-events-none"
+            style={{
+              zIndex: 10,
+              background: "linear-gradient(to top, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.00) 100%)",
+            }}
+          >
+            <div className="pointer-events-auto">
+              <Link
+                href="/collections"
+                className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/30"
+                style={{
+                  padding: "13px 30px",
+                  borderRadius: "8px",
+                  color: "white",
+                  border: "1.5px solid rgba(255,255,255,0.55)",
+                  background: "rgba(255,255,255,0.15)",
+                  backdropFilter: "blur(12px)",
+                  WebkitBackdropFilter: "blur(12px)",
+                  boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+                }}
+              >
+                Explore Collection →
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── STATS ────────────────────────────────────────── */}
       <section style={{ borderTop: "2px solid rgba(212,175,55,0.22)" }}>

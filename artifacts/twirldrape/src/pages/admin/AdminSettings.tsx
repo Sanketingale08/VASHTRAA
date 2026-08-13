@@ -753,6 +753,18 @@ function SecuritySection() {
   });
   const twoFaEnabled = twoFaStatus?.enabled ?? false;
 
+  // Pre-flight: check that email and mobile are set before allowing 2FA setup.
+  // Reuses the same query key as ProfileSection so it hits the cache — no extra request.
+  const { data: profileData } = useQuery({
+    queryKey: ["admin-profile"],
+    queryFn: () => apiFetch("/api/admin/settings/profile"),
+    staleTime: 30_000,
+  });
+  const missingEmail = !profileData?.email;
+  const missingMobile = !profileData?.mobile;
+  const missingBoth = missingEmail && missingMobile;
+  const missingField = missingBoth ? "email and mobile number" : missingEmail ? "email" : missingMobile ? "mobile number" : null;
+
   function refresh2fa() { qc.invalidateQueries({ queryKey: ["admin-2fa-status"] }); }
 
   return (
@@ -772,8 +784,8 @@ function SecuritySection() {
         </div>
 
         {/* 2FA */}
-        <div className="px-6 py-4 flex items-center justify-between gap-4">
-          <div>
+        <div className="px-6 py-4 flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-gray-900">Two-Factor Authentication</p>
               {twoFaLoading ? (
@@ -785,11 +797,29 @@ function SecuritySection() {
               )}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">Add an extra layer of security to admin login.</p>
+
+            {/* Pre-flight warning: show inline when contact details are missing and 2FA is not yet enabled */}
+            {!twoFaEnabled && !twoFaLoading && missingField && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 max-w-sm">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 leading-snug">
+                  Your {missingField} {missingBoth ? "are" : "is"} not set. Please add {missingBoth ? "them" : "it"} in{" "}
+                  <a
+                    href="#section-profile"
+                    onClick={(e) => { e.preventDefault(); document.getElementById("section-profile")?.scrollIntoView({ behavior: "smooth" }); }}
+                    className="font-semibold underline underline-offset-2 text-amber-900 hover:text-amber-700"
+                  >
+                    Profile Settings
+                  </a>{" "}
+                  before enabling 2FA.
+                </p>
+              </div>
+            )}
           </div>
           <div className="shrink-0">
             {twoFaEnabled ? (
               <Btn variant="secondary" onClick={() => setShow2faManage(true)}>Manage 2FA</Btn>
-            ) : (
+            ) : missingField ? null : (
               <Btn onClick={() => setShow2faSetup(true)}>Enable 2FA</Btn>
             )}
           </div>

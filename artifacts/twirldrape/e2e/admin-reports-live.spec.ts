@@ -169,6 +169,10 @@ const mockVendorData = {
   topVendors: [],
   settlementSummary: { pendingCount: 0, completedCount: 0, pendingAmount: 0, completedAmount: 0 },
 };
+const mockCustomerData = {
+  summary: { totalCustomers: 1, newCustomers: 1, returningCustomers: 0, avgOrdersPerCustomer: 1 },
+  topCustomers: [],
+};
 
 // ── Vendor tab live integration ───────────────────────────────────────────────
 
@@ -670,6 +674,472 @@ test.describe("Admin Reports — Customer tab (live data)", () => {
     const userIdPrefix = customerUserId.slice(0, 20);
     await expect(
       page.locator(`text=${userIdPrefix}`).first(),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+// ── Revenue tab live integration ──────────────────────────────────────────────
+
+test.describe("Admin Reports — Revenue tab (live data)", () => {
+  let revenueUserId = "";
+  let revenueOrderId: string | null = null;
+  let setupError: string | null = null;
+  // Narrow timestamp window — same isolation strategy as the other blocks
+  let windowFrom = "";
+
+  test.beforeAll(async ({ browser }) => {
+    if (!LIVE_DB_ENABLED) return;
+
+    windowFrom = new Date(Date.now() - 5_000).toISOString();
+
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+      setupError = "CLERK_SECRET_KEY is not set";
+      return;
+    }
+
+    const clerk = createClerkClient({ secretKey });
+    const tag = Date.now() + 13;
+    const user = await clerk.users.createUser({
+      emailAddress: [`e2e-rev-rpt-${tag}@twirldrape-test.com`],
+      password: `RevRpt${tag}!@Z`,
+      firstName: "RevRpt",
+      lastName: "Tester",
+      skipPasswordChecks: true,
+    });
+    revenueUserId = user.id;
+
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await signInUser(page, revenueUserId);
+
+      const productsResp = await page.evaluate(async () => {
+        const r = await fetch("/api/products?limit=50", { credentials: "include" });
+        return r.ok ? r.json() : null;
+      });
+
+      const products: any[] = Array.isArray(productsResp?.products)
+        ? productsResp.products
+        : Array.isArray(productsResp) ? productsResp : [];
+
+      const eligible = products.find(
+        (p: any) => p.stock > 0 && p.price > 0 && p.active !== false && p.status === "approved",
+      );
+
+      if (!eligible) {
+        setupError = "No in-stock approved product found in the database";
+        return;
+      }
+
+      // Revenue report reads directly from the orders table — no need to
+      // advance to delivered; a placed order immediately contributes to
+      // grossRevenue and totalOrders.
+      const orderResp = await page.evaluate(
+        async (productId: string) => {
+          const r = await fetch("/api/orders", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              items: [{ productId, quantity: 1 }],
+              address: {
+                name: "E2E Revenue Reporter",
+                phone: "9000000003",
+                line1: "3 Revenue Road",
+                city: "Bangalore",
+                state: "Karnataka",
+                pincode: "560001",
+              },
+              deliveryMethod: "standard",
+              paymentMethod: "cod",
+            }),
+          });
+          if (!r.ok) return { error: await r.text(), status: r.status };
+          return r.json();
+        },
+        eligible.id,
+      );
+
+      if (orderResp?.error) {
+        setupError = `Order placement failed (${orderResp.status}): ${orderResp.error}`;
+        return;
+      }
+
+      revenueOrderId = orderResp?.orderId ?? orderResp?.id ?? null;
+
+      if (!revenueOrderId) {
+        setupError = `No orderId in response: ${JSON.stringify(orderResp)}`;
+        return;
+      }
+
+      await page.waitForTimeout(800);
+    } finally {
+      await page.close();
+      await context.close();
+    }
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!LIVE_DB_ENABLED) return;
+    if (revenueOrderId) {
+      const cancelled = await setOrderStatus(request, revenueOrderId, "cancelled");
+      console.info(
+        `[revenue-report e2e] cleanup: cancel ${revenueOrderId} → ${cancelled ? "OK" : "FAILED"}`,
+      );
+    }
+    if (revenueUserId) {
+      const secretKey = process.env.CLERK_SECRET_KEY;
+      if (secretKey) {
+        try {
+          const clerk = createClerkClient({ secretKey });
+          await clerk.users.deleteUser(revenueUserId);
+          console.info(`[revenue-report e2e] cleanup: deleted Clerk user ${revenueUserId}`);
+        } catch (err) {
+          console.warn(`[revenue-report e2e] cleanup: failed to delete Clerk user ${revenueUserId}:`, err);
+        }
+      }
+    }
+  });
+
+  test("Revenue report returns non-zero grossRevenue and totalOrders >= 1 after a real order", async ({
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    test.skip(!LIVE_DB_ENABLED, "Set E2E_LIVE_DB=1 to run live database integration tests");
+
+    expect(setupError, `Revenue report setup failed: ${setupError}`).toBeNull();
+    expect(revenueOrderId, "Order was not placed in beforeAll").toBeTruthy();
+
+    const adminKey = process.env.ADMIN_API_KEY ?? "test-e2e-admin-key";
+
+    // Narrow custom window: only records from this run are included, so the
+    // totals reflect our single test order regardless of historical data.
+    const from = encodeURIComponent(windowFrom);
+    const to = encodeURIComponent(new Date(Date.now() + 60_000).toISOString());
+    const resp = await request.get(
+      `/api/admin/reports/revenue?period=custom&from=${from}&to=${to}`,
+      { headers: { "x-admin-key": adminKey } },
+    );
+
+    expect(resp.ok(), `Revenue report API failed: ${resp.status()}`).toBe(true);
+    const data = await resp.json();
+
+    // Shape check
+    expect(typeof data.summary).toBe("object");
+    expect(Array.isArray(data.trend)).toBe(true);
+
+    // The order placed in beforeAll must be reflected in the summary
+    expect(Number(data.summary.totalOrders)).toBeGreaterThanOrEqual(1);
+    expect(Number(data.summary.grossRevenue)).toBeGreaterThan(0);
+  });
+
+  test("Revenue tab renders summary cards with live data after a real order", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    test.skip(!LIVE_DB_ENABLED, "Set E2E_LIVE_DB=1 to run live database integration tests");
+
+    expect(setupError, `Revenue report setup failed: ${setupError}`).toBeNull();
+    expect(revenueOrderId, "Order was not placed in beforeAll").toBeTruthy();
+
+    await seedAdminKey(page);
+
+    const from = windowFrom;
+    const to = new Date(Date.now() + 60_000).toISOString();
+
+    // Stub all endpoints EXCEPT /api/admin/reports/revenue.
+    // The revenue endpoint is intercepted, its URL is rewritten to the narrow
+    // custom window, and the REAL API response is forwarded to the page.
+    await page.route("**/api/admin/reports/sales**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockSalesData) }),
+    );
+    await page.route("**/api/admin/reports/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockVendorData) }),
+    );
+    await page.route("**/api/admin/reports/products**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductData) }),
+    );
+    await page.route("**/api/admin/reports/returns**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockReturnData) }),
+    );
+    await page.route("**/api/admin/reports/customers**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockCustomerData) }),
+    );
+    await page.route("**/api/admin/products/stats**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ total: 10, pending: 1, approved: 8, rejected: 0, featured: 2 }) }),
+    );
+    // Rewrite the revenue endpoint's period to the narrow custom window
+    await page.route("**/api/admin/reports/revenue**", async (route) => {
+      const u = new URL(route.request().url());
+      u.searchParams.set("period", "custom");
+      u.searchParams.set("from", from);
+      u.searchParams.set("to", to);
+      const real = await route.fetch({ url: u.toString() });
+      await route.fulfill({ response: real });
+    });
+
+    await page.goto("/admin/reports");
+
+    await expect(page.locator("h1").filter({ hasText: "Reports" }).first()).toBeVisible({ timeout: 20_000 });
+
+    // Revenue is the default first tab — click it explicitly to be safe
+    const revenueTab = page
+      .locator("main")
+      .locator("button")
+      .filter({ hasText: /Revenue/ })
+      .first();
+    await expect(revenueTab).toBeVisible({ timeout: 10_000 });
+    await revenueTab.click();
+
+    // "Gross Revenue" metric card must appear on the Revenue tab
+    await expect(page.locator("text=Gross Revenue").first()).toBeVisible({ timeout: 20_000 });
+
+    // The tab must show a non-zero total order count (rendered as text in a card)
+    // totalOrders >= 1 is guaranteed by our placed order in the narrow window
+    await expect(
+      page.locator("text=Total Orders").first(),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+// ── Sales tab live integration ────────────────────────────────────────────────
+
+test.describe("Admin Reports — Sales tab (live data)", () => {
+  let salesUserId = "";
+  let salesOrderId: string | null = null;
+  let productCategory: string | null = null;
+  let setupError: string | null = null;
+  // Narrow timestamp window — same isolation strategy as the other blocks
+  let windowFrom = "";
+
+  test.beforeAll(async ({ browser }) => {
+    if (!LIVE_DB_ENABLED) return;
+
+    windowFrom = new Date(Date.now() - 5_000).toISOString();
+
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+      setupError = "CLERK_SECRET_KEY is not set";
+      return;
+    }
+
+    const clerk = createClerkClient({ secretKey });
+    const tag = Date.now() + 19;
+    const user = await clerk.users.createUser({
+      emailAddress: [`e2e-sales-rpt-${tag}@twirldrape-test.com`],
+      password: `SalesRpt${tag}!@Z`,
+      firstName: "SalesRpt",
+      lastName: "Tester",
+      skipPasswordChecks: true,
+    });
+    salesUserId = user.id;
+
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await signInUser(page, salesUserId);
+
+      const productsResp = await page.evaluate(async () => {
+        const r = await fetch("/api/products?limit=50", { credentials: "include" });
+        return r.ok ? r.json() : null;
+      });
+
+      const products: any[] = Array.isArray(productsResp?.products)
+        ? productsResp.products
+        : Array.isArray(productsResp) ? productsResp : [];
+
+      const eligible = products.find(
+        (p: any) => p.stock > 0 && p.price > 0 && p.active !== false && p.status === "approved" && p.category,
+      );
+
+      if (!eligible) {
+        setupError = "No in-stock approved product with a category found in the database";
+        return;
+      }
+
+      // Record the product's category — the byCategory assertion checks this
+      productCategory = eligible.category as string;
+
+      // Sales report reads directly from the orders table joined to products via
+      // JSONB items — placing the order is sufficient, no status advance required.
+      const orderResp = await page.evaluate(
+        async (productId: string) => {
+          const r = await fetch("/api/orders", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              items: [{ productId, quantity: 1 }],
+              address: {
+                name: "E2E Sales Reporter",
+                phone: "9000000004",
+                line1: "4 Sales Street",
+                city: "Chennai",
+                state: "Tamil Nadu",
+                pincode: "600001",
+              },
+              deliveryMethod: "standard",
+              paymentMethod: "cod",
+            }),
+          });
+          if (!r.ok) return { error: await r.text(), status: r.status };
+          return r.json();
+        },
+        eligible.id,
+      );
+
+      if (orderResp?.error) {
+        setupError = `Order placement failed (${orderResp.status}): ${orderResp.error}`;
+        return;
+      }
+
+      salesOrderId = orderResp?.orderId ?? orderResp?.id ?? null;
+
+      if (!salesOrderId) {
+        setupError = `No orderId in response: ${JSON.stringify(orderResp)}`;
+        return;
+      }
+
+      await page.waitForTimeout(800);
+    } finally {
+      await page.close();
+      await context.close();
+    }
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!LIVE_DB_ENABLED) return;
+    if (salesOrderId) {
+      const cancelled = await setOrderStatus(request, salesOrderId, "cancelled");
+      console.info(
+        `[sales-report e2e] cleanup: cancel ${salesOrderId} → ${cancelled ? "OK" : "FAILED"}`,
+      );
+    }
+    if (salesUserId) {
+      const secretKey = process.env.CLERK_SECRET_KEY;
+      if (secretKey) {
+        try {
+          const clerk = createClerkClient({ secretKey });
+          await clerk.users.deleteUser(salesUserId);
+          console.info(`[sales-report e2e] cleanup: deleted Clerk user ${salesUserId}`);
+        } catch (err) {
+          console.warn(`[sales-report e2e] cleanup: failed to delete Clerk user ${salesUserId}:`, err);
+        }
+      }
+    }
+  });
+
+  test("Sales report byCategory includes the ordered product's category", async ({
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    test.skip(!LIVE_DB_ENABLED, "Set E2E_LIVE_DB=1 to run live database integration tests");
+
+    expect(setupError, `Sales report setup failed: ${setupError}`).toBeNull();
+    expect(salesOrderId, "Order was not placed in beforeAll").toBeTruthy();
+    expect(productCategory, "productCategory must be set when setup succeeds").toBeTruthy();
+
+    const adminKey = process.env.ADMIN_API_KEY ?? "test-e2e-admin-key";
+
+    // Narrow custom window: only records from this run are included.
+    const from = encodeURIComponent(windowFrom);
+    const to = encodeURIComponent(new Date(Date.now() + 60_000).toISOString());
+    const resp = await request.get(
+      `/api/admin/reports/sales?period=custom&from=${from}&to=${to}`,
+      { headers: { "x-admin-key": adminKey } },
+    );
+
+    expect(resp.ok(), `Sales report API failed: ${resp.status()}`).toBe(true);
+    const data = await resp.json();
+
+    // Shape check
+    expect(typeof data.summary).toBe("object");
+    expect(Array.isArray(data.byCategory)).toBe(true);
+
+    // The placed order must appear in the summary totals
+    expect(Number(data.summary.totalOrders)).toBeGreaterThanOrEqual(1);
+    expect(Number(data.summary.salesRevenue)).toBeGreaterThan(0);
+
+    // The product's category must appear in byCategory — the SQL joins to
+    // products via the JSONB items array to resolve the live category value.
+    const match = data.byCategory.find((c: any) => c.category === productCategory);
+    expect(
+      match,
+      `Category "${productCategory}" not found in byCategory: ${JSON.stringify(data.byCategory.map((c: any) => c.category))}`,
+    ).toBeDefined();
+    expect(Number(match!.count)).toBeGreaterThanOrEqual(1);
+    expect(Number(match!.revenue)).toBeGreaterThan(0);
+  });
+
+  test("Sales tab renders byCategory breakdown after a real order", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    test.skip(!LIVE_DB_ENABLED, "Set E2E_LIVE_DB=1 to run live database integration tests");
+
+    expect(setupError, `Sales report setup failed: ${setupError}`).toBeNull();
+    expect(salesOrderId, "Order was not placed in beforeAll").toBeTruthy();
+    expect(productCategory, "productCategory must be set when setup succeeds").toBeTruthy();
+
+    await seedAdminKey(page);
+
+    const from = windowFrom;
+    const to = new Date(Date.now() + 60_000).toISOString();
+
+    // Stub all endpoints EXCEPT /api/admin/reports/sales.
+    // The sales endpoint is intercepted, its URL is rewritten to the narrow
+    // custom window, and the REAL API response is forwarded to the page.
+    await page.route("**/api/admin/reports/revenue**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockRevenueData) }),
+    );
+    await page.route("**/api/admin/reports/vendors**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockVendorData) }),
+    );
+    await page.route("**/api/admin/reports/products**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockProductData) }),
+    );
+    await page.route("**/api/admin/reports/returns**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockReturnData) }),
+    );
+    await page.route("**/api/admin/reports/customers**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockCustomerData) }),
+    );
+    await page.route("**/api/admin/products/stats**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ total: 10, pending: 1, approved: 8, rejected: 0, featured: 2 }) }),
+    );
+    // Rewrite the sales endpoint's period to the narrow custom window
+    await page.route("**/api/admin/reports/sales**", async (route) => {
+      const u = new URL(route.request().url());
+      u.searchParams.set("period", "custom");
+      u.searchParams.set("from", from);
+      u.searchParams.set("to", to);
+      const real = await route.fetch({ url: u.toString() });
+      await route.fulfill({ response: real });
+    });
+
+    await page.goto("/admin/reports");
+
+    await expect(page.locator("h1").filter({ hasText: "Reports" }).first()).toBeVisible({ timeout: 20_000 });
+
+    // Switch to the Sales tab
+    const salesTab = page
+      .locator("main")
+      .locator("button")
+      .filter({ hasText: /Sales/ })
+      .first();
+    await expect(salesTab).toBeVisible({ timeout: 10_000 });
+    await salesTab.click();
+
+    // "Sales by Category" or "By Category" section heading must appear (SalesTab renders it)
+    await expect(page.locator("text=/[Bb]y [Cc]ategory/").first()).toBeVisible({ timeout: 20_000 });
+
+    // The product's category must appear as a table cell in the byCategory breakdown.
+    // The narrow window guarantees this run's order is the only data.
+    await expect(
+      page.locator(`text=${productCategory}`).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 });

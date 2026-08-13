@@ -2,11 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
-  ShieldCheck,
-  BadgeCheck,
   Star,
-  Truck,
-  Store,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -24,6 +20,7 @@ import type { ProductSummary, VendorSummary } from "@workspace/api-client-react"
 interface HeroBanner {
   id: string;
   imageUrl: string;
+  title?: string | null;
   slideIntervalMs: number;
 }
 
@@ -33,12 +30,6 @@ const MAROON = "#1E6B5A";
 const IVORY = "#F3F8F5";
 const CREAM = "#E6F0EA";
 
-// Hero section premium palette
-const H_WINE = "#4D0B35";
-const H_PRIMARY = "#6A0D45";
-const H_GOLD = "#D4AF37";
-const H_CREAM = "#FFF9F4";
-const H_BEIGE = "#F8EFE7";
 
 const PAITHANI_DESIGNER_TABS = [
   { label: "Paithani", category: "paithani" as const },
@@ -331,130 +322,11 @@ export default function Home() {
   return (
     <Layout>
       {/* ── HERO ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden" style={{ minHeight: "580px", background: "#F5E8DC" }}>
-
-        {/* Full-bleed background slider — only when admin has uploaded banners */}
-        {heroBanners.length > 0 && (
-          <HeroBannerSlider
-            banners={heroBanners}
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
-          />
-        )}
-
-        {/* Gradient overlay — cream panel fades out so the image dominates the right */}
-        <div
-          className="absolute inset-0 z-10"
-          style={{
-            background:
-              "linear-gradient(to right, rgba(245,232,220,0.82) 0%, rgba(245,232,220,0.70) 30%, rgba(245,232,220,0.26) 58%, rgba(245,232,220,0.00) 80%)",
-          }}
+      <section className="relative overflow-hidden" style={{ minHeight: "580px" }}>
+        <HeroBannerSlider
+          banners={heroBanners}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
         />
-
-        {/* ── Content (desktop) ── */}
-        <motion.div
-          className="hidden lg:flex flex-col justify-center relative z-20 px-10 md:px-16 lg:px-20 py-16 lg:py-20"
-          style={{ minHeight: "580px", maxWidth: "660px" }}
-          initial={{ opacity: 0, x: -40 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        >
-          {/* Eyebrow */}
-          <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-6" style={{ color: GOLD }}>
-            Celebrate Tradition. Embrace Elegance.
-          </p>
-
-          {/* Heading */}
-          <h1 className="font-serif font-bold leading-[1.1] mb-6" style={{ fontSize: "clamp(38px, 4.5vw, 66px)" }}>
-            <span style={{ color: MAROON }}>Authentic Paithani &amp;</span><br />
-            <span style={{ color: GOLD }}>Designer Sarees</span>
-          </h1>
-
-          {/* Description */}
-          <p className="mb-8 leading-relaxed" style={{ color: "#5A4E4E", fontSize: "15px", maxWidth: "480px" }}>
-            Handpicked from master weavers across India — discover sarees that tell a story of heritage, craftsmanship, and timeless beauty.
-          </p>
-
-          {/* Trust Indicators */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-10">
-            {[
-              { icon: <BadgeCheck size={15} />, label: "Authenticity Assured" },
-              { icon: <Store size={15} />, label: "Trusted Vendors" },
-              { icon: <ShieldCheck size={15} />, label: "Secure Shopping" },
-              { icon: <Truck size={15} />, label: "Pan India Delivery" },
-            ].map((t) => (
-              <span key={t.label} className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#4A4040" }}>
-                <span style={{ color: GOLD }}>{t.icon}</span>
-                {t.label}
-              </span>
-            ))}
-          </div>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Link
-              href="/paithani"
-              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:opacity-90 hover:shadow-lg"
-              style={{ background: "#0F5C54", color: "white", padding: "14px 28px", borderRadius: "4px" }}
-            >
-              Explore Paithani Sarees &nbsp;→
-            </Link>
-            <Link
-              href="/designer"
-              className="inline-flex items-center justify-center font-bold text-sm tracking-widest uppercase transition-all hover:bg-white/40"
-              style={{ border: "2px solid #0F5C54", color: "#0F5C54", padding: "12px 26px", borderRadius: "4px" }}
-            >
-              Explore Designer Sarees &nbsp;→
-            </Link>
-          </div>
-        </motion.div>
-
-        {/* ── Mobile layout ── */}
-        <div className="flex lg:hidden flex-col relative z-20 px-6 py-10 gap-6" style={{ minHeight: "480px" }}>
-          {/* mobile gradient — heavier at top for text, lighter at bottom so image shows */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(to bottom, rgba(245,232,220,0.88) 0%, rgba(245,232,220,0.74) 45%, rgba(245,232,220,0.32) 100%)",
-              zIndex: -1,
-            }}
-          />
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.25em] mb-4" style={{ color: GOLD }}>
-              Celebrate Tradition. Embrace Elegance.
-            </p>
-            <h1 className="font-serif font-bold leading-tight mb-4" style={{ fontSize: "36px" }}>
-              <span style={{ color: MAROON }}>Authentic Paithani &amp;</span><br />
-              <span style={{ color: GOLD }}>Designer Sarees</span>
-            </h1>
-            <p className="mb-5 leading-relaxed text-sm" style={{ color: "#5A4E4E" }}>
-              Handpicked from master weavers across India — discover sarees that tell a story of heritage, craftsmanship, and timeless beauty.
-            </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-6">
-              {[
-                { icon: <BadgeCheck size={13} />, label: "Authenticity Assured" },
-                { icon: <Store size={13} />, label: "Trusted Vendors" },
-                { icon: <ShieldCheck size={13} />, label: "Secure Shopping" },
-                { icon: <Truck size={13} />, label: "Pan India Delivery" },
-                ].map((t) => (
-                  <span key={t.label} className="flex items-center gap-1 text-xs font-medium" style={{ color: "#4A4040" }}>
-                    <span style={{ color: GOLD }}>{t.icon}</span>
-                    {t.label}
-                  </span>
-                ))}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link href="/paithani" className="inline-flex items-center justify-center font-bold text-sm tracking-wider uppercase py-3 px-5"
-                  style={{ background: H_WINE, color: "white", borderRadius: "4px" }}>
-                  Explore Paithani →
-                </Link>
-                <Link href="/designer" className="inline-flex items-center justify-center font-bold text-sm tracking-wider uppercase py-3 px-5"
-                  style={{ border: `2px solid ${H_WINE}`, color: H_WINE, borderRadius: "4px" }}>
-                  Explore Designer →
-                </Link>
-              </div>
-            </div>
-          </div>
       </section>
 
       {/* ── STATS ────────────────────────────────────────── */}

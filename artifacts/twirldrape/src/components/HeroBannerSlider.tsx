@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 interface Banner {
   id: string;
   imageUrl: string;
+  title?: string | null;
   slideIntervalMs?: number | null;
 }
 
@@ -70,6 +71,20 @@ export function HeroBannerSlider({
             className="w-full h-full object-cover"
             style={{ objectPosition: "top center" }}
           />
+          {/* Admin-configured caption — only rendered when title is set */}
+          {images[activeIndex]?.title && (
+            <div
+              className="absolute bottom-0 left-0 right-0 px-8 py-6"
+              style={{
+                background: "linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.00) 100%)",
+                zIndex: 2,
+              }}
+            >
+              <p className="text-white font-serif font-semibold text-2xl md:text-3xl drop-shadow">
+                {images[activeIndex].title}
+              </p>
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
     </div>

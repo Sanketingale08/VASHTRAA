@@ -174,6 +174,7 @@ export function CheckoutPage() {
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [savedMethodsLoaded, setSavedMethodsLoaded] = useState(false);
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
+  const [savePaymentMethod, setSavePaymentMethod] = useState(false);
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
@@ -503,6 +504,36 @@ export function CheckoutPage() {
       orderPlacedRef.current = true;
       sessionStorage.removeItem(BUY_NOW_KEY);
       if (!buyNowItems) await clearCart();
+
+      // Save payment method if the shopper opted in (best-effort, fire and forget)
+      if (savePaymentMethod && selectedSavedMethodId === null) {
+        if (paymentMethod === "upi" && /^[\w.\-]+@[\w]+$/.test(upiId.trim())) {
+          fetch(`/api/payment-methods`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "upi", upiId: upiId.trim() }),
+          }).catch(() => {});
+        } else if (
+          (paymentMethod === "credit_card" || paymentMethod === "debit_card") &&
+          validatePayment()
+        ) {
+          const [expMo, expYr] = cardExpiry.split("/");
+          fetch(`/api/payment-methods`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "card",
+              cardNumber,
+              cardholderName: cardName,
+              expiryMonth: parseInt(expMo, 10),
+              expiryYear: parseInt("20" + expYr, 10),
+              cvv: cardCvv,
+            }),
+          }).catch(() => {});
+        }
+      }
 
       // Apply referral code if stored (best-effort, fire and forget)
       const storedRef = localStorage.getItem("td_ref_code");
@@ -860,6 +891,7 @@ export function CheckoutPage() {
                                 onClick={() => {
                                   paymentChoiceMadeRef.current = true;
                                   setSelectedSavedMethodId(m.id);
+                                  setSavePaymentMethod(false);
                                   setUpiError("");
                                   setCardErrors({});
                                   if (m.type === "upi") {
@@ -924,6 +956,7 @@ export function CheckoutPage() {
                               paymentChoiceMadeRef.current = true;
                               setPaymentMethod(opt.id);
                               setSelectedSavedMethodId(null);
+                              setSavePaymentMethod(false);
                               setUpiId("");
                               setUpiError("");
                               setCardErrors({});
@@ -959,82 +992,106 @@ export function CheckoutPage() {
                                 className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 focus:border-[#1E6B5A] transition-colors ${upiError ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
                               />
                               {upiError && <p className="text-red-500 text-xs mt-1">{upiError}</p>}
+                              <label className="flex items-center gap-2.5 mt-3 cursor-pointer group">
+                                <input
+                                  type="checkbox"
+                                  checked={savePaymentMethod}
+                                  onChange={e => setSavePaymentMethod(e.target.checked)}
+                                  className="w-4 h-4 accent-[#1E6B5A] cursor-pointer"
+                                />
+                                <span className="text-sm text-gray-600 dark:text-gray-300 group-hover:text-[#1E6B5A] transition-colors">
+                                  Save for future purchases
+                                </span>
+                              </label>
                             </div>
                           )}
 
                           {/* Credit / Debit card fields — only when manually entering */}
                           {(paymentMethod === "credit_card" || paymentMethod === "debit_card") && paymentMethod === opt.id && selectedSavedMethodId === null && (
-                            <div className="mt-3 px-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="sm:col-span-2">
-                                <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Card Number *</label>
-                                <input
-                                  value={cardNumber.replace(/(.{4})/g, "$1 ").trim()}
-                                  onChange={e => {
-                                    setCardNumber(e.target.value.replace(/\D/g, "").slice(0, 16));
-                                    setCardErrors(p => ({ ...p, number: undefined }));
-                                  }}
-                                  onBlur={() => {
-                                    if (cardNumber && !luhnCheck(cardNumber))
-                                      setCardErrors(p => ({ ...p, number: "Invalid card number" }));
-                                  }}
-                                  placeholder="1234 5678 9012 3456"
-                                  maxLength={19}
-                                  className={`w-full border rounded-lg px-3 py-2.5 text-sm tracking-widest bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.number ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
-                                />
-                                {cardErrors.number && <p className="text-red-500 text-xs mt-1">{cardErrors.number}</p>}
-                              </div>
-                              <div>
-                                <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Name on Card *</label>
-                                <input
-                                  value={cardName}
-                                  onChange={e => { setCardName(e.target.value); setCardErrors(p => ({ ...p, name: undefined })); }}
-                                  onBlur={() => {
-                                    if (cardName && cardName.trim().length < 2)
-                                      setCardErrors(p => ({ ...p, name: "Enter the cardholder name" }));
-                                  }}
-                                  placeholder="Priya Sharma"
-                                  className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.name ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
-                                />
-                                {cardErrors.name && <p className="text-red-500 text-xs mt-1">{cardErrors.name}</p>}
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Expiry (MM/YY) *</label>
+                            <div className="mt-3 px-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="sm:col-span-2">
+                                  <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Card Number *</label>
                                   <input
-                                    value={cardExpiry}
+                                    value={cardNumber.replace(/(.{4})/g, "$1 ").trim()}
                                     onChange={e => {
-                                      let v = e.target.value.replace(/[^\d/]/g, "").slice(0, 5);
-                                      if (v.length === 2 && !v.includes("/") && cardExpiry.length === 1) v = v + "/";
-                                      setCardExpiry(v);
-                                      setCardErrors(p => ({ ...p, expiry: undefined }));
+                                      setCardNumber(e.target.value.replace(/\D/g, "").slice(0, 16));
+                                      setCardErrors(p => ({ ...p, number: undefined }));
                                     }}
                                     onBlur={() => {
-                                      if (cardExpiry && !validateExpiry(cardExpiry))
-                                        setCardErrors(p => ({ ...p, expiry: "Invalid or expired" }));
+                                      if (cardNumber && !luhnCheck(cardNumber))
+                                        setCardErrors(p => ({ ...p, number: "Invalid card number" }));
                                     }}
-                                    placeholder="12/27"
-                                    maxLength={5}
-                                    className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.expiry ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                    placeholder="1234 5678 9012 3456"
+                                    maxLength={19}
+                                    className={`w-full border rounded-lg px-3 py-2.5 text-sm tracking-widest bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.number ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
                                   />
-                                  {cardErrors.expiry && <p className="text-red-500 text-xs mt-1">{cardErrors.expiry}</p>}
+                                  {cardErrors.number && <p className="text-red-500 text-xs mt-1">{cardErrors.number}</p>}
                                 </div>
                                 <div>
-                                  <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">CVV *</label>
+                                  <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Name on Card *</label>
                                   <input
-                                    value={cardCvv}
-                                    onChange={e => { setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 3)); setCardErrors(p => ({ ...p, cvv: undefined })); }}
+                                    value={cardName}
+                                    onChange={e => { setCardName(e.target.value); setCardErrors(p => ({ ...p, name: undefined })); }}
                                     onBlur={() => {
-                                      if (cardCvv && cardCvv.length < 3)
-                                        setCardErrors(p => ({ ...p, cvv: "CVV must be 3 digits" }));
+                                      if (cardName && cardName.trim().length < 2)
+                                        setCardErrors(p => ({ ...p, name: "Enter the cardholder name" }));
                                     }}
-                                    placeholder="•••"
-                                    type="password"
-                                    maxLength={3}
-                                    className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.cvv ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                    placeholder="Priya Sharma"
+                                    className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.name ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
                                   />
-                                  {cardErrors.cvv && <p className="text-red-500 text-xs mt-1">{cardErrors.cvv}</p>}
+                                  {cardErrors.name && <p className="text-red-500 text-xs mt-1">{cardErrors.name}</p>}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">Expiry (MM/YY) *</label>
+                                    <input
+                                      value={cardExpiry}
+                                      onChange={e => {
+                                        let v = e.target.value.replace(/[^\d/]/g, "").slice(0, 5);
+                                        if (v.length === 2 && !v.includes("/") && cardExpiry.length === 1) v = v + "/";
+                                        setCardExpiry(v);
+                                        setCardErrors(p => ({ ...p, expiry: undefined }));
+                                      }}
+                                      onBlur={() => {
+                                        if (cardExpiry && !validateExpiry(cardExpiry))
+                                          setCardErrors(p => ({ ...p, expiry: "Invalid or expired" }));
+                                      }}
+                                      placeholder="12/27"
+                                      maxLength={5}
+                                      className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.expiry ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                    />
+                                    {cardErrors.expiry && <p className="text-red-500 text-xs mt-1">{cardErrors.expiry}</p>}
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-semibold text-[#3D1A1A] dark:text-[#F3F8F5] mb-1.5">CVV *</label>
+                                    <input
+                                      value={cardCvv}
+                                      onChange={e => { setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 3)); setCardErrors(p => ({ ...p, cvv: undefined })); }}
+                                      onBlur={() => {
+                                        if (cardCvv && cardCvv.length < 3)
+                                          setCardErrors(p => ({ ...p, cvv: "CVV must be 3 digits" }));
+                                      }}
+                                      placeholder="•••"
+                                      type="password"
+                                      maxLength={3}
+                                      className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-[#1E2329] focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/30 transition-colors ${cardErrors.cvv ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+                                    />
+                                    {cardErrors.cvv && <p className="text-red-500 text-xs mt-1">{cardErrors.cvv}</p>}
+                                  </div>
                                 </div>
                               </div>
+                              <label className="flex items-center gap-2.5 mt-3 cursor-pointer group">
+                                <input
+                                  type="checkbox"
+                                  checked={savePaymentMethod}
+                                  onChange={e => setSavePaymentMethod(e.target.checked)}
+                                  className="w-4 h-4 accent-[#1E6B5A] cursor-pointer"
+                                />
+                                <span className="text-sm text-gray-600 dark:text-gray-300 group-hover:text-[#1E6B5A] transition-colors">
+                                  Save for future purchases
+                                </span>
+                              </label>
                             </div>
                           )}
 

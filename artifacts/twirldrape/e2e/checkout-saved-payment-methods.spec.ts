@@ -430,6 +430,70 @@ test.describe("Checkout Step 3 — Saved Payment Methods", () => {
     await expect(nextBtn).toBeEnabled({ timeout: 5_000 });
   });
 
+  // ── Test 5: Declined saved method → back to Step 3, method deselected ───
+
+  test("when a saved payment method is declined the checkout returns to Step 3 with the method deselected and an error message", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInUser(page, baseURL!, userId);
+    await setupCommonRoutes(page, [SAVED_CARD]);
+    await injectBuyNowItem(page);
+    await goToPaymentStep(page);
+
+    // Select the saved card
+    const cardRow = page.locator("button").filter({ hasText: /4242/ }).first();
+    await cardRow.waitFor({ state: "visible", timeout: 10_000 });
+    await cardRow.click();
+    await expect(cardRow).toHaveClass(/border-\[#1E6B5A\]/, { timeout: 5_000 });
+
+    // Advance to Step 4 (Review)
+    const reviewBtn = page.locator("button", { hasText: /Review Order/i });
+    await expect(reviewBtn).toBeEnabled({ timeout: 5_000 });
+    await reviewBtn.click();
+
+    // Mock /api/orders to return a payment-method-related error
+    await page.route("**/api/orders**", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Card declined. Please choose a different payment method.",
+          paymentMethodInvalid: true,
+        }),
+      });
+    });
+
+    // Click "Place Order" on the Review step
+    const placeOrderBtn = page.locator("button", { hasText: /Place Order/i });
+    await expect(placeOrderBtn).toBeVisible({ timeout: 10_000 });
+    await placeOrderBtn.click();
+
+    // Should be back on the Payment step (Step 3)
+    await expect(
+      page.locator("h2", { hasText: /Payment Method/i })
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The saved card must no longer be selected (no border-[#1E6B5A] highlight)
+    await expect(cardRow).not.toHaveClass(/border-\[#1E6B5A\]/, { timeout: 5_000 });
+
+    // An inline error message must appear
+    await expect(
+      page.locator("text=/card declined.*choose a different payment method/i").first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
   // ── Test 4: No saved methods → "Saved Methods" section absent ───────────
 
   test("user with no saved methods sees only standard payment options without a Saved Methods section", async ({

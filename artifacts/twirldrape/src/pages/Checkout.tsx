@@ -176,6 +176,8 @@ export function CheckoutPage() {
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
   const [savePaymentMethod, setSavePaymentMethod] = useState(false);
 
+  const [savedMethodError, setSavedMethodError] = useState("");
+
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
     code: string; type: "percent" | "flat"; value: number; description: string; expiresAt: string | null;
@@ -445,6 +447,7 @@ export function CheckoutPage() {
     setPlacing(true);
     setPlaceError("");
     setCouponOrderError("");
+    setSavedMethodError("");
     const adjustments = await revalidateStock();
     if (adjustments.length > 0) {
       setStockNotice(adjustments);
@@ -496,6 +499,25 @@ export function CheckoutPage() {
           /already used/i.test(msg);
         if (isCouponRelated && appliedCoupon) {
           setCouponOrderError(msg);
+          return;
+        }
+        const isPaymentMethodRelated =
+          (errData as any).paymentMethodInvalid ||
+          /payment method/i.test(msg) ||
+          /expired card/i.test(msg) ||
+          /card expired/i.test(msg) ||
+          /card declined/i.test(msg) ||
+          /invalid card/i.test(msg) ||
+          /invalid upi/i.test(msg) ||
+          /upi.*invalid/i.test(msg) ||
+          /saved.*method/i.test(msg) ||
+          /method.*declined/i.test(msg);
+        if (isPaymentMethodRelated && selectedSavedMethodId !== null) {
+          setSelectedSavedMethodId(null);
+          setSavedMethodError(
+            msg || "Your saved payment method was declined. Please choose a different payment method."
+          );
+          setStep(3);
           return;
         }
         throw new Error(msg);
@@ -878,6 +900,13 @@ export function CheckoutPage() {
                   >
                     <h2 className="font-serif text-xl font-bold text-[#1E6B5A] mb-5">Payment Method</h2>
 
+                    {savedMethodError && (
+                      <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3 mb-4">
+                        <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
+                        <p className="text-sm text-red-600 dark:text-red-400">{savedMethodError}</p>
+                      </div>
+                    )}
+
                     {/* ── Saved payment methods (signed-in users only) ── */}
                     {isSignedIn && savedPaymentMethods.length > 0 && (
                       <div className="mb-4">
@@ -892,6 +921,7 @@ export function CheckoutPage() {
                                   paymentChoiceMadeRef.current = true;
                                   setSelectedSavedMethodId(m.id);
                                   setSavePaymentMethod(false);
+                                  setSavedMethodError("");
                                   setUpiError("");
                                   setCardErrors({});
                                   if (m.type === "upi") {
@@ -957,6 +987,7 @@ export function CheckoutPage() {
                               setPaymentMethod(opt.id);
                               setSelectedSavedMethodId(null);
                               setSavePaymentMethod(false);
+                              setSavedMethodError("");
                               setUpiId("");
                               setUpiError("");
                               setCardErrors({});

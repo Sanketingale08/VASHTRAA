@@ -106,29 +106,34 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         data-testid={`card-product-${product.id}`}
       >
         {/* Badges */}
-        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
           {(product.active === false) && (
-            <span className="bg-amber-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
+            <span className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+              style={{ background: "linear-gradient(90deg, #b45309 0%, #d97706 100%)" }}>
               Out of Stock
             </span>
           )}
           {product.active !== false && product.stock === 0 && (
-            <span className="bg-gray-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
+            <span className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+              style={{ background: "linear-gradient(90deg, #6b7280 0%, #9ca3af 100%)" }}>
               Sold Out
             </span>
           )}
           {product.active !== false && product.stock !== 0 && product.isBestSeller && (
-            <span className="bg-[#C9A84C] text-[#1E6B5A] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
+            <span className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+              style={{ background: "linear-gradient(90deg, #2F9FC6 0%, #45B9AF 50%, #32C092 100%)" }}>
               Best Seller
             </span>
           )}
           {product.active !== false && product.stock !== 0 && product.isNewArrival && (
-            <span className="bg-[#1E6B5A] text-[#F3F8F5] text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
+            <span className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+              style={{ background: "linear-gradient(90deg, #6C63D5 0%, #9B7FE8 100%)" }}>
               New Arrival
             </span>
           )}
           {product.active !== false && product.stock !== 0 && discount > 0 && (
-            <span className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md">
+            <span className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+              style={{ background: "linear-gradient(90deg, #4A7FC1 0%, #6B9FE4 100%)" }}>
               {discount}% Off
             </span>
           )}
@@ -192,7 +197,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
                 "flex-1 font-bold py-2 text-xs tracking-wider uppercase rounded-md transition-colors",
                 (product.stock ?? 1) === 0 || product.active === false
                   ? "bg-gray-400 text-white cursor-not-allowed opacity-80"
-                  : "bg-[#C9A84C] hover:bg-[#b59539] text-[#1E3A2A]"
+                  : "bg-[#8BB8F5] hover:bg-[#6da3f0] text-[#1a2d50]"
               )}
             >
               {product.active === false ? "Out of Stock" : (product.stock ?? 1) === 0 ? "Sold Out" : "Add to Cart"}

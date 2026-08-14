@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, Search, Download, RefreshCw, FileText } from "lucide-react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -115,6 +116,9 @@ function OrdersContent() {
   useEffect(() => {
     loadOrders(statusFilter || undefined);
   }, [adminKey, statusFilter]);
+
+  // Background poll every 30 s, paused while tab is hidden.
+  useVisibilityPolling(() => loadOrders(statusFilter || undefined), 30000, { fireOnMount: false });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

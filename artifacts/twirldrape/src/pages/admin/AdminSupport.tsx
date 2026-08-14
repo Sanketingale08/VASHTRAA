@@ -94,6 +94,7 @@ function AdminSupportContent() {
       if (!r.ok) throw new Error("Failed to load tickets");
       return r.json();
     },
+    refetchInterval: 30000,
   });
   const tickets = data?.tickets ?? [];
   const total = data?.total ?? 0;
@@ -110,6 +111,7 @@ function AdminSupportContent() {
       return r.json();
     },
     enabled: !!selectedId,
+    refetchInterval: selectedId ? 30000 : false,
   });
 
   const addReply = useMutation({

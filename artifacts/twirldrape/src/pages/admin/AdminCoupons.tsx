@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Plus, X, Pencil, Ban, Loader2, BadgePercent, Search,
 } from "lucide-react";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -258,6 +259,9 @@ function CouponsContent() {
   useEffect(() => {
     loadCoupons();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Background poll every 60 s, paused while tab is hidden.
+  useVisibilityPolling(loadCoupons, 60000, { fireOnMount: false });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return coupons;

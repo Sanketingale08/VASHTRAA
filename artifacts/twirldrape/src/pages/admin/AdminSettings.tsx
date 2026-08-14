@@ -312,6 +312,8 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [error, setError] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [codesAcknowledged, setCodesAcknowledged] = useState(false);
+  const [setupCopied, setSetupCopied] = useState(false);
 
   // Clean up cooldown timer on unmount
   useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
@@ -436,6 +438,32 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       setError(err.message ?? "Invalid code. Please try again.");
       setSmsOtp("");
     } finally { setLoading(false); }
+  }
+
+  function handleCopySetupCodes() {
+    navigator.clipboard.writeText(recoveryCodes.join("\n")).then(() => {
+      setSetupCopied(true);
+      setTimeout(() => setSetupCopied(false), 2500);
+    });
+  }
+
+  function handleDownloadSetupCodes() {
+    const text = [
+      "TwirlDrape Admin — Recovery Codes",
+      `Generated: ${new Date().toLocaleString("en-IN")}`,
+      "",
+      ...recoveryCodes,
+      "",
+      "Each code can only be used once.",
+      "Store these in a safe place.",
+    ].join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "twirldrape-admin-recovery-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const STEP_LABELS = ["Key", "Scan QR", "Verify App", "Email OTP", "SMS OTP"];
@@ -640,35 +668,66 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
 
           {/* Step 6: Success — shows recovery codes */}
           {step === 6 && (
-            <div className="space-y-5 text-center py-2">
-              <div className="flex justify-center">
+            <div className="space-y-5 py-2">
+              <div className="flex flex-col items-center text-center gap-3">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#f0fdf4" }}>
                   <CheckCircle size={36} className="text-green-500" />
                 </div>
-              </div>
-              <div>
-                <h4 className="font-serif font-bold text-base mb-1.5" style={{ color: NAVY }}>
-                  Two-Factor Authentication Enabled
-                </h4>
-                <p className="text-sm text-gray-600">
-                  Your account is now protected with your authenticator app, email, and SMS.
-                </p>
+                <div>
+                  <h4 className="font-serif font-bold text-base mb-1.5" style={{ color: NAVY }}>
+                    Two-Factor Authentication Enabled
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    Your account is now protected with your authenticator app, email, and SMS.
+                  </p>
+                </div>
               </div>
               {recoveryCodes.length > 0 && (
-                <div className="text-left">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Recovery Codes</p>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Save these in a secure place. Each code can only be used once if you ever lose access to your authenticator.
-                  </p>
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 grid grid-cols-2 gap-1.5">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Recovery Codes</p>
+                    <p className="text-xs text-gray-500">
+                      Save these now — they won't be shown again. Each code can only be used once if you ever lose access to your authenticator.
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 font-mono text-sm grid grid-cols-2 gap-x-6 gap-y-1.5">
                     {recoveryCodes.map((code, i) => (
-                      <span key={i} className="font-mono text-xs text-gray-700 text-center py-1 px-2 bg-white rounded border border-gray-100">{code}</span>
+                      <span key={i} className="text-gray-800 tracking-wider">{code}</span>
                     ))}
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCopySetupCodes}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    >
+                      {setupCopied ? <CheckCircle size={14} className="text-green-500" /> : <RefreshCw size={13} />}
+                      {setupCopied ? "Copied!" : "Copy Codes"}
+                    </button>
+                    <button
+                      onClick={handleDownloadSetupCodes}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg text-white transition-colors"
+                      style={{ background: NAVY }}
+                    >
+                      Download .txt
+                    </button>
+                  </div>
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={codesAcknowledged}
+                      onChange={e => setCodesAcknowledged(e.target.checked)}
+                      className="mt-0.5 shrink-0 accent-navy"
+                      style={{ accentColor: NAVY }}
+                    />
+                    <span className="text-xs text-gray-600">
+                      I have saved my recovery codes in a secure place and understand they will not be shown again.
+                    </span>
+                  </label>
                 </div>
               )}
               <button onClick={onSuccess}
-                className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors"
+                disabled={recoveryCodes.length > 0 && !codesAcknowledged}
+                className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: NAVY, color: "white" }}>
                 Continue to Security Settings
               </button>

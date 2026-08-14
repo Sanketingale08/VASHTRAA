@@ -346,6 +346,119 @@ router.delete(
   }
 );
 
+// ─── PATCH /api/payment-methods/:id ──────────────────────────────────────────
+// Updates editable fields on an existing payment method.
+// Card: cardholderName, expiryMonth, expiryYear  (card number is immutable)
+// UPI:  upiId
+
+router.patch(
+  "/payment-methods/:id",
+  isCustomer,
+  async (req: any, res: any): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      const existing = await db
+        .select()
+        .from(savedPaymentMethodsTable)
+        .where(eq(savedPaymentMethodsTable.id, id))
+        .limit(1);
+
+      if (!existing.length) {
+        res.status(404).json({ error: "Payment method not found" });
+        return;
+      }
+
+      if (existing[0].userId !== req.userId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+
+      const method = existing[0];
+
+      if (method.type === "card") {
+        const { cardholderName, expiryMonth, expiryYear } = req.body;
+
+        const nameStr = cardholderName !== undefined ? String(cardholderName).trim() : undefined;
+        if (nameStr !== undefined && !nameStr) {
+          res.status(400).json({ error: "Cardholder name cannot be empty" });
+          return;
+        }
+
+        let monthNum: number | undefined;
+        let yearNum: number | undefined;
+        if (expiryMonth !== undefined || expiryYear !== undefined) {
+          monthNum = parseInt(String(expiryMonth ?? method.expiryMonth), 10);
+          yearNum  = parseInt(String(expiryYear  ?? method.expiryYear),  10);
+          if (!isExpiryValid(monthNum, yearNum)) {
+            res.status(400).json({ error: "Card is expired or expiry date is invalid" });
+            return;
+          }
+        }
+
+        const updates: Record<string, any> = { updatedAt: new Date() };
+        if (nameStr  !== undefined) updates.cardholderName = nameStr;
+        if (monthNum !== undefined) updates.expiryMonth    = monthNum;
+        if (yearNum  !== undefined) updates.expiryYear     = yearNum;
+
+        const [updated] = await db
+          .update(savedPaymentMethodsTable)
+          .set(updates)
+          .where(eq(savedPaymentMethodsTable.id, id))
+          .returning();
+
+        res.json({ paymentMethod: updated });
+      } else if (method.type === "upi") {
+        const { upiId } = req.body;
+
+        if (!upiId) {
+          res.status(400).json({ error: "UPI ID is required" });
+          return;
+        }
+
+        const upiStr = String(upiId).trim().toLowerCase();
+        if (!UPI_RE.test(upiStr)) {
+          res.status(400).json({ error: "Invalid UPI ID. Expected format: username@handle" });
+          return;
+        }
+
+        // Duplicate check (exclude self)
+        const dupe = await db
+          .select({ id: savedPaymentMethodsTable.id })
+          .from(savedPaymentMethodsTable)
+          .where(
+            and(
+              eq(savedPaymentMethodsTable.userId, req.userId),
+              eq(savedPaymentMethodsTable.type, "upi"),
+              eq(savedPaymentMethodsTable.upiId, upiStr)
+            )
+          )
+          .limit(1);
+
+        if (dupe.length > 0 && dupe[0].id !== id) {
+          res.status(409).json({ error: "This UPI ID is already saved" });
+          return;
+        }
+
+        const upiHandle = upiStr.split("@")[1];
+
+        const [updated] = await db
+          .update(savedPaymentMethodsTable)
+          .set({ upiId: upiStr, upiHandle, updatedAt: new Date() })
+          .where(eq(savedPaymentMethodsTable.id, id))
+          .returning();
+
+        res.json({ paymentMethod: updated });
+      } else {
+        res.status(400).json({ error: "Unknown payment method type" });
+      }
+    } catch (err) {
+      req.log?.error({ err }, "Failed to update payment method");
+      res.status(500).json({ error: "Failed to update payment method" });
+    }
+  }
+);
+
 // ─── PATCH /api/payment-methods/:id/set-default ───────────────────────────────
 
 router.patch(

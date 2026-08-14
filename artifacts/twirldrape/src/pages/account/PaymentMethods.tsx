@@ -11,6 +11,7 @@ import {
   CheckCircle,
   X,
   AlertTriangle,
+  Pencil,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +94,16 @@ function BrandBadge({ brand }: { brand?: string | null }) {
       {b}
     </span>
   );
+}
+
+// ─── Shared input / label classes ─────────────────────────────────────────────
+
+const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5";
+function inputCls(hasError: boolean) {
+  return `w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${hasError ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`;
+}
+function selectCls(hasError: boolean) {
+  return `w-full border rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${hasError ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`;
 }
 
 // ─── Card form ────────────────────────────────────────────────────────────────
@@ -208,30 +219,26 @@ function AddCardForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Cardholder name */}
         <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-            Cardholder Name *
-          </label>
+          <label className={labelCls}>Cardholder Name *</label>
           <input
             value={form.cardholderName}
             onChange={(e) => set("cardholderName", e.target.value)}
             placeholder="Priya Sharma"
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.cardholderName ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={inputCls(!!errors.cardholderName)}
           />
           {errors.cardholderName && <p className="text-red-500 text-xs mt-1">{errors.cardholderName}</p>}
         </div>
 
         {/* Card number */}
         <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-            Card Number *
-          </label>
+          <label className={labelCls}>Card Number *</label>
           <div className="relative">
             <input
               value={form.cardNumber}
               onChange={(e) => set("cardNumber", e.target.value.replace(/\D/g, "").slice(0, 19))}
               placeholder="4242 4242 4242 4242"
               maxLength={19}
-              className={`w-full border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors pr-20 ${errors.cardNumber ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+              className={`${inputCls(!!errors.cardNumber)} font-mono pr-20`}
             />
             {form.cardNumber.length >= 1 && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -245,14 +252,8 @@ function AddCardForm({
         {/* Expiry + CVV */}
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Month *
-            </label>
-            <select
-              value={form.expiryMonth}
-              onChange={(e) => set("expiryMonth", e.target.value)}
-              className={`w-full border rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.expiryMonth ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
-            >
+            <label className={labelCls}>Month *</label>
+            <select value={form.expiryMonth} onChange={(e) => set("expiryMonth", e.target.value)} className={selectCls(!!errors.expiryMonth)}>
               <option value="">MM</option>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
@@ -260,29 +261,21 @@ function AddCardForm({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Year *
-            </label>
-            <select
-              value={form.expiryYear}
-              onChange={(e) => set("expiryYear", e.target.value)}
-              className={`w-full border rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.expiryMonth ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
-            >
+            <label className={labelCls}>Year *</label>
+            <select value={form.expiryYear} onChange={(e) => set("expiryYear", e.target.value)} className={selectCls(!!errors.expiryMonth)}>
               <option value="">YYYY</option>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              CVV *
-            </label>
+            <label className={labelCls}>CVV *</label>
             <input
               value={form.cvv}
               onChange={(e) => set("cvv", e.target.value.replace(/\D/g, "").slice(0, cvvLen))}
               placeholder={"•".repeat(cvvLen)}
               maxLength={cvvLen}
               type="password"
-              className={`w-full border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.cvv ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+              className={`${inputCls(!!errors.cvv)} font-mono`}
             />
           </div>
           {(errors.expiryMonth || errors.cvv) && (
@@ -306,19 +299,142 @@ function AddCardForm({
         </label>
 
         <div className="flex gap-3 pt-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors"
-          >
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors"
-          >
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
             {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save Card"}
+          </button>
+        </div>
+      </form>
+    </motion.div>
+  );
+}
+
+// ─── Edit Card Form ───────────────────────────────────────────────────────────
+// Card number is immutable (only last4 stored); editable fields: name + expiry.
+
+function EditCardForm({
+  method,
+  onSuccess,
+  onCancel,
+}: {
+  method: PaymentMethod;
+  onSuccess: (updated: PaymentMethod) => void;
+  onCancel: () => void;
+}) {
+  const { toast } = useToast();
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 15 }, (_, i) => currentYear + i);
+
+  const [cardholderName, setCardholderName] = useState(method.cardholderName ?? "");
+  const [expiryMonth, setExpiryMonth] = useState(String(method.expiryMonth ?? ""));
+  const [expiryYear, setExpiryYear] = useState(String(method.expiryYear ?? ""));
+  const [errors, setErrors] = useState<{ name?: string; expiry?: string }>({});
+  const [saving, setSaving] = useState(false);
+
+  function validate() {
+    const e: { name?: string; expiry?: string } = {};
+    if (!cardholderName.trim()) e.name = "Cardholder name is required";
+    const m = parseInt(expiryMonth, 10);
+    const y = parseInt(expiryYear, 10);
+    if (!expiryMonth || !expiryYear || !isExpiryValid(m, y))
+      e.expiry = "Expiry date is invalid or in the past";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/payment-methods/${method.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cardholderName: cardholderName.trim(),
+          expiryMonth: parseInt(expiryMonth, 10),
+          expiryYear: parseInt(expiryYear, 10),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Couldn't update card", description: data.error ?? "Please try again", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Card updated" });
+      onSuccess(data.paymentMethod);
+    } catch {
+      toast({ title: "Network error", description: "Please try again", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      className="bg-[#f8fbf9] rounded-xl border border-[#1E6B5A]/20 p-5 mb-4"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-[#1E6B5A] text-sm flex items-center gap-2">
+          <Pencil size={14} />
+          Edit Card Details
+        </h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Read-only card number hint */}
+      <div className="flex items-center gap-2 mb-4 p-3 bg-white rounded-lg border border-[#C9A84C]/20">
+        <BrandBadge brand={method.cardBrand} />
+        <span className="font-mono text-sm text-gray-500 tracking-wider">•••• •••• •••• {method.last4}</span>
+        <span className="text-[10px] text-gray-400 ml-auto">(card number cannot be changed)</span>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className={labelCls}>Cardholder Name *</label>
+          <input
+            value={cardholderName}
+            onChange={(e) => { setCardholderName(e.target.value); setErrors((er) => ({ ...er, name: undefined })); }}
+            placeholder="Priya Sharma"
+            className={inputCls(!!errors.name)}
+          />
+          {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Expiry Month *</label>
+            <select value={expiryMonth} onChange={(e) => { setExpiryMonth(e.target.value); setErrors((er) => ({ ...er, expiry: undefined })); }} className={selectCls(!!errors.expiry)}>
+              <option value="">MM</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Expiry Year *</label>
+            <select value={expiryYear} onChange={(e) => { setExpiryYear(e.target.value); setErrors((er) => ({ ...er, expiry: undefined })); }} className={selectCls(!!errors.expiry)}>
+              <option value="">YYYY</option>
+              {years.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          {errors.expiry && <p className="col-span-2 text-red-500 text-xs -mt-2">{errors.expiry}</p>}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#155a4a] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
+            {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save Changes"}
           </button>
         </div>
       </form>
@@ -393,14 +509,12 @@ function AddUpiForm({
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-            UPI ID *
-          </label>
+          <label className={labelCls}>UPI ID *</label>
           <input
             value={upiId}
             onChange={(e) => { setUpiId(e.target.value); setError(""); }}
             placeholder="name@oksbi"
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${error ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`${inputCls(!!error)} font-mono`}
           />
           <p className="text-[11px] text-gray-400 mt-1">
             Examples: name@paytm · name@oksbi · name@ybl · name@upi
@@ -425,19 +539,110 @@ function AddUpiForm({
         </label>
 
         <div className="flex gap-3 pt-1">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors"
-          >
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors"
-          >
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
             {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save UPI ID"}
+          </button>
+        </div>
+      </form>
+    </motion.div>
+  );
+}
+
+// ─── Edit UPI Form ────────────────────────────────────────────────────────────
+
+function EditUpiForm({
+  method,
+  onSuccess,
+  onCancel,
+}: {
+  method: PaymentMethod;
+  onSuccess: (updated: PaymentMethod) => void;
+  onCancel: () => void;
+}) {
+  const { toast } = useToast();
+  const [upiId, setUpiId] = useState(method.upiId ?? "");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const val = upiId.trim().toLowerCase();
+    if (!UPI_RE.test(val)) {
+      setError("Invalid UPI ID. Expected format: username@handle (e.g. name@oksbi)");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/payment-methods/${method.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upiId: val }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) {
+          toast({ title: "Already saved", description: data.error, variant: "destructive" });
+        } else {
+          toast({ title: "Couldn't update UPI ID", description: data.error ?? "Please try again", variant: "destructive" });
+        }
+        return;
+      }
+      toast({ title: "UPI ID updated" });
+      onSuccess(data.paymentMethod);
+    } catch {
+      toast({ title: "Network error", description: "Please try again", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      className="bg-[#f8fbf9] rounded-xl border border-[#1E6B5A]/20 p-5 mb-4"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-[#1E6B5A] text-sm flex items-center gap-2">
+          <Pencil size={14} />
+          Edit UPI ID
+        </h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <X size={16} />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className={labelCls}>UPI ID *</label>
+          <input
+            value={upiId}
+            onChange={(e) => { setUpiId(e.target.value); setError(""); }}
+            placeholder="name@oksbi"
+            className={`${inputCls(!!error)} font-mono`}
+          />
+          <p className="text-[11px] text-gray-400 mt-1">
+            Examples: name@paytm · name@oksbi · name@ybl · name@upi
+          </p>
+          {error && (
+            <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+              <AlertTriangle size={11} />{error}
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#155a4a] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
+            {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save Changes"}
           </button>
         </div>
       </form>
@@ -516,11 +721,13 @@ function CardRow({
   method,
   onSetDefault,
   onDelete,
+  onEdit,
   settingDefault,
 }: {
   method: PaymentMethod;
   onSetDefault: (id: string) => void;
   onDelete: (method: PaymentMethod) => void;
+  onEdit: (method: PaymentMethod) => void;
   settingDefault: string | null;
 }) {
   return (
@@ -567,6 +774,13 @@ function CardRow({
             </button>
           )}
           <button
+            onClick={() => onEdit(method)}
+            title="Edit card details"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
             onClick={() => onDelete(method)}
             title="Remove"
             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -585,11 +799,13 @@ function UpiRow({
   method,
   onSetDefault,
   onDelete,
+  onEdit,
   settingDefault,
 }: {
   method: PaymentMethod;
   onSetDefault: (id: string) => void;
   onDelete: (method: PaymentMethod) => void;
+  onEdit: (method: PaymentMethod) => void;
   settingDefault: string | null;
 }) {
   return (
@@ -630,6 +846,13 @@ function UpiRow({
             </button>
           )}
           <button
+            onClick={() => onEdit(method)}
+            title="Edit UPI ID"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
             onClick={() => onDelete(method)}
             title="Remove"
             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -658,6 +881,9 @@ export function AccountPaymentMethodsPage() {
   const [settingDefault, setSettingDefault] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PaymentMethod | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Edit state — only one edit form open at a time
+  const [editTarget, setEditTarget] = useState<PaymentMethod | null>(null);
 
   const fetchMethods = useCallback(async () => {
     try {
@@ -709,7 +935,6 @@ export function AccountPaymentMethodsPage() {
       if (res.ok) {
         setMethods((prev) => {
           const remaining = prev.filter((m) => m.id !== deleteTarget.id);
-          // If deleted was default, mark the oldest remaining as default (mirrors server)
           if (deleteTarget.isDefault && remaining.length > 0) {
             const oldest = [...remaining].sort(
               (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -734,6 +959,17 @@ export function AccountPaymentMethodsPage() {
     setShowCardForm(false);
     setShowUpiForm(false);
     fetchMethods();
+  }
+
+  function handleEditSuccess(updated: PaymentMethod) {
+    setMethods((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    setEditTarget(null);
+  }
+
+  function handleStartEdit(method: PaymentMethod) {
+    setShowCardForm(false);
+    setShowUpiForm(false);
+    setEditTarget(method);
   }
 
   const cards = methods.filter((m) => m.type === "card");
@@ -802,7 +1038,7 @@ export function AccountPaymentMethodsPage() {
             </h3>
             {!showCardForm && (
               <button
-                onClick={() => { setShowCardForm(true); setShowUpiForm(false); }}
+                onClick={() => { setShowCardForm(true); setShowUpiForm(false); setEditTarget(null); }}
                 className="flex items-center gap-1.5 text-xs font-bold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
               >
                 <Plus size={13} />
@@ -825,13 +1061,23 @@ export function AccountPaymentMethodsPage() {
             <div className="space-y-3">
               <AnimatePresence>
                 {cards.map((m) => (
-                  <CardRow
-                    key={m.id}
-                    method={m}
-                    onSetDefault={handleSetDefault}
-                    onDelete={setDeleteTarget}
-                    settingDefault={settingDefault}
-                  />
+                  <React.Fragment key={m.id}>
+                    {editTarget?.id === m.id ? (
+                      <EditCardForm
+                        method={m}
+                        onSuccess={handleEditSuccess}
+                        onCancel={() => setEditTarget(null)}
+                      />
+                    ) : (
+                      <CardRow
+                        method={m}
+                        onSetDefault={handleSetDefault}
+                        onDelete={setDeleteTarget}
+                        onEdit={handleStartEdit}
+                        settingDefault={settingDefault}
+                      />
+                    )}
+                  </React.Fragment>
                 ))}
               </AnimatePresence>
             </div>
@@ -856,7 +1102,7 @@ export function AccountPaymentMethodsPage() {
             </h3>
             {!showUpiForm && (
               <button
-                onClick={() => { setShowUpiForm(true); setShowCardForm(false); }}
+                onClick={() => { setShowUpiForm(true); setShowCardForm(false); setEditTarget(null); }}
                 className="flex items-center gap-1.5 text-xs font-bold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
               >
                 <Plus size={13} />
@@ -879,13 +1125,23 @@ export function AccountPaymentMethodsPage() {
             <div className="space-y-3">
               <AnimatePresence>
                 {upis.map((m) => (
-                  <UpiRow
-                    key={m.id}
-                    method={m}
-                    onSetDefault={handleSetDefault}
-                    onDelete={setDeleteTarget}
-                    settingDefault={settingDefault}
-                  />
+                  <React.Fragment key={m.id}>
+                    {editTarget?.id === m.id ? (
+                      <EditUpiForm
+                        method={m}
+                        onSuccess={handleEditSuccess}
+                        onCancel={() => setEditTarget(null)}
+                      />
+                    ) : (
+                      <UpiRow
+                        method={m}
+                        onSetDefault={handleSetDefault}
+                        onDelete={setDeleteTarget}
+                        onEdit={handleStartEdit}
+                        settingDefault={settingDefault}
+                      />
+                    )}
+                  </React.Fragment>
                 ))}
               </AnimatePresence>
             </div>

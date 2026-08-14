@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useSearch, useLocation } from "wouter";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingBag, Users, Store,
@@ -1170,15 +1171,44 @@ const TABS = [
 type TabKey = typeof TABS[number]["key"];
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
+const VALID_TABS = new Set(TABS.map((t) => t.key));
+const VALID_PERIODS = new Set(PERIODS.map((p) => p.key));
+
 function ReportsContent() {
-  const [tab, setTab] = useState<TabKey>("revenue");
-  const [period, setPeriod] = useState<Period>("30d");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const search = useSearch();
+  const [location, navigate] = useLocation();
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Derive state from URL query string, falling back to sensible defaults.
+  const params = new URLSearchParams(search);
+  const rawTab = params.get("tab") ?? "";
+  const tab: TabKey = VALID_TABS.has(rawTab as TabKey) ? (rawTab as TabKey) : "revenue";
+
+  const rawPeriod = params.get("period") ?? "";
+  const period: Period = VALID_PERIODS.has(rawPeriod as Period) ? (rawPeriod as Period) : "30d";
+
+  const from = params.get("from") ?? "";
+  const to = params.get("to") ?? "";
+
+  function updateParams(updates: Record<string, string>) {
+    const next = new URLSearchParams(search);
+    for (const [k, v] of Object.entries(updates)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
+    navigate(`${location}?${next.toString()}`, { replace: true });
+  }
+
+  function handleTabChange(key: TabKey) {
+    updateParams({ tab: key });
+  }
+
   function handlePeriodChange(p: Period, f: string, t: string) {
-    setPeriod(p); setFrom(f); setTo(t);
+    updateParams({
+      period: p,
+      from: p === "custom" ? f : "",
+      to: p === "custom" ? t : "",
+    });
   }
 
   function handleRefresh() {
@@ -1212,7 +1242,7 @@ function ReportsContent() {
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
-            onClick={() => setTab(key)}
+            onClick={() => handleTabChange(key)}
             className="flex items-center gap-2 whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0"
             style={{
               background: tab === key ? NAVY : "white",

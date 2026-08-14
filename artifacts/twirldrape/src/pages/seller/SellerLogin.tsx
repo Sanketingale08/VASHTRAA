@@ -22,11 +22,6 @@ export default function SellerLogin() {
 
         {/* ── Logo + portal label ── */}
         <div className="text-center mb-6">
-          <img
-            src={`${basePath}/images/logo.png`}
-            alt="TwirlDrape"
-            className="h-10 w-auto object-contain mx-auto mb-2"
-          />
           <p
             className="text-[10px] font-semibold uppercase tracking-[0.25em]"
             style={{ color: GOLD }}

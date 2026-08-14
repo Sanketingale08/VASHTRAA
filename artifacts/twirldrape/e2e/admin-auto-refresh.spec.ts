@@ -316,6 +316,247 @@ test.describe("AdminReturns — polling and mutation reload", () => {
 
     expect(consoleErrors.filter(isAppError)).toHaveLength(0);
   });
+
+  test("list is re-fetched immediately after approving a refund", async ({ page }) => {
+    test.setTimeout(30_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    await seedAdminKey(page);
+    await page.clock.install();
+    await stubAdminInfra(page);
+
+    // Order with a pending refund — triggers the "Approve refund" and "Reject refund" buttons
+    const PENDING_REFUND_ORDER = {
+      ...STUB_RETURNS.orders[0],
+      id: "ord-002",
+      displayId: "TD-002",
+      status: "return_approved",
+      refundStatus: "pending",
+      refundMethod: "bank_transfer",
+    };
+
+    // After the action the server returns refundStatus: "approved"
+    const APPROVED_REFUND_ORDER_RESULT = {
+      ...PENDING_REFUND_ORDER,
+      refundStatus: "approved",
+      updatedAt: new Date().toISOString(),
+    };
+
+    let returnsFetchCount = 0;
+    await page.route("**/api/admin/returns**", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      returnsFetchCount++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        // Serve the updated order on subsequent fetches so the pill updates
+        body: JSON.stringify({ orders: [returnsFetchCount === 1 ? PENDING_REFUND_ORDER : APPROVED_REFUND_ORDER_RESULT] }),
+      });
+    });
+
+    // Count POST requests to the refund endpoint to confirm the mutation fired
+    let refundPostCount = 0;
+    await page.route("**/api/admin/orders/ord-002/refund", (route) => {
+      if (route.request().method() === "POST") refundPostCount++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: APPROVED_REFUND_ORDER_RESULT }),
+      });
+    });
+
+    await page.goto("/admin/returns");
+    await expect(page.locator("text=Returns").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("text=Kanjivaram Silk").first()).toBeVisible({ timeout: 10_000 });
+
+    // "refund pending" pill must be visible — confirms the order is in the right state
+    await expect(page.locator("text=refund pending").first()).toBeVisible({ timeout: 5_000 });
+
+    // "Approve refund" must be visible unconditionally — if it is absent the component is broken
+    const approveRefundBtn = page.locator("button", { hasText: /Approve refund/i }).first();
+    await expect(approveRefundBtn).toBeVisible({ timeout: 5_000 });
+
+    const beforeAction = returnsFetchCount;
+    await approveRefundBtn.click();
+
+    // The POST to /refund must have fired
+    expect(refundPostCount).toBeGreaterThanOrEqual(1);
+
+    // The returns list must be re-fetched within 2 s of the mutation
+    await page.waitForTimeout(2_000);
+    expect(returnsFetchCount).toBeGreaterThan(beforeAction);
+
+    // The refundStatus pill must update to "approved" without a manual reload
+    await expect(page.locator("text=refund approved").first()).toBeVisible({ timeout: 3_000 });
+
+    expect(consoleErrors.filter(isAppError)).toHaveLength(0);
+  });
+
+  test("list is re-fetched immediately after rejecting a refund via confirm modal", async ({ page }) => {
+    test.setTimeout(30_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    await seedAdminKey(page);
+    await page.clock.install();
+    await stubAdminInfra(page);
+
+    const PENDING_REFUND_ORDER = {
+      ...STUB_RETURNS.orders[0],
+      id: "ord-002",
+      displayId: "TD-002",
+      status: "return_approved",
+      refundStatus: "pending",
+      refundMethod: "bank_transfer",
+    };
+
+    const REJECTED_REFUND_ORDER_RESULT = {
+      ...PENDING_REFUND_ORDER,
+      refundStatus: "rejected",
+      updatedAt: new Date().toISOString(),
+    };
+
+    let returnsFetchCount = 0;
+    await page.route("**/api/admin/returns**", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      returnsFetchCount++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ orders: [returnsFetchCount === 1 ? PENDING_REFUND_ORDER : REJECTED_REFUND_ORDER_RESULT] }),
+      });
+    });
+
+    // Count POST requests to confirm the mutation fired
+    let refundPostCount = 0;
+    await page.route("**/api/admin/orders/ord-002/refund", (route) => {
+      if (route.request().method() === "POST") refundPostCount++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: REJECTED_REFUND_ORDER_RESULT }),
+      });
+    });
+
+    await page.goto("/admin/returns");
+    await expect(page.locator("text=Returns").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("text=Kanjivaram Silk").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("text=refund pending").first()).toBeVisible({ timeout: 5_000 });
+
+    // "Reject refund" must be visible — clicking it opens the RejectRefundConfirmModal
+    const rejectRefundBtn = page.locator("button", { hasText: /Reject refund/i }).first();
+    await expect(rejectRefundBtn).toBeVisible({ timeout: 5_000 });
+
+    const beforeAction = returnsFetchCount;
+    await rejectRefundBtn.click();
+
+    // Confirm button inside the modal must appear and be clicked
+    const confirmBtn = page.locator("button", { hasText: /^Reject refund$/i }).last();
+    await expect(confirmBtn).toBeVisible({ timeout: 3_000 });
+    await confirmBtn.click();
+
+    // The POST to /refund must have fired
+    expect(refundPostCount).toBeGreaterThanOrEqual(1);
+
+    // The returns list must be re-fetched within 2 s
+    await page.waitForTimeout(2_000);
+    expect(returnsFetchCount).toBeGreaterThan(beforeAction);
+
+    // The refundStatus pill must update to "rejected" without a manual reload
+    await expect(page.locator("text=refund rejected").first()).toBeVisible({ timeout: 3_000 });
+
+    expect(consoleErrors.filter(isAppError)).toHaveLength(0);
+  });
+
+  test("list is re-fetched and pill updates after confirming a refund payout", async ({ page }) => {
+    test.setTimeout(30_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    await seedAdminKey(page);
+    await page.clock.install();
+    await stubAdminInfra(page);
+
+    // Order with an approved refund — triggers the "Mark payout done" button
+    const APPROVED_REFUND_ORDER = {
+      ...STUB_RETURNS.orders[0],
+      id: "ord-003",
+      displayId: "TD-003",
+      status: "return_approved",
+      refundStatus: "approved",
+      refundMethod: "bank_transfer",
+    };
+
+    // After processRefund the server returns refundStatus: "processed"
+    const PROCESSED_REFUND_ORDER = {
+      ...APPROVED_REFUND_ORDER,
+      refundStatus: "processed",
+      refundProcessedAt: new Date().toISOString(),
+      refundReference: "TXN-REF-9999",
+      updatedAt: new Date().toISOString(),
+    };
+
+    let returnsFetchCount = 0;
+    await page.route("**/api/admin/returns**", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      returnsFetchCount++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        // After the first fetch serve the updated order so the pill updates
+        body: JSON.stringify({ orders: [returnsFetchCount === 1 ? APPROVED_REFUND_ORDER : PROCESSED_REFUND_ORDER] }),
+      });
+    });
+
+    // Count POST requests to /refund/process to confirm the mutation fired
+    let processPostCount = 0;
+    await page.route("**/api/admin/orders/ord-003/refund/process", (route) => {
+      if (route.request().method() === "POST") processPostCount++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ order: PROCESSED_REFUND_ORDER }),
+      });
+    });
+
+    await page.goto("/admin/returns");
+    await expect(page.locator("text=Returns").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("text=Kanjivaram Silk").first()).toBeVisible({ timeout: 10_000 });
+
+    // "refund approved" pill must be visible before the action
+    await expect(page.locator("text=refund approved").first()).toBeVisible({ timeout: 5_000 });
+
+    // "Mark payout done" must be visible — clicking it opens the PayoutConfirmModal
+    const payoutBtn = page.locator("button", { hasText: /Mark payout done/i }).first();
+    await expect(payoutBtn).toBeVisible({ timeout: 5_000 });
+
+    const beforeAction = returnsFetchCount;
+    await payoutBtn.click();
+
+    // Confirm button inside the modal must appear and be clicked
+    const confirmPayoutBtn = page.locator("button", { hasText: /Confirm payout/i }).first();
+    await expect(confirmPayoutBtn).toBeVisible({ timeout: 3_000 });
+    await confirmPayoutBtn.click();
+
+    // The POST to /refund/process must have fired
+    expect(processPostCount).toBeGreaterThanOrEqual(1);
+
+    // The returns list must be re-fetched within 2 s
+    await page.waitForTimeout(2_000);
+    expect(returnsFetchCount).toBeGreaterThan(beforeAction);
+
+    // The refundStatus pill in the row must reflect "processed" without a manual reload
+    await expect(page.locator("text=refund processed").first()).toBeVisible({ timeout: 3_000 });
+
+    expect(consoleErrors.filter(isAppError)).toHaveLength(0);
+  });
 });
 
 // ── Test: AdminVendorDetail polling + mutation reload ─────────────────────────

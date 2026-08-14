@@ -6,7 +6,8 @@ export default function PaithaniShop() {
     <ProductsListing
       category="paithani"
       title="Paithani Sarees"
-      subtitle="Heritage Handwoven Silk"
+      subtitle=""
+      heroBanner="/images/hero-paithani-banner.png"
     />
   );
 }

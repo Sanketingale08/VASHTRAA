@@ -97,6 +97,11 @@ export default function CheckoutScreen() {
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvv, setCardCvv] = useState("");
   const [cardName, setCardName] = useState("");
+  const [savePaymentMethod, setSavePaymentMethod] = useState(false);
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<any[]>([]);
+  const [selectedSavedPaymentId, setSelectedSavedPaymentId] = useState<string | null>(null);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
+  const [enteringNewPayment, setEnteringNewPayment] = useState(false);
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | {
@@ -148,9 +153,42 @@ export default function CheckoutScreen() {
       .finally(() => setAddressesLoading(false));
   }, [isLoaded, isSignedIn]);
 
+  const fetchPaymentMethods = React.useCallback(() => {
+    if (!isLoaded || !isSignedIn) return;
+    setPaymentMethodsLoading(true);
+    getToken()
+      .then((token) => {
+        if (!token) throw new Error("No auth token");
+        return fetch(`${API_BASE}/api/payment-methods`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      })
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to fetch payment methods");
+        return r.json();
+      })
+      .then((data) => {
+        const methods = data.paymentMethods ?? [];
+        setSavedPaymentMethods(methods);
+        const def = methods.find((m: any) => m.isDefault) ?? methods[0];
+        if (def) {
+          setSelectedSavedPaymentId(def.id);
+          setEnteringNewPayment(false);
+        } else {
+          setEnteringNewPayment(true);
+        }
+      })
+      .catch(() => {
+        // Non-fatal — user can still enter payment details manually
+        setEnteringNewPayment(true);
+      })
+      .finally(() => setPaymentMethodsLoading(false));
+  }, [isLoaded, isSignedIn]);
+
   useEffect(() => {
     fetchAddresses();
-  }, [fetchAddresses]);
+    fetchPaymentMethods();
+  }, [fetchAddresses, fetchPaymentMethods]);
 
   const orderItems = buyNowItem ? [buyNowItem] : cartItems;
   const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -251,6 +289,34 @@ export default function CheckoutScreen() {
         throw new Error(msg);
       }
       const data = await res.json();
+
+      // Save payment method in the background if requested
+      if (savePaymentMethod && enteringNewPayment && (paymentMethod === "card" || paymentMethod === "upi")) {
+        try {
+          let body: Record<string, any>;
+          if (paymentMethod === "card") {
+            const [expMonth, expYear] = cardExpiry.split("/").map((p) => parseInt(p.trim(), 10));
+            body = {
+              type: "card",
+              cardNumber: cardNumber.replace(/\D/g, ""),
+              cardholderName: cardName.trim(),
+              expiryMonth: expMonth,
+              expiryYear: expYear < 100 ? 2000 + expYear : expYear,
+              cvv: cardCvv,
+            };
+          } else {
+            body = { type: "upi", upiId: upiId.trim() };
+          }
+          await fetch(`${API_BASE}/api/payment-methods`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(body),
+          });
+        } catch {
+          // Non-fatal — order was placed successfully
+        }
+      }
+
       if (!buyNowItem) await clearCart();
       router.replace(`/orders/${data.orderId}` as any);
     } catch (err: any) {
@@ -726,54 +792,132 @@ export default function CheckoutScreen() {
             {step === 3 && (
               <>
                 <Text style={s.sectionTitle}>Payment Method</Text>
-                {([
-                  { id: "upi" as const, icon: "phone-portrait-outline", title: "UPI", sub: "Pay via UPI ID (Google Pay, PhonePe, etc.)" },
-                  { id: "card" as const, icon: "card-outline", title: "Credit / Debit Card", sub: "Visa, Mastercard, RuPay" },
-                  { id: "cod" as const, icon: "cash-outline", title: "Cash on Delivery", sub: "Pay when you receive your order" },
-                ] as const).map((opt) => (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => setPaymentMethod(opt.id)}
-                    style={[s.optionCard, {
-                      borderColor: paymentMethod === opt.id ? colors.primary : colors.border + "44",
-                      backgroundColor: paymentMethod === opt.id ? colors.primary + "08" : colors.card,
-                    }]}
-                  >
-                    <View style={[s.optionIcon, { backgroundColor: paymentMethod === opt.id ? colors.primary : colors.muted }]}>
-                      <Ionicons name={opt.icon} size={20} color={paymentMethod === opt.id ? colors.primaryForeground : colors.mutedForeground} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.optionTitle}>{opt.title}</Text>
-                      <Text style={s.optionSub}>{opt.sub}</Text>
-                    </View>
-                    {paymentMethod === opt.id && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-                  </Pressable>
-                ))}
 
-                {paymentMethod === "upi" && (
-                  <View style={s.card}>
-                    <Text style={s.label}>UPI ID</Text>
-                    <TextInput style={s.inputBox} value={upiId} onChangeText={setUpiId} placeholder="yourname@upi" placeholderTextColor={colors.mutedForeground + "88"} autoCapitalize="none" keyboardType="email-address" />
-                  </View>
+                {/* Saved payment methods */}
+                {!paymentMethodsLoading && savedPaymentMethods.length > 0 && (
+                  <>
+                    <Text style={[s.label, { marginBottom: 8 }]}>Saved Methods</Text>
+                    {savedPaymentMethods.map((pm) => {
+                      const pmType: PaymentMethod = pm.type === "card" ? "card" : "upi";
+                      const isSelected = !enteringNewPayment && selectedSavedPaymentId === pm.id;
+                      const displayLabel = pm.type === "card"
+                        ? `${pm.cardBrand} •••• ${pm.last4} (${String(pm.expiryMonth).padStart(2, "0")}/${pm.expiryYear})`
+                        : pm.upiId;
+                      const iconName = pm.type === "card" ? "card-outline" : "phone-portrait-outline";
+                      return (
+                        <Pressable
+                          key={pm.id}
+                          onPress={() => {
+                            setSelectedSavedPaymentId(pm.id);
+                            setPaymentMethod(pmType);
+                            setEnteringNewPayment(false);
+                          }}
+                          style={[s.optionCard, {
+                            borderColor: isSelected ? colors.primary : colors.border + "44",
+                            backgroundColor: isSelected ? colors.primary + "08" : colors.card,
+                          }]}
+                        >
+                          <View style={[s.optionIcon, { backgroundColor: isSelected ? colors.primary : colors.muted }]}>
+                            <Ionicons name={iconName} size={20} color={isSelected ? colors.primaryForeground : colors.mutedForeground} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.optionTitle}>{displayLabel}</Text>
+                            {pm.cardholderName && <Text style={s.optionSub}>{pm.cardholderName}</Text>}
+                          </View>
+                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                        </Pressable>
+                      );
+                    })}
+                    <Pressable
+                      onPress={() => {
+                        setEnteringNewPayment(true);
+                        setSelectedSavedPaymentId(null);
+                      }}
+                      style={[s.optionCard, {
+                        borderColor: enteringNewPayment ? colors.primary : colors.border + "44",
+                        backgroundColor: enteringNewPayment ? colors.primary + "08" : colors.card,
+                        borderStyle: "dashed",
+                      }]}
+                    >
+                      <View style={[s.optionIcon, { backgroundColor: enteringNewPayment ? colors.primary : colors.muted }]}>
+                        <Ionicons name="add-outline" size={20} color={enteringNewPayment ? colors.primaryForeground : colors.mutedForeground} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.optionTitle}>Use a new card or UPI</Text>
+                      </View>
+                      {enteringNewPayment && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                    </Pressable>
+                  </>
                 )}
 
-                {paymentMethod === "card" && (
-                  <View style={s.card}>
-                    <Text style={s.label}>Cardholder Name</Text>
-                    <TextInput style={s.inputBox} value={cardName} onChangeText={setCardName} placeholder="As on card" placeholderTextColor={colors.mutedForeground + "88"} />
-                    <Text style={s.label}>Card Number</Text>
-                    <TextInput style={s.inputBox} value={cardNumber} onChangeText={(v) => setCardNumber(v.replace(/\D/g, "").slice(0, 16))} placeholder="1234 5678 9012 3456" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" />
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.label}>Expiry</Text>
-                        <TextInput style={s.inputBox} value={cardExpiry} onChangeText={setCardExpiry} placeholder="MM/YY" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" />
+                {/* Payment type selector — shown when entering new or no saved methods */}
+                {(enteringNewPayment || savedPaymentMethods.length === 0) && (
+                  <>
+                    {savedPaymentMethods.length > 0 && (
+                      <Text style={[s.label, { marginBottom: 8, marginTop: 4 }]}>New Payment</Text>
+                    )}
+                    {([
+                      { id: "upi" as const, icon: "phone-portrait-outline", title: "UPI", sub: "Pay via UPI ID (Google Pay, PhonePe, etc.)" },
+                      { id: "card" as const, icon: "card-outline", title: "Credit / Debit Card", sub: "Visa, Mastercard, RuPay" },
+                      { id: "cod" as const, icon: "cash-outline", title: "Cash on Delivery", sub: "Pay when you receive your order" },
+                    ] as const).map((opt) => (
+                      <Pressable
+                        key={opt.id}
+                        onPress={() => setPaymentMethod(opt.id)}
+                        style={[s.optionCard, {
+                          borderColor: paymentMethod === opt.id ? colors.primary : colors.border + "44",
+                          backgroundColor: paymentMethod === opt.id ? colors.primary + "08" : colors.card,
+                        }]}
+                      >
+                        <View style={[s.optionIcon, { backgroundColor: paymentMethod === opt.id ? colors.primary : colors.muted }]}>
+                          <Ionicons name={opt.icon} size={20} color={paymentMethod === opt.id ? colors.primaryForeground : colors.mutedForeground} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.optionTitle}>{opt.title}</Text>
+                          <Text style={s.optionSub}>{opt.sub}</Text>
+                        </View>
+                        {paymentMethod === opt.id && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                      </Pressable>
+                    ))}
+
+                    {paymentMethod === "upi" && (
+                      <View style={s.card}>
+                        <Text style={s.label}>UPI ID</Text>
+                        <TextInput style={s.inputBox} value={upiId} onChangeText={setUpiId} placeholder="yourname@upi" placeholderTextColor={colors.mutedForeground + "88"} autoCapitalize="none" keyboardType="email-address" />
+                        <Pressable style={s.checkRow} onPress={() => setSavePaymentMethod((v) => !v)}>
+                          <View style={[s.checkBox, { borderColor: savePaymentMethod ? colors.primary : colors.border, backgroundColor: savePaymentMethod ? colors.primary : "transparent" }]}>
+                            {savePaymentMethod && <Ionicons name="checkmark" size={13} color={colors.primaryForeground} />}
+                          </View>
+                          <Text style={s.checkLabel}>Save for future purchases</Text>
+                        </Pressable>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.label}>CVV</Text>
-                        <TextInput style={s.inputBox} value={cardCvv} onChangeText={(v) => setCardCvv(v.replace(/\D/g, "").slice(0, 3))} placeholder="•••" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" secureTextEntry />
+                    )}
+
+                    {paymentMethod === "card" && (
+                      <View style={s.card}>
+                        <Text style={s.label}>Cardholder Name</Text>
+                        <TextInput style={s.inputBox} value={cardName} onChangeText={setCardName} placeholder="As on card" placeholderTextColor={colors.mutedForeground + "88"} />
+                        <Text style={s.label}>Card Number</Text>
+                        <TextInput style={s.inputBox} value={cardNumber} onChangeText={(v) => setCardNumber(v.replace(/\D/g, "").slice(0, 16))} placeholder="1234 5678 9012 3456" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" />
+                        <View style={s.row2}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.label}>Expiry</Text>
+                            <TextInput style={s.inputBox} value={cardExpiry} onChangeText={setCardExpiry} placeholder="MM/YY" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.label}>CVV</Text>
+                            <TextInput style={s.inputBox} value={cardCvv} onChangeText={(v) => setCardCvv(v.replace(/\D/g, "").slice(0, 3))} placeholder="•••" placeholderTextColor={colors.mutedForeground + "88"} keyboardType="numeric" secureTextEntry />
+                          </View>
+                        </View>
+                        <Pressable style={s.checkRow} onPress={() => setSavePaymentMethod((v) => !v)}>
+                          <View style={[s.checkBox, { borderColor: savePaymentMethod ? colors.primary : colors.border, backgroundColor: savePaymentMethod ? colors.primary : "transparent" }]}>
+                            {savePaymentMethod && <Ionicons name="checkmark" size={13} color={colors.primaryForeground} />}
+                          </View>
+                          <Text style={s.checkLabel}>Save for future purchases</Text>
+                        </Pressable>
                       </View>
-                    </View>
-                  </View>
+                    )}
+                  </>
                 )}
               </>
             )}

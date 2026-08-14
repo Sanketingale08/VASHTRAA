@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { db } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
-import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ilike, or, gte, lte, isNull } from "drizzle-orm";
 
 const router = Router();
 
@@ -12,7 +12,11 @@ router.get("/notifications/unread-count", requireAuth, async (req: any, res: any
     const [row] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(notificationsTable)
-      .where(and(eq(notificationsTable.userId, req.userId), eq(notificationsTable.read, false)));
+      .where(and(
+      eq(notificationsTable.userId, req.userId),
+      eq(notificationsTable.read, false),
+      isNull(notificationsTable.vendorId),
+    ));
     res.json({ count: row?.count ?? 0 });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch unread count");
@@ -35,20 +39,11 @@ router.get("/notifications", requireAuth, async (req: any, res: any): Promise<vo
       ? (Array.isArray(rawType) ? rawType : String(rawType).split(",")).map(String).filter(Boolean)
       : [];
 
-    // Seller-domain notification types must never appear in the user notification feed
-    const SELLER_TYPES = [
-      "low_stock", "new_order_seller", "new_order",
-      "payout_successful", "payout_failed", "payout_pending",
-      "product_approved", "product_rejected", "product_approval",
-      "inventory_update", "store_performance", "review_moderation",
-      "seller_verification", "store_verified", "store_rejected",
-      "customer_query",
-    ];
-
     const conditions: any[] = [
       eq(notificationsTable.userId, req.userId),
-      // Exclude any seller-domain types that may have been stored in the shared table
-      sql`${notificationsTable.type} NOT IN (${sql.join(SELLER_TYPES.map((t) => sql`${t}`), sql`, `)})`,
+      // Seller notifications always have vendorId set; customer notifications never do.
+      // This is the robust, future-proof guard — no type blacklist needed.
+      isNull(notificationsTable.vendorId),
     ];
     if (types.length === 1) conditions.push(eq(notificationsTable.type, types[0] as any));
     else if (types.length > 1) conditions.push(inArray(notificationsTable.type, types as any[]));
@@ -89,7 +84,11 @@ router.patch("/notifications/read-all", requireAuth, async (req: any, res: any):
     await db
       .update(notificationsTable)
       .set({ read: true })
-      .where(and(eq(notificationsTable.userId, req.userId), eq(notificationsTable.read, false)));
+      .where(and(
+        eq(notificationsTable.userId, req.userId),
+        eq(notificationsTable.read, false),
+        isNull(notificationsTable.vendorId),
+      ));
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to mark all notifications as read");

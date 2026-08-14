@@ -10,6 +10,7 @@ import { SlidersHorizontal, X, ChevronDown, Search, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ProductsListingProps {
+  heroBanner?: string;
   category: "paithani" | "designer";
   title: string;
   subtitle: string;
@@ -55,7 +56,7 @@ function formatPrice(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
-export function ProductsListing({ category, title, subtitle }: ProductsListingProps) {
+export function ProductsListing({ category, title, subtitle, heroBanner }: ProductsListingProps) {
   const searchStr = useSearch();
   const [pathname, navigate] = useLocation();
 
@@ -223,15 +224,27 @@ export function ProductsListing({ category, title, subtitle }: ProductsListingPr
       <div className="min-h-screen bg-[#F3F8F5] text-[#3D1A1A]">
 
         {/* Page Header */}
-        <div className="py-12 border-b border-[#C9A84C]/20 bg-[#E6F0EA]">
-          <div className="container mx-auto px-4 text-center">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-3">{subtitle}</p>
-            <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#1E6B5A]">
-              {title}
-            </h1>
-            <div className="w-16 h-0.5 bg-[#C9A84C] mx-auto mt-6" />
+        {heroBanner ? (
+          <div className="w-full border-b border-[#C9A84C]/20">
+            <img
+              src={heroBanner}
+              alt={title}
+              className="w-full object-cover max-h-[340px]"
+            />
           </div>
-        </div>
+        ) : (
+          <div className="py-12 border-b border-[#C9A84C]/20 bg-[#E6F0EA]">
+            <div className="container mx-auto px-4 text-center">
+              {subtitle && (
+                <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-3">{subtitle}</p>
+              )}
+              <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#1E6B5A]">
+                {title}
+              </h1>
+              <div className="w-16 h-0.5 bg-[#C9A84C] mx-auto mt-6" />
+            </div>
+          </div>
+        )}
 
         <div className="container mx-auto px-4 py-8 max-w-7xl">
 

@@ -6,7 +6,8 @@ export default function DesignerShop() {
     <ProductsListing
       category="designer"
       title="Designer Sarees"
-      subtitle="Contemporary Couture"
+      subtitle=""
+      heroBanner="/images/hero-designer-banner.png"
     />
   );
 }

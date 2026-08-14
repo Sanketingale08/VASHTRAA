@@ -10,6 +10,7 @@ import {
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
 import type { CartItem, StockAdjustment } from "@/context/CartContext";
+import { useToast } from "@/hooks/use-toast";
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -134,6 +135,7 @@ export function CheckoutPage() {
   const [, setLocation] = useLocation();
   const { isSignedIn, isLoaded } = useUser();
   const { items: cartItems, clearCart, refreshStock } = useCart();
+  const { toast } = useToast();
 
   const [step, setStep] = useState(1);
   const [buyNowItems, setBuyNowItems] = useState<CartItem[] | null>(null);
@@ -527,15 +529,28 @@ export function CheckoutPage() {
       sessionStorage.removeItem(BUY_NOW_KEY);
       if (!buyNowItems) await clearCart();
 
-      // Save payment method if the shopper opted in (best-effort, fire and forget)
+      // Save payment method if the shopper opted in (best-effort, non-blocking)
       if (savePaymentMethod && selectedSavedMethodId === null) {
+        const notifyPaymentSave = (res: Response) => {
+          if (res.status === 409) {
+            toast({
+              title: "Already saved",
+              description: "This payment method is already in your saved methods.",
+            });
+          } else if (res.status === 201) {
+            toast({
+              title: "Payment method saved",
+              description: "It's now available for future orders.",
+            });
+          }
+        };
         if (paymentMethod === "upi" && /^[\w.\-]+@[\w]+$/.test(upiId.trim())) {
           fetch(`/api/payment-methods`, {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ type: "upi", upiId: upiId.trim() }),
-          }).catch(() => {});
+          }).then(notifyPaymentSave).catch(() => {});
         } else if (
           (paymentMethod === "credit_card" || paymentMethod === "debit_card") &&
           validatePayment()
@@ -553,7 +568,7 @@ export function CheckoutPage() {
               expiryYear: parseInt("20" + expYr, 10),
               cvv: cardCvv,
             }),
-          }).catch(() => {});
+          }).then(notifyPaymentSave).catch(() => {});
         }
       }
 

@@ -823,7 +823,57 @@ test.describe("Admin Reports — export file content", () => {
   });
 });
 
-// ── 8. Refresh button sends a clean period value ───────────────────────────────
+// ── 8. Vendor tab — empty-state when topVendors is [] ────────────────────────
+
+test.describe("Admin Reports — Vendor tab empty state", () => {
+  test("shows empty-state message when topVendors is [] and throws no JS errors", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    const jsErrors: string[] = [];
+    page.on("pageerror", (err) => jsErrors.push(err.message));
+
+    await seedAdminKey(page);
+
+    // Override the vendors endpoint to return an empty topVendors array.
+    // The summary and settlementSummary still carry real-looking data so that
+    // KPI cards render without issue.
+    const emptyVendorData = {
+      summary: {
+        totalVendors: 45,
+        activeVendors: 38,
+        pendingVendors: 5,
+        suspendedVendors: 2,
+      },
+      topVendors: [],
+      settlementSummary: {
+        pendingCount: 0,
+        completedCount: 0,
+        pendingAmount: 0,
+        completedAmount: 0,
+      },
+    };
+
+    await stubAllReportRoutes(page, { vendors: emptyVendorData });
+
+    await page.goto("/admin/reports");
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({ timeout: 20_000 });
+
+    // Navigate to the Vendor tab
+    const vendorTab = page.locator("main").locator("button").filter({ hasText: /Vendor/ }).first();
+    await expect(vendorTab).toBeVisible({ timeout: 10_000 });
+    await vendorTab.click();
+
+    // The "Vendor Performance" table section must show the empty-state message
+    await expect(
+      page.locator("text=No vendor data for this period.").first()
+    ).toBeVisible({ timeout: 15_000 });
+
+    // No JS errors must have been thrown
+    expect(jsErrors).toHaveLength(0);
+  });
+});
+
+// ── 9. Refresh button sends a clean period value ───────────────────────────────
 //
 // Previously, the Refresh button incremented `refreshKey` which was embedded into
 // the period string as `"30d__1"` (via `periodStr = \`${period}__${refreshKey}\``).

@@ -397,4 +397,121 @@ test.describe("Seller bulk upload", () => {
       ).toBeVisible({ timeout: 5_000 });
     },
   );
+
+  // ── Test 3 ─────────────────────────────────────────────────────────────────
+
+  test(
+    "HTTP 500 crash: wizard stays on review step, shows error banner, and lets the seller retry",
+    async ({ page }) => {
+      test.setTimeout(120_000);
+
+      await mockApprovedVendor(page);
+
+      // Mock GET /api/seller/products so the seller products page loads cleanly.
+      await page.route("**/api/seller/products", (route) => {
+        if (route.request().method() === "GET") {
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ products: [] }),
+          });
+        } else {
+          route.continue();
+        }
+      });
+
+      // First call returns HTTP 500 (simulates a total server crash).
+      // Second call (retry) succeeds so we can confirm the wizard proceeds.
+      let callCount = 0;
+      await page.route("**/api/seller/products/bulk-import", (route) => {
+        callCount += 1;
+        if (callCount === 1) {
+          // Total server crash — top-level 500.
+          route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({ error: "Internal server error" }),
+          });
+          return;
+        }
+        // Retry succeeds for all rows.
+        const body = route.request().postDataJSON() as { rows: Array<Record<string, string>> };
+        const rows = body.rows ?? [];
+        const results = rows.map((row, i) => ({
+          row: i + 1,
+          success: true,
+          productId: `RETRY00${i + 1}`,
+          name: row.name,
+        }));
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            results,
+            summary: { total: rows.length, succeeded: rows.length, failed: 0 },
+          }),
+        });
+      });
+
+      // ── Navigate to Seller Products page ──────────────────────────────────
+      await page.goto("/seller/products");
+      await expect(page.getByRole("heading", { name: /products/i })).toBeVisible({
+        timeout: 15_000,
+      });
+
+      // ── Open the bulk upload wizard ────────────────────────────────────────
+      await page.getByRole("button", { name: /bulk upload/i }).click();
+      await expect(page.getByText("Bulk Upload Products")).toBeVisible({ timeout: 5_000 });
+
+      // ── Step 1: upload all-valid xlsx file ────────────────────────────────
+      const xlsxBuffer = makeAllValidXlsx();
+      const fileInput = page.locator('input[type="file"]').first();
+      await fileInput.setInputFiles({
+        name: "test-products-valid.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer: xlsxBuffer,
+      });
+
+      // ── Step 2: column mapping ─────────────────────────────────────────────
+      const reviewButton = page.getByRole("button", { name: /review 3 rows/i });
+      await expect(reviewButton).toBeVisible({ timeout: 10_000 });
+      await expect(reviewButton).toBeEnabled();
+      await reviewButton.click();
+
+      // ── Step 3: review table ───────────────────────────────────────────────
+      await expect(page.getByText("3 valid", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+      const importButton = page.getByRole("button", { name: /import 3 valid rows/i });
+      await expect(importButton).toBeVisible({ timeout: 5_000 });
+      await expect(importButton).toBeEnabled();
+
+      // ── First import attempt — server returns 500 ──────────────────────────
+      await importButton.click();
+
+      // The wizard must NOT advance to the "done" step.
+      // The review summary bar must still be visible.
+      await expect(page.getByText("3 valid", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+      // An error banner containing the server's message must appear.
+      await expect(
+        page.locator("text=Internal server error"),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // The import button must still be visible and enabled so the seller can retry.
+      await expect(importButton).toBeVisible({ timeout: 5_000 });
+      await expect(importButton).toBeEnabled();
+
+      // ── Retry — server now succeeds ────────────────────────────────────────
+      await importButton.click();
+
+      // After the successful retry the wizard advances to the done screen.
+      await expect(page.getByText(/3 products? imported/i)).toBeVisible({
+        timeout: 15_000,
+      });
+
+      // Both the first (failed) and second (successful) calls were made.
+      expect(callCount).toBe(2);
+    },
+  );
 });

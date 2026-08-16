@@ -431,13 +431,31 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
       });
     });
 
+    // Pre-check for duplicate product names within this vendor to give clear errors.
+    // Comparison is case-insensitive: lower(name) IN (...lowercased names...).
+    const vendorId = req.vendorId;
+    const lowercasedNames = toInsert.map((item: any) => item.name.toLowerCase());
+    const existingByName = lowercasedNames.length > 0
+      ? await db
+          .select({ name: productsTable.name })
+          .from(productsTable)
+          .where(and(eq(productsTable.vendorId, vendorId), inArray(sql`lower(${productsTable.name})`, lowercasedNames)))
+      : [];
+    const existingNameSet = new Set(existingByName.map((p) => p.name.toLowerCase()));
+
     for (const item of toInsert) {
       const { _rowNum, ...values } = item;
+      if (existingNameSet.has(values.name.toLowerCase())) {
+        results.push({ row: _rowNum, success: false, error: "A product with this name already exists" });
+        continue;
+      }
       try {
         const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
         let categoryPrefix: string = CATEGORY_PREFIX[values.category as keyof typeof CATEGORY_PREFIX] ?? "XX";
         const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
         const [product] = await db.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
+        // Track newly inserted names to catch duplicates within the same batch
+        existingNameSet.add(values.name.toLowerCase());
         results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
       } catch {
         results.push({ row: _rowNum, success: false, error: "Failed to save product" });

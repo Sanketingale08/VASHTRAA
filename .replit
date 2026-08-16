@@ -50,28 +50,20 @@ ADMIN_API_KEY = "Admin@123"
 
 [[ports]]
 localPort = 3001
-externalPort = 3002
+externalPort = 3001
 
 [[ports]]
 localPort = 8080
-externalPort = 8080
+externalPort = 80
 
 [[ports]]
 localPort = 8081
 externalPort = 8081
 
 [[ports]]
-localPort = 8082
+localPort = 23779
 externalPort = 3000
 
 [[ports]]
-localPort = 8083
-externalPort = 3003
-
-[[ports]]
-localPort = 23779
-externalPort = 3001
-
-[[ports]]
 localPort = 24295
-externalPort = 80
+externalPort = 3002

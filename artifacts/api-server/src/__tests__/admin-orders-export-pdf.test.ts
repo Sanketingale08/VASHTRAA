@@ -9,6 +9,9 @@
  *  (e) Byte-count scaling      — more matching orders → larger PDF
  *  (f) Empty-state             — no matching orders → valid PDF (not 500)
  *
+ * The CSV export coverage below uses the same fixtures and database mock so its
+ * status/search behavior can be checked against the PDF export's contract.
+ *
  * Content verification strategy
  * ─────────────────────────────
  * pdfkit with built-in fonts stores text as WinAnsiEncoding hex-strings
@@ -282,6 +285,15 @@ async function getPdf(
   return req as any;
 }
 
+async function getCsv(
+  app: Express,
+  query: Record<string, string> = {},
+): Promise<any> {
+  return request(app)
+    .get("/api/admin/orders/export.csv")
+    .query(query);
+}
+
 function isPdfBuffer(buf: Buffer): boolean {
   return buf.slice(0, 4).toString("ascii") === "%PDF";
 }
@@ -513,5 +525,148 @@ describe("GET /admin/orders/export.pdf — filter combinations", () => {
 
     const text = extractPdfText(res.body);
     expect(text).not.toContain("Pending Only");
+  });
+});
+
+describe("GET /admin/orders/export.csv — filter combinations", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    _idCounter = 1;
+    state.orders = [];
+    vi.clearAllMocks();
+    app = await buildApp();
+  });
+
+  it("returns all order rows with a text/csv response when no filters are provided", async () => {
+    state.orders = [
+      makeOrder({
+        id: "order-arjun",
+        address: { name: "Arjun Kumar" },
+      }),
+      makeOrder({
+        id: "order-meera",
+        address: { name: "Meera Pillai" },
+      }),
+      makeOrder({
+        id: "order-ravi",
+        address: { name: "Ravi Nair" },
+      }),
+    ];
+
+    const res = await getCsv(app);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/csv/);
+    expect(res.text).toContain('"order-arjun","Arjun Kumar"');
+    expect(res.text).toContain('"order-meera","Meera Pillai"');
+    expect(res.text).toContain('"order-ravi","Ravi Nair"');
+  });
+
+  it("includes only rows matching the status filter", async () => {
+    state.orders = [
+      makeOrder({
+        id: "delivered-1",
+        status: "delivered",
+        address: { name: "Lakshmi Iyer" },
+      }),
+      makeOrder({
+        id: "delivered-2",
+        status: "delivered",
+        address: { name: "Kiran Reddy" },
+      }),
+      makeOrder({
+        id: "pending-1",
+        status: "pending",
+        address: { name: "Suresh Babu" },
+      }),
+    ];
+
+    const res = await getCsv(app, { status: "delivered" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/csv/);
+    expect(res.text).toContain('"delivered-1","Lakshmi Iyer"');
+    expect(res.text).toContain('"delivered-2","Kiran Reddy"');
+    expect(res.text).not.toContain("pending-1");
+    expect(res.text).not.toContain("Suresh Babu");
+  });
+
+  it("includes only rows matching the search filter", async () => {
+    state.orders = [
+      makeOrder({
+        id: "priya-order",
+        address: { name: "Priya Sharma" },
+        items: [{ name: "Kanjivaram Silk", quantity: 1, price: 75000 }],
+      }),
+      makeOrder({
+        id: "deepak-order",
+        address: { name: "Deepak Joshi" },
+        items: [{ name: "Cotton Saree", quantity: 1, price: 20000 }],
+      }),
+    ];
+
+    const res = await getCsv(app, { search: "kanjivaram" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/csv/);
+    expect(res.text).toContain('"priya-order","Priya Sharma"');
+    expect(res.text).toContain('"Kanjivaram Silk x1"');
+    expect(res.text).not.toContain("deepak-order");
+    expect(res.text).not.toContain("Cotton Saree");
+  });
+
+  it("includes only rows matching both status and search filters", async () => {
+    state.orders = [
+      makeOrder({
+        id: "anita-delivered",
+        status: "delivered",
+        address: { name: "Anita Singh" },
+      }),
+      makeOrder({
+        id: "vijay-delivered",
+        status: "delivered",
+        address: { name: "Vijay Menon" },
+      }),
+      makeOrder({
+        id: "anita-pending",
+        status: "pending",
+        address: { name: "Anita Bose" },
+      }),
+      makeOrder({
+        id: "rohit-pending",
+        status: "pending",
+        address: { name: "Rohit Sharma" },
+      }),
+    ];
+
+    const res = await getCsv(app, { status: "delivered", search: "anita" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/csv/);
+    expect(res.text).toContain('"anita-delivered","Anita Singh"');
+    expect(res.text).not.toContain("vijay-delivered");
+    expect(res.text).not.toContain("anita-pending");
+    expect(res.text).not.toContain("rohit-pending");
+  });
+
+  it("returns a header-only CSV with the expected content type when no rows match", async () => {
+    state.orders = [
+      makeOrder({
+        id: "pending-only",
+        status: "pending",
+        address: { name: "Pending Only" },
+      }),
+    ];
+
+    const res = await getCsv(app, { status: "delivered", search: "no-match" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/csv/);
+    expect(res.text).toBe(
+      '"Order ID","Customer Name","Items","Total (INR)","Status","Payment Method","Created Date"',
+    );
+    expect(res.text).not.toContain("pending-only");
+    expect(res.text).not.toContain("Pending Only");
   });
 });

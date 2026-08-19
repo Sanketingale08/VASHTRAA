@@ -1,0 +1,92 @@
+Seller Panel Bulk Upload Improvements
+Update the Seller Panel by improving the Bulk Upload feature and enhancing the Seller Profile
+Address Management section.
+Requirements
+1. Update the Bulk Upload Excel Template
+ Update the Bulk Upload Excel template in the My Products section.
+ Set the updated template as the default template for all sellers.
+ Ensure that every seller downloads and uses the same standardized template.
+ Do not modify the existing product upload functionality unless required for the new
+template.
+2. Simplify the Bulk Upload Process
+Remove the following sections from the Bulk Upload workflow:
+ Map
+ Review
+New Upload Flow
+1. Seller uploads the Excel file.
+2. The system automatically reads the uploaded file.
+3. The system validates the data.
+4. Products are uploaded directly to the database.
+5. Display a success or error message after the upload process is completed.
+Validation Requirements
+ Validate all mandatory fields.
+ Identify missing or invalid data.
+ Display clear error messages for invalid rows.
+ Prevent duplicate product entries.
+ Show the total number of successfully uploaded products.
+ Show the total number of failed uploads.
+Seller Profile Address Management
+Improve Seller Profile Address Management
+Update both the Shop Address and Pickup Address sections in the Seller Profile.
+Shop Address Fields
+Add the following fields to the Shop Address section:
+ Shop Name
+ Address Line 1
+ Address Line 2
+ Landmark
+ City
+ State
+ PIN Code
+ Country
+Pickup Address Configuration
+Add a checkbox option below the Shop Address section:
+☐ Use the same address as the Shop Address
+Checkbox Behavior
+If the seller selects the checkbox:
+ The Pickup Address should automatically use the Shop Address information.
+ No additional Pickup Address fields should be displayed.
+ The UI layout should remain unchanged.
+ Any updates made to the Shop Address should automatically be reflected in the Pickup
+Address.
+If the seller does not select the checkbox:
+ A separate Pickup Address section should be displayed.
+ The seller should be able to enter a different Pickup Address.
+Separate Pickup Address Fields
+When the seller chooses a different Pickup Address, display the following fields:
+ Pickup Location Name
+ Address Line 1
+ Address Line 2
+ Landmark
+ City
+ State
+ PIN Code
+ Country
+Address Management Requirements
+ All address fields should be displayed properly.
+ Sellers should be able to create, edit, and update both addresses.
+ Validate all required fields before saving.
+ Ensure that address information is synchronized across the Seller Panel.
+ Save both addresses correctly in the database.
+ Maintain a clean, modern, and user-friendly UI.
+ Ensure that the form is fully responsive on desktop, tablet, and mobile devices.
+Important Instructions
+ Do not change any existing APIs.
+ Do not modify middleware.
+ Do not affect any existing customer-side functionality.
+ Do not change any existing business logic.
+ Modify only the Seller Profile address management module.
+Important Instructions
+ Modify only the Seller Panel UI and related functionality.
+ Do not change any existing APIs.
+ Do not modify middleware.
+ Do not change the database structure unless it is absolutely necessary.
+ Do not affect any existing customer-side functionality.
+ Maintain all existing features while implementing these improvements.
+ Ensure that the new implementation is fully responsive and works correctly on desktop,
+tablet, and mobile devices.
+Expected Result
+ A standardized Bulk Upload template for all sellers.
+ A simplified product upload process without the Map and Review steps.
+ Automatic product uploads after the Excel file is processed.
+ A complete and properly structured address management system in the Seller Profile
+section.

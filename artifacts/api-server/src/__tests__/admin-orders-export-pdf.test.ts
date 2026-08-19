@@ -482,6 +482,28 @@ describe("GET /admin/orders/export.pdf — filter combinations", () => {
     expect(resMany.body.length).toBeGreaterThan(resSingle.body.length);
   });
 
+  it("(e) exports 501 orders as a complete multi-page PDF", async () => {
+    state.orders = Array.from({ length: 501 }, (_, index) =>
+      makeOrder({
+        address: { name: `Export Customer ${index + 1}` },
+      }),
+    );
+
+    const res = await getPdf(app);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/pdf/);
+    expect(res.headers["content-disposition"]).toMatch(/orders-all-\d{4}-\d{2}-\d{2}\.pdf/);
+    expect(isPdfBuffer(res.body)).toBe(true);
+    expect(res.body.toString("latin1").trimEnd().endsWith("%%EOF")).toBe(true);
+
+    // The final row proves the full unpaginated list was rendered, and multiple
+    // page objects prove the page-break loop completed.
+    expect(extractPdfText(res.body)).toContain("Export Customer 501");
+    const pageCount = (res.body.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length;
+    expect(pageCount).toBeGreaterThan(1);
+  });
+
   // ── (f) Empty-state ───────────────────────────────────────────────────────
 
   it("(f) no-filter empty state: returns a valid PDF (not an error)", async () => {

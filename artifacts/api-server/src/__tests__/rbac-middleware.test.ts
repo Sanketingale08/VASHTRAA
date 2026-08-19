@@ -323,4 +323,34 @@ describe("isCustomer", () => {
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
+
+  it("sets req.userId and calls next() for a pending vendor (pending sellers can still place orders)", async () => {
+    // Regression guard: isCustomer must NOT block users whose vendor record is
+    // pending (not yet approved). Pending sellers are still shoppers.
+    mockGetAuth.mockReturnValue({ userId: "vendor-pending-user" });
+    const req = mockReq();
+    const res = mockRes();
+
+    await isCustomer(req, res, next);
+
+    expect((req as any).userId).toBe("vendor-pending-user");
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 for an approved vendor who presents a valid admin key", async () => {
+    // Even an approved vendor cannot place a customer order through the admin
+    // key path — the admin guard fires regardless of vendor status.
+    mockGetAuth.mockReturnValue({ userId: "approved-vendor-user" });
+    const res = mockRes();
+
+    await isCustomer(
+      mockReq({ headers: { "x-admin-key": "secret-admin-key" } }),
+      res,
+      next,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
 });

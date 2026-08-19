@@ -21,6 +21,13 @@ import express, { type Express } from "express";
 const state = vi.hoisted(() => ({
   /** When non-null, getAuth returns this userId. */
   userId: "customer-user-123" as string | null,
+  /**
+   * When set, the vendor table select mock returns this record.
+   * This lets tests encode a specific vendor status (pending / approved)
+   * so that any future re-introduction of a vendor-status check in isCustomer
+   * would be caught by these tests.
+   */
+  vendorRecord: null as { id: string; ownerId: string; status: string } | null,
 }));
 
 // ---------------------------------------------------------------------------
@@ -50,15 +57,42 @@ vi.mock("@workspace/db", () => {
     };
   }
 
+  /**
+   * Vendor-aware select chain: if the table passed to from() is the vendors
+   * table (_t: "vendors"), return the current state.vendorRecord (or []).
+   * All other tables fall back to PRODUCT rows.
+   *
+   * This ensures that a future re-introduction of a vendor-status query inside
+   * isCustomer will use the fixture the test set up, making regressions
+   * immediately visible.
+   */
+  function makeSmartSelectChain() {
+    return {
+      from: vi.fn((table: any) => {
+        const rows: unknown[] =
+          table?._t === "vendors"
+            ? state.vendorRecord
+              ? [state.vendorRecord]
+              : []
+            : [PRODUCT];
+        return {
+          where: vi.fn(() => ({
+            limit: vi.fn(() => Promise.resolve(rows)),
+            for: vi.fn(() => Promise.resolve(rows)),
+          })),
+          for: vi.fn(() => Promise.resolve(rows)),
+        };
+      }),
+    };
+  }
+
   const dbMock = {
-    select: vi.fn((_fields?: any) => makeSelectChain([PRODUCT])),
+    select: vi.fn((_fields?: any) => makeSmartSelectChain()),
 
     transaction: vi.fn(async (cb: (tx: any) => Promise<unknown>) => {
       let orderSeq = 1;
       const txMock = {
-        select: vi.fn(() =>
-          makeSelectChain([PRODUCT]),
-        ),
+        select: vi.fn((_fields?: any) => makeSmartSelectChain()),
         insert: vi.fn(() => ({
           values: vi.fn(() =>
             Object.assign(Promise.resolve(undefined), {
@@ -167,6 +201,7 @@ describe("POST /api/orders — isCustomer authorization", () => {
   beforeEach(async () => {
     process.env.ADMIN_API_KEY = ADMIN_KEY;
     state.userId = "customer-user-123";
+    state.vendorRecord = null;
     app = await buildApp();
   });
 
@@ -202,5 +237,38 @@ describe("POST /api/orders — isCustomer authorization", () => {
     const res = await request(app).post("/api/orders").send(ORDER_BODY);
 
     expect(res.status).toBe(401);
+  });
+
+  it("allows a user with a pending vendor record to place an order (200)", async () => {
+    // Regression guard: the original bug blocked ALL users in the vendors table,
+    // regardless of status. The fix ensures only approved vendors were exempt
+    // from shopping — but then the marketplace model means even approved vendors
+    // can shop. This test encodes the pending-vendor DB fixture explicitly so
+    // any future re-introduction of a vendor-status gate in isCustomer will be
+    // caught immediately (the middleware would query the vendors table and get
+    // back status="pending"; if it then blocks pending users, this test fails).
+    state.userId = "vendor-pending-user";
+    state.vendorRecord = { id: "v-pending-1", ownerId: "vendor-pending-user", status: "pending" };
+
+    const res = await request(app).post("/api/orders").send(ORDER_BODY);
+
+    expect(res.status).toBe(200);
+    expect(res.body.orderId).toBeDefined();
+  });
+
+  it("blocks an approved vendor presenting a valid admin key with 403", async () => {
+    // Even an approved vendor cannot reach the customer order endpoint via the
+    // admin-key path. The admin-key guard in isCustomer must fire regardless of
+    // the user's vendor status.
+    state.userId = "vendor-approved-user";
+    state.vendorRecord = { id: "v-approved-1", ownerId: "vendor-approved-user", status: "approved" };
+
+    const res = await request(app)
+      .post("/api/orders")
+      .set("x-admin-key", ADMIN_KEY)
+      .send(ORDER_BODY);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/admin/i);
   });
 });

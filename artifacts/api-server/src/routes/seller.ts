@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
-import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
-import { eq, desc, asc, inArray, and, sql } from "drizzle-orm";
+import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, bulkImportBatchesTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
+import { eq, desc, asc, inArray, and, lte, sql } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
@@ -358,6 +359,34 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
+/**
+ * Validates and normalises the optional Idempotency-Key header.
+ *
+ * The header is OPTIONAL for backward compatibility: older/legacy clients that
+ * do not send it keep the existing (non-idempotent) behaviour. The new UI
+ * always sends one. When present, it must be a reasonably-sized ASCII token
+ * (UUIDs are what the client generates) so we don't store arbitrary payloads.
+ */
+function readIdempotencyKey(req: any): { key: string | null; invalid: boolean } {
+  const raw = req.get?.("Idempotency-Key") ?? req.headers?.["idempotency-key"];
+  if (raw == null) return { key: null, invalid: false };
+  const value = Array.isArray(raw) ? raw[0] : String(raw);
+  const key = value.trim();
+  // Empty header value → treat as "not provided" for compatibility.
+  if (!key) return { key: null, invalid: false };
+  // Guard against oversized / control-character keys.
+  if (key.length > 200 || /[\u0000-\u001f\u007f]/.test(key)) {
+    return { key: null, invalid: true };
+  }
+  return { key, invalid: false };
+}
+
+const BULK_IMPORT_PROCESSING_LEASE_MS = 30 * 60 * 1000;
+
+function bulkImportLeaseExpiry(): Date {
+  return new Date(Date.now() + BULK_IMPORT_PROCESSING_LEASE_MS);
+}
+
 // ── JSON bulk-import (used by the new Excel upload flow) ─────────────────────
 router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, res: any) => {
   const { rows } = req.body;
@@ -366,6 +395,104 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
   }
   if (rows.length > 500) {
     return res.status(400).json({ error: "Maximum 500 rows per upload" });
+  }
+
+  // ── Vendor-scoped idempotency ─────────────────────────────────────────────
+  // The client direct-upload flow retries failed requests. To make a retry
+  // after a lost response safe (and to stop racing retry clicks from creating
+  // two batches) we claim a (vendorId, idempotencyKey) record BEFORE doing any
+  // product-insert work, and persist the completed response atomically with the
+  // inserts. A subsequent retry with the same key returns the stored response.
+  const vendorIdForKey = req.vendorId;
+  const { key: idempotencyKey, invalid: idempotencyKeyInvalid } = readIdempotencyKey(req);
+  if (idempotencyKeyInvalid) {
+    return res.status(400).json({ error: "Invalid Idempotency-Key header" });
+  }
+
+  let batchId: string | null = null;
+  let batchLeaseToken: string | null = null;
+  if (idempotencyKey) {
+    try {
+      const requestedLeaseToken = randomUUID();
+      // Attempt to claim the key by inserting a "processing" row. The unique
+      // (vendor_id, idempotency_key) index makes this atomic: exactly one of two
+      // concurrent retries wins the insert; the loser hits the catch below.
+      const [batch] = await db
+        .insert(bulkImportBatchesTable)
+        .values({
+          vendorId: vendorIdForKey,
+          idempotencyKey,
+          status: "processing",
+          leaseExpiresAt: bulkImportLeaseExpiry(),
+          leaseToken: requestedLeaseToken,
+        })
+        .onConflictDoNothing({ target: [bulkImportBatchesTable.vendorId, bulkImportBatchesTable.idempotencyKey] })
+        .returning({ id: bulkImportBatchesTable.id });
+
+      if (!batch) {
+        // Key already claimed — either a completed batch (replay the stored
+        // response) or one still processing (report in-progress, don't duplicate).
+        const [existing] = await db
+          .select({
+            id: bulkImportBatchesTable.id,
+            status: bulkImportBatchesTable.status,
+            response: bulkImportBatchesTable.response,
+            leaseExpiresAt: bulkImportBatchesTable.leaseExpiresAt,
+            leaseToken: bulkImportBatchesTable.leaseToken,
+          })
+          .from(bulkImportBatchesTable)
+          .where(and(eq(bulkImportBatchesTable.vendorId, vendorIdForKey), eq(bulkImportBatchesTable.idempotencyKey, idempotencyKey)))
+          .limit(1);
+
+        if (existing?.status === "completed" && existing.response != null) {
+          return res.json(existing.response);
+        }
+
+        // A process-level interruption can leave a claimed row behind without
+        // completing or reaching the route catch. Reclaim only an expired lease;
+        // the conditional update makes competing stale retries race-safe.
+        const now = new Date();
+        if (
+          existing?.id
+          && existing.leaseExpiresAt != null
+          && existing.leaseExpiresAt.getTime() <= now.getTime()
+        ) {
+          const [reclaimed] = await db
+            .update(bulkImportBatchesTable)
+            .set({
+              leaseExpiresAt: bulkImportLeaseExpiry(),
+              leaseToken: requestedLeaseToken,
+            })
+            .where(and(
+              eq(bulkImportBatchesTable.id, existing.id),
+              eq(bulkImportBatchesTable.status, "processing"),
+              lte(bulkImportBatchesTable.leaseExpiresAt, now),
+            ))
+            .returning({ id: bulkImportBatchesTable.id });
+
+          if (reclaimed) {
+            batchId = reclaimed.id;
+            batchLeaseToken = requestedLeaseToken;
+          }
+        }
+
+        if (batchId) {
+          // This request now owns the reclaimed claim and may safely continue.
+        } else {
+        // Row exists but no completed response yet — original request is still
+        // running. Tell the client to retry rather than starting a second batch.
+          return res.status(409).json({ error: "This upload is already being processed. Please retry in a moment.", processing: true });
+        }
+      }
+
+      if (batch) {
+        batchId = batch.id;
+        batchLeaseToken = requestedLeaseToken;
+      }
+    } catch (err: any) {
+      req.log?.error({ err }, "seller/products/bulk-import idempotency claim failed");
+      return res.status(500).json({ error: "Failed to process bulk import" });
+    }
   }
 
   try {
@@ -443,36 +570,91 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
       : [];
     const existingNameSet = new Set(existingByName.map((p) => p.name.toLowerCase()));
 
-    for (const item of toInsert) {
-      const { _rowNum, ...values } = item;
-      if (existingNameSet.has(values.name.toLowerCase())) {
-        results.push({ row: _rowNum, success: false, error: "A product with this name already exists" });
-        continue;
+    // Run all product inserts (and, when idempotent, the batch completion) inside
+    // a single transaction so the persisted response is atomic with the inserts:
+    // if the response is lost in transit, the completed row is already committed
+    // and a retry replays it; if the transaction fails, nothing is committed and
+    // a retry safely re-does the whole batch.
+    const runInserts = async (executor: any) => {
+      for (const item of toInsert) {
+        const { _rowNum, ...values } = item;
+        if (existingNameSet.has(values.name.toLowerCase())) {
+          results.push({ row: _rowNum, success: false, error: "A product with this name already exists" });
+          continue;
+        }
+        try {
+          const seqResult = await executor.execute(sql`SELECT nextval('product_id_seq') AS seq`);
+          let categoryPrefix: string = CATEGORY_PREFIX[values.category as keyof typeof CATEGORY_PREFIX] ?? "XX";
+          const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
+          const [product] = await executor.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
+          // Track newly inserted names to catch duplicates within the same batch
+          existingNameSet.add(values.name.toLowerCase());
+          results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
+        } catch {
+          results.push({ row: _rowNum, success: false, error: "Failed to save product" });
+        }
       }
-      try {
-        const seqResult = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
-        let categoryPrefix: string = CATEGORY_PREFIX[values.category as keyof typeof CATEGORY_PREFIX] ?? "XX";
-        const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
-        const [product] = await db.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
-        // Track newly inserted names to catch duplicates within the same batch
-        existingNameSet.add(values.name.toLowerCase());
-        results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
-      } catch {
-        results.push({ row: _rowNum, success: false, error: "Failed to save product" });
-      }
-    }
 
-    results.sort((a, b) => a.row - b.row);
-    res.json({
-      results,
-      summary: {
-        total: rows.length,
-        succeeded: results.filter(r => r.success).length,
-        failed:    results.filter(r => !r.success).length,
-      },
-    });
+      results.sort((a, b) => a.row - b.row);
+      const response = {
+        results,
+        summary: {
+          total: rows.length,
+          succeeded: results.filter((r) => r.success).length,
+          failed:    results.filter((r) => !r.success).length,
+        },
+      };
+
+      // Persist the exact completed response atomically with the inserts so that
+      // a retry after a lost response returns this same batch result.
+      if (batchId && batchLeaseToken) {
+        const [completed] = await executor
+          .update(bulkImportBatchesTable)
+          .set({
+            status: "completed",
+            response,
+            completedAt: new Date(),
+            leaseExpiresAt: null,
+            leaseToken: batchLeaseToken,
+          })
+          .where(and(
+            eq(bulkImportBatchesTable.id, batchId),
+            eq(bulkImportBatchesTable.status, "processing"),
+            eq(bulkImportBatchesTable.leaseToken, batchLeaseToken),
+          ))
+          .returning({ id: bulkImportBatchesTable.id });
+
+        // Another request reclaimed the lease while this worker was still
+        // running. Throwing rolls back this worker's product inserts.
+        if (!completed) {
+          throw new Error("Bulk import processing lease was lost");
+        }
+      }
+
+      return response;
+    };
+
+    const response = batchId
+      ? await db.transaction((tx) => runInserts(tx))
+      : await runInserts(db);
+
+    res.json(response);
   } catch (err: any) {
     req.log?.error({ err }, "seller/products/bulk-import failed");
+    // The insert transaction (if any) rolled back, so the batch was never marked
+    // completed. Release the "processing" claim so a retry with the same key can
+    // re-run instead of being stuck reporting "processing in progress" forever.
+    if (batchId && batchLeaseToken) {
+      try {
+        await db.delete(bulkImportBatchesTable).where(and(
+          eq(bulkImportBatchesTable.id, batchId),
+          eq(bulkImportBatchesTable.status, "processing"),
+          eq(bulkImportBatchesTable.leaseToken, batchLeaseToken),
+        ));
+      } catch (cleanupErr: any) {
+        req.log?.error({ err: cleanupErr }, "seller/products/bulk-import batch cleanup failed");
+      }
+    }
     res.status(500).json({ error: "Failed to process bulk import" });
   }
 });

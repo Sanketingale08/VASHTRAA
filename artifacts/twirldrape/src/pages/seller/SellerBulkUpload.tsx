@@ -1,11 +1,26 @@
 import React, { useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import {
-  X, Upload, Download, Check, AlertCircle, ChevronRight, ChevronLeft,
-  FileSpreadsheet, AlertTriangle, Loader2, CheckCircle2,
+  X, Upload, Download, Check, AlertCircle,
+  FileSpreadsheet, Loader2,
 } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
+
+// ── Idempotency key generation ──────────────────────────────────────────────
+// One UUID per uploaded file, sent as the Idempotency-Key header so the server
+// can dedupe retries of the same batch. Falls back to a manual UUID v4 when
+// crypto.randomUUID is unavailable.
+export function generateIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -35,27 +50,246 @@ const FABRICS    = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"] a
 const OCCASIONS  = ["bridal", "festival", "casual", "party", "formal"] as const;
 const COLORS     = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"] as const;
 
-// ── Column-header aliases for auto-mapping ────────────────────────────────────
+// ── Column-header aliases — maps friendly template labels → field keys ─────────
+// Includes both legacy (exact key) and template (friendly label) variants.
 const HEADER_ALIASES: Record<string, FieldKey> = {
-  "product name":   "name",   "title": "name",     "product title": "name", "product": "name",
-  "selling price":  "price",  "sale price": "price",
-  "material":       "fabric",
-  "colour":         "color",
-  "qty":            "stock",  "quantity": "stock",  "inventory": "stock",
-  "original price": "originalPrice", "original_price": "originalPrice",
-  "originalprice":  "originalPrice", "mrp": "originalPrice",
-  "sub category":   "subcategory",   "sub-category": "subcategory",
-  "design pattern": "designPattern", "design_pattern": "designPattern",
-  "designpattern":  "designPattern", "pattern": "designPattern",
-  "image urls":     "images",  "image_urls": "images", "image url": "images",
-  "imageurl":       "images",  "imageurls": "images",
-  "desc":           "description",   "details": "description",
+  // Template friendly labels (exact)
+  "product name *":       "name",
+  "price (₹) *":         "price",
+  "category *":          "category",
+  "original price (₹)":  "originalPrice",
+  "images (url)":        "images",
+  // Without asterisks / alternate capitalisation
+  "product name":        "name",
+  "title":               "name",
+  "product title":       "name",
+  "product":             "name",
+  "price (₹)":           "price",
+  "selling price":       "price",
+  "sale price":          "price",
+  "price":               "price",
+  "category":            "category",
+  "description":         "description",
+  "desc":                "description",
+  "details":             "description",
+  "fabric":              "fabric",
+  "material":            "fabric",
+  "color":               "color",
+  "colour":              "color",
+  "occasion":            "occasion",
+  "stock":               "stock",
+  "qty":                 "stock",
+  "quantity":            "stock",
+  "inventory":           "stock",
+  "original price":      "originalPrice",
+  "original_price":      "originalPrice",
+  "originalprice":       "originalPrice",
+  "mrp":                 "originalPrice",
+  "subcategory":         "subcategory",
+  "sub category":        "subcategory",
+  "sub-category":        "subcategory",
+  "brand":               "brand",
+  "design pattern":      "designPattern",
+  "design_pattern":      "designPattern",
+  "designpattern":       "designPattern",
+  "pattern":             "designPattern",
+  "image urls":          "images",
+  "image_urls":          "images",
+  "image url":           "images",
+  "imageurl":            "images",
+  "imageurls":           "images",
 };
+
+// Columns that should always be ignored (e.g. template-only columns)
+const IGNORED_COLUMNS = new Set(["varients", "variants", "variation", "variations"]);
+
+// The canonical workbook supplied by the business contains two filled example
+// rows. The download must remain byte-for-byte unchanged, so recognize those
+// examples only when the workbook structure and complete source row (including
+// the intentionally ignored "Varients" cell) match exactly.
+const CANONICAL_TEMPLATE_HEADERS = [
+  "Product Name *",
+  "Price (₹) *",
+  "Category *",
+  "Description",
+  "Fabric",
+  "Color",
+  "Occasion",
+  "Stock",
+  "Original Price (₹)",
+  "Varients",
+  "Subcategory",
+  "Brand",
+  "Design Pattern",
+  "Images (URL)",
+] as const;
+
+const CANONICAL_TEMPLATE_SAMPLE_ROWS = [
+  [
+    "Peacock Paithani ABC", "15000", "paithani",
+    "Handwoven pure silk saree with peacock motifs", "silk", "red",
+    "festival", "10", "1000", "6 Var", "paithan festivali", "ss",
+    "Peacock", "https://in.pinterest.com/pin/1086352741404761172/",
+  ],
+  [
+    "Peacock Paithani xyz", "15000", "paithani",
+    "Handwoven pure silk saree with peacock motifs", "silk", "red",
+    "festival", "10", "1000", "6 Var", "paithan festivali", "ss",
+    "Peacock", "https://in.pinterest.com/pin/1086352741404761172/",
+  ],
+] as const;
+
+function isCanonicalTemplateLayout(
+  wb: XLSX.WorkBook,
+  headerRowIndex: number,
+  headers: string[],
+): boolean {
+  return (
+    wb.SheetNames.length === 2
+    && wb.SheetNames[0] === "Product Catalog"
+    && wb.SheetNames[1] === "Instructions"
+    && headerRowIndex === 6
+    && headers.length === CANONICAL_TEMPLATE_HEADERS.length
+    && headers.every((header, index) => header === CANONICAL_TEMPLATE_HEADERS[index])
+  );
+}
+
+function isCanonicalTemplateSampleSourceRow(sourceValues: string[]): boolean {
+  return CANONICAL_TEMPLATE_SAMPLE_ROWS.some(
+    sample => sample.length === sourceValues.length
+      && sample.every((value, index) => value === sourceValues[index]),
+  );
+}
 
 function autoMap(header: string): FieldKey | "" {
   const n = header.toLowerCase().trim();
+  // Exact match on field key
   if (PRODUCT_FIELDS.find(f => f.key === n)) return n as FieldKey;
+  // Alias match
   return HEADER_ALIASES[n] ?? "";
+}
+
+// ── Template XLSX detection ────────────────────────────────────────────────────
+/**
+ * Scans the first sheet for the canonical product-catalog template header row.
+ * The template has:
+ *   - Decorative rows 1-6 (title, branding, instructions)
+ *   - Row 7 (0-indexed row 6): the actual header row with friendly labels
+ *
+ * Returns { headerRowIndex, headers, dataStartRow } if found, or null.
+ * We scan up to row 10 to handle slight variation in template versions.
+ */
+function detectTemplateCatalog(wb: XLSX.WorkBook): {
+  ws: XLSX.WorkSheet;
+  headerRowIndex: number;
+  headers: string[];
+} | null {
+  // Prefer a sheet named "Product Catalog"
+  const sheetName = wb.SheetNames.find(
+    n => n.toLowerCase().includes("product catalog") || n.toLowerCase().includes("products")
+  ) ?? wb.SheetNames[0];
+
+  const ws = wb.Sheets[sheetName];
+  if (!ws || !ws["!ref"]) return null;
+
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+
+  for (let r = 0; r <= Math.min(10, range.e.r); r++) {
+    const rowCells: string[] = [];
+    for (let c = 0; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      rowCells.push(cell ? String(cell.v ?? "").trim() : "");
+    }
+
+    const normalized = rowCells.map(h => h.toLowerCase().trim());
+    // Check if this row has the 3 required-like columns
+    const hasName  = normalized.some(h => h === "product name *" || h === "product name" || h === "name");
+    const hasPrice = normalized.some(h => h.startsWith("price") || h === "price (₹) *");
+    const hasCat   = normalized.some(h => h === "category *" || h === "category");
+
+    if (hasName && hasPrice && hasCat) {
+      const lastNonEmpty = rowCells.reduce((acc, v, i) => v !== "" ? i : acc, -1);
+      const finalHeaders = rowCells.slice(0, lastNonEmpty + 1);
+      return { ws, headerRowIndex: r, headers: finalHeaders };
+    }
+  }
+
+  return null;
+}
+
+// ── Parse an uploaded file → mapped rows ─────────────────────────────────────
+/**
+ * Parses the file. Supports:
+ *   1. Canonical template (Product Catalog sheet with friendly labels on row 7)
+ *   2. Legacy simple format (first row = field keys, e.g. "name", "price", …)
+ *   3. Simple CSV with field keys as first row
+ *
+ * Returns { rows, originalHeaderRow } where originalHeaderRow is the
+ * 0-based index of the header row in the sheet (used to compute Excel row numbers).
+ */
+export function parseWorkbook(wb: XLSX.WorkBook): {
+  rows: Array<{ values: Record<string, string>; sheetRow: number }>;
+  headerRow: number;
+} {
+  // Try template detection first
+  const detected = detectTemplateCatalog(wb);
+
+  if (detected) {
+    const { ws, headerRowIndex, headers } = detected;
+    const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1:A1");
+    const rows: Array<{ values: Record<string, string>; sheetRow: number }> = [];
+    const canonicalLayout = isCanonicalTemplateLayout(wb, headerRowIndex, headers);
+
+    for (let r = headerRowIndex + 1; r <= range.e.r; r++) {
+      const rowData: Record<string, string> = {};
+      const sourceValues: string[] = [];
+      let hasAnyValue = false;
+
+      for (let c = 0; c < headers.length; c++) {
+        const header = headers[c];
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        const val = cell ? String(cell.v ?? "").trim() : "";
+        sourceValues.push(val);
+
+        if (!header) continue;
+
+        const normalizedHeader = header.toLowerCase().trim();
+
+        // Skip ignored columns (e.g. Varients)
+        if (IGNORED_COLUMNS.has(normalizedHeader)) continue;
+
+        const fieldKey = autoMap(header);
+        if (!fieldKey) continue; // unmapped column — skip
+
+        rowData[fieldKey] = val;
+        if (val !== "") hasAnyValue = true;
+      }
+
+      // Skip completely empty rows (decorative rows below sample data)
+      if (!hasAnyValue) continue;
+
+      // The supplied canonical workbook has two pre-filled examples. Since this
+      // flow imports immediately, unchanged examples must never become listings.
+      if (canonicalLayout && isCanonicalTemplateSampleSourceRow(sourceValues)) continue;
+
+      rows.push({ values: rowData, sheetRow: r });
+    }
+
+    return { rows, headerRow: headerRowIndex };
+  }
+
+  // Fallback: legacy first-row-is-headers format
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", raw: false });
+  const rows = rawRows.map((raw, idx) => {
+    const values: Record<string, string> = {};
+    for (const [header, val] of Object.entries(raw)) {
+      const fieldKey = autoMap(header);
+      if (fieldKey) values[fieldKey] = String(val ?? "").trim();
+    }
+    return { values, sheetRow: idx + 1 }; // +1 because header is row 0
+  });
+  return { rows, headerRow: 0 };
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -76,16 +310,17 @@ function validateRow(row: Record<string, string>): RowErrors {
   return e;
 }
 
-// ── Template download ─────────────────────────────────────────────────────────
+// ── Template download (static file) ──────────────────────────────────────────
 function downloadTemplate() {
-  const keys  = PRODUCT_FIELDS.map(f => f.key);
-  const sample = ["Peacock Paithani", "15000", "paithani", "Handwoven pure silk saree with peacock motifs",
-                   "silk", "red", "festival", "10", "", "", "", "", ""];
-  const ws = XLSX.utils.aoa_to_sheet([keys, sample]);
-  ws["!cols"] = keys.map(() => ({ wch: 22 }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Products");
-  XLSX.writeFile(wb, "twirldrape_product_template.xlsx");
+  const a = document.createElement("a");
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  a.href = `${basePath}/twirldrape_product_template.xlsx`;
+  a.download = "twirldrape_product_template.xlsx";
+  a.click();
+}
+
+export function toExcelRowNumber(zeroBasedSheetRow: number) {
+  return zeroBasedSheetRow + 1;
 }
 
 // ── Error report download ─────────────────────────────────────────────────────
@@ -94,7 +329,7 @@ function downloadErrorReport(
 ) {
   const headers = ["Excel Row", ...PRODUCT_FIELDS.map(f => f.key), "Error Reasons"];
   const data = failed.map(({ rowIndex, row, reason }) => [
-    String(rowIndex + 2), // +2: 1-based + header row
+    String(toExcelRowNumber(rowIndex)),
     ...PRODUCT_FIELDS.map(f => row[f.key] ?? ""),
     reason,
   ]);
@@ -105,13 +340,9 @@ function downloadErrorReport(
   XLSX.writeFile(wb, "twirldrape_upload_errors.xlsx");
 }
 
-// ── Pill / badge helpers ──────────────────────────────────────────────────────
-function RequiredBadge() {
-  return <span className="text-[9px] font-bold text-red-500 ml-1">*</span>;
-}
+// ── Module-level types ────────────────────────────────────────────────────────
+type Step = "upload" | "processing" | "results";
 
-// ── Module-level types (used both inside and outside the component) ───────────
-type Step = "upload" | "map" | "review" | "done";
 type ReviewRow  = { index: number; values: Record<string, string>; errors: RowErrors };
 type ApiResult  = { row: number; success: boolean; error?: string; productId?: string; name?: string };
 type FailedRow  = { rowIndex: number; row: Record<string, string>; reason: string; source: "client" | "server" };
@@ -153,12 +384,12 @@ export function buildAllFailed(
 
   const serverFailed: FailedRow[] = validRows.flatMap((r, originalIdx) => {
     const result = apiResults[originalIdx];
-    if (!result || result.success) return [];
+    if (result?.success) return [];
     return [
       {
         rowIndex: r.index,
         row: r.values,
-        reason: result.error ?? "Import failed",
+        reason: result?.error ?? "Import failed",
         source: "server" as const,
       },
     ];
@@ -179,60 +410,149 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
   const [step, setStep] = useState<Step>("upload");
   const dropRef = useRef<HTMLDivElement>(null);
 
-  // Step 1 – file / raw rows
-  const [parsedHeaders, setParsedHeaders] = useState<string[]>([]);
-  const [rawRows,        setRawRows]       = useState<Record<string, string>[]>([]);
-  const [fileError,      setFileError]     = useState("");
-  const [isDragging,     setIsDragging]    = useState(false);
+  // Upload step state
+  const [fileError,   setFileError]  = useState("");
+  const [isDragging,  setIsDragging] = useState(false);
 
-  // Step 2 – column mapping: detectedHeader → productFieldKey | ""
-  const [mapping, setMapping] = useState<Record<string, FieldKey | "">>({});
-
-  // Step 3 – editable review rows
-  const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
-
-  // Step 4 – import results
-  const [importing,    setImporting]    = useState(false);
+  // Processing / results state
+  const [processingStatus, setProcessingStatus] = useState("");
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError,  setImportError]  = useState("");
+  // Store reviewRows used by last run — needed for retry
+  const [lastReviewRows, setLastReviewRows] = useState<ReviewRow[]>([]);
+  const [lastValidRows,  setLastValidRows]  = useState<ReviewRow[]>([]);
+  // One idempotency key per uploaded file, retained across retries so a retry
+  // after a lost response returns the original batch result instead of
+  // duplicating products. Regenerated only when a new file is uploaded.
+  const idempotencyKeyRef = useRef<string>("");
+  // Guards against concurrent retry submissions (double-clicking Retry).
+  const isSubmittingRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── File parsing ────────────────────────────────────────────────────────────
-  const parseFile = useCallback((file: File) => {
+  const processFile = useCallback(async (file: File) => {
     setFileError("");
     const allowed = [".xlsx", ".xls", ".csv"];
     const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-    if (!allowed.includes(ext)) { setFileError("Please upload an .xlsx, .xls, or .csv file."); return; }
+    if (!allowed.includes(ext)) {
+      setFileError("Please upload an .xlsx, .xls, or .csv file.");
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const wb   = XLSX.read(data, { type: "array" });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", raw: false });
-        if (rows.length === 0) { setFileError("The file has no data rows."); return; }
-        if (rows.length > 500) { setFileError("Maximum 500 rows per upload. Please split the file."); return; }
+    setStep("processing");
+    setProcessingStatus("Reading file…");
+    setImportError("");
+    setImportResult(null);
+    // Fresh idempotency key for this file. Retries reuse it (see runImport).
+    idempotencyKeyRef.current = generateIdempotencyKey();
 
-        const headers = Object.keys(rows[0]);
-        setParsedHeaders(headers);
-        setRawRows(rows);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const wb = XLSX.read(data, { type: "array" });
 
-        // Build initial auto-mapping
-        const initialMapping: Record<string, FieldKey | ""> = {};
-        for (const h of headers) initialMapping[h] = autoMap(h);
-        setMapping(initialMapping);
+      setProcessingStatus("Detecting columns…");
+      const { rows: parsedRows } = parseWorkbook(wb);
 
-        setStep("map");
-      } catch {
-        setFileError("Could not parse the file. Please check it is a valid Excel or CSV file.");
+      if (parsedRows.length === 0) {
+        setFileError("The file has no product rows to import. Add your own rows; unchanged template examples are ignored.");
+        setStep("upload");
+        return;
       }
-    };
-    reader.readAsArrayBuffer(file);
-  }, []);
+      if (parsedRows.length > 500) {
+        setFileError("Maximum 500 rows per upload. Please split the file.");
+        setStep("upload");
+        return;
+      }
+
+      setProcessingStatus(`Validating ${parsedRows.length} rows…`);
+
+      // Build ReviewRow objects with their original Excel row numbers
+      // sheetRow is the original 0-based row index in the uploaded sheet.
+      const reviewRows: ReviewRow[] = parsedRows.map(({ values, sheetRow }) => ({
+        index: sheetRow,
+        values,
+        errors: validateRow(values),
+      }));
+
+      const validRows = reviewRows.filter(r => Object.keys(r.errors).length === 0);
+
+      // Save for potential retry
+      setLastReviewRows(reviewRows);
+      setLastValidRows(validRows);
+
+      await runImport(reviewRows, validRows);
+    } catch (err: any) {
+      setFileError("Could not parse the file. Please check it is a valid Excel or CSV file.");
+      setStep("upload");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Core import logic (separated so retry can call it) ─────────────────────
+  async function runImport(reviewRows: ReviewRow[], validRows: ReviewRow[]) {
+    // Prevent concurrent submissions (e.g. rapid double-clicks on Retry) so we
+    // never fire two requests for the same batch at once.
+    if (isSubmittingRef.current) return;
+
+    setImportError("");
+
+    // When every row fails client validation — no API call needed
+    if (validRows.length === 0) {
+      const allFailed = buildAllFailed(reviewRows, [], []);
+      setImportResult({ succeeded: 0, failed: allFailed.length, apiResults: [], validRows: [], allFailed });
+      setStep("results");
+      return;
+    }
+
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    setProcessingStatus(`Importing ${validRows.length} valid row${validRows.length !== 1 ? "s" : ""}…`);
+
+    try {
+      const res = await fetch(getApiUrl("/api/seller/products/bulk-import"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Same key across retries → server replays the original batch result.
+          "Idempotency-Key": idempotencyKeyRef.current,
+        },
+        credentials: "include",
+        body: JSON.stringify({ rows: validRows.map(r => r.values) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+
+      const apiResults: ApiResult[] = data.results ?? [];
+      const allFailed = buildAllFailed(reviewRows, validRows, apiResults);
+
+      const result: ImportResult = {
+        succeeded: data.summary?.succeeded ?? 0,
+        failed: allFailed.length,
+        apiResults,
+        validRows,
+        allFailed,
+      };
+      setImportResult(result);
+      if (result.succeeded > 0) onDone(`${result.succeeded} product(s) imported`);
+      setStep("results");
+    } catch (err: any) {
+      setImportError(err.message || "Import failed");
+      // Stay on "processing" step so user can retry
+      setProcessingStatus("");
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  }
+
+  // ── Retry after top-level failure ──────────────────────────────────────────
+  async function handleRetry() {
+    await runImport(lastReviewRows, lastValidRows);
+  }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) parseFile(file);
+    if (file) processFile(file);
     e.target.value = "";
   }
 
@@ -242,89 +562,12 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
   function onDrop(e: React.DragEvent) {
     e.preventDefault(); setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) parseFile(file);
+    if (file) processFile(file);
   }
-
-  // ── Advance to review ───────────────────────────────────────────────────────
-  function buildReview() {
-    const usedFields = new Set(Object.values(mapping).filter(Boolean));
-    // Apply mapping to raw rows
-    const rows: ReviewRow[] = rawRows.map((raw, idx) => {
-      const values: Record<string, string> = {};
-      for (const [header, field] of Object.entries(mapping)) {
-        if (field) values[field] = raw[header] ?? "";
-      }
-      return { index: idx, values, errors: validateRow(values) };
-    });
-    setReviewRows(rows);
-    setStep("review");
-  }
-
-  // ── Cell edit in review table ───────────────────────────────────────────────
-  function handleCellEdit(rowIndex: number, field: string, value: string) {
-    setReviewRows(prev => prev.map((r, i) => {
-      if (i !== rowIndex) return r;
-      const updated = { ...r.values, [field]: value };
-      return { ...r, values: updated, errors: validateRow(updated) };
-    }));
-  }
-
-  // ── Import ──────────────────────────────────────────────────────────────────
-  async function handleImport() {
-    const validRows = reviewRows.filter(r => Object.keys(r.errors).length === 0);
-
-    // When every row fails client validation there is nothing to send to the
-    // server, but the seller still needs to see the error report.  Build the
-    // failed list from the review rows alone and jump to the done screen.
-    if (validRows.length === 0) {
-      const allFailed = buildAllFailed(reviewRows, [], []);
-      setImportResult({ succeeded: 0, failed: allFailed.length, apiResults: [], validRows: [], allFailed });
-      setStep("done");
-      return;
-    }
-
-    setImporting(true);
-    setImportError("");
-    try {
-      const res = await fetch(getApiUrl("/api/seller/products/bulk-import"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ rows: validRows.map(r => r.values) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Import failed");
-
-      const apiResults: ApiResult[] = data.results ?? [];
-
-      // Rows that failed client-side validation (skipped, not sent to API)
-      // combined with rows the server rejected — deduplicated and sorted.
-      // apiResults[originalIdx] corresponds to validRows[originalIdx] — preserve originalIdx
-      // across the map so we never confuse it with a post-filter reset index.
-      const allFailed = buildAllFailed(reviewRows, validRows, apiResults);
-
-      setImportResult({
-        succeeded: data.summary?.succeeded ?? 0,
-        // allFailed already contains every client-invalid and server-rejected
-        // row exactly once, so its length is the authoritative failed count.
-        failed: allFailed.length,
-        apiResults,
-        validRows,
-        allFailed,
-      });
-      if (data.summary?.succeeded > 0) onDone(`${data.summary.succeeded} product(s) imported`);
-      setStep("done");
-    } catch (err: any) {
-      setImportError(err.message || "Import failed");
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  const validCount   = reviewRows.filter(r => Object.keys(r.errors).length === 0).length;
-  const invalidCount = reviewRows.length - validCount;
 
   // ── Render ──────────────────────────────────────────────────────────────────
+  const stepLabel = step === "upload" ? "Upload" : step === "processing" ? "Processing" : "Results";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" style={{ background: "rgba(0,0,0,0.5)" }}>
       <motion.div
@@ -332,7 +575,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.97 }}
         className="bg-white rounded-2xl shadow-2xl w-full flex flex-col"
-        style={{ maxWidth: step === "review" ? 1000 : 620, maxHeight: "92vh" }}
+        style={{ maxWidth: 620, maxHeight: "92vh" }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -340,12 +583,12 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
           <div>
             <h3 className="font-serif text-lg font-bold" style={{ color: MAROON }}>Bulk Upload Products</h3>
             <div className="flex items-center gap-1.5 mt-1">
-              {(["upload", "map", "review", "done"] as Step[]).map((s, i) => (
+              {(["upload", "processing", "results"] as Step[]).map((s, i) => (
                 <React.Fragment key={s}>
                   <span className={`text-[10px] font-semibold ${step === s ? "text-[#1E6B5A]" : "text-gray-300"}`}>
                     {i + 1}. {s.charAt(0).toUpperCase() + s.slice(1)}
                   </span>
-                  {i < 3 && <span className="text-gray-200 text-[10px]">›</span>}
+                  {i < 2 && <span className="text-gray-200 text-[10px]">›</span>}
                 </React.Fragment>
               ))}
             </div>
@@ -387,11 +630,11 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                 </div>
               )}
 
-              {/* Template download */}
+              {/* Template download — serves the canonical static workbook */}
               <div className="flex items-center justify-between px-4 py-3 rounded-xl border" style={{ borderColor: "#C9A84C33", background: CREAM }}>
                 <div>
                   <p className="text-sm font-semibold" style={{ color: MAROON }}>Download template</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Pre-formatted .xlsx with all column headers and a sample row</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Replace the example rows with your products, then upload</p>
                 </div>
                 <button
                   onClick={downloadTemplate}
@@ -424,198 +667,48 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
             </div>
           )}
 
-          {/* ─── STEP 2: Field mapping ─── */}
-          {step === "map" && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-500">
-                {parsedHeaders.length} column{parsedHeaders.length !== 1 ? "s" : ""} detected from your file.
-                Confirm or adjust the mapping for each column.
-              </p>
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ background: CREAM }}>
-                      <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-gray-500">Your Column</th>
-                      <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-gray-500">Sample Value</th>
-                      <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-gray-500">Maps To</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parsedHeaders.map((h) => (
-                      <tr key={h} className="border-t border-gray-100">
-                        <td className="px-4 py-2.5">
-                          <code className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">{h}</code>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-gray-400 max-w-[160px] truncate">
-                          {String(rawRows[0]?.[h] ?? "").slice(0, 40) || "—"}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <select
-                            value={mapping[h] ?? ""}
-                            onChange={e => setMapping(m => ({ ...m, [h]: e.target.value as FieldKey | "" }))}
-                            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-[#C9A84C]"
-                          >
-                            <option value="">— Ignore —</option>
-                            {PRODUCT_FIELDS.map(f => (
-                              <option key={f.key} value={f.key}>
-                                {f.label}{f.required ? " *" : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Check that required fields are mapped */}
-              {(() => {
-                const mappedFields = new Set(Object.values(mapping).filter(Boolean));
-                const missing = PRODUCT_FIELDS.filter(f => f.required && !mappedFields.has(f.key));
-                return missing.length > 0 ? (
-                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs">
-                    <AlertTriangle size={14} />
-                    Required fields not yet mapped: <strong>{missing.map(f => f.label).join(", ")}</strong>
+          {/* ─── STEP 2: Processing ─── */}
+          {step === "processing" && (
+            <div className="space-y-5">
+              {importError ? (
+                /* Top-level server failure — stay here so seller can retry */
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center text-center py-8">
+                    <AlertCircle size={40} className="mb-3 text-red-500" />
+                    <p className="text-lg font-bold font-serif text-red-700">Import failed</p>
+                    <p className="text-sm text-gray-500 mt-1">{importError}</p>
                   </div>
-                ) : null;
-              })()}
-
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setStep("upload")} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">
-                  <ChevronLeft size={15} /> Back
-                </button>
-                <button
-                  onClick={buildReview}
-                  disabled={(() => {
-                    const mapped = new Set(Object.values(mapping).filter(Boolean));
-                    return PRODUCT_FIELDS.some(f => f.required && !mapped.has(f.key));
-                  })()}
-                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40"
-                  style={{ background: MAROON }}
-                >
-                  Review {rawRows.length} Rows <ChevronRight size={15} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ─── STEP 3: Review ─── */}
-          {step === "review" && (
-            <div className="space-y-4">
-              {/* Summary bar */}
-              <div className="flex items-center gap-4 px-4 py-3 rounded-xl border" style={{ borderColor: "#C9A84C33", background: CREAM }}>
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-green-700">
-                  <CheckCircle2 size={15} /> {validCount} valid
-                </span>
-                {invalidCount > 0 && (
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-red-600">
-                    <AlertCircle size={15} /> {invalidCount} with errors
-                  </span>
-                )}
-                <span className="text-xs text-gray-400 ml-auto">Edit cells to fix errors, then import valid rows</span>
-              </div>
-
-              {/* Scrollable editable table */}
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto" style={{ maxHeight: 420 }}>
-                  <table className="text-xs w-max min-w-full">
-                    <thead className="sticky top-0 z-10" style={{ background: CREAM }}>
-                      <tr>
-                        <th className="px-3 py-2.5 text-left text-gray-400 font-bold uppercase tracking-wide w-10">#</th>
-                        {PRODUCT_FIELDS.map(f => (
-                          <th key={f.key} className="px-3 py-2.5 text-left font-bold uppercase tracking-wide text-gray-500 whitespace-nowrap">
-                            {f.label}{f.required && <RequiredBadge />}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reviewRows.map((row, rowIdx) => {
-                        const hasError = Object.keys(row.errors).length > 0;
-                        return (
-                          <tr
-                            key={row.index}
-                            className="border-t border-gray-100 hover:bg-gray-50/60 transition-colors"
-                            style={hasError ? { background: "#FFF5F5" } : {}}
-                          >
-                            <td className="px-3 py-2 text-gray-400 font-mono">{row.index + 2}</td>
-                            {PRODUCT_FIELDS.map(f => {
-                              const err = row.errors[f.key as FieldKey];
-                              return (
-                                <td key={f.key} className="px-1.5 py-1" style={{ minWidth: 120 }}>
-                                  <div className="relative">
-                                    <input
-                                      value={row.values[f.key] ?? ""}
-                                      onChange={e => handleCellEdit(rowIdx, f.key, e.target.value)}
-                                      className="w-full px-2 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1"
-                                      style={{
-                                        borderColor: err ? "#FCA5A5" : "#E5E7EB",
-                                        background:  err ? "#FFF0F0" : "#fff",
-                                      }}
-                                      placeholder={f.required ? "Required" : ""}
-                                    />
-                                    {err && (
-                                      <div className="absolute left-0 top-full mt-0.5 z-20 bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded shadow-md whitespace-nowrap pointer-events-none">
-                                        {err}
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => { setImportError(""); setStep("upload"); }}
+                      className="px-5 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    >
+                      Upload Different File
+                    </button>
+                    <button
+                      onClick={handleRetry}
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ background: MAROON }}
+                    >
+                      {isSubmitting ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                      {isSubmitting ? "Retrying…" : "Retry Import"}
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              {importError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-                  <AlertCircle size={14} /> {importError}
+              ) : (
+                /* Normal processing spinner */
+                <div className="flex flex-col items-center text-center py-12">
+                  <Loader2 size={40} className="mb-4 animate-spin" style={{ color: MAROON }} />
+                  <p className="text-base font-semibold text-gray-700">{processingStatus || "Processing…"}</p>
+                  <p className="text-xs text-gray-400 mt-1">This will only take a moment</p>
                 </div>
               )}
-
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setStep("map")} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">
-                  <ChevronLeft size={15} /> Back
-                </button>
-                {/* When every row is invalid, show a dedicated error-report action instead
-                    of a disabled import button so sellers can still download the report. */}
-                {validCount === 0 ? (
-                  <button
-                    onClick={handleImport}
-                    disabled={importing}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40"
-                    style={{ background: MAROON }}
-                  >
-                    <Download size={15} />
-                    {`View Error Report (${invalidCount} failed row${invalidCount !== 1 ? "s" : ""})`}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleImport}
-                    disabled={importing}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40"
-                    style={{ background: MAROON }}
-                  >
-                    {importing ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                    {importing ? "Importing…" : `Import ${validCount} Valid Row${validCount !== 1 ? "s" : ""}`}
-                  </button>
-                )}
-                {validCount > 0 && invalidCount > 0 && (
-                  <p className="text-xs text-amber-600 self-center">
-                    {invalidCount} row{invalidCount !== 1 ? "s" : ""} with errors will be skipped
-                  </p>
-                )}
-              </div>
             </div>
           )}
 
-          {/* ─── STEP 4: Done ─── */}
-          {step === "done" && importResult && (
+          {/* ─── STEP 3: Results ─── */}
+          {step === "results" && importResult && (
             <div className="space-y-5">
               <div className="flex flex-col items-center text-center py-6 rounded-2xl"
                    style={{ background: importResult.succeeded > 0 ? `${MAROON}0d` : "#FFF5F5" }}>
@@ -636,14 +729,14 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                 )}
               </div>
 
-              {/* Per-row server results — apiResults[i] maps to validRows[i] */}
+              {/* Per-row server results */}
               {importResult.apiResults.length > 0 && (
                 <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-gray-100 p-3">
                   {importResult.apiResults.map((r, i) => {
                     const originalRow = importResult.validRows[i];
                     const label = r.success
                       ? (r.name ?? originalRow?.values?.name ?? "Imported")
-                      : `Row ${(originalRow?.index ?? i) + 2}: ${r.error ?? "Failed"}`;
+                      : `Row ${toExcelRowNumber(originalRow?.index ?? i)}: ${r.error ?? "Failed"}`;
                     return (
                       <div key={i} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg"
                            style={{ background: r.success ? "#DCFCE7" : "#FEE2E2" }}>
@@ -669,6 +762,12 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                     <Download size={14} /> Download Error Report ({importResult.allFailed.length} rows)
                   </button>
                 )}
+                <button
+                  onClick={() => { setStep("upload"); setImportResult(null); setImportError(""); }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-500 hover:bg-gray-50"
+                >
+                  Upload Another File
+                </button>
               </div>
             </div>
           )}

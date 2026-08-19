@@ -267,6 +267,34 @@
       "when": 1755907200000,
       "tag": "0040_add_saved_payment_methods",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1755993600000,
+      "tag": "0041_add_vendor_address_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1756080000000,
+      "tag": "0042_add_bulk_import_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1756166400000,
+      "tag": "0043_add_bulk_import_batch_lease",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1756252800000,
+      "tag": "0044_add_bulk_import_batch_fence",
+      "breakpoints": true
     }
   ]
 }

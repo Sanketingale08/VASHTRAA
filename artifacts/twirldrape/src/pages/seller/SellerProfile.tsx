@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Save, Camera, AlertCircle, CheckCircle, X, Loader2, Pencil, Phone, Mail, MapPin, Building2, FileText, User } from "lucide-react";
+import { Save, Camera, AlertCircle, CheckCircle, X, Loader2, Pencil, Phone, Mail, MapPin, Building2, FileText, User, Home, Package } from "lucide-react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
@@ -9,6 +9,27 @@ const MAROON = "#1E6B5A";
 const IVORY = "#F3F8F5";
 const CREAM = "#E6F0EA";
 const GOLD = "#C9A84C";
+
+interface AddressFields {
+  addressLine1: string; // maps to shopStreet (backward compat)
+  addressLine2: string;
+  landmark: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
+
+interface PickupFields {
+  locationName: string;
+  addressLine1: string;
+  addressLine2: string;
+  landmark: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
 
 interface FormState {
   name: string;
@@ -19,6 +40,11 @@ interface FormState {
   contactEmail: string;
   mobile: string;
   avatar: string;
+  // Shop address
+  shopAddress: AddressFields;
+  // Pickup address
+  pickupSameAsShop: boolean;
+  pickupAddress: PickupFields;
 }
 
 // ── Single-photo avatar uploader ──────────────────────────────────────────────
@@ -181,12 +207,227 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
   );
 }
 
+// ── Address card for view mode ─────────────────────────────────────────────────
+interface AddressCardProps {
+  title: string;
+  icon: React.ElementType;
+  lines: string[];
+  badge?: string;
+}
+
+function AddressCard({ title, icon: Icon, lines, badge }: AddressCardProps) {
+  const nonEmpty = lines.filter(Boolean);
+  if (nonEmpty.length === 0) return null;
+  return (
+    <div className="rounded-xl border p-4" style={{ borderColor: `${GOLD}20`, background: `${CREAM}80` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ background: `${MAROON}15` }}>
+          <Icon size={12} style={{ color: MAROON }} />
+        </div>
+        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: MAROON }}>{title}</p>
+        {badge && (
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${GOLD}25`, color: "#7a5c1e" }}>
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="space-y-0.5 pl-8">
+        {nonEmpty.map((line, i) => (
+          <p key={i} className="text-sm leading-snug" style={{ color: "#3d2b1f" }}>{line}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Address input group (reusable for shop + pickup) ──────────────────────────
+interface AddressInputGroupProps {
+  prefix: string;
+  label: string;
+  values: { addressLine1: string; addressLine2: string; landmark: string; city: string; state: string; pincode: string; country: string };
+  onChange: (field: string, value: string) => void;
+  disabled: boolean;
+  requireLine1?: boolean;
+  requireCity?: boolean;
+  requireState?: boolean;
+  requirePincode?: boolean;
+}
+
+function AddressInputGroup({ prefix, label, values, onChange, disabled, requireLine1, requireCity, requireState, requirePincode }: AddressInputGroupProps) {
+  const inputClass = "w-full px-4 py-2.5 rounded-lg border text-sm outline-none transition focus:ring-2 focus:ring-[#1E6B5A]/20";
+  const inputStyle = { background: CREAM, borderColor: "#C9A84C44", color: "#3D1515" };
+  const labelClass = "block text-xs font-bold uppercase tracking-wider mb-1.5";
+  const labelStyle = { color: "#5a3e3e" };
+  const opacity = { opacity: disabled ? 0.6 : 1 };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label htmlFor={`${prefix}-address-line-1`} className={labelClass} style={labelStyle}>
+          Address Line 1{requireLine1 ? " *" : ""}
+          <span className="normal-case font-normal tracking-normal ml-1 text-gray-400">(Street / House No.)</span>
+        </label>
+        <input
+          id={`${prefix}-address-line-1`}
+          type="text"
+          value={values.addressLine1}
+          onChange={(e) => onChange("addressLine1", e.target.value)}
+          placeholder="e.g. Plot 12, Gandhi Marg"
+          disabled={disabled}
+          className={inputClass}
+          style={{ ...inputStyle, ...opacity }}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={`${prefix}-address-line-2`} className={labelClass} style={labelStyle}>Address Line 2</label>
+        <input
+          id={`${prefix}-address-line-2`}
+          type="text"
+          value={values.addressLine2}
+          onChange={(e) => onChange("addressLine2", e.target.value)}
+          placeholder="Apartment, floor, building name (optional)"
+          disabled={disabled}
+          className={inputClass}
+          style={{ ...inputStyle, ...opacity }}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={`${prefix}-landmark`} className={labelClass} style={labelStyle}>Landmark</label>
+        <input
+          id={`${prefix}-landmark`}
+          type="text"
+          value={values.landmark}
+          onChange={(e) => onChange("landmark", e.target.value)}
+          placeholder="e.g. Near City Hospital"
+          disabled={disabled}
+          className={inputClass}
+          style={{ ...inputStyle, ...opacity }}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor={`${prefix}-city`} className={labelClass} style={labelStyle}>City{requireCity ? " *" : ""}</label>
+          <input
+            id={`${prefix}-city`}
+            type="text"
+            value={values.city}
+            onChange={(e) => onChange("city", e.target.value)}
+            placeholder="e.g. Nashik"
+            disabled={disabled}
+            className={inputClass}
+            style={{ ...inputStyle, ...opacity }}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${prefix}-state`} className={labelClass} style={labelStyle}>State{requireState ? " *" : ""}</label>
+          <input
+            id={`${prefix}-state`}
+            type="text"
+            value={values.state}
+            onChange={(e) => onChange("state", e.target.value)}
+            placeholder="e.g. Maharashtra"
+            disabled={disabled}
+            className={inputClass}
+            style={{ ...inputStyle, ...opacity }}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor={`${prefix}-pincode`} className={labelClass} style={labelStyle}>PIN Code{requirePincode ? " *" : ""}</label>
+          <input
+            id={`${prefix}-pincode`}
+            type="text"
+            value={values.pincode}
+            onChange={(e) => onChange("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="6-digit PIN"
+            maxLength={6}
+            disabled={disabled}
+            className={inputClass}
+            style={{ ...inputStyle, ...opacity, fontFamily: "monospace" }}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${prefix}-country`} className={labelClass} style={labelStyle}>Country</label>
+          <input
+            id={`${prefix}-country`}
+            type="text"
+            value={values.country}
+            onChange={(e) => onChange("country", e.target.value)}
+            placeholder="India"
+            disabled={disabled}
+            className={inputClass}
+            style={{ ...inputStyle, ...opacity }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatAddressLines(fields: AddressFields): string[] {
+  const parts: string[] = [];
+  if (fields.addressLine1) parts.push(fields.addressLine1);
+  if (fields.addressLine2) parts.push(fields.addressLine2);
+  if (fields.landmark) parts.push(fields.landmark);
+  const cityStateParts: string[] = [];
+  if (fields.city) cityStateParts.push(fields.city);
+  if (fields.state) cityStateParts.push(fields.state);
+  if (fields.pincode) cityStateParts.push(fields.pincode);
+  if (cityStateParts.length > 0) parts.push(cityStateParts.join(", "));
+  if (fields.country) parts.push(fields.country);
+  return parts;
+}
+
+function formatPickupAddressLines(fields: PickupFields): string[] {
+  const parts: string[] = [];
+  if (fields.addressLine1) parts.push(fields.addressLine1);
+  if (fields.addressLine2) parts.push(fields.addressLine2);
+  if (fields.landmark) parts.push(fields.landmark);
+  const cityStateParts: string[] = [];
+  if (fields.city) cityStateParts.push(fields.city);
+  if (fields.state) cityStateParts.push(fields.state);
+  if (fields.pincode) cityStateParts.push(fields.pincode);
+  if (cityStateParts.length > 0) parts.push(cityStateParts.join(", "));
+  if (fields.country) parts.push(fields.country);
+  return parts;
+}
+
+function shopToPickupFields(shop: AddressFields, locationName: string): PickupFields {
+  return {
+    locationName,
+    addressLine1: shop.addressLine1,
+    addressLine2: shop.addressLine2,
+    landmark: shop.landmark,
+    city: shop.city,
+    state: shop.state,
+    pincode: shop.pincode,
+    country: shop.country,
+  };
+}
+
+const emptyAddress: AddressFields = {
+  addressLine1: "", addressLine2: "", landmark: "", city: "", state: "", pincode: "", country: "",
+};
+
+const emptyPickup: PickupFields = {
+  locationName: "", addressLine1: "", addressLine2: "", landmark: "", city: "", state: "", pincode: "", country: "",
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SellerProfile() {
   const { vendor, refresh } = useSellerContext();
   const [form, setForm] = useState<FormState>({
     name: "", tagline: "", bio: "", location: "",
     gstin: "", contactEmail: "", mobile: "", avatar: "",
+    shopAddress: { ...emptyAddress },
+    pickupSameAsShop: false,
+    pickupAddress: { ...emptyPickup },
   });
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -208,26 +449,45 @@ export default function SellerProfile() {
         contactEmail: vendor.contactEmail ?? "",
         mobile: vendor.mobile ?? "",
         avatar: vendor.avatar ?? "",
+        shopAddress: {
+          addressLine1: vendor.shopStreet ?? "",
+          addressLine2: vendor.shopAddressLine2 ?? "",
+          landmark: vendor.shopLandmark ?? "",
+          city: vendor.shopCity ?? "",
+          state: vendor.shopState ?? "",
+          pincode: vendor.shopPincode ?? "",
+          country: vendor.shopCountry ?? "",
+        },
+        pickupSameAsShop: vendor.pickupSameAsShop ?? false,
+        pickupAddress: {
+          locationName: vendor.pickupLocationName ?? "",
+          addressLine1: vendor.pickupAddressLine1 ?? "",
+          addressLine2: vendor.pickupAddressLine2 ?? "",
+          landmark: vendor.pickupLandmark ?? "",
+          city: vendor.pickupCity ?? "",
+          state: vendor.pickupState ?? "",
+          pincode: vendor.pickupPincode ?? "",
+          country: vendor.pickupCountry ?? "",
+        },
       };
       setForm(loaded);
     }
   }, [vendor]);
 
   function startEdit() {
-    setSnapshot({ ...form });
+    setSnapshot({ ...form, shopAddress: { ...form.shopAddress }, pickupAddress: { ...form.pickupAddress } });
     setError("");
     setSuccess(false);
     setEditing(true);
   }
 
   function cancelEdit() {
-    if (avatarUploading) return; // wait for upload to finish before discarding
+    if (avatarUploading) return;
     if (snapshot) setForm(snapshot);
     setError("");
     setEditing(false);
   }
 
-  // True when any async operation is in progress
   const busy = saving || avatarUploading;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -236,9 +496,46 @@ export default function SellerProfile() {
     setSuccess(false);
   }
 
+  function handleShopAddressChange(field: string, value: string) {
+    setForm((prev) => ({
+      ...prev,
+      shopAddress: { ...prev.shopAddress, [field]: value },
+    }));
+    setError("");
+    setSuccess(false);
+  }
+
+  function handlePickupAddressChange(field: string, value: string) {
+    setForm((prev) => ({
+      ...prev,
+      pickupAddress: { ...prev.pickupAddress, [field]: value },
+    }));
+    setError("");
+    setSuccess(false);
+  }
+
+  function handlePickupSameAsShopChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setForm((prev) => ({ ...prev, pickupSameAsShop: e.target.checked }));
+    setError("");
+    setSuccess(false);
+  }
+
   function validateMobile(mobile: string) {
-    if (!mobile.trim()) return true; // optional
+    if (!mobile.trim()) return true;
     return /^[6-9]\d{9}$/.test(mobile.trim());
+  }
+
+  function validatePincode(pin: string) {
+    if (!pin.trim()) return true;
+    return /^\d{6}$/.test(pin.trim());
+  }
+
+  // Derive effective pickup address at save/display time
+  function getEffectivePickup(): PickupFields {
+    if (form.pickupSameAsShop) {
+      return shopToPickupFields(form.shopAddress, form.pickupAddress.locationName || form.name);
+    }
+    return form.pickupAddress;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -249,6 +546,15 @@ export default function SellerProfile() {
     if (!form.location.trim()) { setError("Address is required."); return; }
     if (form.mobile.trim() && !validateMobile(form.mobile)) {
       setError("Enter a valid mobile number (10 digits, starting with 6–9).");
+      return;
+    }
+    if (form.shopAddress.pincode && !validatePincode(form.shopAddress.pincode)) {
+      setError("Shop PIN code must be exactly 6 digits.");
+      return;
+    }
+    const effectivePickup = getEffectivePickup();
+    if (!form.pickupSameAsShop && effectivePickup.pincode && !validatePincode(effectivePickup.pincode)) {
+      setError("Pickup PIN code must be exactly 6 digits.");
       return;
     }
 
@@ -270,6 +576,24 @@ export default function SellerProfile() {
           contactEmail: form.contactEmail.trim() || null,
           mobile: form.mobile.trim() || null,
           avatar: form.avatar.trim() || null,
+          // Shop address
+          shopStreet: form.shopAddress.addressLine1.trim() || null,
+          shopAddressLine2: form.shopAddress.addressLine2.trim() || null,
+          shopLandmark: form.shopAddress.landmark.trim() || null,
+          shopCity: form.shopAddress.city.trim() || null,
+          shopState: form.shopAddress.state.trim() || null,
+          shopPincode: form.shopAddress.pincode.trim() || null,
+          shopCountry: form.shopAddress.country.trim() || null,
+          // Pickup
+          pickupSameAsShop: form.pickupSameAsShop,
+          pickupLocationName: effectivePickup.locationName?.trim() || null,
+          pickupAddressLine1: effectivePickup.addressLine1?.trim() || null,
+          pickupAddressLine2: effectivePickup.addressLine2?.trim() || null,
+          pickupLandmark: effectivePickup.landmark?.trim() || null,
+          pickupCity: effectivePickup.city?.trim() || null,
+          pickupState: effectivePickup.state?.trim() || null,
+          pickupPincode: effectivePickup.pincode?.trim() || null,
+          pickupCountry: effectivePickup.country?.trim() || null,
         }),
       });
 
@@ -294,6 +618,13 @@ export default function SellerProfile() {
   const inputStyle = { background: CREAM, borderColor: "#C9A84C44", color: "#3D1515" };
   const labelClass = "block text-xs font-bold uppercase tracking-wider mb-1.5";
   const labelStyle = { color: "#5a3e3e" };
+
+  // Derived for view mode
+  const shopAddressLines = formatAddressLines(form.shopAddress);
+  const effectivePickupForDisplay = form.pickupSameAsShop
+    ? shopToPickupFields(form.shopAddress, form.pickupAddress.locationName || form.name)
+    : form.pickupAddress;
+  const pickupAddressLines = formatPickupAddressLines(effectivePickupForDisplay);
 
   return (
     <SellerLayout title="Seller Profile">
@@ -394,6 +725,33 @@ export default function SellerProfile() {
                   <p className="text-xs text-gray-400 py-2">No contact or business details added yet.</p>
                 )}
               </div>
+
+              {/* Shop & Pickup address cards */}
+              {(shopAddressLines.length > 0 || pickupAddressLines.length > 0) && (
+                <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+                  <h3 className="font-serif font-bold text-sm mb-4" style={{ color: MAROON }}>Addresses</h3>
+                  <div className="space-y-3">
+                    {shopAddressLines.length > 0 && (
+                      <AddressCard
+                        title="Shop Address"
+                        icon={Home}
+                        lines={[form.name, ...shopAddressLines]}
+                      />
+                    )}
+                    {pickupAddressLines.length > 0 && (
+                      <AddressCard
+                        title="Pickup Address"
+                        icon={Package}
+                        lines={[
+                          effectivePickupForDisplay.locationName || form.name,
+                          ...pickupAddressLines,
+                        ]}
+                        badge={form.pickupSameAsShop ? "Same as Shop" : undefined}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
           ) : (
             /* ── Edit mode ─────────────────────────────────────────────────── */
@@ -444,7 +802,7 @@ export default function SellerProfile() {
                 </div>
 
                 <div>
-                  <label className={labelClass} style={labelStyle}>Address *</label>
+                  <label className={labelClass} style={labelStyle}>Business Location *</label>
                   <input type="text" name="location" value={form.location} onChange={handleChange}
                     placeholder="e.g. Nashik, Maharashtra" required disabled={busy}
                     className={inputClass} style={{ ...inputStyle, opacity: busy ? 0.6 : 1 }} />
@@ -478,6 +836,118 @@ export default function SellerProfile() {
                     placeholder="22AAAAA0000A1Z5" maxLength={15} disabled={busy}
                     className={inputClass} style={{ ...inputStyle, opacity: busy ? 0.6 : 1, fontFamily: "monospace", letterSpacing: "0.04em" }} />
                 </div>
+              </div>
+
+              {/* Shop Address */}
+              <div data-testid="shop-address-section" className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+                <div>
+                  <h3 className="font-serif font-bold text-sm" style={{ color: MAROON }}>Shop Address</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">The registered address of your shop (used for invoices and correspondence)</p>
+                </div>
+                {/* Shop name = vendor name, displayed read-only */}
+                <div>
+                  <label className={labelClass} style={labelStyle}>Shop Name</label>
+                  <div
+                    className="w-full px-4 py-2.5 rounded-lg border text-sm"
+                    style={{ background: `${CREAM}80`, borderColor: "#C9A84C44", color: "#3D1515", opacity: 0.8 }}
+                  >
+                    {form.name || <span className="text-gray-400">—</span>}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Shop name is your Business Name above</p>
+                </div>
+                <AddressInputGroup
+                  prefix="shop"
+                  label="Shop"
+                  values={form.shopAddress}
+                  onChange={handleShopAddressChange}
+                  disabled={busy}
+                />
+              </div>
+
+              {/* Pickup Address */}
+              <div data-testid="pickup-address-section" className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+                <div>
+                  <h3 className="font-serif font-bold text-sm" style={{ color: MAROON }}>Pickup Address</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Where orders are picked up by the courier</p>
+                </div>
+
+                {/* Same-as-shop toggle */}
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={form.pickupSameAsShop}
+                      onChange={handlePickupSameAsShopChange}
+                      disabled={busy}
+                      className="sr-only"
+                    />
+                    <div
+                      className="w-10 h-6 rounded-full transition-colors"
+                      style={{
+                        background: form.pickupSameAsShop ? MAROON : "#d1d5db",
+                        opacity: busy ? 0.6 : 1,
+                      }}
+                    >
+                      <div
+                        className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform"
+                        style={{ transform: form.pickupSameAsShop ? "translateX(16px)" : "translateX(0)" }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium" style={{ color: "#3d2b1f" }}>
+                    Pickup address is same as shop address
+                  </span>
+                </label>
+
+                {!form.pickupSameAsShop && (
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <label htmlFor="pickup-location-name" className={labelClass} style={labelStyle}>Pickup Location Name</label>
+                      <input
+                        id="pickup-location-name"
+                        type="text"
+                        value={form.pickupAddress.locationName}
+                        onChange={(e) => handlePickupAddressChange("locationName", e.target.value)}
+                        placeholder="e.g. Main Warehouse"
+                        disabled={busy}
+                        className={inputClass}
+                        style={{ ...inputStyle, opacity: busy ? 0.6 : 1 }}
+                      />
+                    </div>
+                    <AddressInputGroup
+                      prefix="pickup"
+                      label="Pickup"
+                      values={{
+                        addressLine1: form.pickupAddress.addressLine1,
+                        addressLine2: form.pickupAddress.addressLine2,
+                        landmark: form.pickupAddress.landmark,
+                        city: form.pickupAddress.city,
+                        state: form.pickupAddress.state,
+                        pincode: form.pickupAddress.pincode,
+                        country: form.pickupAddress.country,
+                      }}
+                      onChange={handlePickupAddressChange}
+                      disabled={busy}
+                    />
+                  </div>
+                )}
+
+                {form.pickupSameAsShop && (
+                  <div className="space-y-1 pt-1">
+                    <label htmlFor="pickup-location-name-same" className="text-xs font-semibold" style={{ color: MAROON }}>Pickup location name</label>
+                    <input
+                      id="pickup-location-name-same"
+                      type="text"
+                      value={form.pickupAddress.locationName}
+                      onChange={(e) => handlePickupAddressChange("locationName", e.target.value)}
+                      placeholder={form.name || "Pickup location name"}
+                      disabled={busy}
+                      className={inputClass}
+                      style={{ ...inputStyle, opacity: busy ? 0.6 : 1 }}
+                    />
+                    <p className="text-[11px] text-gray-400">Address will be derived from your shop address on save</p>
+                  </div>
+                )}
               </div>
 
               {error && (

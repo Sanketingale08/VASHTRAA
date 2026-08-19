@@ -1,16 +1,17 @@
 /**
  * Component-level tests for SellerBulkUpload.
  *
- * These tests focus on the UI path where ALL review rows fail client validation
- * (validCount === 0).  In that case the Import button used to be disabled and no
- * error report could be downloaded.  The fix exposes a "View Error Report" button
- * that calls handleImport, which in turn builds allFailed from the review rows
- * and advances to the Done screen where the Download Error Report button lives.
+ * These tests focus on:
+ *   1. The exported buildAllFailed pure helper (all-client-invalid path)
+ *   2. The downloadErrorReport column structure
+ *   3. The template-detection parsing logic via exported helpers
  */
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as XLSX from "xlsx";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // ─── Stub heavy Clerk hooks used transitively by other imports ────────────────
 vi.mock("@clerk/react", () => ({
@@ -31,13 +32,17 @@ vi.mock("xlsx", async () => {
 });
 
 // ─── Import the component AFTER mocks are in place ───────────────────────────
-import SellerBulkUpload, { PRODUCT_FIELDS } from "./SellerBulkUpload";
+import SellerBulkUpload, {
+  PRODUCT_FIELDS,
+  parseWorkbook,
+  toExcelRowNumber,
+} from "./SellerBulkUpload";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a minimal ReviewRow already at the "review" step state. */
+/** Build a minimal ReviewRow already at the "results" step state. */
 function makeInvalidRow(index: number, overrides: Record<string, string> = {}) {
   return {
     index,
@@ -50,7 +55,7 @@ function makeInvalidRow(index: number, overrides: Record<string, string> = {}) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("SellerBulkUpload – all-client-invalid path", () => {
+describe("SellerBulkUpload – buildAllFailed: all-client-invalid path", () => {
   const onClose = vi.fn();
   const onDone  = vi.fn();
 
@@ -58,54 +63,125 @@ describe("SellerBulkUpload – all-client-invalid path", () => {
     vi.clearAllMocks();
   });
 
-  it("shows 'View Error Report' button instead of a disabled Import button when every row fails client validation", async () => {
+  it("renders Upload step with template download button on mount", () => {
     render(<SellerBulkUpload onClose={onClose} onDone={onDone} />);
-
-    // Directly inject review state by calling the internal state setter
-    // via the exported component.  Since we can't easily do that without
-    // exposing internals, we reach the review step via the module's
-    // exported helper.  Instead: we exploit the fact that the component
-    // renders the review step when `step === "review"`.
-    //
-    // Strategy: spy on useState to seed reviewRows with all-invalid rows,
-    // or — simpler — test the done-screen directly by calling handleImport
-    // through the rendered button.
-    //
-    // Actually the simplest approach: render the component and verify that
-    // when reviewRows are all invalid, the "View Error Report" button is
-    // present.  We cannot set internal state directly, but we CAN expose
-    // reviewRows through the component's exported API if we add a test-only
-    // prop — or we can use a wrapper that pre-populates state.
-    //
-    // The pragmatic choice: render the component and use the internal
-    // review-step rendering path by calling buildAllFailed directly.
-    // We test the "View Error Report" label below via a simulated state.
-    expect(true).toBe(true); // placeholder — see the state-injection test below
+    expect(screen.getByText("Bulk Upload Products")).toBeDefined();
+    expect(screen.getByText(/download template/i)).toBeDefined();
   });
 
-  it("View Error Report button is present when all rows are invalid (state-injected via wrapper)", async () => {
-    /**
-     * We cannot directly set the internal state of SellerBulkUpload from
-     * outside, so we create a thin wrapper that renders a pre-seeded version
-     * of the review step.  We validate:
-     *   1. The button labelled /view error report/i is rendered (not a
-     *      disabled "Import 0 Valid Rows" button).
-     *   2. Clicking it calls XLSX.writeFile (meaning downloadErrorReport ran)
-     *      and transitions to a screen showing "No products were imported".
-     *
-     * The wrapper overrides the initial state by calling the exported
-     * buildAllFailed helper and reflecting on the component's rendered tree.
-     */
+  it("parses the supplied template layout from its friendly row-7 headers", () => {
+    const rows = [
+      ["", "", "", "", "PRODUCT CATALOG TEMPLATE"],
+      [],
+      [],
+      ["", "", "", "", "Paithani & Designer Saree"],
+      [],
+      ["Add one product per row below."],
+      [
+        "Product Name *",
+        "Price (₹) *",
+        "Category *",
+        "Description",
+        "Fabric",
+        "Color",
+        "Occasion",
+        "Stock",
+        "Original Price (₹)",
+        "Varients",
+        "Subcategory",
+        "Brand",
+        "Design Pattern",
+        "Images (URL)",
+      ],
+      [
+        "Peacock Paithani",
+        15000,
+        "paithani",
+        "Handwoven silk",
+        "silk",
+        "red",
+        "festival",
+        10,
+        18000,
+        "6 Var",
+        "Festive",
+        "TwirlDrape",
+        "Peacock",
+        "https://example.com/product.jpg",
+      ],
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Product Catalog");
 
-    // We use a simple trick: render, then navigate through the upload/map
-    // steps programmatically via the DOM.  Because parsing a real file is
-    // tricky in jsdom, we instead test the exported buildAllFailed logic for
-    // the full-coverage path and verify the component label separately.
+    const parsed = parseWorkbook(workbook);
 
-    // -- verify the button label logic --
-    // The component renders "View Error Report (N failed rows)" when validCount===0.
-    // We test this by rendering with all-invalid reviewRows using an approach
-    // that only exercises the already-extracted pure logic.
+    expect(parsed.headerRow).toBe(6);
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0].sheetRow).toBe(7);
+    expect(parsed.rows[0].values).toMatchObject({
+      name: "Peacock Paithani",
+      price: "15000",
+      category: "paithani",
+      originalPrice: "18000",
+      images: "https://example.com/product.jpg",
+    });
+    expect(parsed.rows[0].values).not.toHaveProperty("variants");
+    expect(toExcelRowNumber(parsed.rows[0].sheetRow)).toBe(8);
+  });
+
+  it("does not import the unchanged example rows from the exact supplied workbook", () => {
+    const templateBytes = readFileSync(
+      resolve(process.cwd(), "public/twirldrape_product_template.xlsx"),
+    );
+    const workbook = XLSX.read(templateBytes, { type: "buffer" });
+
+    const parsed = parseWorkbook(workbook);
+
+    expect(parsed.headerRow).toBe(6);
+    expect(parsed.rows).toEqual([]);
+  });
+
+  it("imports the same values from a compatible workbook that is not the canonical template", () => {
+    const headers = [
+      "Product Name *", "Price (₹) *", "Category *", "Description",
+      "Fabric", "Color", "Occasion", "Stock", "Original Price (₹)",
+      "Varients", "Subcategory", "Brand", "Design Pattern", "Images (URL)",
+    ];
+    const sample = [
+      "Peacock Paithani ABC", 15000, "paithani",
+      "Handwoven pure silk saree with peacock motifs", "silk", "red",
+      "festival", 10, 1000, "6 Var", "paithan festivali", "ss",
+      "Peacock", "https://in.pinterest.com/pin/1086352741404761172/",
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([headers, sample]),
+      "Products",
+    );
+
+    const parsed = parseWorkbook(workbook);
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0].values.name).toBe("Peacock Paithani ABC");
+  });
+
+  it("imports a canonical example row when its ignored Varients cell is edited", () => {
+    const templateBytes = readFileSync(
+      resolve(process.cwd(), "public/twirldrape_product_template.xlsx"),
+    );
+    const workbook = XLSX.read(templateBytes, { type: "buffer" });
+    workbook.Sheets["Product Catalog"].J8.v = "7 Var";
+
+    const parsed = parseWorkbook(workbook);
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0].values.name).toBe("Peacock Paithani ABC");
+    expect(parsed.rows[0].values).not.toHaveProperty("variants");
+  });
+
+  it("buildAllFailed returns all rows when every row fails client validation", async () => {
     const { buildAllFailed } = await import("./SellerBulkUpload");
 
     const allInvalidRows = [
@@ -132,29 +208,7 @@ describe("SellerBulkUpload – all-client-invalid path", () => {
     expect(allFailed[2].row).toMatchObject(allInvalidRows[2].values);
   });
 
-  it("downloadErrorReport writes one xlsx row per failed entry and includes all PRODUCT_FIELDS columns", () => {
-    // Import the function directly and verify the xlsx output structure.
-    // We mock XLSX.writeFile; instead we spy on XLSX.utils.aoa_to_sheet
-    // to capture the data passed in.
-    const capturedData: string[][] = [];
-    const origAoa = XLSX.utils.aoa_to_sheet.bind(XLSX.utils);
-    vi.spyOn(XLSX.utils, "aoa_to_sheet").mockImplementation((data: any) => {
-      capturedData.push(...data);
-      return origAoa(data);
-    });
-
-    // Re-import downloadErrorReport via the module (it is not exported, but
-    // we can exercise it through buildAllFailed + XLSX.writeFile spy by
-    // importing the full module and calling the private function indirectly).
-    //
-    // Since downloadErrorReport is not exported, we verify the xlsx shape by
-    // reasoning from the known implementation:
-    //   headers = ["Excel Row", ...PRODUCT_FIELDS.map(f => f.key), "Error Reasons"]
-    //   data rows = one per FailedRow entry
-    //
-    // We already know buildAllFailed returns the right entries; the final
-    // integration test is that the xlsx sheet would have those exact rows.
-
+  it("downloadErrorReport column structure has Excel Row + all PRODUCT_FIELDS + Error Reasons", () => {
     const fieldKeys = PRODUCT_FIELDS.map(f => f.key);
     const expectedHeaders = ["Excel Row", ...fieldKeys, "Error Reasons"];
     expect(expectedHeaders).toContain("name");
@@ -162,8 +216,40 @@ describe("SellerBulkUpload – all-client-invalid path", () => {
     expect(expectedHeaders).toContain("category");
     expect(expectedHeaders[0]).toBe("Excel Row");
     expect(expectedHeaders[expectedHeaders.length - 1]).toBe("Error Reasons");
-    expect(expectedHeaders).toHaveLength(PRODUCT_FIELDS.length + 2); // "Excel Row" + fields + "Error Reasons"
+    // "Excel Row" + all fields + "Error Reasons"
+    expect(expectedHeaders).toHaveLength(PRODUCT_FIELDS.length + 2);
+  });
 
-    vi.restoreAllMocks();
+  it("buildAllFailed merges client-invalid and server-rejected without duplicates, sorted by rowIndex", async () => {
+    const { buildAllFailed: baf } = await import("./SellerBulkUpload");
+
+    const row0 = makeInvalidRow(0);
+    const row1 = { index: 1, values: { name: "Silk", price: "5000", category: "designer" }, errors: {} };
+    const row2 = { index: 2, values: { name: "Cotton", price: "3000", category: "bridal" }, errors: {} };
+    const row3 = makeInvalidRow(3);
+    const row4 = { index: 4, values: { name: "Red", price: "8000", category: "paithani" }, errors: {} };
+
+    const allReviewRows = [row0, row1, row2, row3, row4];
+    const validRows = [row1, row2, row4];
+
+    const apiResults = [
+      { row: 1, success: false, error: "Server error for row1" },
+      { row: 2, success: true },
+      { row: 4, success: false, error: "Server error for row4" },
+    ];
+
+    const result = baf(allReviewRows, validRows, apiResults);
+
+    expect(result).toHaveLength(4);
+    expect(result[0].rowIndex).toBe(0);
+    expect(result[0].source).toBe("client");
+    expect(result[1].rowIndex).toBe(1);
+    expect(result[1].source).toBe("server");
+    expect(result[1].reason).toBe("Server error for row1");
+    expect(result[2].rowIndex).toBe(3);
+    expect(result[2].source).toBe("client");
+    expect(result[3].rowIndex).toBe(4);
+    expect(result[3].source).toBe("server");
+    expect(result[3].reason).toBe("Server error for row4");
   });
 });

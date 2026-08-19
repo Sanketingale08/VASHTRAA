@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAllFailed } from "./SellerBulkUpload";
+import { buildAllFailed, generateIdempotencyKey } from "./SellerBulkUpload";
 
 // Minimal helpers so tests stay readable
 const makeReviewRow = (
@@ -193,5 +193,19 @@ describe("buildAllFailed", () => {
     expect(result[0].source).toBe("client");
     expect(result[1].source).toBe("client");
     expect(result[2].source).toBe("server");
+  });
+});
+
+describe("generateIdempotencyKey", () => {
+  it("produces a UUID-shaped string", () => {
+    const key = generateIdempotencyKey();
+    expect(key).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it("produces a distinct key on each call (so each file gets its own)", () => {
+    const keys = new Set(Array.from({ length: 100 }, () => generateIdempotencyKey()));
+    expect(keys.size).toBe(100);
   });
 });

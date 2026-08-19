@@ -1,38 +1,36 @@
 /**
  * Seller bulk upload — E2E Playwright tests.
  *
- * Validates the full SellerBulkUpload wizard:
+ * Validates the SellerBulkUpload wizard (Upload → Processing → Results):
  *
  *  Test 1 — client-side validation path:
  *    Upload an .xlsx file containing:
  *       - 2 valid product rows
  *       - 1 row with a missing name (required field)
  *       - 1 row with an invalid category value
- *    Step 3 (Review) summary bar must show exactly "2 valid" and
- *    "2 with errors". The import button must read "Import 2 Valid Rows".
- *    Clicking import sends ONLY the 2 valid rows to the API.
- *    The done screen shows "2 products imported" and lists the two
- *    successes.  Invalid rows appear in the "Download Error Report" count
- *    (2 rows) and are not sent to the import API.
+ *    The wizard auto-processes the file.  The results screen shows
+ *    "2 products imported" and the "Download Error Report (2 rows)" button.
+ *    Only the 2 valid rows are sent to the import API.
  *
  *  Test 2 — server-side rejection path:
  *    Upload an .xlsx file containing 3 rows that all pass client-side
  *    validation.  The mocked API accepts rows 1 & 3 but rejects row 2
- *    with a server error.  The done screen must show "2 products imported"
- *    and display a failure card for the rejected row.  The
- *    "Download Error Report" button must count exactly 1 failed row, and
- *    no server-side failure must be silently swallowed.
+ *    with a server error.  The results screen must show "2 products imported"
+ *    and a failure card for the rejected row.  The "Download Error Report"
+ *    button must count exactly 1 failed row.
  *
- * The bulk-import API is mocked — these tests cover the client-side
- * validation and wizard UI flow, not DB persistence (that is handled by
- * the API server's own unit tests).
+ *  Test 3 — HTTP 500 crash / retry:
+ *    First import attempt returns HTTP 500.  The wizard stays on the
+ *    Processing step, shows an error banner, and exposes a "Retry Import"
+ *    button.  Clicking retry (which returns 200) advances to Results.
  *
- * Auth pattern mirrors seller-image-gallery.spec.ts: one Clerk user is
- * created in beforeAll, signed in, and its storage state is saved to a
- * temp file so each test can restore the session cheaply.
+ * The bulk-import API is mocked — these tests cover client-side
+ * validation and wizard UI flow, not DB persistence.
+ *
+ * Auth pattern mirrors seller-image-gallery.spec.ts.
  */
 
-import { writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import * as XLSX from "xlsx";
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import {
@@ -68,46 +66,44 @@ const APPROVED_VENDOR = {
  *   row 3 — invalid: name is empty
  *   row 4 — invalid: category is not in the allowed list
  *
- * Column headers are the exact field keys used by the component so
- * auto-mapping fires immediately and the required fields (name, price,
- * category) are already mapped when the wizard reaches step 2.
+ * This mirrors the supplied workbook: decorative rows precede friendly headers
+ * on row 7, including the intentionally unsupported "Varients" column.
  */
 function makeTestXlsx(): Buffer {
   const headers = [
-    "name", "price", "category", "description",
-    "fabric", "color", "occasion", "stock",
+    "Product Name *", "Price (₹) *", "Category *", "Description",
+    "Fabric", "Color", "Occasion", "Stock", "Original Price (₹)",
+    "Varients", "Subcategory", "Brand", "Design Pattern", "Images (URL)",
   ];
   const dataRows = [
     // Valid row 1
-    ["Silk Paithani Saree",    "12000", "paithani", "Handwoven pure silk",  "silk",   "red",   "festival", "5"],
+    ["Silk Paithani Saree", 12000, "paithani", "Handwoven pure silk", "silk", "red", "festival", 5, 15000, "6 Var", "", "", "", ""],
     // Valid row 2
-    ["Designer Banarasi Saree","8500",  "designer", "Elegant Banarasi",     "silk",   "blue",  "formal",   "3"],
+    ["Designer Banarasi Saree", 8500, "designer", "Elegant Banarasi", "silk", "blue", "formal", 3, "", "4 Var", "", "", "", ""],
     // Invalid: missing name
-    ["",                       "5000",  "paithani", "No name provided",     "",       "",      "",         ""],
+    ["", 5000, "paithani", "No name provided", "", "", "", "", "", "", "", "", "", ""],
     // Invalid: category not in allowed list
-    ["Cotton Summer Saree",    "3000",  "INVALIDCAT","Casual wear",          "cotton", "green", "casual",   "10"],
+    ["Cotton Summer Saree", 3000, "INVALIDCAT", "Casual wear", "cotton", "green", "casual", 10, "", "", "", "", "", ""],
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+  const decorativeRows = [
+    ["", "", "", "", "PRODUCT CATALOG TEMPLATE"],
+    [],
+    [],
+    ["", "", "", "", "Paithani & Designer Saree | Product Master Sheet"],
+    [],
+    ["Add one product per row below."],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([...decorativeRows, headers, ...dataRows]);
   ws["!cols"] = headers.map(() => ({ wch: 22 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Products");
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-async function mockApprovedVendor(page: Page) {
-  await page.route("**/api/vendors/me", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(APPROVED_VENDOR),
-    }),
-  );
-}
-
 /**
  * Build an xlsx Buffer containing 3 rows that all pass client-side
- * validation — used by the server-rejection test.
+ * validation — used by the server-rejection and retry tests.
  */
 function makeAllValidXlsx(): Buffer {
   const headers = [
@@ -127,6 +123,16 @@ function makeAllValidXlsx(): Buffer {
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
+async function mockApprovedVendor(page: Page) {
+  await page.route("**/api/vendors/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(APPROVED_VENDOR),
+    }),
+  );
+}
+
 // ── Suite ─────────────────────────────────────────────────────────────────────
 
 test.describe("Seller bulk upload", () => {
@@ -135,9 +141,6 @@ test.describe("Seller bulk upload", () => {
   test.beforeAll(async ({ browser, baseURL }) => {
     seller = await createVerifiedSeller();
 
-    // Write a placeholder so Playwright doesn't throw ENOENT when it reads
-    // storageState before the real sign-in file is written (see memory note on
-    // Playwright shared Clerk session in beforeAll).
     writeFileSync(STATE_FILE, JSON.stringify({ cookies: [], origins: [] }), "utf8");
 
     const ctx: BrowserContext = await browser.newContext();
@@ -156,13 +159,12 @@ test.describe("Seller bulk upload", () => {
   // ── Test 1 ─────────────────────────────────────────────────────────────────
 
   test(
-    "review table shows 2 valid and 2 invalid rows; import sends only valid rows and flags errors in results",
+    "auto-processes file: sends only 2 valid rows, results show 2 imported and error report with 2 rows",
     async ({ page }) => {
       test.setTimeout(120_000);
 
       await mockApprovedVendor(page);
 
-      // Mock GET /api/seller/products so the seller products page loads cleanly.
       await page.route("**/api/seller/products", (route) => {
         if (route.request().method() === "GET") {
           route.fulfill({
@@ -175,7 +177,7 @@ test.describe("Seller bulk upload", () => {
         }
       });
 
-      // Capture the import request body and return success for every row sent.
+      // Capture the import request body; return success for every row sent.
       // Because invalid rows are filtered client-side, only 2 rows will arrive.
       let capturedImportBody: { rows: Array<Record<string, string>> } | null = null;
       await page.route("**/api/seller/products/bulk-import", (route) => {
@@ -208,7 +210,22 @@ test.describe("Seller bulk upload", () => {
       await page.getByRole("button", { name: /bulk upload/i }).click();
       await expect(page.getByText("Bulk Upload Products")).toBeVisible({ timeout: 5_000 });
 
-      // ── Step 1: upload the xlsx file ──────────────────────────────────────
+      // The download button must serve the supplied workbook byte-for-byte.
+      const downloadPromise = page.waitForEvent("download");
+      await page.getByRole("button", { name: /template/i }).click();
+      const templateDownload = await downloadPromise;
+      expect(templateDownload.suggestedFilename()).toBe("twirldrape_product_template.xlsx");
+      const downloadedPath = await templateDownload.path();
+      expect(downloadedPath).not.toBeNull();
+      const expectedTemplate = readFileSync(
+        new URL(
+          "../../../attached_assets/twirldrape_product_template1_(1)_1787117520135.xlsx",
+          import.meta.url,
+        ),
+      );
+      expect(readFileSync(downloadedPath!)).toEqual(expectedTemplate);
+
+      // ── Upload the xlsx file — wizard auto-processes ──────────────────────
       const xlsxBuffer = makeTestXlsx();
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.setInputFiles({
@@ -218,40 +235,10 @@ test.describe("Seller bulk upload", () => {
         buffer: xlsxBuffer,
       });
 
-      // ── Step 2: column mapping ─────────────────────────────────────────────
-      // Headers in the xlsx match exact field keys, so auto-mapping fires and
-      // required fields (name, price, category) are already mapped.
-      // The "Review N Rows" button should be immediately enabled.
-      const reviewButton = page.getByRole("button", { name: /review 4 rows/i });
-      await expect(reviewButton).toBeVisible({ timeout: 10_000 });
-      await expect(reviewButton).toBeEnabled();
-      await reviewButton.click();
-
-      // ── Step 3: review table ───────────────────────────────────────────────
-      // Summary bar: "2 valid" (exact span text) and "2 with errors"
-      await expect(page.getByText("2 valid", { exact: true })).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText(/2 with errors/i)).toBeVisible({ timeout: 5_000 });
-
-      // Import button must read "Import 2 Valid Rows"
-      const importButton = page.getByRole("button", { name: /import 2 valid rows/i });
-      await expect(importButton).toBeVisible({ timeout: 5_000 });
-      await expect(importButton).toBeEnabled();
-
-      // Rows with errors have red-tinted inputs (borderColor #FCA5A5).
-      // Count error tooltip elements — each invalid cell with an error
-      // renders a tooltip div with class bg-red-600.
-      const errorTooltips = page.locator(".bg-red-600");
-      // The two invalid rows have at least one error each (name=Required,
-      // category=bad value), so there must be ≥ 2 error tooltips.
-      const tooltipCount = await errorTooltips.count();
-      expect(tooltipCount, "Expected at least 2 error tooltips for invalid rows").toBeGreaterThanOrEqual(2);
-
-      // ── Click import ───────────────────────────────────────────────────────
-      await importButton.click();
-
-      // ── Step 4: done screen ────────────────────────────────────────────────
+      // ── Results screen ────────────────────────────────────────────────────
+      // Wait for auto-processing to complete and results to appear
       await expect(page.getByText(/2 products? imported/i)).toBeVisible({
-        timeout: 15_000,
+        timeout: 20_000,
       });
 
       // Only 2 valid rows were sent to the API (not the 2 invalid ones).
@@ -265,7 +252,7 @@ test.describe("Seller bulk upload", () => {
         "Designer Banarasi Saree",
       );
 
-      // Done screen lists 2 green (success) result cards.
+      // Results screen shows success cards for the 2 imported products.
       const successCards = page.locator("div").filter({ hasText: /Silk Paithani|Designer Banarasi/ });
       await expect(successCards.first()).toBeVisible({ timeout: 5_000 });
 
@@ -280,13 +267,12 @@ test.describe("Seller bulk upload", () => {
   // ── Test 2 ─────────────────────────────────────────────────────────────────
 
   test(
-    "server-side rejection: done screen shows 2 imported and 1 server failure; error report counts 1 row",
+    "server-side rejection: results show 2 imported and 1 server failure; error report counts 1 row",
     async ({ page }) => {
       test.setTimeout(120_000);
 
       await mockApprovedVendor(page);
 
-      // Mock GET /api/seller/products so the seller products page loads cleanly.
       await page.route("**/api/seller/products", (route) => {
         if (route.request().method() === "GET") {
           route.fulfill({
@@ -308,7 +294,6 @@ test.describe("Seller bulk upload", () => {
         const rows = body.rows ?? [];
         const results = rows.map((row, i) => {
           if (i === 1) {
-            // Simulate a server-side duplicate name rejection for the second row.
             return { row: i + 1, success: false, error: "Duplicate product name" };
           }
           return { row: i + 1, success: true, productId: `SVRBULK00${i + 1}`, name: row.name };
@@ -333,7 +318,7 @@ test.describe("Seller bulk upload", () => {
       await page.getByRole("button", { name: /bulk upload/i }).click();
       await expect(page.getByText("Bulk Upload Products")).toBeVisible({ timeout: 5_000 });
 
-      // ── Step 1: upload the xlsx file ──────────────────────────────────────
+      // ── Upload all-valid xlsx file ────────────────────────────────────────
       const xlsxBuffer = makeAllValidXlsx();
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.setInputFiles({
@@ -343,29 +328,9 @@ test.describe("Seller bulk upload", () => {
         buffer: xlsxBuffer,
       });
 
-      // ── Step 2: column mapping ─────────────────────────────────────────────
-      // All 3 rows are valid; "Review 3 Rows" button must be enabled.
-      const reviewButton = page.getByRole("button", { name: /review 3 rows/i });
-      await expect(reviewButton).toBeVisible({ timeout: 10_000 });
-      await expect(reviewButton).toBeEnabled();
-      await reviewButton.click();
-
-      // ── Step 3: review table ───────────────────────────────────────────────
-      // All 3 rows pass client-side validation — no error badges expected.
-      await expect(page.getByText("3 valid", { exact: true })).toBeVisible({ timeout: 10_000 });
-
-      // Import button must read "Import 3 Valid Rows"
-      const importButton = page.getByRole("button", { name: /import 3 valid rows/i });
-      await expect(importButton).toBeVisible({ timeout: 5_000 });
-      await expect(importButton).toBeEnabled();
-
-      // ── Click import ───────────────────────────────────────────────────────
-      await importButton.click();
-
-      // ── Step 4: done screen ────────────────────────────────────────────────
-      // 2 of the 3 server rows succeeded.
+      // ── Results screen ────────────────────────────────────────────────────
       await expect(page.getByText(/2 products? imported/i)).toBeVisible({
-        timeout: 15_000,
+        timeout: 20_000,
       });
 
       // All 3 valid rows were sent to the API.
@@ -376,8 +341,7 @@ test.describe("Seller bulk upload", () => {
       expect(sentRows[1].name).toBe("Designer Banarasi Saree");
       expect(sentRows[2].name).toBe("Bridal Kanjivaram Saree");
 
-      // A result card for the server-rejected row must be visible and styled
-      // as a failure (red background element containing the error text).
+      // A result card for the server-rejected row must be visible.
       await expect(
         page.locator("div").filter({ hasText: /Duplicate product name/i }).first(),
       ).toBeVisible({ timeout: 5_000 });
@@ -390,8 +354,7 @@ test.describe("Seller bulk upload", () => {
         page.locator("div").filter({ hasText: /Bridal Kanjivaram Saree/ }).first(),
       ).toBeVisible({ timeout: 5_000 });
 
-      // The "Download Error Report" button must reflect exactly 1 failed row
-      // (the server-rejected one; there are no client-side invalid rows).
+      // The "Download Error Report" button must reflect exactly 1 failed row.
       await expect(
         page.getByRole("button", { name: /download error report.*1 rows/i }),
       ).toBeVisible({ timeout: 5_000 });
@@ -401,13 +364,12 @@ test.describe("Seller bulk upload", () => {
   // ── Test 3 ─────────────────────────────────────────────────────────────────
 
   test(
-    "HTTP 500 crash: wizard stays on review step, shows error banner, and lets the seller retry",
+    "HTTP 500 crash: processing step shows error banner with Retry Import; retry succeeds and advances to results",
     async ({ page }) => {
       test.setTimeout(120_000);
 
       await mockApprovedVendor(page);
 
-      // Mock GET /api/seller/products so the seller products page loads cleanly.
       await page.route("**/api/seller/products", (route) => {
         if (route.request().method() === "GET") {
           route.fulfill({
@@ -420,13 +382,11 @@ test.describe("Seller bulk upload", () => {
         }
       });
 
-      // First call returns HTTP 500 (simulates a total server crash).
-      // Second call (retry) succeeds so we can confirm the wizard proceeds.
+      // First call returns HTTP 500. Second call (retry) succeeds.
       let callCount = 0;
       await page.route("**/api/seller/products/bulk-import", (route) => {
         callCount += 1;
         if (callCount === 1) {
-          // Total server crash — top-level 500.
           route.fulfill({
             status: 500,
             contentType: "application/json",
@@ -463,7 +423,7 @@ test.describe("Seller bulk upload", () => {
       await page.getByRole("button", { name: /bulk upload/i }).click();
       await expect(page.getByText("Bulk Upload Products")).toBeVisible({ timeout: 5_000 });
 
-      // ── Step 1: upload all-valid xlsx file ────────────────────────────────
+      // ── Upload all-valid xlsx file (triggers auto-import → first attempt → 500) ──
       const xlsxBuffer = makeAllValidXlsx();
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.setInputFiles({
@@ -473,45 +433,119 @@ test.describe("Seller bulk upload", () => {
         buffer: xlsxBuffer,
       });
 
-      // ── Step 2: column mapping ─────────────────────────────────────────────
-      const reviewButton = page.getByRole("button", { name: /review 3 rows/i });
-      await expect(reviewButton).toBeVisible({ timeout: 10_000 });
-      await expect(reviewButton).toBeEnabled();
-      await reviewButton.click();
+      // ── Processing step: error banner appears after 500 response ──────────
+      // The wizard must NOT advance to the results step.
+      await expect(page.getByText("Import failed")).toBeVisible({ timeout: 15_000 });
 
-      // ── Step 3: review table ───────────────────────────────────────────────
-      await expect(page.getByText("3 valid", { exact: true })).toBeVisible({ timeout: 10_000 });
-
-      const importButton = page.getByRole("button", { name: /import 3 valid rows/i });
-      await expect(importButton).toBeVisible({ timeout: 5_000 });
-      await expect(importButton).toBeEnabled();
-
-      // ── First import attempt — server returns 500 ──────────────────────────
-      await importButton.click();
-
-      // The wizard must NOT advance to the "done" step.
-      // The review summary bar must still be visible.
-      await expect(page.getByText("3 valid", { exact: true })).toBeVisible({ timeout: 10_000 });
-
-      // An error banner containing the server's message must appear.
+      // The server's error message must appear.
       await expect(
         page.locator("text=Internal server error"),
       ).toBeVisible({ timeout: 10_000 });
 
-      // The import button must still be visible and enabled so the seller can retry.
-      await expect(importButton).toBeVisible({ timeout: 5_000 });
-      await expect(importButton).toBeEnabled();
+      // The "Retry Import" button must be visible and enabled.
+      const retryButton = page.getByRole("button", { name: /retry import/i });
+      await expect(retryButton).toBeVisible({ timeout: 5_000 });
+      await expect(retryButton).toBeEnabled();
 
       // ── Retry — server now succeeds ────────────────────────────────────────
-      await importButton.click();
+      await retryButton.click();
 
-      // After the successful retry the wizard advances to the done screen.
+      // After the successful retry the wizard advances to the results screen.
       await expect(page.getByText(/3 products? imported/i)).toBeVisible({
         timeout: 15_000,
       });
 
       // Both the first (failed) and second (successful) calls were made.
       expect(callCount).toBe(2);
+    },
+  );
+
+  // ── Test 4 ─────────────────────────────────────────────────────────────────
+
+  test(
+    "retry reuses the same Idempotency-Key so a lost response replays the original batch",
+    async ({ page }) => {
+      test.setTimeout(120_000);
+
+      await mockApprovedVendor(page);
+
+      await page.route("**/api/seller/products", (route) => {
+        if (route.request().method() === "GET") {
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ products: [] }),
+          });
+        } else {
+          route.continue();
+        }
+      });
+
+      // Simulate a lost response: the FIRST attempt "succeeds" on the server
+      // (it stored the batch) but the response never reaches the client — we
+      // model that as a network abort. The retry (same key) receives the stored
+      // completed response. We assert both requests carry the SAME key.
+      const seenKeys: string[] = [];
+      let callCount = 0;
+      await page.route("**/api/seller/products/bulk-import", (route) => {
+        callCount += 1;
+        seenKeys.push(route.request().headers()["idempotency-key"] ?? "");
+        if (callCount === 1) {
+          // Response lost in transit — client will surface an error and offer retry.
+          route.abort("failed");
+          return;
+        }
+        // Retry with the same key: server replays the original completed batch.
+        const body = route.request().postDataJSON() as { rows: Array<Record<string, string>> };
+        const rows = body.rows ?? [];
+        const results = rows.map((row, i) => ({
+          row: i + 1,
+          success: true,
+          productId: `IDEMP00${i + 1}`,
+          name: row.name,
+        }));
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            results,
+            summary: { total: rows.length, succeeded: rows.length, failed: 0 },
+          }),
+        });
+      });
+
+      await page.goto("/seller/products");
+      await expect(page.getByRole("heading", { name: /products/i })).toBeVisible({
+        timeout: 15_000,
+      });
+
+      await page.getByRole("button", { name: /bulk upload/i }).click();
+      await expect(page.getByText("Bulk Upload Products")).toBeVisible({ timeout: 5_000 });
+
+      const xlsxBuffer = makeAllValidXlsx();
+      const fileInput = page.locator('input[type="file"]').first();
+      await fileInput.setInputFiles({
+        name: "test-products-valid.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer: xlsxBuffer,
+      });
+
+      // First attempt failed (aborted) → error banner + Retry button.
+      await expect(page.getByText("Import failed")).toBeVisible({ timeout: 15_000 });
+      const retryButton = page.getByRole("button", { name: /retry import/i });
+      await expect(retryButton).toBeVisible({ timeout: 5_000 });
+
+      // Retry — succeeds and advances to results.
+      await retryButton.click();
+      await expect(page.getByText(/3 products? imported/i)).toBeVisible({
+        timeout: 15_000,
+      });
+
+      // Exactly two requests were made and BOTH used the identical key.
+      expect(callCount).toBe(2);
+      expect(seenKeys[0]).toBeTruthy();
+      expect(seenKeys[0]).toBe(seenKeys[1]);
     },
   );
 });

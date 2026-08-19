@@ -10,6 +10,10 @@ import { insertAdminNotification } from "../lib/adminNotifications";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import {
+  buildVendorAddressUpdates,
+  toNullableText,
+} from "../lib/vendorAddress";
+import {
   sendVendorApprovalEmailForVendor,
   sendVendorSuspensionEmailForVendor,
   sendVendorRejectionEmailForVendor,
@@ -83,6 +87,24 @@ router.get("/vendors/me", requireAuth, async (req: any, res: any) => {
       ownerId: v.ownerId,
       vendorId: v.vendorId ?? null,
       reactivationWelcomePending: v.reactivationWelcomePending,
+      // Shop address (shopStreet is backward-compatible addressLine1)
+      shopStreet: v.shopStreet ?? null,
+      shopAddressLine2: v.shopAddressLine2 ?? null,
+      shopLandmark: v.shopLandmark ?? null,
+      shopCity: v.shopCity ?? null,
+      shopState: v.shopState ?? null,
+      shopPincode: v.shopPincode ?? null,
+      shopCountry: v.shopCountry ?? null,
+      // Pickup address
+      pickupSameAsShop: v.pickupSameAsShop,
+      pickupLocationName: v.pickupLocationName ?? null,
+      pickupAddressLine1: v.pickupAddressLine1 ?? null,
+      pickupAddressLine2: v.pickupAddressLine2 ?? null,
+      pickupLandmark: v.pickupLandmark ?? null,
+      pickupCity: v.pickupCity ?? null,
+      pickupState: v.pickupState ?? null,
+      pickupPincode: v.pickupPincode ?? null,
+      pickupCountry: v.pickupCountry ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch vendor profile");
@@ -312,7 +334,9 @@ router.post("/seller/claim/:vendorId", requireAuth, async (req: any, res: any) =
 
 router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
   const { id } = req.params;
-  const { name, location, bio, gstin, contactEmail, tagline, avatar, mobile } = req.body;
+  const {
+    name, location, bio, gstin, contactEmail, tagline, avatar, mobile,
+  } = req.body;
 
   try {
     const rows = await db
@@ -331,11 +355,11 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
     const updates: Record<string, any> = {};
     if (name !== undefined) updates.name = String(name).trim();
     if (location !== undefined) updates.location = String(location).trim();
-    if (bio !== undefined) updates.bio = String(bio).trim() || null;
-    if (gstin !== undefined) updates.gstin = String(gstin).trim().toUpperCase() || null;
-    if (contactEmail !== undefined) updates.contactEmail = String(contactEmail).trim() || null;
-    if (tagline !== undefined) updates.tagline = String(tagline).trim() || null;
-    if (avatar !== undefined) updates.avatar = String(avatar).trim() || null;
+    if (bio !== undefined) updates.bio = toNullableText(bio);
+    if (gstin !== undefined) updates.gstin = toNullableText(gstin)?.toUpperCase() ?? null;
+    if (contactEmail !== undefined) updates.contactEmail = toNullableText(contactEmail);
+    if (tagline !== undefined) updates.tagline = toNullableText(tagline);
+    if (avatar !== undefined) updates.avatar = toNullableText(avatar);
     if (mobile !== undefined) {
       if (mobile === null || mobile === "") {
         updates.mobile = null;
@@ -347,6 +371,12 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
         updates.mobile = mobileStr || null;
       }
     }
+
+    const addressPatch = buildVendorAddressUpdates(req.body, rows[0]);
+    if (addressPatch.error) {
+      return res.status(400).json({ error: addressPatch.error });
+    }
+    Object.assign(updates, addressPatch.updates);
 
     const [updated] = await db
       .update(vendorsTable)
@@ -365,6 +395,22 @@ router.patch("/vendors/:id", requireVendorAuth, async (req: any, res: any) => {
       avatar: updated.avatar,
       mobile: updated.mobile ?? null,
       status: updated.status,
+      shopStreet: updated.shopStreet ?? null,
+      shopAddressLine2: updated.shopAddressLine2 ?? null,
+      shopLandmark: updated.shopLandmark ?? null,
+      shopCity: updated.shopCity ?? null,
+      shopState: updated.shopState ?? null,
+      shopPincode: updated.shopPincode ?? null,
+      shopCountry: updated.shopCountry ?? null,
+      pickupSameAsShop: updated.pickupSameAsShop,
+      pickupLocationName: updated.pickupLocationName ?? null,
+      pickupAddressLine1: updated.pickupAddressLine1 ?? null,
+      pickupAddressLine2: updated.pickupAddressLine2 ?? null,
+      pickupLandmark: updated.pickupLandmark ?? null,
+      pickupCity: updated.pickupCity ?? null,
+      pickupState: updated.pickupState ?? null,
+      pickupPincode: updated.pickupPincode ?? null,
+      pickupCountry: updated.pickupCountry ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to update vendor");

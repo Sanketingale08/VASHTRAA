@@ -22,6 +22,24 @@ interface VendorProfile {
   ownerId: string | null;
   vendorId: string | null;
   reactivationWelcomePending: boolean;
+  // Shop address
+  shopStreet: string | null;
+  shopAddressLine2: string | null;
+  shopLandmark: string | null;
+  shopCity: string | null;
+  shopState: string | null;
+  shopPincode: string | null;
+  shopCountry: string | null;
+  // Pickup address
+  pickupSameAsShop: boolean;
+  pickupLocationName: string | null;
+  pickupAddressLine1: string | null;
+  pickupAddressLine2: string | null;
+  pickupLandmark: string | null;
+  pickupCity: string | null;
+  pickupState: string | null;
+  pickupPincode: string | null;
+  pickupCountry: string | null;
 }
 
 interface SellerContextValue {

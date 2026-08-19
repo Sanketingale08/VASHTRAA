@@ -123,7 +123,7 @@ vi.mock("@workspace/db", () => {
 
   return {
     db: dbMock,
-    vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId" },
+    vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId", status: "status" },
     ordersTable: { _t: "orders", id: "id", userId: "userId" },
     productsTable: {
       _t: "products",
@@ -214,6 +214,11 @@ describe("POST /api/orders — isCustomer authorization", () => {
   it("allows an approved vendor account to place an order (200)", async () => {
     // Vendors are also buyers in a multi-vendor marketplace.
     state.userId = "vendor-user-456";
+    state.vendorRecord = {
+      id: "v-approved-1",
+      ownerId: "vendor-user-456",
+      status: "approved",
+    };
 
     const res = await request(app).post("/api/orders").send(ORDER_BODY);
 

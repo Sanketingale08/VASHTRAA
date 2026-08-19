@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useSearch, useLocation } from "wouter";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
+import { useToast } from "@/hooks/use-toast";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingBag, Users, Store,
   RotateCcw, Package, Download, FileSpreadsheet, FileText, Printer,
-  BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search,
+  BarChart2, RefreshCw, Copy, ChevronLeft, ChevronRight, Search,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -65,10 +66,11 @@ interface PeriodFilterProps {
   to: string;
   onChange: (p: Period, from: string, to: string) => void;
   onRefresh: () => void;
+  onCopyLink: () => void;
   loading?: boolean;
 }
 
-function PeriodFilter({ period, from, to, onChange, onRefresh, loading }: PeriodFilterProps) {
+function PeriodFilter({ period, from, to, onChange, onRefresh, onCopyLink, loading }: PeriodFilterProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex flex-wrap gap-1">
@@ -110,6 +112,12 @@ function PeriodFilter({ period, from, to, onChange, onRefresh, loading }: Period
         className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
       >
         <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Refresh
+      </button>
+      <button
+        onClick={onCopyLink}
+        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"
+      >
+        <Copy size={12} /> Copy link
       </button>
     </div>
   );
@@ -1178,6 +1186,7 @@ function ReportsContent() {
   const search = useSearch();
   const [location, navigate] = useLocation();
   const [refreshKey, setRefreshKey] = useState(0);
+  const { toast } = useToast();
 
   // Derive state from URL query string, falling back to sensible defaults.
   const params = new URLSearchParams(search);
@@ -1215,6 +1224,19 @@ function ReportsContent() {
     setRefreshKey((k) => k + 1);
   }
 
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast({ title: "Report link copied", description: "Your filtered report view is ready to share." });
+    } catch {
+      toast({
+        title: "Could not copy link",
+        description: "Please copy the URL from your browser address bar.",
+        variant: "destructive",
+      });
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -1234,6 +1256,7 @@ function ReportsContent() {
           to={to}
           onChange={handlePeriodChange}
           onRefresh={handleRefresh}
+          onCopyLink={handleCopyLink}
         />
       </div>
 

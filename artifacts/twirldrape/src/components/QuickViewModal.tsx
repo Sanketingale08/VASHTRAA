@@ -124,13 +124,28 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
               )}
               <div className="absolute top-3 left-3 flex flex-col gap-1">
                 {product.isBestSeller && (
-                  <span className="bg-[#C9A84C] text-[#1E6B5A] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">Best Seller</span>
+                  <span
+                    className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+                    style={{ background: "linear-gradient(90deg, #2F9FC6 0%, #45B9AF 50%, #32C092 100%)" }}
+                  >
+                    Best Seller
+                  </span>
                 )}
                 {product.isNewArrival && (
-                  <span className="bg-[#1E6B5A] text-[#F3F8F5] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">New Arrival</span>
+                  <span
+                    className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+                    style={{ background: "linear-gradient(90deg, #6C63D5 0%, #9B7FE8 100%)" }}
+                  >
+                    New Arrival
+                  </span>
                 )}
                 {discount > 0 && (
-                  <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">{discount}% Off</span>
+                  <span
+                    className="text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+                    style={{ background: "linear-gradient(90deg, #4A7FC1 0%, #6B9FE4 100%)" }}
+                  >
+                    {discount}% Off
+                  </span>
                 )}
               </div>
             </div>
@@ -225,7 +240,7 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
                       ? "bg-gray-400 text-white cursor-not-allowed opacity-80"
                       : added
                       ? "bg-green-600 text-white"
-                      : "bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5]"
+                      : "bg-[#8BB8F5] hover:bg-[#6da3f0] text-[#1a2d50]"
                   )}
                 >
                   <ShoppingBag size={16} />

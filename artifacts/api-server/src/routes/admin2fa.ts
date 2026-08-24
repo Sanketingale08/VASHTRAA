@@ -644,17 +644,26 @@ router.post("/admin/2fa/regenerate-codes", requireAdminKey, async (req: any, res
       return res.status(403).json({ error: "Invalid authenticator code. Please try again." });
     }
 
-    // Atomically replace all recovery codes so the old set is preserved if the insert fails.
-    const plainCodes: string[] = [];
+    // Atomically replace all recovery codes. If the insert fails, explicitly
+    // abort the transaction before the error reaches the route handler so the
+    // existing recovery codes remain available.
+    let plainCodes: string[] = [];
     await db.transaction(async (tx: any) => {
-      await tx.delete(adminRecoveryCodesTable);
-      const rows: { codeHash: string }[] = [];
-      for (let i = 0; i < 10; i++) {
-        const plain = generateRecoveryCode();
-        plainCodes.push(plain);
-        rows.push({ codeHash: sha256hex(plain) });
+      try {
+        await tx.delete(adminRecoveryCodesTable);
+        const nextCodes: string[] = [];
+        const rows: { codeHash: string }[] = [];
+        for (let i = 0; i < 10; i++) {
+          const plain = generateRecoveryCode();
+          nextCodes.push(plain);
+          rows.push({ codeHash: sha256hex(plain) });
+        }
+        await tx.insert(adminRecoveryCodesTable).values(rows);
+        plainCodes = nextCodes;
+      } catch (err) {
+        tx.rollback();
+        throw err;
       }
-      await tx.insert(adminRecoveryCodesTable).values(rows);
     });
     const codes = plainCodes;
 
@@ -662,7 +671,9 @@ router.post("/admin/2fa/regenerate-codes", requireAdminKey, async (req: any, res
     res.json({ ok: true, codes });
   } catch (err) {
     logger.error({ err }, "[admin2fa] regenerate-codes error");
-    res.status(500).json({ error: "Failed to regenerate recovery codes. Please try again." });
+    res.status(500).json({
+      error: "Failed to regenerate recovery codes. No recovery codes were changed. Please try again.",
+    });
   }
 });
 

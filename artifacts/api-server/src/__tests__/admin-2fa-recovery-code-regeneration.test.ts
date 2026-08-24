@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   recoveryCodes: [] as { id: string; codeHash: string; used: boolean; usedAt: Date | null }[],
   challenges: new Map<string, { id: string; type: string; codeHash: string; expiresAt: Date; attempts: number; createdAt: Date }>(),
   idCounter: 0,
+  failRecoveryCodeInsert: false,
+  recoveryTransactionRollbackCount: 0,
 }));
 
 // ─── @workspace/db mock ───────────────────────────────────────────────────────
@@ -136,6 +138,9 @@ vi.mock("@workspace/db", () => {
           return { returning: vi.fn(() => Promise.resolve([{ id }])) };
         }
         if (table._t === "admin_recovery_codes") {
+          if (state.failRecoveryCodeInsert) {
+            throw new Error("Simulated recovery-code insert failure");
+          }
           const rows = Array.isArray(vals) ? vals : [vals];
           for (const r of rows) {
             state.recoveryCodes.push({
@@ -210,7 +215,27 @@ vi.mock("@workspace/db", () => {
     }),
   };
 
-  db.transaction = vi.fn((fn: any) => fn(db));
+  db.transaction = vi.fn(async (fn: any) => {
+    // Mirror the database transaction contract: mutations made before a
+    // rejected callback are not visible after the transaction rolls back.
+    const recoveryCodesSnapshot = state.recoveryCodes.map((row) => ({ ...row }));
+    const idCounterSnapshot = state.idCounter;
+    const tx = {
+      ...db,
+      rollback: vi.fn(() => {
+        state.recoveryTransactionRollbackCount++;
+        throw new Error("Transaction rolled back");
+      }),
+    };
+
+    try {
+      return await fn(tx);
+    } catch (err) {
+      state.recoveryCodes.splice(0, state.recoveryCodes.length, ...recoveryCodesSnapshot);
+      state.idCounter = idCounterSnapshot;
+      throw err;
+    }
+  });
 
   return {
     db,
@@ -277,6 +302,8 @@ beforeEach(() => {
   state.recoveryCodes.length = 0;
   state.challenges.clear();
   state.idCounter = 0;
+  state.failRecoveryCodeInsert = false;
+  state.recoveryTransactionRollbackCount = 0;
 
   // 2FA is enabled with a known secret
   state.settings.set("admin_2fa_enabled", "true");
@@ -486,6 +513,26 @@ describe("POST /api/admin/2fa/regenerate-codes — valid TOTP accepted, codes re
 });
 
 describe("POST /api/admin/2fa/regenerate-codes — guard rails", () => {
+  it("returns 500 and preserves every old code when inserting replacements fails", async () => {
+    const oldCodes = [
+      { id: "old-unused", codeHash: sha256("OLD-UNUSED"), used: false, usedAt: null },
+      { id: "old-used", codeHash: sha256("OLD-USED"), used: true, usedAt: new Date("2026-01-01T00:00:00.000Z") },
+    ];
+    state.recoveryCodes.push(...oldCodes);
+    state.failRecoveryCodeInsert = true;
+
+    const res = await request(app)
+      .post("/api/admin/2fa/regenerate-codes")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({ code: validTOTP() });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/failed to regenerate recovery codes/i);
+    expect(res.body.error).toMatch(/no recovery codes were changed/i);
+    expect(state.recoveryTransactionRollbackCount).toBe(1);
+    expect(state.recoveryCodes).toEqual(oldCodes);
+  });
+
   it("returns 400 when 2FA is not enabled", async () => {
     state.settings.set("admin_2fa_enabled", "false");
 

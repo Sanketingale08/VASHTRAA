@@ -27,6 +27,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { ProductCard } from "@/components/ProductCard";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
@@ -238,6 +239,7 @@ function ZoomLightbox({
             transition: imgScale === 1 ? "transform 0.25s ease" : "none",
           }}
           onClick={(e) => e.stopPropagation()}
+           onError={replaceProductImageWithFallback}
           draggable={false}
         />
       </AnimatePresence>
@@ -675,8 +677,9 @@ export default function ProductDetail() {
     );
   }
 
-  const images =
-    product.images.length > 0 ? product.images : ["/images/product-1.png"];
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? product.images.map(getProductImageSrc)
+    : [getProductImageSrc()];
   const discount = product.originalPrice
     ? Math.round(
         ((product.originalPrice - product.price) / product.originalPrice) * 100
@@ -811,6 +814,7 @@ export default function ProductDetail() {
                         src={images[activeImage]}
                         alt={product.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                        onError={replaceProductImageWithFallback}
                       />
                       {product.isBestSeller && (
                         <span className="absolute top-4 left-4 bg-[#C9A84C] text-[#1E6B5A] text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
@@ -848,7 +852,7 @@ export default function ProductDetail() {
                               : "border-transparent opacity-50 hover:opacity-100"
                           )}
                         >
-                          <img src={img} alt="" className="w-full h-full object-cover" />
+                          <img src={img} alt="" className="w-full h-full object-cover" onError={replaceProductImageWithFallback} />
                         </button>
                       ))}
                     </div>

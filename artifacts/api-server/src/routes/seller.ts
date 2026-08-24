@@ -7,6 +7,7 @@ import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
+import { normalizeBulkProductImages } from "../lib/bulkProductImages";
 
 const router = Router();
 
@@ -496,7 +497,7 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
   }
 
   try {
-    const results: Array<{ row: number; success: boolean; error?: string; productId?: string; name?: string }> = [];
+    const results: Array<{ row: number; success: boolean; error?: string; productId?: string; name?: string; images?: string[] }> = [];
     const toInsert: any[] = [];
 
     rows.forEach((rowRaw: unknown, idx: number) => {
@@ -533,6 +534,11 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
         results.push({ row: rowNum, success: false, error: `Invalid occasion` }); return;
       }
       if (!Number.isInteger(stock) || stock < 0) { results.push({ row: rowNum, success: false, error: "Invalid stock" }); return; }
+      const normalizedImages = normalizeBulkProductImages(row.images);
+      if (!normalizedImages.ok) {
+        results.push({ row: rowNum, success: false, error: normalizedImages.error });
+        return;
+      }
 
       toInsert.push({
         _rowNum: rowNum,
@@ -548,9 +554,7 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
         price,
         originalPrice: row.originalPrice?.trim() ? parseInt(row.originalPrice) : null,
         stock,
-        images: row.images?.trim()
-          ? row.images.split("|").map((s: string) => s.trim()).filter(Boolean)
-          : [],
+        images: normalizedImages.images,
         vendorId:   req.vendorId,
         vendorName: req.vendor.name,
         status: "pending",
@@ -589,7 +593,7 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
           const [product] = await executor.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
           // Track newly inserted names to catch duplicates within the same batch
           existingNameSet.add(values.name.toLowerCase());
-          results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
+          results.push({ row: _rowNum, success: true, productId: product.id, name: product.name, images: values.images });
         } catch {
           results.push({ row: _rowNum, success: false, error: "Failed to save product" });
         }
@@ -674,7 +678,7 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
       return res.status(400).json({ error: "Maximum 500 rows per upload" });
     }
 
-    const results: Array<{ row: number; success: boolean; error?: string; productId?: string; name?: string }> = [];
+    const results: Array<{ row: number; success: boolean; error?: string; productId?: string; name?: string; images?: string[] }> = [];
     const toInsert: any[] = [];
 
     rows.forEach((row, idx) => {
@@ -703,6 +707,11 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         return;
       }
       if (!Number.isInteger(stock) || stock < 0) { results.push({ row: rowNum, success: false, error: "Invalid stock" }); return; }
+      const normalizedImages = normalizeBulkProductImages(row.images);
+      if (!normalizedImages.ok) {
+        results.push({ row: rowNum, success: false, error: normalizedImages.error });
+        return;
+      }
 
       toInsert.push({
         _rowNum: rowNum,
@@ -718,7 +727,7 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         price,
         originalPrice: row.originalPrice ? parseInt(row.originalPrice) : null,
         stock,
-        images: row.images ? row.images.split("|").map((s: string) => s.trim()).filter(Boolean) : [],
+        images: normalizedImages.images,
         vendorId: req.vendorId,
         vendorName: req.vendor.name,
         status: "pending",
@@ -737,7 +746,7 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         }
         const newProductId = `${categoryPrefix}${(seqResult as any).rows[0].seq}`;
         const [product] = await db.insert(productsTable).values({ id: newProductId, ...values }).returning({ id: productsTable.id, name: productsTable.name });
-        results.push({ row: _rowNum, success: true, productId: product.id, name: product.name });
+        results.push({ row: _rowNum, success: true, productId: product.id, name: product.name, images: values.images });
       } catch (insertErr: any) {
         results.push({ row: _rowNum, success: false, error: "Failed to save row" });
       }

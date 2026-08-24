@@ -7,6 +7,7 @@ import { useUser, useClerk, Show } from "@clerk/react";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
 import { NotificationBell } from "@/components/NotificationBell";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -267,9 +268,10 @@ export function Navbar() {
                                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
                               >
                                 <img
-                                  src={product.images[0] ?? "/images/product-1.png"}
+                                  src={getProductImageSrc(product.images[0])}
                                   alt={product.name}
                                   className="w-10 h-10 rounded-md object-cover shrink-0 border border-gray-100"
+                                  onError={replaceProductImageWithFallback}
                                 />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm text-gray-800 font-medium line-clamp-1">{product.name}</p>

@@ -11,6 +11,7 @@ import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
 import type { CartItem, StockAdjustment } from "@/context/CartContext";
 import { useToast } from "@/hooks/use-toast";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -1239,10 +1240,12 @@ export function CheckoutPage() {
                         {orderItems.map(item => (
                           <div key={item.productId} className="flex gap-3 items-start">
                             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                              {item.images?.[0] && (
-                                <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover"
-                                  onError={e => { e.currentTarget.style.display = "none"; }} />
-                              )}
+                              <img
+                                src={getProductImageSrc(item.images?.[0])}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                onError={replaceProductImageWithFallback}
+                              />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm leading-snug truncate">{item.name}</p>

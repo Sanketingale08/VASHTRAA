@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 import { adminHeaders } from '@/lib/adminApi';
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 // ─── constants ───────────────────────────────────────────────────────────────
 const NAVY = "#0D1B36";
@@ -194,7 +195,7 @@ function ProductModal({ product, onClose, onRefresh, toast }: {
     finally { setBusy(false); }
   }
 
-  const img = product.images?.[0];
+  const img = getProductImageSrc(product.images?.[0]);
 
   return (
     <div className="fixed inset-0 z-50 flex bg-black/40" onClick={onClose}>
@@ -211,11 +212,9 @@ function ProductModal({ product, onClose, onRefresh, toast }: {
         </div>
 
         {/* image */}
-        {img && (
-          <div className="aspect-video bg-gray-50 overflow-hidden">
-            <img src={img} alt={product.name} className="w-full h-full object-cover" />
-          </div>
-        )}
+        <div className="aspect-video bg-gray-50 overflow-hidden">
+          <img src={img} alt={product.name} className="w-full h-full object-cover" onError={replaceProductImageWithFallback} />
+        </div>
 
         {/* sub-tabs */}
         <div className="border-b border-gray-100 px-5 flex gap-1 pt-3">
@@ -476,9 +475,12 @@ function ProductsTable({
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-gray-100 overflow-hidden shrink-0">
-                          {p.images?.[0] ? (
-                            <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
-                          ) : <Package size={16} className="m-auto mt-2.5 text-gray-400" />}
+                          <img
+                            src={getProductImageSrc(p.images?.[0])}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            onError={replaceProductImageWithFallback}
+                          />
                         </div>
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 truncate max-w-[160px]">{p.name}</p>
@@ -989,9 +991,12 @@ function FeaturedTab({ toast }: { toast: ReturnType<typeof useToastMsg> }) {
               <GripVertical size={16} className="text-gray-300 shrink-0 cursor-grab" />
               <span className="w-6 text-center text-xs font-bold text-gray-400 shrink-0">{idx + 1}</span>
               <div className="w-10 h-10 rounded-xl bg-gray-100 overflow-hidden shrink-0">
-                {p.images?.[0]
-                  ? <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
-                  : <Package size={14} className="m-auto mt-3 text-gray-400" />}
+                <img
+                  src={getProductImageSrc(p.images?.[0])}
+                  alt={p.name}
+                  className="w-full h-full object-cover"
+                  onError={replaceProductImageWithFallback}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm truncate">{p.name}</p>

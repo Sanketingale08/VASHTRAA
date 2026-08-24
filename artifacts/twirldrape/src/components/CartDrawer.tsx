@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ShoppingBag, Minus, Plus, Trash2, ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { useCart } from "@/context/CartContext";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -110,9 +111,10 @@ export function CartDrawer() {
                       className="shrink-0"
                     >
                       <img
-                        src={item.images[0] ?? "/images/product-1.png"}
+                        src={getProductImageSrc(item.images[0])}
                         alt={item.name}
                         className="w-20 h-20 object-cover rounded-md border border-[#C9A84C]/10"
+                        onError={replaceProductImageWithFallback}
                       />
                     </Link>
                     <div className="flex-1 min-w-0">

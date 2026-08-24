@@ -634,7 +634,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
               <div className="flex items-center justify-between px-4 py-3 rounded-xl border" style={{ borderColor: "#C9A84C33", background: CREAM }}>
                 <div>
                   <p className="text-sm font-semibold" style={{ color: MAROON }}>Download template</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Replace the example rows with your products, then upload</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Use direct image URLs or uploaded product-image paths; page and share links will be rejected</p>
                 </div>
                 <button
                   onClick={downloadTemplate}
@@ -659,7 +659,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                       {f.key === "fabric"   && <span className="text-gray-500">{FABRICS.join(", ")}</span>}
                       {f.key === "color"    && <span className="text-gray-500">{COLORS.join(", ")}</span>}
                       {f.key === "occasion" && <span className="text-gray-500">{OCCASIONS.join(", ")}</span>}
-                      {f.key === "images"   && <span className="text-gray-500">pipe-separated URLs e.g. url1|url2</span>}
+                       {f.key === "images"   && <span className="text-gray-500">optional; direct http(s) image URLs or /api/storage/public-objects/product-images/... paths, separated with |</span>}
                     </div>
                   ))}
                 </div>

@@ -5,6 +5,7 @@ import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, 
 import { useClerk } from "@clerk/react";
 import { useSellerContext } from "@/components/SellerGuard";
 import brandLogo from "@assets/Presentation1_(2)_1787549658833.jpg";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -560,13 +561,12 @@ export default function SellerDashboard() {
                       {i + 1}
                     </span>
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                      {product.image ? (
-                        <img src={product.image} alt={product.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "/images/product-1.png"; }} />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Package size={16} className="text-gray-300" />
-                        </div>
-                      )}
+                      <img
+                        src={getProductImageSrc(product.image)}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        onError={replaceProductImageWithFallback}
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-700 line-clamp-1">{product.name}</p>

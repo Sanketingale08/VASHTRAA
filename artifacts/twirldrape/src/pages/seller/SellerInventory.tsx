@@ -5,6 +5,7 @@ import { AlertTriangle, PackageX, Check, X, ClipboardList, Save } from "lucide-r
 import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -220,11 +221,12 @@ export default function SellerInventory() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0" style={{ background: CREAM }}>
-                              {item.images?.[0] ? (
-                                <img src={item.images[0]} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">—</div>
-                              )}
+                              <img
+                                src={getProductImageSrc(item.images?.[0])}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={replaceProductImageWithFallback}
+                              />
                             </div>
                             <p className="font-medium text-gray-800 truncate max-w-[220px]">{item.name}</p>
                           </div>

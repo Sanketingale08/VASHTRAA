@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useUser } from "@clerk/react";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { motion } from "framer-motion";
 import { Package, ShoppingBag } from "lucide-react";
 import { Layout } from "@/components/Layout";
@@ -186,14 +187,12 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                                 key={`${item.productId}-${i}`}
                                 className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-[#C9A84C]/10 shrink-0"
                               >
-                                {item.images?.[0] && (
                                   <img
-                                    src={item.images[0]}
+                                    src={getProductImageSrc(item.images?.[0])}
                                     alt={item.name}
                                     className="w-full h-full object-cover"
-                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                    onError={replaceProductImageWithFallback}
                                   />
-                                )}
                               </div>
                             ))}
                             {(order.items as OrderItem[]).length > 3 && (

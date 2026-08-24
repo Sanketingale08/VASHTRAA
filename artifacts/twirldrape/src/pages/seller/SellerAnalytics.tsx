@@ -7,6 +7,7 @@ import {
 import { TrendingUp, ShoppingBag, Package } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -318,11 +319,12 @@ export default function SellerAnalytics() {
                         <td className="py-3 pr-4">
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-gray-400 w-4 text-center font-bold">{i + 1}</span>
-                            {p.image ? (
-                              <img src={p.image} alt={p.name} className="w-9 h-9 rounded-lg object-cover shrink-0" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-lg shrink-0" style={{ background: CREAM }} />
-                            )}
+                            <img
+                              src={getProductImageSrc(p.image)}
+                              alt={p.name}
+                              className="w-9 h-9 rounded-lg object-cover shrink-0"
+                              onError={replaceProductImageWithFallback}
+                            />
                             <span className="font-medium text-gray-800 truncate max-w-[200px]">{p.name}</span>
                           </div>
                         </td>

@@ -7,6 +7,7 @@ import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { CATEGORIES } from "./SellerProductForm";
 import { getApiUrl } from "@/lib/api";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import SellerBulkUpload, { PRODUCT_FIELDS } from "./SellerBulkUpload";
 
 const MAROON = "#1E6B5A";
@@ -376,11 +377,12 @@ export default function SellerProducts() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0" style={{ background: CREAM }}>
-                              {product.images?.[0] ? (
-                                <img src={product.images[0]} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">—</div>
-                              )}
+                              <img
+                                src={getProductImageSrc(product.images?.[0])}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={replaceProductImageWithFallback}
+                              />
                             </div>
                             <div className="min-w-0">
                               <p className="font-medium text-gray-800 truncate max-w-[200px]">{product.name}</p>

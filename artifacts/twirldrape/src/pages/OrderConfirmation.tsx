@@ -11,6 +11,7 @@ import { Layout } from "@/components/Layout";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { OrderTrackingTimeline, type StatusHistoryEntry } from "@/components/OrderTrackingTimeline";
 import { generateInvoice } from "@/utils/generateInvoice";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -390,10 +391,8 @@ function ReturnForm({
               {items.map((item) => (
                 <div key={item.productId} className="flex gap-2 items-start">
                   <div className="w-10 h-10 rounded-md overflow-hidden bg-gray-100 border border-[#C9A84C]/10 shrink-0 mt-0.5">
-                    {item.images?.[0] && (
-                      <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover"
-                        onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    )}
+                    <img src={getProductImageSrc(item.images?.[0])} alt={item.name} className="w-full h-full object-cover"
+                      onError={replaceProductImageWithFallback} />
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name}</p>
@@ -922,14 +921,12 @@ export function OrderConfirmationPage() {
                 {(order.items as OrderItem[]).map((item, idx) => (
                   <div key={`${item.productId}-${idx}`} className="flex gap-3 items-start">
                     <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-[#C9A84C]/10">
-                      {item.images?.[0] && (
-                        <img
-                          src={item.images[0]}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      )}
+                      <img
+                        src={getProductImageSrc(item.images?.[0])}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                        onError={replaceProductImageWithFallback}
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm leading-snug">{item.name}</p>

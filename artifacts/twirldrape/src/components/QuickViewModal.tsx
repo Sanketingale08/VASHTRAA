@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Heart, ShoppingBag, Star, ChevronLeft, ChevronRight, ExternalLink, Minus, Plus } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@clerk/react";
@@ -92,9 +93,10 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
             {/* Image Column */}
             <div className="md:w-[42%] relative bg-[#E6F0EA] dark:bg-[#2A2E35] rounded-t-2xl md:rounded-l-2xl md:rounded-tr-none overflow-hidden min-h-[280px] md:min-h-[420px]">
               <img
-                src={images[imgIdx]}
+                src={getProductImageSrc(images[imgIdx])}
                 alt={product.name}
                 className="w-full h-full object-cover"
+                onError={replaceProductImageWithFallback}
                 style={{ maxHeight: "420px" }}
               />
               {images.length > 1 && (

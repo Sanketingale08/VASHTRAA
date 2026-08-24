@@ -224,4 +224,76 @@ describe("POST /api/seller/products/bulk-import — duplicate name detection", (
     expect(result.success).toBe(true);
     expect(result.productId).toBeDefined();
   });
+
+  it("normalizes ordered direct and uploaded image paths, and returns them with the bulk result", async () => {
+    const res = await request(app)
+      .post("/api/seller/products/bulk-import")
+      .send({
+        rows: [validRow({
+          name: "Image Contract Saree",
+          images: " https://cdn.example.com/look-one.jpg | product-images/look-two.webp | /api/storage/public-objects/product-images/look-three.png ",
+        })],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0]).toMatchObject({
+      success: true,
+      images: [
+        "https://cdn.example.com/look-one.jpg",
+        "/api/storage/public-objects/product-images/look-two.webp",
+        "/api/storage/public-objects/product-images/look-three.png",
+      ],
+    });
+    expect(state.insertedRows).toHaveLength(1);
+    expect(state.insertedRows[0].images).toEqual(res.body.results[0].images);
+  });
+
+  it("rejects invalid image values before inserting their product while importing valid neighbors", async () => {
+    const res = await request(app)
+      .post("/api/seller/products/bulk-import")
+      .send({
+        rows: [
+          validRow({ name: "Direct Image Saree", images: "https://images.example.com/direct.jpg" }),
+          validRow({ name: "Pinterest Link Saree", images: "https://in.pinterest.com/pin/1086352741404761172/" }),
+          validRow({ name: "HTML Page Saree", images: "https://shop.example.com/products/paithani" }),
+          validRow({ name: "Unsafe Link Saree", images: "javascript:alert(1)" }),
+          validRow({ name: "Blank Segment Saree", images: "https://images.example.com/one.jpg||https://images.example.com/two.jpg" }),
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatchObject({ total: 5, succeeded: 1, failed: 4 });
+    expect(res.body.results.map((result: any) => result.success)).toEqual([true, false, false, false, false]);
+    expect(res.body.results.slice(1).every((result: any) =>
+      result.error === "Use direct http(s) image URLs or public product image paths, not page/share links"
+      || result.error === "Images cannot contain blank entries",
+    )).toBe(true);
+    expect(state.insertedRows).toHaveLength(1);
+    expect(state.insertedRows[0].name).toBe("Direct Image Saree");
+  });
+
+  it("applies the same image policy to the legacy CSV bulk-upload endpoint", async () => {
+    const res = await request(app)
+      .post("/api/seller/products/bulk-upload")
+      .send({
+        csv: [
+          "name,price,category,images",
+          "Legacy Public Path,2500,saree,product-images/legacy.jpg",
+          "Legacy Page Link,2500,saree,https://in.pinterest.com/pin/1086352741404761172/",
+        ].join("\n"),
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+    expect(res.body.results[0]).toMatchObject({
+      success: true,
+      images: ["/api/storage/public-objects/product-images/legacy.jpg"],
+    });
+    expect(res.body.results[1]).toMatchObject({
+      success: false,
+      error: "Use direct http(s) image URLs or public product image paths, not page/share links",
+    });
+    expect(state.insertedRows).toHaveLength(1);
+    expect(state.insertedRows[0].images).toEqual(["/api/storage/public-objects/product-images/legacy.jpg"]);
+  });
 });

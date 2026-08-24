@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ProductCard } from "@/components/ProductCard";
 import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -196,9 +197,10 @@ export function WishlistContent({ dashboardMode = false }: { dashboardMode?: boo
                 <div className="bg-white rounded-lg border border-[#C9A84C]/10 overflow-hidden hover:border-[#C9A84C] hover:shadow-md transition-all cursor-pointer group">
                   <div className="aspect-square overflow-hidden">
                     <img
-                      src={product.images?.[0] ?? "/images/product-1.png"}
+                      src={getProductImageSrc(product.images?.[0])}
                       alt={product.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={replaceProductImageWithFallback}
                     />
                   </div>
                   <div className="p-3">

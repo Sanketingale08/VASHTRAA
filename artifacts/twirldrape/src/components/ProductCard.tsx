@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@clerk/react";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import type { ProductSummary } from "@workspace/api-client-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -67,10 +68,10 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
 
   const vendorLabel = product.vendorName ?? product.vendor ?? "";
   const reviewCount = product.reviewCount ?? product.reviews ?? 0;
-  const image =
+  const image = getProductImageSrc(
     (product.images && product.images.length > 0 ? product.images[0] : undefined) ??
-    product.image ??
-    "/images/product-1.png";
+    product.image,
+  );
 
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
@@ -162,7 +163,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
             src={image}
             alt={product.name}
             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
-            onError={(e) => { (e.target as HTMLImageElement).src = "/images/product-1.png"; }}
+            onError={replaceProductImageWithFallback}
           />
 
           {/* Flash Sale Countdown Badge */}

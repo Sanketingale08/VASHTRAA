@@ -5,6 +5,7 @@ import { ArrowLeft, Truck, Check, X, AlertCircle, ThumbsUp, ThumbsDown, Clock } 
 import { SellerLayout } from "./SellerDashboard";
 import { OrderTrackingTimeline } from "@/components/OrderTrackingTimeline";
 import { getApiUrl } from "@/lib/api";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const MAROON = "#1E6B5A";
 const GOLD = "#C9A84C";
@@ -297,14 +298,12 @@ export default function SellerOrderDetail() {
                     const img = item.images?.[0];
                     return (
                       <div key={item.productId} className="flex items-center gap-3">
-                        {img ? (
-                          <img src={img} alt={item.name} className="w-12 h-12 object-cover rounded-lg shrink-0" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg shrink-0 flex items-center justify-center"
-                            style={{ background: CREAM }}>
-                            <span className="text-xs text-gray-400">—</span>
-                          </div>
-                        )}
+                        <img
+                          src={getProductImageSrc(img)}
+                          alt={item.name}
+                          className="w-12 h-12 object-cover rounded-lg shrink-0"
+                          onError={replaceProductImageWithFallback}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
                           <p className="text-xs text-gray-500">Qty: {item.quantity} × ₹{item.price.toLocaleString("en-IN")}</p>

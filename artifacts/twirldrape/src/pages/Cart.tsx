@@ -8,6 +8,7 @@ import type { StockAdjustment } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useUser } from "@clerk/react";
 import { useListProducts } from "@workspace/api-client-react";
+import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -234,9 +235,10 @@ export function CartPage() {
                 <div className="flex gap-4">
                 <Link href={`/products/${item.productId}`} className="shrink-0">
                   <img
-                    src={item.images[0] ?? "/images/product-1.png"}
+                    src={getProductImageSrc(item.images[0])}
                     alt={item.name}
                     className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-md border border-[#C9A84C]/10 hover:opacity-90 transition-opacity"
+                    onError={replaceProductImageWithFallback}
                   />
                 </Link>
                 <div className="flex-1 min-w-0">
@@ -463,9 +465,10 @@ function RecentlyViewedSection({ products }: { products: any[] }) {
             <div className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C9A84C]/10 overflow-hidden hover:border-[#C9A84C] hover:shadow-md transition-all cursor-pointer group">
               <div className="aspect-square overflow-hidden">
                 <img
-                  src={product.images?.[0] ?? "/images/product-1.png"}
+                  src={getProductImageSrc(product.images?.[0])}
                   alt={product.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  onError={replaceProductImageWithFallback}
                 />
               </div>
               <div className="p-3">

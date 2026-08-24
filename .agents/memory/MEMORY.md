@@ -9,3 +9,4 @@
 - [Financial module commission consistency](financial-management-commission-consistency.md) — all revenue/profit/vendor-analytics code must resolve commission rate via shared commission.ts, never hardcode a flat rate
 - [Playwright shared Clerk session in beforeAll](playwright-shared-clerk-session.md) — write empty JSON placeholder before browser.newContext() in beforeAll; Playwright applies test.use storageState to that call too
 - [Bulk-import lease fencing](bulk-import-lease-fencing.md) — stale claim recovery needs ownership tokens so superseded workers cannot commit or clean up reclaimed batches
+- [Bulk product image contract](bulk-product-image-contract.md) — validate direct assets without fetching remote URLs; normalize public paths and always retain render fallbacks

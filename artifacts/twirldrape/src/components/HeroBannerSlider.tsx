@@ -35,6 +35,7 @@ export function HeroBannerSlider({
   // Track which banner IDs have finished loading — keyed by ID so switching
   // slides immediately hides the incoming image without waiting for an effect.
   const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Slide timer — safely no-ops when images is empty or a single slide
@@ -63,11 +64,32 @@ export function HeroBannerSlider({
     setLoadedIds((prev) => new Set([...prev, id]));
   }, []);
 
-  // All hooks have been called unconditionally above — safe to return null now
-  if (images.length === 0) return null;
+  const handleImageError = useCallback((id: string) => {
+    setFailedIds((prev) => new Set([...prev, id]));
+  }, []);
 
   const activeBanner = images[activeIndex];
   const isActiveLoaded = activeBanner ? loadedIds.has(activeBanner.id) : false;
+  const isActiveFailed = activeBanner ? failedIds.has(activeBanner.id) : false;
+  const isActiveReady = isActiveLoaded || isActiveFailed;
+
+  // If a banner fails, move on to the next usable slide. When every banner
+  // fails (or there is only one), leave the static cream background visible
+  // instead of showing a broken image or an endless shimmer.
+  useEffect(() => {
+    if (images.length <= 1 || !activeBanner || !isActiveFailed) return;
+
+    const nextIndex = Array.from({ length: images.length }, (_, offset) => {
+      return (activeIndex + offset + 1) % images.length;
+    }).find((index) => !failedIds.has(images[index].id));
+
+    if (nextIndex !== undefined && nextIndex !== activeIndex) {
+      setActiveIndex(nextIndex);
+    }
+  }, [activeBanner, activeIndex, failedIds, images, isActiveFailed]);
+
+  // All hooks have been called unconditionally above — safe to return null now
+  if (images.length === 0) return null;
 
   return (
     <div
@@ -83,7 +105,7 @@ export function HeroBannerSlider({
           background:
             "linear-gradient(135deg, #f5ede3 0%, #e8d5c4 40%, #f0e4d6 60%, #e8d5c4 100%)",
           backgroundSize: "200% 200%",
-          animation: isActiveLoaded
+          animation: isActiveReady
             ? "none"
             : "heroBannerShimmer 2s ease-in-out infinite",
         }}
@@ -100,18 +122,21 @@ export function HeroBannerSlider({
           style={{ zIndex: 1 }}
         >
           {/* Image fades in only after its onLoad fires */}
-          <img
-            src={activeBanner?.imageUrl}
-            alt="Hero banner"
-            loading={activeIndex === 0 ? "eager" : "lazy"}
-            onLoad={() => activeBanner && handleImageLoad(activeBanner.id)}
-            className="w-full h-full object-cover"
-            style={{
-              objectPosition: "top center",
-              opacity: isActiveLoaded ? 1 : 0,
-              transition: "opacity 0.8s ease-in-out",
-            }}
-          />
+          {!isActiveFailed && (
+            <img
+              src={activeBanner?.imageUrl}
+              alt="Hero banner"
+              loading={activeIndex === 0 ? "eager" : "lazy"}
+              onLoad={() => activeBanner && handleImageLoad(activeBanner.id)}
+              onError={() => activeBanner && handleImageError(activeBanner.id)}
+              className="w-full h-full object-cover"
+              style={{
+                objectPosition: "top center",
+                opacity: isActiveLoaded ? 1 : 0,
+                transition: "opacity 0.8s ease-in-out",
+              }}
+            />
+          )}
 
           {/* Admin-configured caption — only rendered when title is set and
               the image is fully visible */}

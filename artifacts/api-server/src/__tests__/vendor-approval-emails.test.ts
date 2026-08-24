@@ -5,9 +5,8 @@
  * sendVendorApprovalEmailForVendor with the correct contactEmail/ownerId
  * — including passing null contactEmail so the helper can fall back to Clerk.
  *
- * The approve handler uses db.execute() with raw SQL (unlike suspend/reject
- * which use the ORM chain), so the db mock handles both the nextval sequence
- * call and the UPDATE … RETURNING call via a resetable vi.fn().
+ * The approve handler uses db.execute() with one raw, atomic UPDATE that
+ * allocates the next Vendor ID and marks the vendor approved together.
  * Side-effect helpers (insertSellerNotification, insertAdminNotification,
  * writeAuditLog) are mocked at the module level so they don't require a
  * fully-shaped DB mock chain.
@@ -125,16 +124,11 @@ async function buildApp(): Promise<Express> {
 
 /**
  * Configure dbExecuteMock for a successful approve of the given vendor row.
- *
- * The handler calls db.execute() twice in order:
- *   call 1 — SELECT nextval('vendor_id_seq') → { rows: [{ nextval: 1n }] }
- *   call 2 — UPDATE vendors … RETURNING …    → { rows: [vendorRow] }
+ * A successful approval requires one atomic UPDATE … RETURNING execution.
  */
-function setupExecuteMock(vendorRow: Record<string, unknown> | null) {
+function setupApprovalMock(vendorRow: Record<string, unknown>) {
   dbExecuteMock.mockReset();
-  dbExecuteMock
-    .mockResolvedValueOnce({ rows: [{ nextval: 1n }] })                                // nextval
-    .mockResolvedValueOnce({ rows: vendorRow ? [vendorRow] : [] });                    // UPDATE … RETURNING
+  dbExecuteMock.mockResolvedValueOnce({ rows: [vendorRow] });
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +143,7 @@ describe("POST /api/admin/vendors/:id/approve — email delivery", () => {
     approvalEmailMock.mockClear();
 
     // Default: vendor present with contactEmail and ownerId
-    setupExecuteMock({
+    setupApprovalMock({
       id: VENDOR_ID,
       name: VENDOR_NAME,
       status: "approved",
@@ -161,13 +155,15 @@ describe("POST /api/admin/vendors/:id/approve — email delivery", () => {
     app = await buildApp();
   });
 
-  it("returns 200 with vendor status approved", async () => {
+  it("returns the generated Vendor ID with the approved status", async () => {
     const res = await request(app)
       .post(`/api/admin/vendors/${VENDOR_ID}/approve`)
       .set("x-admin-key", ADMIN_KEY)
       .send({});
     expect(res.status).toBe(200);
     expect(res.body.vendor.status).toBe("approved");
+    expect(res.body.vendor.vendorId).toBe("TDV000001");
+    expect(dbExecuteMock).toHaveBeenCalledTimes(1);
   });
 
   it("calls sendVendorApprovalEmailForVendor with contactEmail when vendor has one", async () => {
@@ -191,7 +187,7 @@ describe("POST /api/admin/vendors/:id/approve — email delivery", () => {
   });
 
   it("calls sendVendorApprovalEmailForVendor with null contactEmail (triggers Clerk fallback inside the helper) when vendor has no contactEmail", async () => {
-    setupExecuteMock({
+    setupApprovalMock({
       id: VENDOR_ID,
       name: VENDOR_NAME,
       status: "approved",
@@ -219,7 +215,7 @@ describe("POST /api/admin/vendors/:id/approve — email delivery", () => {
   });
 
   it("calls sendVendorApprovalEmailForVendor with null ownerId when vendor has no owner", async () => {
-    setupExecuteMock({
+    setupApprovalMock({
       id: VENDOR_ID,
       name: VENDOR_NAME,
       status: "approved",
@@ -251,11 +247,15 @@ describe("POST /api/admin/vendors/:id/approve — email delivery", () => {
       .post(`/api/admin/vendors/${VENDOR_ID}/approve`)
       .send({});
     expect(res.status).toBe(403);
+    expect(dbExecuteMock).not.toHaveBeenCalled();
   });
 
   it("returns 404 and does NOT call the email helper when vendor is not found", async () => {
-    // Override: UPDATE returns no rows
-    setupExecuteMock(null);
+    // The atomic UPDATE has no match, and the follow-up lookup confirms it is absent.
+    dbExecuteMock.mockReset();
+    dbExecuteMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
 
     const res = await request(app)
       .post(`/api/admin/vendors/nonexistent/approve`)
@@ -264,6 +264,79 @@ describe("POST /api/admin/vendors/:id/approve — email delivery", () => {
 
     expect(res.status).toBe(404);
     await new Promise((r) => setImmediate(r));
+    expect(approvalEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps an existing permanent Vendor ID when approval is retried", async () => {
+    setupApprovalMock({
+      id: VENDOR_ID,
+      name: VENDOR_NAME,
+      status: "approved",
+      owner_id: OWNER_ID,
+      contact_email: CONTACT_EMAIL,
+      vendor_id: "TDV000123",
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/vendors/${VENDOR_ID}/approve`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.vendor.vendorId).toBe("TDV000123");
+    expect(dbExecuteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the same ID to concurrent approval retries", async () => {
+    const approvedVendor = {
+      id: VENDOR_ID,
+      name: VENDOR_NAME,
+      status: "approved",
+      owner_id: OWNER_ID,
+      contact_email: CONTACT_EMAIL,
+      vendor_id: "TDV000001",
+    };
+    dbExecuteMock.mockReset();
+    dbExecuteMock.mockResolvedValue({ rows: [approvedVendor] });
+
+    const [first, second] = await Promise.all([
+      request(app).post(`/api/admin/vendors/${VENDOR_ID}/approve`).set("x-admin-key", ADMIN_KEY).send({}),
+      request(app).post(`/api/admin/vendors/${VENDOR_ID}/approve`).set("x-admin-key", ADMIN_KEY).send({}),
+    ]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(first.body.vendor.vendorId).toBe("TDV000001");
+    expect(second.body.vendor.vendorId).toBe("TDV000001");
+  });
+
+  it("does not assign an ID to a historical vendor that is already approved without one", async () => {
+    dbExecuteMock.mockReset();
+    dbExecuteMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ status: "approved", vendor_id: null }] });
+
+    const res = await request(app)
+      .post(`/api/admin/vendors/${VENDOR_ID}/approve`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("already approved without a generated Vendor ID");
+    expect(approvalEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("does not approve a vendor when ID allocation fails", async () => {
+    dbExecuteMock.mockReset();
+    dbExecuteMock.mockRejectedValueOnce(new Error("sequence unavailable"));
+
+    const res = await request(app)
+      .post(`/api/admin/vendors/${VENDOR_ID}/approve`)
+      .set("x-admin-key", ADMIN_KEY)
+      .send({});
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Vendor approval could not be completed. Please retry.");
     expect(approvalEmailMock).not.toHaveBeenCalled();
   });
 });

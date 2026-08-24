@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
 
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
 const GOLD = "#C9A84C";
@@ -104,25 +103,29 @@ function VendorsContent() {
     if (inFlight.current.has(key)) return;
     inFlight.current.add(key);
     setActionLoading(key);
+    setError("");
     try {
       const res = await fetch(`/api/admin/vendors/${id}/${action}`, {
         method: "POST",
         headers: adminHeaders(),
         credentials: "include",
       });
-      if (res.ok) {
-        const data = await res.json();
-        // Optimistic local update for instant feedback
-        setVendors((prev) =>
-          prev.map((v) => (v.id === id ? {
-            ...v,
-            status: data.vendor.status ?? v.status,
-            featured: data.vendor.featured ?? v.featured,
-          } : v))
-        );
-        // Full reload to pick up any server-side changes (e.g. kycVerified, audit events)
-        loadVendors();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? `Failed to ${action} vendor`);
+        return;
       }
+      // Optimistic local update for instant feedback, including the generated Vendor ID.
+      setVendors((prev) =>
+        prev.map((v) => (v.id === id ? {
+          ...v,
+          status: data.vendor.status ?? v.status,
+          vendorId: data.vendor.vendorId ?? v.vendorId,
+          featured: data.vendor.featured ?? v.featured,
+        } : v))
+      );
+      // Full reload to pick up any server-side changes (e.g. kycVerified, audit events)
+      loadVendors();
     } finally {
       inFlight.current.delete(key);
       setActionLoading(null);
@@ -223,7 +226,9 @@ function VendorsContent() {
                     <td className="px-4 py-3.5 hidden md:table-cell">
                       {v.vendorId
                         ? <span className="text-xs font-mono font-semibold" style={{ color: NAVY }}>{v.vendorId}</span>
-                        : <span className="text-xs italic text-gray-300">—</span>}
+                        : <span className="text-xs italic text-gray-400">
+                          {v.status === "approved" ? "Not Generated (legacy)" : "Not Generated"}
+                        </span>}
                     </td>
                     <td className="px-4 py-3.5"><StatusBadge status={v.status} /></td>
                     <td className="px-4 py-3.5 text-xs text-gray-500 hidden md:table-cell">{v.location}</td>

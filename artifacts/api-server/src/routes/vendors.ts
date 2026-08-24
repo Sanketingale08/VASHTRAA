@@ -21,16 +21,6 @@ import {
 
 const router = Router();
 
-// ── Vendor ID generation ──────────────────────────────────────────────────────
-// Draws the next value from vendor_id_seq and formats it as TDVxxxxxx.
-// db.execute() returns { rows: Row[] } — we read rows[0].
-async function generateVendorId(): Promise<string> {
-  const result = await db.execute(sql`SELECT nextval('vendor_id_seq') AS nextval`);
-  const n = Number((result.rows[0] as any).nextval);
-  const digits = Math.max(6, String(n).length); // extend beyond 6 if sequence > 999999
-  return "TDV" + String(n).padStart(digits, "0");
-}
-
 router.get("/vendors", async (req, res) => {
   try {
     // Return only approved vendors, featured ones first, then sorted by rating desc.
@@ -475,23 +465,49 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
 router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   try {
-    // Generate a candidate ID from the sequence (atomic; unused IDs are harmless gaps).
-    // The UPDATE uses COALESCE so the candidate is only written when vendor_id IS NULL.
-    // If two concurrent approvals race, both generate unique candidates but only the
-    // first writer's value survives — the second request simply keeps the already-set ID.
-    const candidateVendorId = await generateVendorId();
-
+    // Allocation and approval are one atomic database operation. COALESCE preserves
+    // permanent existing IDs, including when a second approval request races the first.
+    // This advisory lock is shared with the sequence reseed migration.
     const updateResult = await db.execute(sql`
+      WITH vendor_id_lock AS (
+        SELECT pg_advisory_xact_lock(764204853)
+      )
       UPDATE vendors
-         SET status     = 'approved',
-             vendor_id  = COALESCE(vendor_id, ${candidateVendorId})
+         SET status = 'approved',
+             vendor_id = COALESCE(
+               vendor_id,
+               'TDV' || (
+                 SELECT CASE
+                   WHEN char_length(next_vendor_id.value) < 6
+                     THEN lpad(next_vendor_id.value, 6, '0')
+                   ELSE next_vendor_id.value
+                 END
+                 FROM (
+                   SELECT nextval('vendor_id_seq')::text AS value
+                     FROM vendor_id_lock
+                 ) AS next_vendor_id
+               )
+             )
+        FROM vendor_id_lock
        WHERE id = ${id}
+         AND (status <> 'approved' OR vendor_id IS NOT NULL)
       RETURNING id, name, status, owner_id, contact_email, vendor_id
     `);
 
     const updated = (updateResult.rows[0] as any) ?? null;
     if (!updated) {
-      return res.status(404).json({ error: "Vendor not found" });
+      const existingResult = await db.execute(sql`
+        SELECT status, vendor_id
+          FROM vendors
+         WHERE id = ${id}
+      `);
+      const existing = (existingResult.rows[0] as any) ?? null;
+      if (!existing) {
+        return res.status(404).json({ error: "Vendor not found" });
+      }
+      return res.status(409).json({
+        error: "This vendor is already approved without a generated Vendor ID and cannot be reassigned.",
+      });
     }
 
     // Re-shape snake_case raw columns into camelCase for downstream use
@@ -520,10 +536,17 @@ router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res:
     }).catch((err) => req.log.warn({ err, vendorId: updatedVendor.id }, "Failed to send vendor approval email"));
 
     writeAuditLog({ action: "vendor_approved", module: "Vendors", details: { vendorId: updatedVendor.id, vendorName: updatedVendor.name }, ipAddress: getIp(req) }).catch(() => {});
-    res.json({ vendor: { id: updatedVendor.id, name: updatedVendor.name, status: updatedVendor.status } });
+    res.json({
+      vendor: {
+        id: updatedVendor.id,
+        name: updatedVendor.name,
+        status: updatedVendor.status,
+        vendorId: updatedVendor.vendorId,
+      },
+    });
   } catch (err) {
     req.log.error({ err }, "Failed to approve vendor");
-    res.status(500).json({ error: "Failed to approve vendor" });
+    res.status(500).json({ error: "Vendor approval could not be completed. Please retry." });
   }
 });
 

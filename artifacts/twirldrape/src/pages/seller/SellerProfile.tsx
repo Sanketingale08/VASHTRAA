@@ -707,7 +707,9 @@ export default function SellerProfile() {
                       {vendor.vendorId ? (
                         <p className="text-sm font-semibold font-mono" style={{ color: "#2d1f14" }}>{vendor.vendorId}</p>
                       ) : (
-                        <p className="text-sm italic" style={{ color: "#bfae9e" }}>Pending approval</p>
+                        <p className="text-sm italic" style={{ color: "#bfae9e" }}>
+                          {vendor.status === "approved" ? "Not Generated (legacy account)" : "Not Generated"}
+                        </p>
                       )}
                     </div>
                   </div>

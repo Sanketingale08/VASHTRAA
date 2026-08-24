@@ -480,7 +480,7 @@ test.describe("AdminReturns — polling and mutation reload", () => {
     expect(consoleErrors.filter(isAppError)).toHaveLength(0);
   });
 
-  test("list is re-fetched and pill updates after confirming a refund payout", async ({ page }) => {
+  test("confirm payout is disabled during a slow request, then closes and reloads the list", async ({ page }) => {
     test.setTimeout(30_000);
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
@@ -522,11 +522,13 @@ test.describe("AdminReturns — polling and mutation reload", () => {
       });
     });
 
-    // Count POST requests to /refund/process to confirm the mutation fired
+    // Delay the successful payout response to keep the confirmation modal in its
+    // loading state long enough to prove a slow connection cannot submit twice.
     let processPostCount = 0;
-    await page.route("**/api/admin/orders/ord-003/refund/process", (route) => {
+    await page.route("**/api/admin/orders/ord-003/refund/process", async (route) => {
       if (route.request().method() === "POST") processPostCount++;
-      return route.fulfill({
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+      await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ order: PROCESSED_REFUND_ORDER }),
@@ -548,12 +550,16 @@ test.describe("AdminReturns — polling and mutation reload", () => {
     await payoutBtn.click();
 
     // Confirm button inside the modal must appear and be clicked
-    const confirmPayoutBtn = page.locator("button", { hasText: /Confirm payout/i }).first();
+    const confirmPayoutBtn = page.locator("button").filter({ hasText: /Confirm payout|Processing…/i }).first();
     await expect(confirmPayoutBtn).toBeVisible({ timeout: 3_000 });
     await confirmPayoutBtn.click();
 
-    // The POST to /refund/process must have fired
-    expect(processPostCount).toBeGreaterThanOrEqual(1);
+    // While the first request is in-flight, another confirmation is impossible.
+    await expect(confirmPayoutBtn).toBeDisabled();
+    expect(processPostCount).toBe(1);
+
+    // Once the payout request resolves, the modal closes.
+    await expect(page.getByRole("heading", { name: "Confirm payout" })).toBeHidden({ timeout: 3_000 });
 
     // The returns list must be re-fetched within 2 s
     await page.waitForTimeout(2_000);

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { Instagram, Facebook, Youtube, Twitter, MapPin, Phone, Mail } from "lucide-react";
+import brandLogo from "@assets/Presentation1_(2)_1787549658833.jpg";
 
 export function Footer() {
   return (
@@ -11,9 +12,11 @@ export function Footer() {
           {/* Brand Col */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex flex-col items-start group mb-6">
-              <span className="font-serif text-3xl font-bold tracking-wider text-[#C9A84C]">
-                TWIRLDRAPE
-              </span>
+              <img
+                src={brandLogo}
+                alt="TwirlDrape — Paithani & Designer Sarees"
+                className="block w-[190px] max-w-full h-auto object-contain object-left"
+              />
               <span className="text-xs tracking-[0.2em] uppercase opacity-80 mt-1">
                 Authentic Paithani & Designer
               </span>

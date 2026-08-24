@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark, LogOut, ChevronDown } from "lucide-react";
 import { useClerk } from "@clerk/react";
 import { useSellerContext } from "@/components/SellerGuard";
+import brandLogo from "@assets/Presentation1_(2)_1787549658833.jpg";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -110,10 +111,10 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
         <div className="px-6 py-5 border-b border-white/10">
           <Link href="/">
             <img
-              src={`${basePath}/images/logo.png`}
-              alt="TwirlDrape"
-              className="w-full h-auto object-contain"
-              style={{ maxHeight: "90px" }}
+              src={brandLogo}
+              alt="TwirlDrape — Paithani & Designer Sarees"
+              className="block w-full max-w-[220px] h-auto object-contain object-left"
+              style={{ maxHeight: "96px" }}
             />
           </Link>
           <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/40 mt-1">Seller Panel</p>

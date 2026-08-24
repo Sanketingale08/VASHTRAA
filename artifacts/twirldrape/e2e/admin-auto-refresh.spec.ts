@@ -113,6 +113,13 @@ const STUB_RETURNS = {
   ],
 };
 
+const REFUND_PILL_STATES = [
+  { status: "pending", background: "rgb(255, 251, 235)", color: "rgb(180, 83, 9)" },
+  { status: "approved", background: "rgb(240, 253, 244)", color: "rgb(21, 128, 61)" },
+  { status: "processed", background: "rgb(240, 253, 244)", color: "rgb(21, 128, 61)" },
+  { status: "rejected", background: "rgb(254, 242, 242)", color: "rgb(185, 28, 28)" },
+] as const;
+
 const STUB_VENDOR = {
   id: "vendor-001",
   name: "Silk Palace",
@@ -554,6 +561,50 @@ test.describe("AdminReturns — polling and mutation reload", () => {
 
     // The refundStatus pill in the row must reflect "processed" without a manual reload
     await expect(page.locator("text=refund processed").first()).toBeVisible({ timeout: 3_000 });
+
+    expect(consoleErrors.filter(isAppError)).toHaveLength(0);
+  });
+});
+
+// ── Test: AdminReturns initial refund pill render ──────────────────────────────
+
+test.describe("AdminReturns — initial refund pill render", () => {
+  test("shows each refund state with its correct pill on direct page load", async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    await seedAdminKey(page);
+    await stubAdminInfra(page);
+
+    const orders = REFUND_PILL_STATES.map(({ status }, index) => ({
+      ...STUB_RETURNS.orders[0],
+      id: `refund-state-${status}`,
+      displayId: `TD-REF-${index + 1}`,
+      status: "return_approved",
+      refundStatus: status,
+      refundMethod: "bank_transfer",
+    }));
+
+    await page.route("**/api/admin/returns**", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ orders }),
+      });
+    });
+
+    await page.goto("/admin/returns");
+    await expect(page.getByRole("heading", { name: "Returns & Refunds" })).toBeVisible({ timeout: 20_000 });
+
+    for (const { status, background, color } of REFUND_PILL_STATES) {
+      const pill = page.getByText(`refund ${status}`, { exact: true });
+      await expect(pill).toBeVisible();
+      await expect(pill).toHaveCSS("background-color", background);
+      await expect(pill).toHaveCSS("color", color);
+    }
 
     expect(consoleErrors.filter(isAppError)).toHaveLength(0);
   });

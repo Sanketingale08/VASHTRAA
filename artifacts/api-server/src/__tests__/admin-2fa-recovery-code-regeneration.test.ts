@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express, { type Express } from "express";
 import { generateSync } from "otplib";
+import crypto from "crypto";
 import admin2faRouter from "../routes/admin2fa";
 
 const ADMIN_KEY = "test-admin-key-2fa-regen-e2e";
@@ -441,6 +442,46 @@ describe("POST /api/admin/2fa/regenerate-codes — valid TOTP accepted, codes re
       .send({ code: newCodes[0] });
     expect(second.status).toBe(403);
     expect(second.body.code).toBe("2FA_INVALID");
+  });
+
+  it("treats a regenerated row with a previously used hash as unused", async () => {
+    const REUSED_PLAIN = "ABABABABAB-ABABABABAB";
+    const reusedHash = sha256(REUSED_PLAIN);
+    state.recoveryCodes.push({
+      id: "burned-rc-1",
+      codeHash: reusedHash,
+      used: true,
+      usedAt: new Date(),
+    });
+
+    // Force regeneration to produce the same hash as the burned row. The
+    // replacement rows must get their own fresh unused state.
+    const randomBytesSpy = vi
+      .spyOn(crypto, "randomBytes")
+      .mockImplementation((size: number) => {
+        if (size === 5) {
+          return Buffer.from("ababababab", "hex");
+        }
+        return Buffer.alloc(size, 0);
+      });
+
+    try {
+      const regenRes = await request(app)
+        .post("/api/admin/2fa/regenerate-codes")
+        .set("x-admin-key", ADMIN_KEY)
+        .send({ code: validTOTP() });
+
+      expect(regenRes.status).toBe(200);
+      expect(regenRes.body.codes).toHaveLength(10);
+      expect(new Set(regenRes.body.codes)).toEqual(new Set(["ABABABABAB-ABABABABAB"]));
+
+      const replacementRows = state.recoveryCodes.filter(r => r.codeHash === reusedHash);
+      expect(replacementRows).toHaveLength(10);
+      expect(replacementRows.every(r => !r.used)).toBe(true);
+      expect(replacementRows.every(r => r.id !== "burned-rc-1")).toBe(true);
+    } finally {
+      randomBytesSpy.mockRestore();
+    }
   });
 });
 

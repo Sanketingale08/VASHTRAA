@@ -10,3 +10,4 @@
 - [Playwright shared Clerk session in beforeAll](playwright-shared-clerk-session.md) — write empty JSON placeholder before browser.newContext() in beforeAll; Playwright applies test.use storageState to that call too
 - [Bulk-import lease fencing](bulk-import-lease-fencing.md) — stale claim recovery needs ownership tokens so superseded workers cannot commit or clean up reclaimed batches
 - [Bulk product image contract](bulk-product-image-contract.md) — validate direct assets without fetching remote URLs; normalize public paths and always retain render fallbacks
+- [Admin 2FA test rate limits](admin-2fa-test-rate-limits.md) — recovery-login tests share a module-level limiter, so focused tests should avoid unnecessary attempts

@@ -24,6 +24,11 @@
  *    Processing step, shows an error banner, and exposes a "Retry Import"
  *    button.  Clicking retry (which returns 200) advances to Results.
  *
+ *  Test 5 — network disconnect / retry:
+ *    First import attempt is aborted before a response arrives.  The wizard
+ *    stays on Processing, shows an error banner, and keeps "Retry Import"
+ *    enabled.  Clicking retry (which returns 200) advances to Results.
+ *
  * The bulk-import API is mocked — these tests cover client-side
  * validation and wizard UI flow, not DB persistence.
  *
@@ -546,6 +551,91 @@ test.describe("Seller bulk upload", () => {
       expect(callCount).toBe(2);
       expect(seenKeys[0]).toBeTruthy();
       expect(seenKeys[0]).toBe(seenKeys[1]);
+    },
+  );
+
+  // ── Test 5 ─────────────────────────────────────────────────────────────────
+
+  test(
+    "network disconnect: stays on Processing with an enabled retry; restored request succeeds",
+    async ({ page }) => {
+      test.setTimeout(120_000);
+
+      await mockApprovedVendor(page);
+
+      await page.route("**/api/seller/products", (route) => {
+        if (route.request().method() === "GET") {
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ products: [] }),
+          });
+        } else {
+          route.continue();
+        }
+      });
+
+      let callCount = 0;
+      await page.route("**/api/seller/products/bulk-import", (route) => {
+        callCount += 1;
+
+        if (callCount === 1) {
+          // Simulate the connection dropping before fetch receives a response.
+          route.abort("failed");
+          return;
+        }
+
+        const body = route.request().postDataJSON() as {
+          rows: Array<Record<string, string>>;
+        };
+        const rows = body.rows ?? [];
+        const results = rows.map((row, i) => ({
+          row: i + 1,
+          success: true,
+          productId: `NETWORK00${i + 1}`,
+          name: row.name,
+        }));
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            results,
+            summary: { total: rows.length, succeeded: rows.length, failed: 0 },
+          }),
+        });
+      });
+
+      await page.goto("/seller/products");
+      await expect(page.getByRole("heading", { name: /products/i })).toBeVisible({
+        timeout: 15_000,
+      });
+
+      await page.getByRole("button", { name: /bulk upload/i }).click();
+      await expect(page.getByText("Bulk Upload Products")).toBeVisible({ timeout: 5_000 });
+
+      const fileInput = page.locator('input[type="file"]').first();
+      await fileInput.setInputFiles({
+        name: "test-products-network.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer: makeAllValidXlsx(),
+      });
+
+      // A network abort must leave the wizard on Processing instead of losing
+      // the parsed rows or returning to the upload screen.
+      await expect(page.getByText("2. Processing")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Import failed")).toBeVisible({ timeout: 5_000 });
+
+      const retryButton = page.getByRole("button", { name: /retry import/i });
+      await expect(retryButton).toBeVisible({ timeout: 5_000 });
+      await expect(retryButton).toBeEnabled();
+
+      // The route now fulfills the request, so the retry can complete the batch.
+      await retryButton.click();
+      await expect(page.getByText(/3 products? imported/i)).toBeVisible({
+        timeout: 15_000,
+      });
+      expect(callCount).toBe(2);
     },
   );
 });

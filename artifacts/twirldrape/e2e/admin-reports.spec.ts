@@ -964,3 +964,55 @@ test.describe("Admin Reports — Refresh button sends clean period to API", () =
     expect(refreshPeriod).toBe("7d");
   });
 });
+
+// ── 10. Shared report links — restore tab and custom date range ────────────────
+
+test.describe("Admin Reports — shared filtered links", () => {
+  test("opens the selected tab and dates, then copies the full filtered URL", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await seedAdminKey(page);
+    await stubAllReportRoutes(page);
+
+    const sharedUrl =
+      "/admin/reports?tab=sales&period=custom&from=2026-07-01&to=2026-07-31";
+    await page.goto(sharedUrl);
+
+    await expect(page.locator("h1", { hasText: /Reports/i })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // The shared URL should open the non-default Sales tab rather than Revenue.
+    const salesTab = page
+      .locator("main")
+      .locator("button")
+      .filter({ hasText: /Sales/ })
+      .first();
+    await expect(salesTab).toBeVisible({ timeout: 10_000 });
+    await expect(salesTab).toHaveCSS("background-color", "rgb(13, 27, 54)");
+    await expect(page.locator("text=Order List").first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Both custom date controls must retain the dates encoded in the shared URL.
+    const dateInputs = page.locator('input[type="date"]');
+    await expect(dateInputs).toHaveCount(2);
+    await expect(dateInputs.nth(0)).toHaveValue("2026-07-01");
+    await expect(dateInputs.nth(1)).toHaveValue("2026-07-31");
+
+    // Read the browser clipboard after the same user action an admin uses.
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+      origin: new URL(page.url()).origin,
+    });
+    const copyButton = page.getByRole("button", { name: "Copy link" });
+    await expect(copyButton).toBeVisible({ timeout: 5_000 });
+    await copyButton.click();
+
+    await expect(page.getByText("Report link copied").first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(page.url());
+  });
+});

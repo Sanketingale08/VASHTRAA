@@ -35,6 +35,49 @@ const store = vi.hoisted(() => ({
 // ─── @workspace/db mock ───────────────────────────────────────────────────────
 
 vi.mock("@workspace/db", () => {
+  const columnToProperty: Record<string, string> = {
+    id: "id",
+    user_id: "userId",
+    type: "type",
+    last4: "last4",
+    card_brand: "cardBrand",
+    expiry_month: "expiryMonth",
+    expiry_year: "expiryYear",
+    upi_id: "upiId",
+  };
+
+  /**
+   * Drizzle's eq/and conditions are SQL objects. Extracting their equality
+   * chunks keeps this mock stateful without coupling the tests to Drizzle's
+   * internal SQL renderer.
+   */
+  function equalities(condition: any): Array<[string, unknown]> {
+    const chunks = condition?.queryChunks;
+    if (!Array.isArray(chunks)) return [];
+
+    if (
+      chunks.length === 5 &&
+      typeof chunks[1] === "string" &&
+      chunks[3] !== undefined
+    ) {
+      return [[chunks[1], chunks[3]]];
+    }
+
+    return chunks.flatMap((chunk: unknown) => equalities(chunk));
+  }
+
+  function rowsMatching(
+    rows: Record<string, unknown>[],
+    condition?: unknown
+  ): Record<string, unknown>[] {
+    const filters = equalities(condition);
+    if (filters.length === 0) return rows;
+
+    return rows.filter((row) =>
+      filters.every(([column, value]) => row[columnToProperty[column] ?? column] === value)
+    );
+  }
+
   /**
    * Builds a query chain that resolves to `rows` and supports the subset of
    * Drizzle chaining the paymentMethods route actually uses:
@@ -42,14 +85,17 @@ vi.mock("@workspace/db", () => {
    *   .from().where().orderBy()
    */
   function makeSelectChain(rows: Record<string, unknown>[]) {
-    const withOrderBy = Object.assign(Promise.resolve(rows), {
-      // for completeness (not called on GET but included for safety)
-    });
-    const withLimit = () => Promise.resolve(rows.slice(0, 1));
-    const withWhere = () => ({
-      limit: withLimit,
-      orderBy: (_a: unknown, _b: unknown) => Promise.resolve(rows),
-    });
+    const withWhere = (condition: unknown) => {
+      const matchingRows = rowsMatching(rows, condition);
+      const orderedRows = Object.assign(Promise.resolve(matchingRows), {
+        limit: () => Promise.resolve(matchingRows.slice(0, 1)),
+      });
+      return {
+        limit: () => Promise.resolve(matchingRows.slice(0, 1)),
+        orderBy: (_a: unknown, _b: unknown) => orderedRows,
+      };
+    };
+
     return {
       from: (_table: unknown) => ({
         where: withWhere,
@@ -70,6 +116,7 @@ vi.mock("@workspace/db", () => {
 
   const savedPaymentMethodsTable: any = {
     _t: "saved_payment_methods",
+    id: "id",
     userId: "user_id",
     type: "type",
     last4: "last4",
@@ -89,23 +136,13 @@ vi.mock("@workspace/db", () => {
    *   update    → clear isDefault flags in store
    *   insert    → create the new row in store and return it
    */
-  function makeTx(userId: string) {
-    let selectCallCount = 0;
+  function makeTransaction() {
     return {
-      select: vi.fn((_spec?: unknown) => {
-        const callIdx = selectCallCount++;
-        // select #0 is the duplicate-check → no duplicate
-        // select #1 is the existing-count  → real user rows
-        const rows = callIdx === 0 ? [] : store.forUser(userId);
-        return makeSelectChain(rows);
-      }),
+      select: vi.fn((_spec?: unknown) => makeSelectChain(store.rows)),
       update: vi.fn(() => ({
-        set: vi.fn((_vals: Record<string, unknown>) => ({
-          where: vi.fn((_cond: unknown) => {
-            // Clear isDefault for all rows belonging to this user
-            store.forUser(userId).forEach((r) => {
-              r.isDefault = false;
-            });
+        set: vi.fn((vals: Record<string, unknown>) => ({
+          where: vi.fn((condition: unknown) => {
+            rowsMatching(store.rows, condition).forEach((row) => Object.assign(row, vals));
             return Promise.resolve();
           }),
         })),
@@ -114,7 +151,6 @@ vi.mock("@workspace/db", () => {
         values: vi.fn((vals: Record<string, unknown>) => {
           const newRow = {
             id: store.nextId(),
-            userId,
             createdAt: new Date(),
             updatedAt: new Date(),
             ...vals,
@@ -123,6 +159,13 @@ vi.mock("@workspace/db", () => {
           return Object.assign(Promise.resolve(undefined), {
             returning: vi.fn(() => Promise.resolve([newRow])),
           });
+        }),
+      })),
+      delete: vi.fn(() => ({
+        where: vi.fn((condition: unknown) => {
+          const matchingRows = new Set(rowsMatching(store.rows, condition));
+          store.rows = store.rows.filter((row) => !matchingRows.has(row));
+          return Promise.resolve();
         }),
       })),
     };
@@ -135,144 +178,26 @@ vi.mock("@workspace/db", () => {
      */
     select: vi.fn((_spec?: unknown) => ({
       from: (_table: unknown) => ({
-        where: (_cond: unknown) => ({
+        where: (condition: unknown) => ({
           orderBy: (_a: unknown, _b: unknown) => {
             // Sort: isDefault=true first, then by store insertion order (id)
-            const rows = [...store.rows].sort((a, b) => {
+            const rows = [...rowsMatching(store.rows, condition)].sort((a, b) => {
               if (a.isDefault === b.isDefault) {
                 return String(a.id).localeCompare(String(b.id));
               }
               return a.isDefault ? -1 : 1;
             });
-            return Promise.resolve(rows);
+            return Object.assign(Promise.resolve(rows), {
+              limit: () => Promise.resolve(rows.slice(0, 1)),
+            });
           },
         }),
       }),
     })),
 
-    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
-      // We don't have the userId here directly; we rely on the tx mock closures
-      // being passed the correct data from the route. Instead, we extract userId
-      // from the store operations performed during the callback.
-      //
-      // Trick: patch the insert to capture userId from vals, then build the tx.
-      let capturedUserId = "unknown";
-      const tempTx: any = {
-        select: vi.fn((_spec?: unknown) => {
-          return makeSelectChain([]);
-        }),
-        update: vi.fn(() => ({
-          set: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve()),
-          })),
-        })),
-        insert: vi.fn(() => ({
-          values: vi.fn((vals: Record<string, unknown>) => {
-            capturedUserId = String(vals.userId ?? "unknown");
-            return Object.assign(Promise.resolve(undefined), {
-              returning: vi.fn(() => Promise.resolve([])),
-            });
-          }),
-        })),
-      };
-
-      // First pass: discover userId
-      // We can't easily run twice, so instead build the real tx from the start
-      // using a userId-aware tx factory. We reset and use a proper tx below.
-
-      // Build a proper stateful tx scoped to the user id exposed by req.userId.
-      // Since the route attaches req.userId before calling db.transaction, we
-      // pass a sentinel value and fix it up after. Instead, we use a lazy proxy.
-      let resolved = false;
-      let realTx: ReturnType<typeof makeTx> | null = null;
-
-      const lazyTx: any = new Proxy({} as any, {
-        get(_target, prop) {
-          if (!resolved) {
-            // On first access: run a dry insert to get userId, then rebuild tx
-            return (...args: unknown[]) => {
-              // Return a stub that captures userId via insert.values
-              if (prop === "insert") {
-                return {
-                  values: (vals: Record<string, unknown>) => {
-                    if (!resolved) {
-                      capturedUserId = String(vals.userId ?? "unknown");
-                      resolved = true;
-                      realTx = makeTx(capturedUserId);
-                    }
-                    return realTx!.insert().values(vals);
-                  },
-                };
-              }
-              if (prop === "select") {
-                return (_spec?: unknown) => makeSelectChain([]);
-              }
-              if (prop === "update") {
-                return () => ({
-                  set: () => ({
-                    where: () => Promise.resolve(),
-                  }),
-                });
-              }
-            };
-          }
-          return (realTx as any)[prop];
-        },
-      });
-
-      // Actually — the proxy approach is fragile. Use a cleaner strategy:
-      // intercept the whole callback differently.
-      // We know the route calls tx operations in order:
-      //   1. tx.select (dup check) — result doesn't matter for save flow
-      //   2. tx.select (existing)  — result doesn't matter for save flow
-      //   3. tx.update (clear defaults) — side-effect
-      //   4. tx.insert.values.returning — creates the row
-      //
-      // Build a real tx from the start with a "lazy userId" that gets filled
-      // in by the insert call.
-
-      let txSelectCall = 0;
-      const finalTx: any = {
-        select: vi.fn((_spec?: unknown) => {
-          const idx = txSelectCall++;
-          // Return [] for dup-check and existing-count so route treats this
-          // as: no duplicate, no existing methods → first method → makeDefault = true
-          const rows = idx === 0 ? [] : store.rows.filter((r) => r.userId === capturedUserId);
-          return makeSelectChain(rows);
-        }),
-        update: vi.fn(() => ({
-          set: vi.fn((_vals: Record<string, unknown>) => ({
-            where: vi.fn((_cond: unknown) => {
-              // Clear isDefault for the user — userId is known by now because
-              // update is called AFTER at least one select resolved
-              store
-                .rows
-                .filter((r) => r.userId === capturedUserId)
-                .forEach((r) => { r.isDefault = false; });
-              return Promise.resolve();
-            }),
-          })),
-        })),
-        insert: vi.fn(() => ({
-          values: vi.fn((vals: Record<string, unknown>) => {
-            // Capture userId on insert so update.where above can use it too
-            capturedUserId = String(vals.userId ?? capturedUserId);
-            const newRow = {
-              id: store.nextId(),
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              ...vals,
-            };
-            store.rows.push(newRow);
-            return Object.assign(Promise.resolve(undefined), {
-              returning: vi.fn(() => Promise.resolve([newRow])),
-            });
-          }),
-        })),
-      };
-
-      return cb(finalTx);
-    }),
+    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb(makeTransaction())
+    ),
   };
 
   return {
@@ -307,7 +232,7 @@ async function buildApp(): Promise<Express> {
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe("POST /api/payment-methods → GET /api/payment-methods (save-and-retrieve)", () => {
+describe("Saved payment methods", () => {
   let app: Express;
 
   beforeEach(async () => {
@@ -368,6 +293,54 @@ describe("POST /api/payment-methods → GET /api/payment-methods (save-and-retri
 
     const [method] = getRes.body.paymentMethods as any[];
     expect(method.upiId).toBe("shopper@okaxis");
+  });
+
+  it("removes a saved UPI from the Saved Methods list after the shopper deletes it", async () => {
+    const postRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "remove-me@okaxis" });
+
+    expect(postRes.status).toBe(201);
+    const savedId: string = postRes.body.paymentMethod.id;
+
+    const deleteRes = await request(app).delete(`/api/payment-methods/${savedId}`);
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body).toEqual({ success: true });
+
+    const getRes = await request(app).get("/api/payment-methods");
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.paymentMethods).toEqual([]);
+  });
+
+  it("returns 404 for a payment-method ID that is not present for the shopper", async () => {
+    const deleteRes = await request(app).delete("/api/payment-methods/pm-missing");
+
+    expect(deleteRes.status).toBe(404);
+    expect(deleteRes.body).toEqual({ error: "Payment method not found" });
+  });
+
+  it("returns 404 for another shopper's saved method and leaves it intact", async () => {
+    store.rows.push({
+      id: "pm-owned-by-another-shopper",
+      userId: "user-other-shopper",
+      type: "upi",
+      upiId: "other@okaxis",
+      isDefault: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const deleteRes = await request(app).delete(
+      "/api/payment-methods/pm-owned-by-another-shopper"
+    );
+
+    expect(deleteRes.status).toBe(404);
+    expect(deleteRes.body).toEqual({ error: "Payment method not found" });
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]).toMatchObject({
+      id: "pm-owned-by-another-shopper",
+      userId: "user-other-shopper",
+    });
   });
 
   // ── Card ─────────────────────────────────────────────────────────────────

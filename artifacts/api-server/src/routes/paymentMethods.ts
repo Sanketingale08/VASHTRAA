@@ -301,9 +301,9 @@ router.delete(
           throw Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" });
         }
 
-        // IDOR prevention
+        // Do not reveal that another shopper's payment method exists.
         if (existing[0].userId !== req.userId) {
-          throw Object.assign(new Error("FORBIDDEN"), { code: "FORBIDDEN" });
+          throw Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" });
         }
 
         const wasDefault = existing[0].isDefault;
@@ -334,10 +334,6 @@ router.delete(
     } catch (err: any) {
       if (err?.code === "NOT_FOUND") {
         res.status(404).json({ error: "Payment method not found" });
-        return;
-      }
-      if (err?.code === "FORBIDDEN") {
-        res.status(403).json({ error: "Forbidden" });
         return;
       }
       req.log?.error({ err }, "Failed to delete payment method");

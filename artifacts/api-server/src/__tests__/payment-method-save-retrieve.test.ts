@@ -211,8 +211,12 @@ vi.mock("@workspace/db", () => {
 
 // ─── Clerk mock ───────────────────────────────────────────────────────────────
 
+const authState = vi.hoisted(() => ({
+  userId: "user-test-save-retrieve",
+}));
+
 vi.mock("@clerk/express", () => ({
-  getAuth: vi.fn(() => ({ userId: "user-test-save-retrieve" })),
+  getAuth: vi.fn(() => ({ userId: authState.userId })),
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
@@ -237,6 +241,7 @@ describe("Saved payment methods", () => {
 
   beforeEach(async () => {
     store.reset();
+    authState.userId = "user-test-save-retrieve";
     vi.resetModules();
     app = await buildApp();
   });
@@ -319,27 +324,38 @@ describe("Saved payment methods", () => {
     expect(deleteRes.body).toEqual({ error: "Payment method not found" });
   });
 
-  it("returns 404 for another shopper's saved method and leaves it intact", async () => {
-    store.rows.push({
-      id: "pm-owned-by-another-shopper",
-      userId: "user-other-shopper",
-      type: "upi",
-      upiId: "other@okaxis",
-      isDefault: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+  it("does not show User A's saved UPI to User B", async () => {
+    const postRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "user-a@okaxis" });
 
-    const deleteRes = await request(app).delete(
-      "/api/payment-methods/pm-owned-by-another-shopper"
-    );
+    expect(postRes.status).toBe(201);
 
-    expect(deleteRes.status).toBe(404);
-    expect(deleteRes.body).toEqual({ error: "Payment method not found" });
+    authState.userId = "user-b";
+    const getRes = await request(app).get("/api/payment-methods");
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.paymentMethods).toEqual([]);
+  });
+
+  it("returns 403 when User B tries to delete User A's saved method", async () => {
+    const postRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "user-a@okaxis" });
+
+    expect(postRes.status).toBe(201);
+    const savedId: string = postRes.body.paymentMethod.id;
+
+    authState.userId = "user-b";
+    const deleteRes = await request(app).delete(`/api/payment-methods/${savedId}`);
+
+    expect(deleteRes.status).toBe(403);
+    expect(deleteRes.body).toEqual({ error: "Forbidden" });
     expect(store.rows).toHaveLength(1);
     expect(store.rows[0]).toMatchObject({
-      id: "pm-owned-by-another-shopper",
-      userId: "user-other-shopper",
+      id: savedId,
+      userId: "user-test-save-retrieve",
+      upiId: "user-a@okaxis",
     });
   });
 

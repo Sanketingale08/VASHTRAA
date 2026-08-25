@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "RUN_DB_INTEGRATION_TESTS=1 vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.35",

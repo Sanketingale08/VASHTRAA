@@ -494,6 +494,118 @@ test.describe("Checkout Step 3 — Saved Payment Methods", () => {
     ).toBeVisible({ timeout: 5_000 });
   });
 
+  // ── Test 6: Declined new card → back to Step 3 with card error ───────────
+
+  test("when a newly entered card is declined the checkout returns to Step 3 with an inline card error", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInUser(page, baseURL!, userId);
+    await setupCommonRoutes(page, []);
+    await injectBuyNowItem(page);
+    await goToPaymentStep(page);
+
+    // Select the card option and enter a client-valid card. The server will
+    // reject it to exercise recovery from a backend payment failure.
+    const cardOption = page.locator("button").filter({ hasText: /Credit Card/i }).first();
+    await cardOption.click();
+    await page.locator("input[placeholder='1234 5678 9012 3456']").fill("4111 1111 1111 1111");
+    await page.locator("input[placeholder='Priya Sharma']").fill("Priya Sharma");
+    await page.locator("input[placeholder='12/27']").fill("12/27");
+    await page.locator("input[placeholder='•••']").fill("123");
+
+    const reviewBtn = page.locator("button", { hasText: /Review Order/i });
+    await expect(reviewBtn).toBeEnabled({ timeout: 5_000 });
+    await reviewBtn.click();
+
+    await page.route("**/api/orders**", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Card declined by the bank. Please try another card.",
+          paymentMethodInvalid: true,
+        }),
+      });
+    });
+
+    await page.locator("button", { hasText: /Place Order/i }).click();
+
+    await expect(page.locator("h2", { hasText: /Payment Method/i })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator("input[placeholder='1234 5678 9012 3456']")).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(
+      page.locator("text=/card declined by the bank.*try another card/i").first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  // ── Test 7: Declined new UPI → back to Step 3 with UPI error ─────────────
+
+  test("when a newly entered UPI ID is rejected the checkout returns to Step 3 with an inline UPI error", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    if (!userId) {
+      test.skip(true, "CLERK_SECRET_KEY not set — skipping");
+      return;
+    }
+
+    await signInUser(page, baseURL!, userId);
+    await setupCommonRoutes(page, []);
+    await injectBuyNowItem(page);
+    await goToPaymentStep(page);
+
+    const upiInput = page.locator("input[placeholder='name@okaxis']");
+    await upiInput.fill("priya@okaxis");
+
+    const reviewBtn = page.locator("button", { hasText: /Review Order/i });
+    await expect(reviewBtn).toBeEnabled({ timeout: 5_000 });
+    await reviewBtn.click();
+
+    await page.route("**/api/orders**", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "UPI ID not found. Please check your UPI ID and try again.",
+          paymentMethodInvalid: true,
+        }),
+      });
+    });
+
+    await page.locator("button", { hasText: /Place Order/i }).click();
+
+    await expect(page.locator("h2", { hasText: /Payment Method/i })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator("input[placeholder='name@okaxis']")).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(
+      page.locator("text=/upi id not found.*check your upi id/i").first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
   // ── Test 4: No saved methods → "Saved Methods" section absent ───────────
 
   test("user with no saved methods sees only standard payment options without a Saved Methods section", async ({

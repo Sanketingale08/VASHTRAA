@@ -507,19 +507,33 @@ export function CheckoutPage() {
         const isPaymentMethodRelated =
           (errData as any).paymentMethodInvalid ||
           /payment method/i.test(msg) ||
+          /payment.*(?:failed|declined|rejected|refused)/i.test(msg) ||
           /expired card/i.test(msg) ||
           /card expired/i.test(msg) ||
           /card declined/i.test(msg) ||
+          /card.*(?:rejected|refused|failed|not found)/i.test(msg) ||
           /invalid card/i.test(msg) ||
           /invalid upi/i.test(msg) ||
+          /upi.*(?:rejected|refused|failed|not found)/i.test(msg) ||
           /upi.*invalid/i.test(msg) ||
           /saved.*method/i.test(msg) ||
           /method.*declined/i.test(msg);
-        if (isPaymentMethodRelated && selectedSavedMethodId !== null) {
-          setSelectedSavedMethodId(null);
-          setSavedMethodError(
-            msg || "Your saved payment method was declined. Please choose a different payment method."
-          );
+        if (isPaymentMethodRelated) {
+          if (selectedSavedMethodId !== null) {
+            setSelectedSavedMethodId(null);
+            setSavedMethodError(
+              msg || "Your saved payment method was declined. Please choose a different payment method."
+            );
+          } else if (paymentMethod === "upi") {
+            setUpiError(msg || "Your UPI payment was declined. Please check the UPI ID and try again.");
+          } else if (paymentMethod === "credit_card" || paymentMethod === "debit_card") {
+            setCardErrors(prev => ({
+              ...prev,
+              number: msg || "Your card payment was declined. Please check the card details and try again.",
+            }));
+          } else {
+            setSavedMethodError(msg || "Your payment was declined. Please choose a different payment method.");
+          }
           setStep(3);
           return;
         }

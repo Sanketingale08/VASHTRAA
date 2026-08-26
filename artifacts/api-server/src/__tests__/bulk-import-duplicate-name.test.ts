@@ -272,6 +272,24 @@ describe("POST /api/seller/products/bulk-import — duplicate name detection", (
     expect(state.insertedRows[0].name).toBe("Direct Image Saree");
   });
 
+  it("rejects unresolved attached image names instead of creating a product without its mapped photos", async () => {
+    const res = await request(app)
+      .post("/api/seller/products/bulk-import")
+      .send({
+        rows: [validRow({
+          name: "Unresolved Attachment Saree",
+          imageFiles: "front.jpg|back.jpg",
+        })],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0]).toMatchObject({
+      success: false,
+      error: "Attached image names must be resolved to public product images before import",
+    });
+    expect(state.insertedRows).toHaveLength(0);
+  });
+
   it("applies the same image policy to the legacy CSV bulk-upload endpoint", async () => {
     const res = await request(app)
       .post("/api/seller/products/bulk-upload")

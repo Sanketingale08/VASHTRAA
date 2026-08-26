@@ -534,6 +534,14 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
         results.push({ row: rowNum, success: false, error: `Invalid occasion` }); return;
       }
       if (!Number.isInteger(stock) || stock < 0) { results.push({ row: rowNum, success: false, error: "Invalid stock" }); return; }
+      if (row.imageFiles?.trim()) {
+        results.push({
+          row: rowNum,
+          success: false,
+          error: "Attached image names must be resolved to public product images before import",
+        });
+        return;
+      }
       const normalizedImages = normalizeBulkProductImages(row.images);
       if (!normalizedImages.ok) {
         results.push({ row: rowNum, success: false, error: normalizedImages.error });
@@ -707,6 +715,14 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         return;
       }
       if (!Number.isInteger(stock) || stock < 0) { results.push({ row: rowNum, success: false, error: "Invalid stock" }); return; }
+      if (row.imageFiles?.trim()) {
+        results.push({
+          row: rowNum,
+          success: false,
+          error: "Attached image names must be resolved to public product images before import",
+        });
+        return;
+      }
       const normalizedImages = normalizeBulkProductImages(row.images);
       if (!normalizedImages.ok) {
         results.push({ row: rowNum, success: false, error: normalizedImages.error });

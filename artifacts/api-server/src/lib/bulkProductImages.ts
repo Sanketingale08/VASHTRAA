@@ -2,6 +2,10 @@ export type BulkImageNormalizationResult =
   | { ok: true; images: string[] }
   | { ok: false; error: string };
 
+export type ProductImageUploadValidationResult =
+  | { ok: true; ext: "jpg" | "png" | "webp" | "gif" }
+  | { ok: false; error: string };
+
 const PUBLIC_PRODUCT_IMAGE_PATH = "/api/storage/public-objects/";
 const BLOCKED_IMAGE_HOSTS = new Set([
   "pinterest.com",
@@ -19,6 +23,44 @@ const IMAGE_DELIVERY_HOSTS = [
   "images.ctfassets.net",
   "cdn.sanity.io",
 ];
+const PRODUCT_IMAGE_CONTENT_TYPES: Record<string, "jpg" | "png" | "webp" | "gif"> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+function hasBytes(data: Buffer, expected: number[]): boolean {
+  return expected.every((byte, index) => data[index] === byte);
+}
+
+/**
+ * Product images are public browser assets. Validate the declared content type
+ * and lightweight format signature before they enter public object storage so a
+ * renamed arbitrary file cannot become a product image.
+ */
+export function validateProductImageUpload(
+  data: Buffer,
+  rawContentType: string,
+): ProductImageUploadValidationResult {
+  const contentType = rawContentType.toLowerCase().split(";")[0].trim();
+  const ext = PRODUCT_IMAGE_CONTENT_TYPES[contentType];
+  if (!ext) {
+    return { ok: false, error: "Only JPG, PNG, WEBP, or GIF image files are allowed" };
+  }
+  if (data.length === 0) return { ok: false, error: "No image data received" };
+
+  const matchesType = (
+    (contentType === "image/jpeg" && hasBytes(data, [0xff, 0xd8, 0xff]))
+    || (contentType === "image/png" && hasBytes(data, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    || (contentType === "image/gif" && (hasBytes(data, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) || hasBytes(data, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])))
+    || (contentType === "image/webp" && hasBytes(data, [0x52, 0x49, 0x46, 0x46]) && data.toString("ascii", 8, 12) === "WEBP")
+  );
+  if (!matchesType) {
+    return { ok: false, error: "The file contents do not match its image type" };
+  }
+  return { ok: true, ext };
+}
 
 function isBlockedPageHost(hostname: string): boolean {
   return [...BLOCKED_IMAGE_HOSTS].some(

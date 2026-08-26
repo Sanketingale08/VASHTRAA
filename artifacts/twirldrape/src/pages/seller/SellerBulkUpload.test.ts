@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAllFailed, generateIdempotencyKey } from "./SellerBulkUpload";
+import { buildAllFailed, generateIdempotencyKey, mapAttachedImages } from "./SellerBulkUpload";
 
 // Minimal helpers so tests stay readable
 const makeReviewRow = (
@@ -207,5 +207,58 @@ describe("generateIdempotencyKey", () => {
   it("produces a distinct key on each call (so each file gets its own)", () => {
     const keys = new Set(Array.from({ length: 100 }, () => generateIdempotencyKey()));
     expect(keys.size).toBe(100);
+  });
+});
+
+describe("mapAttachedImages", () => {
+  const file = (name: string) => new File(["image-bytes"], name, { type: "image/jpeg" });
+  const row = (index: number, imageFiles?: string) => ({
+    index,
+    values: {
+      name: `Saree ${index}`,
+      price: "12000",
+      category: "paithani",
+      ...(imageFiles ? { imageFiles } : {}),
+    },
+    errors: {},
+  });
+  const attachment = (name: string, relativePath = name) => ({
+    file: file(name),
+    relativePath,
+    displayName: name,
+    valid: true,
+  });
+
+  it("maps ordered explicit filenames to one row and leaves another row importable", () => {
+    const result = mapAttachedImages(
+      [row(7, "front.jpg|back.webp"), row(8)],
+      { images: [attachment("front.jpg"), attachment("back.webp")], issues: [] },
+    );
+
+    expect(result.validRows).toHaveLength(2);
+    expect(result.filesByRow.get(7)?.map(image => image.displayName)).toEqual(["front.jpg", "back.webp"]);
+    expect(result.fileIssues).toEqual([]);
+  });
+
+  it("uses Excel row-number filenames, while blocking missing and duplicated references", () => {
+    const result = mapAttachedImages(
+      [row(7), row(8, "missing.jpg"), row(9, "shared.jpg"), row(10, "shared.jpg")],
+      {
+        images: [
+          attachment("8-z-front.jpg"),
+          attachment("8-a-back.jpg"),
+          attachment("unused.jpg"),
+          attachment("shared.jpg"),
+        ],
+        issues: [],
+      },
+    );
+
+    expect(result.filesByRow.get(7)?.map(image => image.displayName)).toEqual(["8-a-back.jpg", "8-z-front.jpg"]);
+    expect(result.reviewRows[1].errors.imageFiles).toContain('Missing attached image "missing.jpg"');
+    expect(result.reviewRows[2].errors.imageFiles).toContain("assigned to more than one row");
+    expect(result.reviewRows[3].errors.imageFiles).toContain("assigned to more than one row");
+    expect(result.fileIssues.join("\n")).toContain('Unassigned image "unused.jpg"');
+    expect(result.validRows.map(candidate => candidate.index)).toEqual([7]);
   });
 });

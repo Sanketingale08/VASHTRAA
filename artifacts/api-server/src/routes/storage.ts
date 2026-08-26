@@ -1,4 +1,5 @@
 import express, { Router, type IRouter, type Request, type Response } from "express";
+import rateLimit from "express-rate-limit";
 import { Readable } from "stream";
 import { getAuth } from "@clerk/express";
 import {
@@ -7,9 +8,19 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
+import { validateProductImageUpload } from "../lib/bulkProductImages";
+import { requireVendorAuth } from "../middlewares/requireVendorAuth";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+const productImageUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.vendorId,
+  message: { error: "Too many product image uploads. Please wait before trying another bulk upload." },
+});
 
 function requireClerkAuth(req: Request, res: Response, next: any) {
   const auth = getAuth(req as any);
@@ -56,22 +67,57 @@ router.post("/storage/uploads/request-url", requireClerkAuth, issueUploadUrl);
  */
 router.post(
   "/seller/upload/product-image",
-  requireClerkAuth,
-  express.raw({ type: "image/*", limit: "10mb" }),
+  requireVendorAuth,
+  productImageUploadLimiter,
+  express.raw({ type: () => true, limit: "10mb" }),
   async (req: Request, res: Response) => {
     try {
       const rawContentType = (req.headers["content-type"] || "image/jpeg").split(";")[0].trim();
-      const rawExt = rawContentType.split("/")[1] || "jpg";
-      const ext = rawExt === "jpeg" ? "jpg" : ["jpg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
-      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      if (!Buffer.isBuffer(req.body)) {
         res.status(400).json({ error: "No image data received" });
         return;
       }
-      const { publicRelPath } = await objectStorageService.uploadPublicProductImage(req.body, ext, rawContentType);
+      const validation = validateProductImageUpload(req.body, rawContentType);
+      if (!validation.ok) {
+        res.status(400).json({ error: validation.error });
+        return;
+      }
+      const { publicRelPath } = await objectStorageService.uploadPublicProductImage(
+        req.body,
+        validation.ext,
+        rawContentType,
+        (req as any).vendorId,
+      );
       res.json({ publicRelPath });
     } catch (err) {
       req.log.error({ err }, "Failed to upload product image");
       res.status(500).json({ error: "Failed to upload image" });
+    }
+  },
+);
+
+/**
+ * POST /seller/upload/product-image/delete
+ * Deletes newly-uploaded bulk images after a rejected row. Ownership metadata
+ * ensures one vendor cannot delete another seller's public product image.
+ */
+router.post(
+  "/seller/upload/product-image/delete",
+  requireVendorAuth,
+  async (req: Request, res: Response) => {
+    const paths: unknown[] = Array.isArray(req.body?.paths) ? req.body.paths : [];
+    if (paths.length === 0 || paths.length > 500 || paths.some(path => typeof path !== "string")) {
+      res.status(400).json({ error: "Provide between 1 and 500 uploaded image paths" });
+      return;
+    }
+    try {
+      const deleted = await Promise.all(paths.map((path: string) =>
+        objectStorageService.deletePublicProductImage(path, (req as any).vendorId),
+      ));
+      res.json({ deleted: deleted.filter(Boolean).length });
+    } catch (err) {
+      req.log.error({ err }, "Failed to clean up uploaded product images");
+      res.status(500).json({ error: "Failed to clean up uploaded images" });
     }
   },
 );

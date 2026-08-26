@@ -216,6 +216,7 @@ export class ObjectStorageService {
     data: Buffer,
     ext: string,
     contentType: string,
+    vendorId: string,
   ): Promise<{ publicRelPath: string }> {
     const searchPaths = this.getPublicObjectSearchPaths();
     const firstPublicPath = searchPaths[0];
@@ -225,8 +226,36 @@ export class ObjectStorageService {
     const { bucketName, objectName } = parseObjectPath(fullPath);
     const bucket = objectStorageClient.bucket(bucketName);
     const file = bucket.file(objectName);
-    await file.save(data, { contentType, resumable: false });
+    await file.save(data, {
+      contentType,
+      resumable: false,
+      metadata: { metadata: { vendorId } },
+    });
     return { publicRelPath: `/api/storage/public-objects/${relativeImagePath}` };
+  }
+
+  /**
+   * Removes a public product image only when it was uploaded by the requesting
+   * vendor. This lets the bulk importer clean up rejected rows without giving
+   * sellers a way to delete another seller's public images.
+   */
+  async deletePublicProductImage(publicRelPath: string, vendorId: string): Promise<boolean> {
+    const prefix = "/api/storage/public-objects/product-images/";
+    if (!publicRelPath.startsWith(prefix)) return false;
+    const relativeImagePath = publicRelPath.slice("/api/storage/public-objects/".length);
+    if (!relativeImagePath || relativeImagePath.includes("..") || !/^product-images\/[0-9a-f-]+\.(jpg|png|webp|gif)$/.test(relativeImagePath)) {
+      return false;
+    }
+
+    const firstPublicPath = this.getPublicObjectSearchPaths()[0];
+    const { bucketName, objectName } = parseObjectPath(`${firstPublicPath}/${relativeImagePath}`);
+    const file = objectStorageClient.bucket(bucketName).file(objectName);
+    const [exists] = await file.exists();
+    if (!exists) return false;
+    const [metadata] = await file.getMetadata();
+    if ((metadata.metadata as Record<string, string> | undefined)?.vendorId !== vendorId) return false;
+    await file.delete();
+    return true;
   }
 
   async uploadPublicHeroImage(

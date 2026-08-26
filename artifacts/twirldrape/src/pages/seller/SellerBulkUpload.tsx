@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import {
   X, Upload, Download, Check, AlertCircle,
-  FileSpreadsheet, Loader2,
+  FileSpreadsheet, FileImage, FolderOpen, Archive, Loader2,
 } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
 
@@ -41,6 +41,7 @@ export const PRODUCT_FIELDS = [
   { key: "brand",         label: "Brand",            required: false },
   { key: "designPattern", label: "Design Pattern",   required: false },
   { key: "images",        label: "Images (pipe-separated URLs)", required: false },
+  { key: "imageFiles",    label: "Image Files (pipe-separated names)", required: false },
 ] as const;
 
 type FieldKey = typeof PRODUCT_FIELDS[number]["key"];
@@ -59,6 +60,12 @@ const HEADER_ALIASES: Record<string, FieldKey> = {
   "category *":          "category",
   "original price (₹)":  "originalPrice",
   "images (url)":        "images",
+  "image files":         "imageFiles",
+  "image file":          "imageFiles",
+  "image filenames":     "imageFiles",
+  "image filename":      "imageFiles",
+  "images (files)":      "imageFiles",
+  "image files (names)": "imageFiles",
   // Without asterisks / alternate capitalisation
   "product name":        "name",
   "title":               "name",
@@ -98,6 +105,9 @@ const HEADER_ALIASES: Record<string, FieldKey> = {
   "image url":           "images",
   "imageurl":            "images",
   "imageurls":           "images",
+  "image_files":         "imageFiles",
+  "imagefiles":          "imageFiles",
+  "attached images":     "imageFiles",
 };
 
 // Columns that should always be ignored (e.g. template-only columns)
@@ -310,6 +320,327 @@ function validateRow(row: Record<string, string>): RowErrors {
   return e;
 }
 
+// ── Attached image bundle mapping ────────────────────────────────────────────
+// Image files are mapped by an explicit "Image Files" cell. A filename may
+// also start with its Excel row number (for example, 8-front.jpg), so sellers
+// can use a folder/archive without adding a new column to an older sheet.
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const MAX_ATTACHED_IMAGE_FILES = 500;
+const MAX_ATTACHED_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHED_BUNDLE_BYTES = 100 * 1024 * 1024;
+
+type AttachedImage = {
+  file: File;
+  relativePath: string;
+  displayName: string;
+  valid: boolean;
+  issue?: string;
+};
+
+type ImageBundleResult = {
+  images: AttachedImage[];
+  issues: string[];
+  blocked?: boolean;
+};
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+}
+
+function cleanRelativePath(rawPath: string): string {
+  return rawPath.replace(/\\/g, "/").replace(/^\/+/, "").trim();
+}
+
+function isIgnoredArchivePath(path: string): boolean {
+  return path.startsWith("__MACOSX/") || path.split("/").some(part => part.startsWith("."));
+}
+
+function mimeTypeForImage(name: string): string {
+  switch (fileExtension(name)) {
+    case ".jpg":
+    case ".jpeg": return "image/jpeg";
+    case ".png": return "image/png";
+    case ".webp": return "image/webp";
+    case ".gif": return "image/gif";
+    default: return "application/octet-stream";
+  }
+}
+
+function makeAttachedImage(file: File, relativePath = file.name): AttachedImage {
+  const cleanedPath = cleanRelativePath(relativePath);
+  const displayName = cleanedPath.split("/").pop() || file.name;
+  const ext = fileExtension(displayName);
+  if (!IMAGE_EXTENSIONS.has(ext)) {
+    return {
+      file, relativePath: cleanedPath, displayName, valid: false,
+      issue: `"${displayName}" is not a supported image (use JPG, PNG, WEBP, or GIF)`,
+    };
+  }
+  if (file.size <= 0) {
+    return { file, relativePath: cleanedPath, displayName, valid: false, issue: `"${displayName}" is empty` };
+  }
+  if (file.size > MAX_ATTACHED_IMAGE_BYTES) {
+    return {
+      file, relativePath: cleanedPath, displayName, valid: false,
+      issue: `"${displayName}" exceeds the 10 MB image limit`,
+    };
+  }
+  return { file, relativePath: cleanedPath, displayName, valid: true };
+}
+
+function readUint32(view: DataView, offset: number): number {
+  return view.getUint32(offset, true);
+}
+
+/**
+ * Extract image entries from a standard ZIP archive without adding a client
+ * dependency. Stored and deflated entries are supported. Unsupported,
+ * encrypted, damaged, or oversized entries become visible invalid files.
+ */
+async function extractZipImages(zipFile: File): Promise<AttachedImage[]> {
+  if (zipFile.size > MAX_ATTACHED_BUNDLE_BYTES) {
+    throw new Error("The ZIP archive is too large (maximum 100 MB)");
+  }
+  const bytes = new Uint8Array(await zipFile.arrayBuffer());
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let endOfCentralDirectory = -1;
+  for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65557); offset--) {
+    if (offset >= 0 && readUint32(view, offset) === 0x06054b50) {
+      endOfCentralDirectory = offset;
+      break;
+    }
+  }
+  if (endOfCentralDirectory < 0) throw new Error("The ZIP archive is invalid or incomplete");
+
+  const entryCount = view.getUint16(endOfCentralDirectory + 10, true);
+  const centralDirectoryOffset = readUint32(view, endOfCentralDirectory + 16);
+  if (entryCount > MAX_ATTACHED_IMAGE_FILES || centralDirectoryOffset >= bytes.length) {
+    throw new Error(`Archive contains too many files (maximum ${MAX_ATTACHED_IMAGE_FILES})`);
+  }
+
+  const images: AttachedImage[] = [];
+  let offset = centralDirectoryOffset;
+  let totalBytes = 0;
+  for (let index = 0; index < entryCount; index++) {
+    if (offset + 46 > bytes.length || readUint32(view, offset) !== 0x02014b50) {
+      throw new Error("The ZIP archive has a damaged file directory");
+    }
+    const flags = view.getUint16(offset + 8, true);
+    const method = view.getUint16(offset + 10, true);
+    const compressedSize = readUint32(view, offset + 20);
+    const uncompressedSize = readUint32(view, offset + 24);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const localHeaderOffset = readUint32(view, offset + 42);
+    const nameStart = offset + 46;
+    const relativePath = cleanRelativePath(new TextDecoder().decode(bytes.slice(nameStart, nameStart + nameLength)));
+    offset = nameStart + nameLength + extraLength + commentLength;
+
+    if (!relativePath || relativePath.endsWith("/") || isIgnoredArchivePath(relativePath)) continue;
+    if (flags & 0x1) {
+      images.push({
+        file: new File([], relativePath), relativePath,
+        displayName: relativePath.split("/").pop() || relativePath, valid: false,
+        issue: `"${relativePath}" is encrypted; encrypted archives are not supported`,
+      });
+      continue;
+    }
+    if (uncompressedSize > MAX_ATTACHED_IMAGE_BYTES || compressedSize > bytes.length) {
+      images.push({
+        file: new File([], relativePath), relativePath,
+        displayName: relativePath.split("/").pop() || relativePath, valid: false,
+        issue: `"${relativePath}" exceeds the 10 MB image limit`,
+      });
+      continue;
+    }
+    totalBytes += uncompressedSize;
+    if (totalBytes > MAX_ATTACHED_BUNDLE_BYTES) {
+      throw new Error("The archive is too large (maximum 100 MB of extracted images)");
+    }
+    if (localHeaderOffset + 30 > bytes.length || readUint32(view, localHeaderOffset) !== 0x04034b50) {
+      throw new Error(`The ZIP entry "${relativePath}" is damaged`);
+    }
+    const localNameLength = view.getUint16(localHeaderOffset + 26, true);
+    const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+    const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+    if (compressed.length !== compressedSize) throw new Error(`The ZIP entry "${relativePath}" is truncated`);
+
+    let content: Uint8Array;
+    if (method === 0) {
+      content = compressed;
+    } else if (method === 8) {
+      const DecompressionStreamCtor = (globalThis as any).DecompressionStream;
+      if (!DecompressionStreamCtor) throw new Error("This browser cannot extract deflated ZIP archives");
+      const reader = new Blob([compressed as BlobPart]).stream()
+        .pipeThrough(new DecompressionStreamCtor("deflate-raw"))
+        .getReader();
+      const chunks: Uint8Array[] = [];
+      let inflatedBytes = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = value as Uint8Array;
+        inflatedBytes += chunk.byteLength;
+        if (inflatedBytes > MAX_ATTACHED_IMAGE_BYTES || totalBytes - uncompressedSize + inflatedBytes > MAX_ATTACHED_BUNDLE_BYTES) {
+          await reader.cancel();
+          throw new Error(`"${relativePath}" exceeds the allowed extracted image or bundle size`);
+        }
+        chunks.push(chunk);
+      }
+      if (inflatedBytes !== uncompressedSize) throw new Error(`The ZIP entry "${relativePath}" has an invalid extracted size`);
+      content = new Uint8Array(inflatedBytes);
+      let cursor = 0;
+      for (const chunk of chunks) {
+        content.set(chunk, cursor);
+        cursor += chunk.byteLength;
+      }
+    } else {
+      images.push({
+        file: new File([], relativePath), relativePath,
+        displayName: relativePath.split("/").pop() || relativePath, valid: false,
+        issue: `"${relativePath}" uses unsupported ZIP compression`,
+      });
+      continue;
+    }
+    const extractedFile = new File([content as BlobPart], relativePath, { type: mimeTypeForImage(relativePath) });
+    images.push(makeAttachedImage(extractedFile, relativePath));
+  }
+  return images;
+}
+
+async function collectImageBundle(files: FileList | File[]): Promise<ImageBundleResult> {
+  const rawFiles = Array.from(files);
+  if (rawFiles.length === 0) return { images: [], issues: [] };
+  if (rawFiles.length === 1 && fileExtension(rawFiles[0].name) === ".zip") {
+    try {
+      return { images: await extractZipImages(rawFiles[0]), issues: [] };
+    } catch (error) {
+      return { images: [], issues: [error instanceof Error ? error.message : "Could not read the ZIP archive"], blocked: true };
+    }
+  }
+
+  const issues: string[] = [];
+  if (rawFiles.some(file => fileExtension(file.name) === ".zip")) {
+    issues.push("Choose one ZIP archive, or a folder of images — not a ZIP mixed with loose files");
+  }
+  if (rawFiles.length > MAX_ATTACHED_IMAGE_FILES) {
+    issues.push(`The image bundle contains too many files (maximum ${MAX_ATTACHED_IMAGE_FILES})`);
+  }
+  if (rawFiles.reduce((sum, file) => sum + file.size, 0) > MAX_ATTACHED_BUNDLE_BYTES) {
+    issues.push("The image bundle is too large (maximum 100 MB)");
+  }
+  const images = rawFiles.map(file => makeAttachedImage(
+    file,
+    (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+  ));
+  return { images, issues, blocked: issues.length > 0 };
+}
+
+function normalizedFileKey(name: string): string {
+  return cleanRelativePath(name).toLowerCase();
+}
+
+function baseName(name: string): string {
+  return cleanRelativePath(name).split("/").pop()?.toLowerCase() ?? "";
+}
+
+function rowNumberFromFilename(name: string): number | null {
+  const stem = baseName(name).replace(/\.[^.]+$/, "");
+  const match = stem.match(/^(?:row[-_ ]?)?(\d+)(?:[-_ ]|$)/i);
+  return match ? Number(match[1]) : null;
+}
+
+type ImageMappingResult = {
+  reviewRows: ReviewRow[];
+  validRows: ReviewRow[];
+  fileIssues: string[];
+  filesByRow: Map<number, AttachedImage[]>;
+};
+
+/**
+ * Resolve explicit Image Files cells first, then row-number filenames. A
+ * basename that appears more than once is intentionally ambiguous and cannot
+ * be uploaded to either row.
+ */
+export function mapAttachedImages(reviewRows: ReviewRow[], bundle: ImageBundleResult): ImageMappingResult {
+  const reviewWithErrors = reviewRows.map(row => ({
+    ...row,
+    values: { ...row.values },
+    errors: { ...row.errors },
+  }));
+  const fileIssues = [...bundle.issues];
+  const byExactPath = new Map<string, AttachedImage[]>();
+  const byBaseName = new Map<string, AttachedImage[]>();
+  for (const image of bundle.images) {
+    const exactKey = normalizedFileKey(image.relativePath);
+    const nameKey = baseName(image.displayName);
+    byExactPath.set(exactKey, [...(byExactPath.get(exactKey) ?? []), image]);
+    byBaseName.set(nameKey, [...(byBaseName.get(nameKey) ?? []), image]);
+    if (!image.valid && image.issue) fileIssues.push(image.issue);
+  }
+
+  const assignments = new Map<AttachedImage, number[]>();
+  const filesByRow = new Map<number, AttachedImage[]>();
+  for (const row of reviewWithErrors) {
+    const rawNames = row.values.imageFiles?.split("|") ?? [];
+    const requestedNames = rawNames.map(value => value.trim()).filter(Boolean);
+    const conventionMatches = requestedNames.length === 0
+      ? bundle.images
+        .filter(image => rowNumberFromFilename(image.displayName) === row.index + 1)
+        .sort((a, b) => normalizedFileKey(a.relativePath).localeCompare(normalizedFileKey(b.relativePath)))
+      : [];
+    const names = requestedNames.length > 0 ? requestedNames : conventionMatches.map(image => image.relativePath);
+
+    if (rawNames.length > 0 && rawNames.some(value => !value.trim())) {
+      row.errors.imageFiles = "Image file names cannot contain blank entries";
+    }
+
+    const resolved: AttachedImage[] = [];
+    for (const requestedName of names) {
+      const exact = byExactPath.get(normalizedFileKey(requestedName)) ?? [];
+      const matches = exact.length > 0 ? exact : (byBaseName.get(baseName(requestedName)) ?? []);
+      if (matches.length === 0) {
+        row.errors.imageFiles = `Missing attached image "${requestedName}"`;
+        continue;
+      }
+      if (matches.length > 1) {
+        row.errors.imageFiles = `Attached image "${requestedName}" is duplicated or ambiguous`;
+        continue;
+      }
+      const image = matches[0];
+      if (!image.valid) {
+        row.errors.imageFiles = image.issue ?? `Invalid attached image "${requestedName}"`;
+        continue;
+      }
+      resolved.push(image);
+      assignments.set(image, [...(assignments.get(image) ?? []), row.index]);
+    }
+    if (resolved.length > 0) filesByRow.set(row.index, resolved);
+  }
+
+  for (const image of bundle.images) {
+    const assignedRows = assignments.get(image) ?? [];
+    if (assignedRows.length === 0 && image.valid) {
+      fileIssues.push(`Unassigned image "${image.relativePath}" — name it in Image Files or prefix it with its Excel row number`);
+    } else if (assignedRows.length > 1) {
+      for (const rowIndex of assignedRows) {
+        const row = reviewWithErrors.find(candidate => candidate.index === rowIndex);
+        if (row) row.errors.imageFiles = `Attached image "${image.displayName}" is assigned to more than one row`;
+      }
+    }
+  }
+
+  return {
+    reviewRows: reviewWithErrors,
+    validRows: reviewWithErrors.filter(row => Object.keys(row.errors).length === 0),
+    fileIssues,
+    filesByRow,
+  };
+}
+
 // ── Template download (static file) ──────────────────────────────────────────
 function downloadTemplate() {
   const a = document.createElement("a");
@@ -352,7 +683,74 @@ type ImportResult = {
   apiResults: ApiResult[];
   validRows: ReviewRow[];
   allFailed: FailedRow[];
+  fileIssues: string[];
 };
+
+async function uploadAttachedImage(file: File): Promise<string> {
+  const response = await fetch(getApiUrl("/api/seller/upload/product-image"), {
+    method: "POST",
+    headers: { "Content-Type": file.type || mimeTypeForImage(file.name) },
+    credentials: "include",
+    body: file,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || typeof body.publicRelPath !== "string") {
+    throw new Error(body.error || `Upload failed (${response.status})`);
+  }
+  return getApiUrl(body.publicRelPath);
+}
+
+async function deleteUploadedProductImages(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const response = await fetch(getApiUrl("/api/seller/upload/product-image/delete"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ paths }),
+  });
+  if (!response.ok) throw new Error("Could not clean up rejected image uploads");
+}
+
+async function uploadMappedImages(mapping: ImageMappingResult): Promise<{
+  reviewRows: ReviewRow[];
+  validRows: ReviewRow[];
+  uploadedPathsByRow: Map<number, string[]>;
+}> {
+  const reviewRows = mapping.reviewRows.map(row => ({
+    ...row,
+    values: { ...row.values },
+    errors: { ...row.errors },
+  }));
+  const uploadedPathsByRow = new Map<number, string[]>();
+
+  for (const row of reviewRows) {
+    if (Object.keys(row.errors).length > 0) continue;
+    const files = mapping.filesByRow.get(row.index) ?? [];
+    const uploadedPaths: string[] = [];
+    try {
+      for (const image of files) uploadedPaths.push(await uploadAttachedImage(image.file));
+      const existingPaths = row.values.images?.trim() ? row.values.images.trim().split("|") : [];
+      if (uploadedPaths.length > 0) row.values.images = [...existingPaths, ...uploadedPaths].join("|");
+      if (uploadedPaths.length > 0) uploadedPathsByRow.set(row.index, uploadedPaths);
+      delete row.values.imageFiles;
+    } catch (error) {
+      try {
+        await deleteUploadedProductImages(uploadedPaths);
+      } catch {
+        // The row remains blocked; a retry still cannot create a mismatched product.
+      }
+      row.errors.imageFiles = error instanceof Error
+        ? `Could not upload attached images: ${error.message}`
+        : "Could not upload attached images";
+    }
+  }
+
+  return {
+    reviewRows,
+    validRows: reviewRows.filter(row => Object.keys(row.errors).length === 0),
+    uploadedPathsByRow,
+  };
+}
 
 // ── Pure merge helper (exported for unit tests) ───────────────────────────────
 /**
@@ -413,6 +811,8 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
   // Upload step state
   const [fileError,   setFileError]  = useState("");
   const [isDragging,  setIsDragging] = useState(false);
+  const imageBundleFilesRef = useRef<File[]>([]);
+  const [imageBundleLabel, setImageBundleLabel] = useState("");
 
   // Processing / results state
   const [processingStatus, setProcessingStatus] = useState("");
@@ -421,6 +821,8 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
   // Store reviewRows used by last run — needed for retry
   const [lastReviewRows, setLastReviewRows] = useState<ReviewRow[]>([]);
   const [lastValidRows,  setLastValidRows]  = useState<ReviewRow[]>([]);
+  const [lastFileIssues, setLastFileIssues] = useState<string[]>([]);
+  const lastUploadedPathsByRowRef = useRef<Map<number, string[]>>(new Map());
   // One idempotency key per uploaded file, retained across retries so a retry
   // after a lost response returns the original batch result instead of
   // duplicating products. Regenerated only when a new file is uploaded.
@@ -475,13 +877,25 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
         errors: validateRow(values),
       }));
 
-      const validRows = reviewRows.filter(r => Object.keys(r.errors).length === 0);
+      setProcessingStatus("Matching attached images…");
+      const imageBundle = await collectImageBundle(imageBundleFilesRef.current);
+      if (imageBundle.blocked) {
+        setFileError(imageBundle.issues.join(" "));
+        setStep("upload");
+        return;
+      }
+      const mappedImages = mapAttachedImages(reviewRows, imageBundle);
+
+      setProcessingStatus("Uploading matched images…");
+      const preparedRows = await uploadMappedImages(mappedImages);
 
       // Save for potential retry
-      setLastReviewRows(reviewRows);
-      setLastValidRows(validRows);
+      setLastReviewRows(preparedRows.reviewRows);
+      setLastValidRows(preparedRows.validRows);
+      setLastFileIssues(mappedImages.fileIssues);
+      lastUploadedPathsByRowRef.current = preparedRows.uploadedPathsByRow;
 
-      await runImport(reviewRows, validRows);
+      await runImport(preparedRows.reviewRows, preparedRows.validRows, mappedImages.fileIssues, preparedRows.uploadedPathsByRow);
     } catch (err: any) {
       setFileError("Could not parse the file. Please check it is a valid Excel or CSV file.");
       setStep("upload");
@@ -489,7 +903,12 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Core import logic (separated so retry can call it) ─────────────────────
-  async function runImport(reviewRows: ReviewRow[], validRows: ReviewRow[]) {
+  async function runImport(
+    reviewRows: ReviewRow[],
+    validRows: ReviewRow[],
+    fileIssues: string[] = [],
+    uploadedPathsByRow: Map<number, string[]> = lastUploadedPathsByRowRef.current,
+  ) {
     // Prevent concurrent submissions (e.g. rapid double-clicks on Retry) so we
     // never fire two requests for the same batch at once.
     if (isSubmittingRef.current) return;
@@ -499,7 +918,9 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
     // When every row fails client validation — no API call needed
     if (validRows.length === 0) {
       const allFailed = buildAllFailed(reviewRows, [], []);
-      setImportResult({ succeeded: 0, failed: allFailed.length, apiResults: [], validRows: [], allFailed });
+      setImportResult({
+        succeeded: 0, failed: allFailed.length, apiResults: [], validRows: [], allFailed, fileIssues,
+      });
       setStep("results");
       return;
     }
@@ -524,6 +945,15 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
 
       const apiResults: ApiResult[] = data.results ?? [];
       const allFailed = buildAllFailed(reviewRows, validRows, apiResults);
+      const rejectedPaths = validRows.flatMap((row, index) =>
+        apiResults[index]?.success ? [] : (uploadedPathsByRow.get(row.index) ?? []),
+      );
+      const resultFileIssues = [...fileIssues];
+      try {
+        await deleteUploadedProductImages(rejectedPaths);
+      } catch {
+        resultFileIssues.push("Some rejected-row image uploads could not be cleaned up automatically. Please contact support with the import details.");
+      }
 
       const result: ImportResult = {
         succeeded: data.summary?.succeeded ?? 0,
@@ -531,6 +961,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
         apiResults,
         validRows,
         allFailed,
+        fileIssues: resultFileIssues,
       };
       setImportResult(result);
       if (result.succeeded > 0) onDone(`${result.succeeded} product(s) imported`);
@@ -547,12 +978,25 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
 
   // ── Retry after top-level failure ──────────────────────────────────────────
   async function handleRetry() {
-    await runImport(lastReviewRows, lastValidRows);
+    await runImport(lastReviewRows, lastValidRows, lastFileIssues);
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) processFile(file);
+    e.target.value = "";
+  }
+
+  function handleImageBundleInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    imageBundleFilesRef.current = files;
+    if (files.length === 0) {
+      setImageBundleLabel("");
+    } else if (files.length === 1 && fileExtension(files[0].name) === ".zip") {
+      setImageBundleLabel(`Archive selected: ${files[0].name}`);
+    } else {
+      setImageBundleLabel(`${files.length} image file${files.length === 1 ? "" : "s"} selected`);
+    }
     e.target.value = "";
   }
 
@@ -624,6 +1068,50 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                 </label>
               </div>
 
+              {/* Attached image bundle — chosen before the spreadsheet so images
+                  can be matched and uploaded as the sheet is processed. */}
+              <div className="rounded-2xl border border-dashed p-4" style={{ borderColor: "#C9A84C66", background: "#FFFDF6" }}>
+                <div className="flex gap-3">
+                  <div className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center" style={{ background: `${GOLD}1F`, color: MAROON }}>
+                    <FolderOpen size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-700">Optional product-image folder or ZIP</p>
+                    <p className="text-[11px] leading-relaxed text-gray-500 mt-0.5">
+                      Choose this first, then your spreadsheet. In the sheet, add an <strong>Image Files</strong> column with
+                      filenames separated by <code>|</code> (for example <code>peacock-front.jpg|peacock-back.jpg</code>).
+                      Or name files <code>8-front.jpg</code>, <code>8-back.jpg</code> to attach them to Excel row 8.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      <label className="cursor-pointer">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C9A84C]/50 text-xs font-semibold hover:bg-[#C9A84C]/10" style={{ color: MAROON }}>
+                          <FolderOpen size={13} /> Choose Folder
+                        </span>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+                          multiple
+                          className="sr-only"
+                          onChange={handleImageBundleInput}
+                          {...({ webkitdirectory: "", directory: "" } as any)}
+                        />
+                      </label>
+                      <label className="cursor-pointer">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C9A84C]/50 text-xs font-semibold hover:bg-[#C9A84C]/10" style={{ color: MAROON }}>
+                          <Archive size={13} /> Choose ZIP
+                        </span>
+                        <input type="file" accept=".zip,application/zip" className="sr-only" onChange={handleImageBundleInput} />
+                      </label>
+                      {imageBundleLabel && (
+                        <span className="inline-flex items-center gap-1 text-xs text-[#1E6B5A] font-medium truncate max-w-56">
+                          <FileImage size={13} /> {imageBundleLabel}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {fileError && (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
                   <AlertCircle size={15} /> {fileError}
@@ -634,7 +1122,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
               <div className="flex items-center justify-between px-4 py-3 rounded-xl border" style={{ borderColor: "#C9A84C33", background: CREAM }}>
                 <div>
                   <p className="text-sm font-semibold" style={{ color: MAROON }}>Download template</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Use direct image URLs or uploaded product-image paths; page and share links will be rejected</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Use direct image URLs, public product-image paths, or attached image filenames; page and share links will be rejected</p>
                 </div>
                 <button
                   onClick={downloadTemplate}
@@ -660,6 +1148,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                       {f.key === "color"    && <span className="text-gray-500">{COLORS.join(", ")}</span>}
                       {f.key === "occasion" && <span className="text-gray-500">{OCCASIONS.join(", ")}</span>}
                        {f.key === "images"   && <span className="text-gray-500">optional; direct http(s) image URLs or /api/storage/public-objects/product-images/... paths, separated with |</span>}
+                       {f.key === "imageFiles" && <span className="text-gray-500">optional; attached filenames separated with |, matched from the chosen folder or ZIP</span>}
                     </div>
                   ))}
                 </div>
@@ -747,6 +1236,17 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {importResult.fileIssues.length > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                    <AlertCircle size={13} /> Attached image notes
+                  </p>
+                  <ul className="mt-1.5 max-h-24 overflow-y-auto space-y-1 text-[11px] leading-relaxed text-amber-700">
+                    {importResult.fileIssues.map((issue, index) => <li key={`${issue}-${index}`}>• {issue}</li>)}
+                  </ul>
                 </div>
               )}
 

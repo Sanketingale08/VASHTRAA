@@ -44,6 +44,7 @@ vi.mock("@workspace/db", () => {
     expiry_month: "expiryMonth",
     expiry_year: "expiryYear",
     upi_id: "upiId",
+    is_default: "isDefault",
   };
 
   /**
@@ -114,6 +115,18 @@ vi.mock("@workspace/db", () => {
     });
   }
 
+  function makeUpdateChain() {
+    return {
+      set: vi.fn((vals: Record<string, unknown>) => ({
+        where: vi.fn((condition: unknown) => {
+          const matchingRows = rowsMatching(store.rows, condition);
+          matchingRows.forEach((row) => Object.assign(row, vals));
+          return makeWhereResult(matchingRows);
+        }),
+      })),
+    };
+  }
+
   const savedPaymentMethodsTable: any = {
     _t: "saved_payment_methods",
     id: "id",
@@ -139,14 +152,7 @@ vi.mock("@workspace/db", () => {
   function makeTransaction() {
     return {
       select: vi.fn((_spec?: unknown) => makeSelectChain(store.rows)),
-      update: vi.fn(() => ({
-        set: vi.fn((vals: Record<string, unknown>) => ({
-          where: vi.fn((condition: unknown) => {
-            rowsMatching(store.rows, condition).forEach((row) => Object.assign(row, vals));
-            return Promise.resolve();
-          }),
-        })),
-      })),
+      update: vi.fn(() => makeUpdateChain()),
       insert: vi.fn(() => ({
         values: vi.fn((vals: Record<string, unknown>) => {
           const newRow = {
@@ -179,6 +185,7 @@ vi.mock("@workspace/db", () => {
     select: vi.fn((_spec?: unknown) => ({
       from: (_table: unknown) => ({
         where: (condition: unknown) => ({
+          limit: () => Promise.resolve(rowsMatching(store.rows, condition).slice(0, 1)),
           orderBy: (_a: unknown, _b: unknown) => {
             // Sort: isDefault=true first, then by store insertion order (id)
             const rows = [...rowsMatching(store.rows, condition)].sort((a, b) => {
@@ -194,6 +201,7 @@ vi.mock("@workspace/db", () => {
         }),
       }),
     })),
+    update: vi.fn(() => makeUpdateChain()),
 
     transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
       cb(makeTransaction())
@@ -463,5 +471,75 @@ describe("Saved payment methods", () => {
 
     const types = methods.map((m) => m.type).sort();
     expect(types).toEqual(["card", "upi"]);
+  });
+
+  it("returns 403 when User B tries to update User A's saved method", async () => {
+    const postRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "user-a@okaxis" });
+
+    expect(postRes.status).toBe(201);
+    const savedId: string = postRes.body.paymentMethod.id;
+
+    authState.userId = "user-b";
+    const patchRes = await request(app)
+      .patch(`/api/payment-methods/${savedId}`)
+      .send({ upiId: "user-b@okaxis" });
+
+    expect(patchRes.status).toBe(403);
+    expect(patchRes.body).toEqual({ error: "Forbidden" });
+
+    authState.userId = "user-test-save-retrieve";
+    const getRes = await request(app).get("/api/payment-methods");
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.paymentMethods).toEqual([
+      expect.objectContaining({
+        id: savedId,
+        userId: "user-test-save-retrieve",
+        upiId: "user-a@okaxis",
+      }),
+    ]);
+  });
+
+  it("returns 403 when User B tries to set User A's method as the default", async () => {
+    const firstMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "user-a-first@okaxis" });
+    const secondMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "user-a-second@okaxis" });
+
+    expect(firstMethodRes.status).toBe(201);
+    expect(secondMethodRes.status).toBe(201);
+    const firstMethodId: string = firstMethodRes.body.paymentMethod.id;
+    const secondMethodId: string = secondMethodRes.body.paymentMethod.id;
+
+    authState.userId = "user-b";
+    const userBMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "user-b@okaxis" });
+
+    expect(userBMethodRes.status).toBe(201);
+    const userBMethodId: string = userBMethodRes.body.paymentMethod.id;
+    const setDefaultRes = await request(app)
+      .patch(`/api/payment-methods/${secondMethodId}/set-default`);
+
+    expect(setDefaultRes.status).toBe(403);
+    expect(setDefaultRes.body).toEqual({ error: "Forbidden" });
+
+    authState.userId = "user-test-save-retrieve";
+    const userAGetRes = await request(app).get("/api/payment-methods");
+    expect(userAGetRes.status).toBe(200);
+    expect(userAGetRes.body.paymentMethods).toEqual([
+      expect.objectContaining({ id: firstMethodId, isDefault: true }),
+      expect.objectContaining({ id: secondMethodId, isDefault: false }),
+    ]);
+
+    authState.userId = "user-b";
+    const userBGetRes = await request(app).get("/api/payment-methods");
+    expect(userBGetRes.status).toBe(200);
+    expect(userBGetRes.body.paymentMethods).toEqual([
+      expect.objectContaining({ id: userBMethodId, isDefault: true }),
+    ]);
   });
 });

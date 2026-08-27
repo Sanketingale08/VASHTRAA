@@ -483,6 +483,15 @@ router.patch(
           throw Object.assign(new Error("FORBIDDEN"), { code: "FORBIDDEN" });
         }
 
+        // Serialize default changes for this shopper. Without locking all of
+        // the shopper's methods first, two transactions can both clear the
+        // current default before either one promotes its target.
+        await tx
+          .select({ id: savedPaymentMethodsTable.id })
+          .from(savedPaymentMethodsTable)
+          .where(eq(savedPaymentMethodsTable.userId, req.userId))
+          .for("update");
+
         // Clear all defaults for this user, then set the target
         await tx
           .update(savedPaymentMethodsTable)

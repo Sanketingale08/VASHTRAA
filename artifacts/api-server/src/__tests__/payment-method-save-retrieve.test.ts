@@ -20,9 +20,11 @@ import express, { type Express } from "express";
 const store = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
   idCounter: 0,
+  mutexTail: Promise.resolve() as Promise<unknown>,
   reset() {
     this.rows = [];
     this.idCounter = 0;
+    this.mutexTail = Promise.resolve();
   },
   nextId() {
     return `pm-${++this.idCounter}`;
@@ -94,6 +96,7 @@ vi.mock("@workspace/db", () => {
       return {
         limit: () => Promise.resolve(matchingRows.slice(0, 1)),
         orderBy: (_a: unknown, _b: unknown) => orderedRows,
+        for: () => Promise.resolve(matchingRows),
       };
     };
 
@@ -203,9 +206,24 @@ vi.mock("@workspace/db", () => {
     })),
     update: vi.fn(() => makeUpdateChain()),
 
-    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
-      cb(makeTransaction())
-    ),
+    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
+      // The set-default route uses SELECT ... FOR UPDATE to serialize changes
+      // for a shopper. A transaction mutex models that row-lock behavior in
+      // this in-memory store so concurrent requests cannot interleave their
+      // clear-and-promote steps.
+      let releaseLock!: () => void;
+      const previousTransaction = store.mutexTail;
+      store.mutexTail = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      await previousTransaction;
+
+      try {
+        return await cb(makeTransaction());
+      } finally {
+        releaseLock();
+      }
+    }),
   };
 
   return {
@@ -540,6 +558,73 @@ describe("Saved payment methods", () => {
     expect(userBGetRes.status).toBe(200);
     expect(userBGetRes.body.paymentMethods).toEqual([
       expect.objectContaining({ id: userBMethodId, isDefault: true }),
+    ]);
+  });
+
+  it("leaves exactly one default when concurrent requests choose different methods", async () => {
+    const firstMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "concurrent-first@okaxis" });
+    const secondMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "concurrent-second@okaxis" });
+
+    expect(firstMethodRes.status).toBe(201);
+    expect(secondMethodRes.status).toBe(201);
+
+    const firstMethodId: string = firstMethodRes.body.paymentMethod.id;
+    const secondMethodId: string = secondMethodRes.body.paymentMethod.id;
+
+    const [firstSetDefault, secondSetDefault] = await Promise.all([
+      request(app).patch(`/api/payment-methods/${firstMethodId}/set-default`),
+      request(app).patch(`/api/payment-methods/${secondMethodId}/set-default`),
+    ]);
+
+    expect(firstSetDefault.status).toBe(200);
+    expect(secondSetDefault.status).toBe(200);
+
+    const savedMethods = store.forUser(authState.userId);
+    expect(savedMethods.filter((method) => method.isDefault === true)).toHaveLength(1);
+    expect(savedMethods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: firstMethodId }),
+        expect.objectContaining({ id: secondMethodId }),
+      ]),
+    );
+  });
+
+  it("does not clear another shopper's default when changing its own", async () => {
+    const userAMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "isolated-a@okaxis" });
+    expect(userAMethodRes.status).toBe(201);
+
+    authState.userId = "user-b";
+    const userBFirstMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "isolated-b-first@okaxis" });
+    const userBSecondMethodRes = await request(app)
+      .post("/api/payment-methods")
+      .send({ type: "upi", upiId: "isolated-b-second@okaxis" });
+    expect(userBFirstMethodRes.status).toBe(201);
+    expect(userBSecondMethodRes.status).toBe(201);
+
+    const userBSecondMethodId: string = userBSecondMethodRes.body.paymentMethod.id;
+    const setDefaultRes = await request(app)
+      .patch(`/api/payment-methods/${userBSecondMethodId}/set-default`);
+
+    expect(setDefaultRes.status).toBe(200);
+    expect(store.forUser("user-test-save-retrieve")).toEqual([
+      expect.objectContaining({
+        upiId: "isolated-a@okaxis",
+        isDefault: true,
+      }),
+    ]);
+    expect(store.forUser("user-b").filter((method) => method.isDefault === true)).toEqual([
+      expect.objectContaining({
+        id: userBSecondMethodId,
+        isDefault: true,
+      }),
     ]);
   });
 });

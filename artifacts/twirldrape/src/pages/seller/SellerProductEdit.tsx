@@ -110,11 +110,16 @@ export default function SellerProductEdit() {
     })();
   }, [id]);
 
-  function handleChange(field: keyof ProductFormData, value: any) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: undefined }));
-    setApiError("");
-  }
+  const handleChange = React.useCallback((field: keyof ProductFormData, value: any) => {
+    setForm((prev) => (prev[field] === value ? prev : { ...prev, [field]: value }));
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+    setApiError((prev) => (prev ? "" : prev));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

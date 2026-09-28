@@ -89,7 +89,7 @@ interface FieldProps {
   children: React.ReactNode;
   hint?: string;
 }
-function Field({ label, required, error, children, hint }: FieldProps) {
+const Field = React.memo(function Field({ label, required, error, children, hint }: FieldProps) {
   return (
     <div>
       <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: "#5a4a3a" }}>
@@ -100,15 +100,253 @@ function Field({ label, required, error, children, hint }: FieldProps) {
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
-}
+});
 
 const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2 focus:ring-[#0A1F44]/20";
 const inputStyle = { borderColor: "#D6C9BA", background: IVORY };
 
 const selectClass = inputClass + " appearance-none cursor-pointer";
 
+interface FormInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value"> {
+  field: keyof ProductFormData;
+  value: string;
+  onChangeField: (field: keyof ProductFormData, value: any) => void;
+}
+
+export const FormInput = React.memo(function FormInput({
+  field,
+  value,
+  onChangeField,
+  className = "",
+  style,
+  ...props
+}: FormInputProps) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChangeField(field, e.target.value);
+    },
+    [field, onChangeField]
+  );
+
+  return (
+    <input
+      value={value ?? ""}
+      onChange={handleChange}
+      className={`${inputClass} ${className}`.trim()}
+      style={{ ...inputStyle, ...style }}
+      {...props}
+    />
+  );
+});
+
+interface FormTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "value"> {
+  field: keyof ProductFormData;
+  value: string;
+  onChangeField: (field: keyof ProductFormData, value: any) => void;
+}
+
+export const FormTextarea = React.memo(function FormTextarea({
+  field,
+  value,
+  onChangeField,
+  className = "",
+  style,
+  ...props
+}: FormTextareaProps) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      onChangeField(field, e.target.value);
+    },
+    [field, onChangeField]
+  );
+
+  return (
+    <textarea
+      value={value ?? ""}
+      onChange={handleChange}
+      className={`${inputClass} resize-none ${className}`.trim()}
+      style={{ ...inputStyle, ...style }}
+      {...props}
+    />
+  );
+});
+
+interface FormSelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "onChange" | "value"> {
+  field: keyof ProductFormData;
+  value: string;
+  options: readonly string[];
+  onChangeField: (field: keyof ProductFormData, value: any) => void;
+}
+
+export const FormSelect = React.memo(function FormSelect({
+  field,
+  value,
+  options,
+  onChangeField,
+  className = "",
+  style,
+  ...props
+}: FormSelectProps) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      onChangeField(field, e.target.value);
+    },
+    [field, onChangeField]
+  );
+
+  return (
+    <select
+      value={value ?? ""}
+      onChange={handleChange}
+      className={`${selectClass} ${className}`.trim()}
+      style={{ ...inputStyle, ...style }}
+      {...props}
+    >
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+        </option>
+      ))}
+    </select>
+  );
+});
+
+interface VideoRowProps {
+  index: number;
+  url: string;
+  onUpdate: (index: number, url: string) => void;
+  onRemove: (index: number) => void;
+}
+const VideoRow = React.memo(function VideoRow({ index, url, onUpdate, onRemove }: VideoRowProps) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdate(index, e.target.value);
+    },
+    [index, onUpdate]
+  );
+  const handleRemove = useCallback(() => {
+    onRemove(index);
+  }, [index, onRemove]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        className={inputClass + " flex-1"}
+        style={inputStyle}
+        value={url}
+        onChange={handleChange}
+        placeholder="Video URL"
+      />
+      <button type="button" onClick={handleRemove} className="p-2 rounded-lg hover:bg-red-50 shrink-0">
+        <X size={14} className="text-red-400" />
+      </button>
+    </div>
+  );
+});
+
+interface SpecRowProps {
+  index: number;
+  specKey: string;
+  specValue: string;
+  onUpdate: (index: number, field: keyof ProductSpecForm, value: string) => void;
+  onRemove: (index: number) => void;
+}
+const SpecRow = React.memo(function SpecRow({ index, specKey, specValue, onUpdate, onRemove }: SpecRowProps) {
+  const handleKeyChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdate(index, "key", e.target.value);
+    },
+    [index, onUpdate]
+  );
+  const handleValueChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdate(index, "value", e.target.value);
+    },
+    [index, onUpdate]
+  );
+  const handleRemove = useCallback(() => {
+    onRemove(index);
+  }, [index, onRemove]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        className={inputClass + " flex-1"}
+        style={inputStyle}
+        value={specKey}
+        onChange={handleKeyChange}
+        placeholder="Attribute (e.g. Weave)"
+      />
+      <input
+        className={inputClass + " flex-1"}
+        style={inputStyle}
+        value={specValue}
+        onChange={handleValueChange}
+        placeholder="Value (e.g. Handwoven)"
+      />
+      <button type="button" onClick={handleRemove} className="p-2 rounded-lg hover:bg-red-50 shrink-0">
+        <X size={14} className="text-red-400" />
+      </button>
+    </div>
+  );
+});
+
+interface VariantRowProps {
+  index: number;
+  variant: ProductVariantForm;
+  onUpdate: (index: number, field: "stock" | "price" | "sku", value: string) => void;
+}
+const VariantRow = React.memo(function VariantRow({ index, variant, onUpdate }: VariantRowProps) {
+  const handleStockChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdate(index, "stock", e.target.value);
+    },
+    [index, onUpdate]
+  );
+  const handlePriceChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdate(index, "price", e.target.value);
+    },
+    [index, onUpdate]
+  );
+
+  return (
+    <div
+      className="grid items-center px-3 py-2 border-t gap-2"
+      style={{ borderColor: "#E2D9CC", gridTemplateColumns: "1fr 90px 90px" }}
+    >
+      <div className="flex flex-wrap gap-x-1.5">
+        {variant.attributes.map((a, ai) => (
+          <span key={ai} className="text-xs font-semibold" style={{ color: MAROON }}>
+            {ai > 0 && <span className="mx-0.5 opacity-30">·</span>}
+            {a.value}
+          </span>
+        ))}
+      </div>
+      <input
+        className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#0A1F44]/30"
+        style={{ borderColor: "#D6C9BA", background: IVORY }}
+        type="number"
+        min="0"
+        value={variant.stock}
+        onChange={handleStockChange}
+        placeholder="0"
+      />
+      <input
+        className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#0A1F44]/30"
+        style={{ borderColor: "#D6C9BA", background: IVORY }}
+        type="number"
+        min="0"
+        value={variant.price}
+        onChange={handlePriceChange}
+        placeholder="—"
+      />
+    </div>
+  );
+});
+
 interface SectionProps { icon: React.ElementType; title: string; children: React.ReactNode; }
-function Section({ icon: Icon, title, children }: SectionProps) {
+const Section = React.memo(function Section({ icon: Icon, title, children }: SectionProps) {
   return (
     <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: "#E2D9CC", background: "#FDFBF8" }}>
       <div className="flex items-center gap-2 mb-1">
@@ -118,7 +356,7 @@ function Section({ icon: Icon, title, children }: SectionProps) {
       {children}
     </div>
   );
-}
+});
 
 interface ImageEntry {
   id: string;
@@ -284,7 +522,7 @@ interface ImageUploadGalleryProps {
   onImagesChange: (urls: string[]) => void;
 }
 
-function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps) {
+const ImageUploadGallery = React.memo(function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps) {
   const entriesRef = useRef<ImageEntry[]>(images.filter(Boolean).map(makeEntry));
   const [, rerender] = useState(0);
   const [zoneDragOver, setZoneDragOver] = useState(false);
@@ -476,7 +714,7 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
       </div>
     </div>
   );
-}
+});
 
 // ── Attribute-based variant builder ──────────────────────────────────────────
 
@@ -539,7 +777,7 @@ interface AttributeVariantBuilderProps {
   onVariantsChange: (variants: ProductVariantForm[]) => void;
 }
 
-function AttributeVariantBuilder({
+const AttributeVariantBuilder = React.memo(function AttributeVariantBuilder({
   attributeGroups,
   variants,
   onAttributeGroupsChange,
@@ -588,9 +826,12 @@ function AttributeVariantBuilder({
     setGroups(groups);
   }
 
-  function updateVariant(varIdx: number, field: "stock" | "price" | "sku", val: string) {
-    onVariantsChange(variants.map((v, i) => (i === varIdx ? { ...v, [field]: val } : v)));
-  }
+  const updateVariant = useCallback(
+    (varIdx: number, field: "stock" | "price" | "sku", val: string) => {
+      onVariantsChange(variants.map((v, i) => (i === varIdx ? { ...v, [field]: val } : v)));
+    },
+    [variants, onVariantsChange]
+  );
 
   const unusedSuggestions = ATTRIBUTE_SUGGESTIONS.filter(
     (s) => !attributeGroups.some((g) => g.name.toLowerCase() === s.toLowerCase())
@@ -737,38 +978,7 @@ function AttributeVariantBuilder({
               <span>Price (₹)</span>
             </div>
             {variants.map((v, vIdx) => (
-              <div
-                key={vIdx}
-                className="grid items-center px-3 py-2 border-t gap-2"
-                style={{ borderColor: "#E2D9CC", gridTemplateColumns: "1fr 90px 90px" }}
-              >
-                <div className="flex flex-wrap gap-x-1.5">
-                  {v.attributes.map((a, ai) => (
-                    <span key={ai} className="text-xs font-semibold" style={{ color: MAROON }}>
-                      {ai > 0 && <span className="mx-0.5 opacity-30">·</span>}
-                      {a.value}
-                    </span>
-                  ))}
-                </div>
-                <input
-                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#0A1F44]/30"
-                  style={{ borderColor: "#D6C9BA", background: IVORY }}
-                  type="number"
-                  min="0"
-                  value={v.stock}
-                  onChange={(e) => updateVariant(vIdx, "stock", e.target.value)}
-                  placeholder="0"
-                />
-                <input
-                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#0A1F44]/30"
-                  style={{ borderColor: "#D6C9BA", background: IVORY }}
-                  type="number"
-                  min="0"
-                  value={v.price}
-                  onChange={(e) => updateVariant(vIdx, "price", e.target.value)}
-                  placeholder="—"
-                />
-              </div>
+              <VariantRow key={vIdx} index={vIdx} variant={v} onUpdate={updateVariant} />
             ))}
           </div>
         </div>
@@ -781,7 +991,7 @@ function AttributeVariantBuilder({
       )}
     </div>
   );
-}
+});
 
 // ── ProductForm ───────────────────────────────────────────────────────────────
 
@@ -847,32 +1057,30 @@ export default function ProductForm({
     <form onSubmit={onSubmit} className="space-y-5">
       <Section icon={Info} title="Basic Information">
         <Field label="Product Name" required error={errors.name}>
-          <input
-            className={inputClass}
-            style={inputStyle}
+          <FormInput
+            field="name"
             value={data.name}
-            onChange={input("name")}
+            onChangeField={onChange}
             placeholder="e.g. Peacock Paithani Silk Saree"
             maxLength={120}
           />
         </Field>
         <Field label="Description" error={errors.description}>
-          <textarea
-            className={inputClass + " resize-none"}
-            style={inputStyle}
-            rows={3}
+          <FormTextarea
+            field="description"
             value={data.description}
-            onChange={input("description")}
+            onChangeField={onChange}
+            rows={3}
             placeholder="Describe the saree — weave, design, drape quality…"
             maxLength={1000}
           />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Brand" error={errors.brand} hint="Optional">
-            <input className={inputClass} style={inputStyle} value={data.brand} onChange={input("brand")} placeholder="e.g. VASTRAA Signature" />
+            <FormInput field="brand" value={data.brand} onChangeField={onChange} placeholder="e.g. VASTRAA Signature" />
           </Field>
           <Field label="Design Pattern" error={errors.designPattern} hint="Optional">
-            <input className={inputClass} style={inputStyle} value={data.designPattern} onChange={input("designPattern")} placeholder="e.g. Peacock motif, zari border" />
+            <FormInput field="designPattern" value={data.designPattern} onChangeField={onChange} placeholder="e.g. Peacock motif, zari border" />
           </Field>
         </div>
       </Section>
@@ -880,35 +1088,19 @@ export default function ProductForm({
       <Section icon={Tag} title="Classification">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Category" required error={errors.category}>
-            <select className={selectClass} style={inputStyle} value={data.category} onChange={input("category")}>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-              ))}
-            </select>
+            <FormSelect field="category" value={data.category} options={CATEGORIES} onChangeField={onChange} />
           </Field>
           <Field label="Subcategory" error={errors.subcategory} hint="Optional">
-            <input className={inputClass} style={inputStyle} value={data.subcategory} onChange={input("subcategory")} placeholder="e.g. Bridal Paithani" />
+            <FormInput field="subcategory" value={data.subcategory} onChangeField={onChange} placeholder="e.g. Bridal Paithani" />
           </Field>
           <Field label="Fabric" required error={errors.fabric}>
-            <select className={selectClass} style={inputStyle} value={data.fabric} onChange={input("fabric")}>
-              {FABRICS.map((f) => (
-                <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>
-              ))}
-            </select>
+            <FormSelect field="fabric" value={data.fabric} options={FABRICS} onChangeField={onChange} />
           </Field>
           <Field label="Color" required error={errors.color}>
-            <select className={selectClass} style={inputStyle} value={data.color} onChange={input("color")}>
-              {COLORS.map((c) => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-              ))}
-            </select>
+            <FormSelect field="color" value={data.color} options={COLORS} onChangeField={onChange} />
           </Field>
           <Field label="Occasion" required error={errors.occasion}>
-            <select className={selectClass} style={inputStyle} value={data.occasion} onChange={input("occasion")}>
-              {OCCASIONS.map((o) => (
-                <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-              ))}
-            </select>
+            <FormSelect field="occasion" value={data.occasion} options={OCCASIONS} onChangeField={onChange} />
           </Field>
         </div>
       </Section>
@@ -918,13 +1110,13 @@ export default function ProductForm({
           <Field label="Selling Price (₹)" required error={errors.price}>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₹</span>
-              <input
-                className={inputClass + " pl-7"}
-                style={inputStyle}
+              <FormInput
+                field="price"
+                value={data.price}
+                onChangeField={onChange}
+                className="pl-7"
                 type="number"
                 min="1"
-                value={data.price}
-                onChange={input("price")}
                 placeholder="15000"
               />
             </div>
@@ -932,13 +1124,13 @@ export default function ProductForm({
           <Field label="Original Price (₹)" error={errors.originalPrice} hint="Leave blank if no discount">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₹</span>
-              <input
-                className={inputClass + " pl-7"}
-                style={inputStyle}
+              <FormInput
+                field="originalPrice"
+                value={data.originalPrice}
+                onChangeField={onChange}
+                className="pl-7"
                 type="number"
                 min="1"
-                value={data.originalPrice}
-                onChange={input("originalPrice")}
                 placeholder="Optional"
               />
             </div>
@@ -949,24 +1141,22 @@ export default function ProductForm({
       <Section icon={Package} title="Inventory">
         <div className="grid grid-cols-2 gap-4 max-w-md">
           <Field label="Stock Quantity" required error={errors.stock}>
-            <input
-              className={inputClass}
-              style={inputStyle}
+            <FormInput
+              field="stock"
+              value={data.stock}
+              onChangeField={onChange}
               type="number"
               min="0"
-              value={data.stock}
-              onChange={input("stock")}
               placeholder="10"
             />
           </Field>
           <Field label="Low Stock Threshold" error={errors.lowStockThreshold} hint="Alert below this level">
-            <input
-              className={inputClass}
-              style={inputStyle}
+            <FormInput
+              field="lowStockThreshold"
+              value={data.lowStockThreshold}
+              onChangeField={onChange}
               type="number"
               min="0"
-              value={data.lowStockThreshold}
-              onChange={input("lowStockThreshold")}
               placeholder="5"
             />
           </Field>
@@ -984,18 +1174,7 @@ export default function ProductForm({
         <p className="text-xs text-gray-400 -mt-2">Optional. Enter direct video URLs (.mp4, YouTube link, etc).</p>
         <div className="space-y-2.5">
           {data.videos.map((url, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <input
-                className={inputClass + " flex-1"}
-                style={inputStyle}
-                value={url}
-                onChange={(e) => updateVideo(idx, e.target.value)}
-                placeholder="Video URL"
-              />
-              <button type="button" onClick={() => removeVideo(idx)} className="p-2 rounded-lg hover:bg-red-50 shrink-0">
-                <X size={14} className="text-red-400" />
-              </button>
-            </div>
+            <VideoRow key={idx} index={idx} url={url} onUpdate={updateVideo} onRemove={removeVideo} />
           ))}
           <button type="button" onClick={addVideo} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: MAROON }}>
             <Plus size={13} /> Add video
@@ -1019,13 +1198,7 @@ export default function ProductForm({
         <p className="text-xs text-gray-400 -mt-2">Optional. Key-value details like weave, blouse included, wash care.</p>
         <div className="space-y-2.5">
           {data.specifications.map((s, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <input className={inputClass + " flex-1"} style={inputStyle} value={s.key} onChange={(e) => updateSpec(idx, "key", e.target.value)} placeholder="Attribute (e.g. Weave)" />
-              <input className={inputClass + " flex-1"} style={inputStyle} value={s.value} onChange={(e) => updateSpec(idx, "value", e.target.value)} placeholder="Value (e.g. Handwoven)" />
-              <button type="button" onClick={() => removeSpec(idx)} className="p-2 rounded-lg hover:bg-red-50 shrink-0">
-                <X size={14} className="text-red-400" />
-              </button>
-            </div>
+            <SpecRow key={idx} index={idx} specKey={s.key} specValue={s.value} onUpdate={updateSpec} onRemove={removeSpec} />
           ))}
           <button type="button" onClick={addSpec} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: MAROON }}>
             <Plus size={13} /> Add specification
@@ -1035,23 +1208,21 @@ export default function ProductForm({
 
       <Section icon={Truck} title="Delivery & Returns">
         <Field label="Delivery Information" error={errors.deliveryInfo}>
-          <textarea
-            className={inputClass + " resize-none"}
-            style={inputStyle}
-            rows={2}
+          <FormTextarea
+            field="deliveryInfo"
             value={data.deliveryInfo}
-            onChange={input("deliveryInfo")}
+            onChangeField={onChange}
+            rows={2}
             placeholder="e.g. Ships within 2-3 business days"
             maxLength={500}
           />
         </Field>
         <Field label="Return Policy" error={errors.returnPolicy}>
-          <textarea
-            className={inputClass + " resize-none"}
-            style={inputStyle}
-            rows={2}
+          <FormTextarea
+            field="returnPolicy"
             value={data.returnPolicy}
-            onChange={input("returnPolicy")}
+            onChangeField={onChange}
+            rows={2}
             placeholder="e.g. 7-day easy returns"
             maxLength={500}
           />

@@ -59,15 +59,27 @@ export async function requireVendorAuth(req: any, res: any, next: any) {
     }
 
     if (!vendor) {
-      const rows = await db
-        .select()
-        .from(vendorsTable)
-        .where(eq(vendorsTable.ownerId, userId as string))
-        .limit(1);
+      try {
+        const rows = await db
+          .select()
+          .from(vendorsTable)
+          .where(eq(vendorsTable.ownerId, userId as string))
+          .limit(1);
 
-      if (rows.length > 0) {
-        vendor = rows[0];
-      } else {
+        if (rows.length > 0) {
+          vendor = rows[0];
+        }
+      } catch {
+        // Fallback if Postgres DB is offline
+      }
+
+      if (!vendor) {
+        try {
+          vendor = (await mongoVendors.findById(userId as string)) || (await mongoVendors.findByEmail(userId as string));
+        } catch {}
+      }
+
+      if (!vendor) {
         vendor = {
           id: "VEND_DEMO_001",
           name: "Yeola Weavers",

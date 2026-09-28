@@ -97,13 +97,15 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
-      // pdfkit's dependency fontkit uses @swc/helpers which can't be bundled;
-      // externalise the whole chain so Node resolves it from node_modules.
+      "pino",
+      "pino-http",
+      "pino-pretty",
+      "thread-stream",
       "pdfkit",
       "fontkit",
     ],
     sourcemap: "linked",
-    plugins: [esbuildPluginPino()],
+    plugins: [],
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';

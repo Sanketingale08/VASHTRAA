@@ -10,5 +10,43 @@
  * and static asset URLs — never for fetch() calls.
  */
 export function getApiUrl(path: string): string {
+  const baseUrl = (typeof import.meta !== "undefined" && (import.meta.env?.VITE_API_URL || import.meta.env?.VITE_SERVER_URL)) || "";
+  if (baseUrl) {
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${cleanBase}${cleanPath}`;
+  }
   return path;
+}
+
+export function getStoredToken(): string | null {
+  const token = localStorage.getItem("vastraa_auth_token");
+  if (token) return token;
+  const sellerEmail = localStorage.getItem("vastraa_seller_email");
+  if (sellerEmail) return sellerEmail;
+  const clerkUserId = localStorage.getItem("clerk_user_id");
+  if (clerkUserId) return clerkUserId;
+  return null;
+}
+
+export function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extraHeaders };
+  const token = getStoredToken();
+  if (token && !headers["Authorization"] && !headers["authorization"]) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const token = getStoredToken();
+  const headers = new Headers(init?.headers);
+  if (token && !headers.has("Authorization") && !headers.has("authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(input, {
+    credentials: "include",
+    ...init,
+    headers,
+  });
 }

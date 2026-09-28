@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Plus, Edit2, Trash2, Check, Star, X, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -189,7 +190,7 @@ function AddressForm({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="bg-white rounded-xl border border-[#C9A84C]/20 p-6"
+      className="bg-white rounded-xl border border-[#C7CCD1]/20 p-6"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -199,7 +200,7 @@ function AddressForm({
             value={form.name}
             onChange={e => set("name", e.target.value)}
             placeholder="Priya Sharma"
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.name ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${errors.name ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`}
           />
           {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
         </div>
@@ -211,7 +212,7 @@ function AddressForm({
             onChange={e => set("phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
             placeholder="9876543210"
             type="tel"
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.phone ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${errors.phone ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`}
           />
           {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
         </div>
@@ -219,14 +220,14 @@ function AddressForm({
         <div className="sm:col-span-2">
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
             Address Line 1 *
-            {GMAPS_KEY && <span className="text-[10px] text-[#C9A84C] ml-1 font-normal">(type to search)</span>}
+            {GMAPS_KEY && <span className="text-[10px] text-[#C7CCD1] ml-1 font-normal">(type to search)</span>}
           </label>
           <input
             ref={line1Ref}
             value={form.line1}
             onChange={e => set("line1", e.target.value)}
             placeholder="House / Flat / Block No., Street"
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.line1 ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${errors.line1 ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`}
           />
           {errors.line1 && <p className="text-red-500 text-xs mt-1">{errors.line1}</p>}
         </div>
@@ -237,7 +238,7 @@ function AddressForm({
             value={form.line2}
             onChange={e => set("line2", e.target.value)}
             placeholder="Area, Landmark (optional)"
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors"
+            className="w-full border border-[#C7CCD1]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors"
           />
         </div>
 
@@ -247,7 +248,7 @@ function AddressForm({
             value={form.city}
             onChange={e => set("city", e.target.value)}
             placeholder="Mumbai"
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.city ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${errors.city ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`}
           />
           {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city}</p>}
         </div>
@@ -257,7 +258,7 @@ function AddressForm({
           <select
             value={form.state}
             onChange={e => set("state", e.target.value)}
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.state ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`w-full border rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${errors.state ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`}
           >
             <option value="">Select State</option>
             {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -272,7 +273,7 @@ function AddressForm({
             onChange={e => set("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
             placeholder="400001"
             maxLength={6}
-            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${errors.pincode ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`}
+            className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${errors.pincode ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`}
           />
           {errors.pincode && <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>}
           {!errors.pincode && pincodeStatus && (
@@ -294,9 +295,9 @@ function AddressForm({
               type="checkbox"
               checked={form.isDefault}
               onChange={e => set("isDefault", e.target.checked)}
-              className="w-4 h-4 accent-[#1E6B5A] cursor-pointer"
+              className="w-4 h-4 accent-[#0A1F44] cursor-pointer"
             />
-            <span className="text-sm text-gray-600 group-hover:text-[#1E6B5A] transition-colors">
+            <span className="text-sm text-gray-600 group-hover:text-[#0A1F44] transition-colors">
               Set as default address
             </span>
           </label>
@@ -306,14 +307,14 @@ function AddressForm({
       <div className="flex gap-3 mt-6">
         <button
           onClick={onCancel}
-          className="flex-1 py-3 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-sm rounded-sm hover:border-[#C9A84C] transition-colors"
+          className="flex-1 py-3 border border-[#C7CCD1]/40 text-[#0A1F44] font-bold uppercase tracking-wider text-sm rounded-sm hover:border-[#C7CCD1] transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-3 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
+          className="flex-[2] bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-60 text-[#F4F5F7] py-3 font-bold uppercase tracking-wider text-sm rounded-sm flex items-center justify-center gap-2 transition-colors"
         >
           {saving ? (
             <><Loader2 size={14} className="animate-spin" /> Saving…</>
@@ -328,7 +329,7 @@ function AddressForm({
 
 export function AddressBookPage() {
   const [, setLocation] = useLocation();
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoading: authLoading } = useAuth();
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -342,12 +343,12 @@ export function AddressBookPage() {
   const [settingDefault, setSettingDefault] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isLoaded && !isSignedIn) setLocation("/sign-in");
-  }, [isLoaded, isSignedIn, setLocation]);
+    if (!authLoading && !isSignedIn) setLocation("/sign-in");
+  }, [authLoading, isSignedIn, setLocation]);
 
   const fetchAddresses = useCallback(async () => {
     try {
-      const res = await fetch(`/api/addresses`, { credentials: "include" });
+      const res = await apiFetch(`/api/addresses`);
       const data = await res.json();
       setAddresses(data.addresses ?? []);
     } catch {
@@ -358,8 +359,8 @@ export function AddressBookPage() {
   }, []);
 
   useEffect(() => {
-    if (isLoaded && isSignedIn) fetchAddresses();
-  }, [isLoaded, isSignedIn, fetchAddresses]);
+    if (!authLoading && isSignedIn) fetchAddresses();
+  }, [authLoading, isSignedIn, fetchAddresses]);
 
   async function handleSave(formData: FormData) {
     setSaving(true);
@@ -368,9 +369,8 @@ export function AddressBookPage() {
       const isEdit = mode === "edit" && editingAddress;
       const url = isEdit ? `/api/addresses/${editingAddress.id}` : `/api/addresses`;
       const method = isEdit ? "PUT" : "POST";
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
@@ -391,7 +391,7 @@ export function AddressBookPage() {
   async function handleDelete(id: string) {
     setDeleting(id);
     try {
-      await fetch(`/api/addresses/${id}`, { method: "DELETE", credentials: "include" });
+      await apiFetch(`/api/addresses/${id}`, { method: "DELETE" });
       setAddresses(prev => prev.filter(a => a.id !== id));
       setConfirmDeleteId(null);
     } catch {
@@ -403,9 +403,8 @@ export function AddressBookPage() {
   async function handleSetDefault(id: string) {
     setSettingDefault(id);
     try {
-      const res = await fetch(`/api/addresses/${id}/default`, {
+      const res = await apiFetch(`/api/addresses/${id}/default`, {
         method: "PATCH",
-        credentials: "include",
       });
       if (res.ok) {
         setAddresses(prev => prev.map(a => ({ ...a, isDefault: a.id === id })));
@@ -416,12 +415,12 @@ export function AddressBookPage() {
     }
   }
 
-  if (!isLoaded || loading) {
+  if (authLoading || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
-            <div className="animate-spin w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full mx-auto mb-4" />
+            <div className="animate-spin w-10 h-10 border-2 border-[#C7CCD1] border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-sm opacity-60">Loading your addresses…</p>
           </div>
         </div>
@@ -461,7 +460,7 @@ export function AddressBookPage() {
             {(mode === "add" || mode === "edit") ? (
               <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <div className="mb-4">
-                  <h2 className="font-serif text-xl font-bold text-[#1E6B5A]">
+                  <h2 className="font-serif text-xl font-bold text-[#0A1F44]">
                     {mode === "edit" ? "Edit Address" : "Add New Address"}
                   </h2>
                 </div>
@@ -481,7 +480,7 @@ export function AddressBookPage() {
               <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <div className="space-y-4 mb-6">
                   {addresses.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-4 py-16 bg-white rounded-xl border border-[#C9A84C]/20">
+                    <div className="flex flex-col items-center justify-center gap-4 py-16 bg-white rounded-xl border border-[#C7CCD1]/20">
                       <MapPin size={40} className="text-gray-200" />
                       <p className="text-gray-400 text-sm">No saved addresses yet.</p>
                     </div>
@@ -492,14 +491,14 @@ export function AddressBookPage() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.04 }}
-                        className="bg-white rounded-xl border border-[#C9A84C]/20 p-5"
+                        className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <p className="font-bold text-[#3D1A1A] text-sm">{addr.name}</p>
                               {addr.isDefault && (
-                                <span className="inline-flex items-center gap-1 text-[10px] bg-[#1E6B5A] text-[#F3F8F5] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                <span className="inline-flex items-center gap-1 text-[10px] bg-[#0A1F44] text-[#F4F5F7] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
                                   <Star size={8} className="fill-current" /> Default
                                 </span>
                               )}
@@ -516,7 +515,7 @@ export function AddressBookPage() {
                             <button
                               onClick={() => handleSetDefault(addr.id)}
                               disabled={!!settingDefault}
-                              className="flex items-center gap-1.5 text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors disabled:opacity-50"
+                              className="flex items-center gap-1.5 text-xs font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors disabled:opacity-50"
                             >
                               {settingDefault === addr.id ? (
                                 <Loader2 size={12} className="animate-spin" />
@@ -528,7 +527,7 @@ export function AddressBookPage() {
                           )}
                           <button
                             onClick={() => { setEditingAddress(addr); setMode("edit"); setSaveError(""); }}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-[#1E6B5A] transition-colors ml-auto"
+                            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-[#0A1F44] transition-colors ml-auto"
                           >
                             <Edit2 size={12} /> Edit
                           </button>
@@ -565,7 +564,7 @@ export function AddressBookPage() {
 
                 <button
                   onClick={() => { setMode("add"); setSaveError(""); }}
-                  className="w-full py-4 border-2 border-dashed border-[#C9A84C]/40 rounded-xl text-sm font-bold text-[#1E6B5A] hover:border-[#C9A84C] hover:bg-[#C9A84C]/5 transition-all flex items-center justify-center gap-2"
+                  className="w-full py-4 border-2 border-dashed border-[#C7CCD1]/40 rounded-xl text-sm font-bold text-[#0A1F44] hover:border-[#C7CCD1] hover:bg-[#C7CCD1]/5 transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={16} /> Add New Address
                 </button>
@@ -573,7 +572,7 @@ export function AddressBookPage() {
                 <div className="mt-6 text-center">
                   <Link
                     href="/checkout"
-                    className="text-sm text-[#1E6B5A] font-semibold hover:text-[#C9A84C] transition-colors"
+                    className="text-sm text-[#0A1F44] font-semibold hover:text-[#C7CCD1] transition-colors"
                   >
                     ← Back to Checkout
                   </Link>

@@ -2,10 +2,10 @@ import React, { useCallback, useState, useRef, useEffect } from "react";
 import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X, Upload } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
-const IVORY = "#F3F8F5";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
+const IVORY = "#F4F5F7";
 
 export const CATEGORIES = ["paithani", "designer"] as const;
 export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"] as const;
@@ -102,7 +102,7 @@ function Field({ label, required, error, children, hint }: FieldProps) {
   );
 }
 
-const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2 focus:ring-[#1E6B5A]/20";
+const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2 focus:ring-[#0A1F44]/20";
 const inputStyle = { borderColor: "#D6C9BA", background: IVORY };
 
 const selectClass = inputClass + " appearance-none cursor-pointer";
@@ -465,7 +465,7 @@ function ImageUploadGallery({ images, onImagesChange }: ImageUploadGalleryProps)
         {/* "Add more" tile — always visible as the last grid cell */}
         <button
           type="button"
-          className="relative overflow-hidden rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all hover:border-[#1E6B5A] hover:bg-[#1E6B5A08]"
+          className="relative overflow-hidden rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all hover:border-[#0A1F44] hover:bg-[#0A1F4408]"
           style={{ aspectRatio: "1 / 1", borderColor: "#D6C9BA", background: CREAM, cursor: "pointer" }}
           onClick={() => browseRef.current?.click()}
           title="Add more images"
@@ -606,7 +606,7 @@ function AttributeVariantBuilder({
             key={label}
             type="button"
             onClick={() => setGroups(tmpl.map((g) => ({ ...g, values: [...g.values] })))}
-            className="px-3 py-1 rounded-full text-xs font-bold border transition-all hover:border-[#1E6B5A] hover:text-[#1E6B5A]"
+            className="px-3 py-1 rounded-full text-xs font-bold border transition-all hover:border-[#0A1F44] hover:text-[#0A1F44]"
             style={{ borderColor: "#D6C9BA", color: "#7a5f4e" }}
           >
             {label}
@@ -689,7 +689,7 @@ function AttributeVariantBuilder({
                 key={s}
                 type="button"
                 onClick={() => addSuggestion(s)}
-                className="px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all hover:bg-[#1E6B5A] hover:text-white hover:border-[#1E6B5A]"
+                className="px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all hover:bg-[#0A1F44] hover:text-white hover:border-[#0A1F44]"
                 style={{ borderColor: "#D6C9BA", color: "#6b5b4e" }}
               >
                 + {s}
@@ -751,7 +751,7 @@ function AttributeVariantBuilder({
                   ))}
                 </div>
                 <input
-                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#0A1F44]/30"
                   style={{ borderColor: "#D6C9BA", background: IVORY }}
                   type="number"
                   min="0"
@@ -760,7 +760,7 @@ function AttributeVariantBuilder({
                   placeholder="0"
                 />
                 <input
-                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#1E6B5A]/30"
+                  className="w-full px-2 py-1 rounded border text-xs outline-none focus:ring-1 focus:ring-[#0A1F44]/30"
                   style={{ borderColor: "#D6C9BA", background: IVORY }}
                   type="number"
                   min="0"
@@ -869,7 +869,7 @@ export default function ProductForm({
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Brand" error={errors.brand} hint="Optional">
-            <input className={inputClass} style={inputStyle} value={data.brand} onChange={input("brand")} placeholder="e.g. TwirlDrape Signature" />
+            <input className={inputClass} style={inputStyle} value={data.brand} onChange={input("brand")} placeholder="e.g. VASTRAA Signature" />
           </Field>
           <Field label="Design Pattern" error={errors.designPattern} hint="Optional">
             <input className={inputClass} style={inputStyle} value={data.designPattern} onChange={input("designPattern")} placeholder="e.g. Peacock motif, zari border" />

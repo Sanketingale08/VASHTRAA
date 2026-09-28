@@ -1,6 +1,6 @@
-import { db } from "@workspace/db";
+import { db, mongoGeneric } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 import { sendTransactionalEmail, type TransactionalEmailType } from "./transactionalEmail";
 
 type OrderNotifType =
@@ -139,32 +139,61 @@ export async function insertOrderStatusNotification(
   opts: InsertOrderNotificationOpts
 ): Promise<void> {
   const { userId, type, orderId, itemName, extraItemCount, trackingNumber } = opts;
-  const client = opts.tx ?? db;
 
-  const prefs = await client
-    .select({
-      orderUpdates: notificationPreferencesTable.orderUpdates,
-      emailOrderUpdates: notificationPreferencesTable.emailOrderUpdates,
-    })
-    .from(notificationPreferencesTable)
-    .where(eq(notificationPreferencesTable.userId, userId))
-    .limit(1);
+  let wantsOrderUpdates = true;
+  let wantsEmailOrderUpdates = true;
 
-  const wantsOrderUpdates = prefs.length === 0 || prefs[0].orderUpdates;
+  try {
+    const prefDoc = await mongoGeneric.getCollection("notification_preferences").findOne({ userId });
+    if (prefDoc) {
+      if (prefDoc.orderUpdates === false) wantsOrderUpdates = false;
+      if (prefDoc.emailOrderUpdates === false) wantsEmailOrderUpdates = false;
+    }
+  } catch {
+    const client = opts.tx ?? db;
+    const prefs = await client
+      .select({
+        orderUpdates: notificationPreferencesTable.orderUpdates,
+        emailOrderUpdates: notificationPreferencesTable.emailOrderUpdates,
+      })
+      .from(notificationPreferencesTable)
+      .where(eq(notificationPreferencesTable.userId, userId))
+      .limit(1);
+
+    if (prefs.length > 0) {
+      if (prefs[0].orderUpdates === false) wantsOrderUpdates = false;
+      if (prefs[0].emailOrderUpdates === false) wantsEmailOrderUpdates = false;
+    }
+  }
+
   if (!wantsOrderUpdates) return;
-
-  const wantsEmailOrderUpdates = prefs.length === 0 || prefs[0].emailOrderUpdates;
 
   const extra = extraItemCount > 0 ? ` and ${extraItemCount} more item(s)` : "";
   const { title, body } = buildNotifContent(type, itemName, extra);
 
-  await client.insert(notificationsTable).values({
-    userId,
-    type,
-    title,
-    body,
-    metadata: { orderId },
-  });
+  const id = crypto.randomUUID();
+  try {
+    await mongoGeneric.getCollection("notifications").insertOne({
+      id,
+      _id: id,
+      userId,
+      type,
+      title,
+      body,
+      isRead: false,
+      metadata: { orderId },
+      createdAt: new Date(),
+    } as any);
+  } catch {
+    const client = opts.tx ?? db;
+    await client.insert(notificationsTable).values({
+      userId,
+      type,
+      title,
+      body,
+      metadata: { orderId },
+    });
+  }
 
   if (EMAIL_TYPES.has(type) && wantsEmailOrderUpdates) {
     void sendTransactionalEmail({

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation, Redirect } from "wouter";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
@@ -42,12 +43,12 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [location] = useLocation();
-  const { isSignedIn, isLoaded, user } = useUser();
+  const { isSignedIn, isLoading, user } = useAuth();
 
   const { data: openCountData } = useQuery<{ count: number }>({
     queryKey: ["support-open-count"],
     queryFn: async () => {
-      const r = await fetch(`/api/support/tickets/open-count`, { credentials: "include" });
+      const r = await apiFetch(`/api/support/tickets/open-count`);
       if (!r.ok) return { count: 0 };
       return r.json();
     },
@@ -56,7 +57,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   });
   const openTicketCount = openCountData?.count ?? 0;
 
-  if (isLoaded && !isSignedIn) {
+  if (!isLoading && !isSignedIn) {
     return <Redirect to="/sign-in" />;
   }
 
@@ -65,20 +66,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return location.startsWith(href);
   }
 
+  const displayName = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Customer";
+
   return (
     <Layout>
-      <div className="min-h-screen bg-[#F3F8F5]">
+      <div className="min-h-screen bg-[#F4F5F7]">
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 lg:py-8">
           <div className="mb-5 lg:mb-7">
-            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#1E6B5A]">
-              Welcome, {[user?.firstName, user?.lastName].filter(Boolean).join(" ")}
+            <h1 className="font-serif text-2xl lg:text-3xl font-bold text-[#0A1F44]">
+              Welcome, {displayName}
             </h1>
           </div>
 
           <div className="flex gap-6 lg:gap-8 items-start">
             {/* Desktop sidebar */}
             <aside className="hidden lg:block w-60 xl:w-64 shrink-0 sticky top-[104px] self-start">
-              <nav className="bg-white rounded-xl border border-[#C9A84C]/20 overflow-hidden shadow-sm">
+              <nav className="bg-white rounded-xl border border-[#C7CCD1]/20 overflow-hidden shadow-sm">
                 {navItems.map(({ href, icon: Icon, label, exact }) => {
                   const active = isActive(href, exact);
                   const isSupport = href === "/account/support";
@@ -89,28 +92,28 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm transition-colors relative group",
                         active
-                          ? "bg-[#1E6B5A]/5 text-[#1E6B5A] font-semibold"
-                          : "text-gray-600 hover:bg-[#F3F8F5] hover:text-[#1E6B5A]",
+                          ? "bg-[#0A1F44]/5 text-[#0A1F44] font-semibold"
+                          : "text-gray-600 hover:bg-[#F4F5F7] hover:text-[#0A1F44]",
                         active &&
-                          "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-[#1E6B5A] before:rounded-r-full",
+                          "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-[#0A1F44] before:rounded-r-full",
                       )}
                     >
                       <Icon
                         size={15}
                         className={
                           active
-                            ? "text-[#1E6B5A]"
-                            : "text-[#C9A84C] group-hover:text-[#1E6B5A] transition-colors"
+                            ? "text-[#0A1F44]"
+                            : "text-[#C7CCD1] group-hover:text-[#0A1F44] transition-colors"
                         }
                       />
                       <span className="flex-1 truncate">{label}</span>
                       {isSupport && openTicketCount > 0 && (
-                        <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-[#1E6B5A] text-white font-bold shrink-0">
+                        <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-[#0A1F44] text-white font-bold shrink-0">
                           {openTicketCount > 9 ? "9+" : openTicketCount}
                         </span>
                       )}
                       {active && (
-                        <ChevronRight size={13} className="text-[#1E6B5A]/40 shrink-0" />
+                        <ChevronRight size={13} className="text-[#0A1F44]/40 shrink-0" />
                       )}
                     </Link>
                   );
@@ -120,7 +123,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* Tablet icon strip */}
             <aside className="hidden md:block lg:hidden w-14 shrink-0 sticky top-[104px] self-start">
-              <nav className="bg-white rounded-xl border border-[#C9A84C]/20 overflow-hidden shadow-sm py-1">
+              <nav className="bg-white rounded-xl border border-[#C7CCD1]/20 overflow-hidden shadow-sm py-1">
                 {navItems.map(({ href, icon: Icon, label, exact }) => {
                   const active = isActive(href, exact);
                   const isSupport = href === "/account/support";
@@ -132,13 +135,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       className={cn(
                         "flex items-center justify-center w-full py-3.5 transition-colors relative",
                         active
-                          ? "text-[#1E6B5A] bg-[#1E6B5A]/5"
-                          : "text-gray-400 hover:text-[#1E6B5A] hover:bg-[#F3F8F5]",
+                          ? "text-[#0A1F44] bg-[#0A1F44]/5"
+                          : "text-gray-400 hover:text-[#0A1F44] hover:bg-[#F4F5F7]",
                       )}
                     >
                       <Icon size={18} />
                       {isSupport && openTicketCount > 0 && (
-                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#1E6B5A]" />
+                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#0A1F44]" />
                       )}
                     </Link>
                   );
@@ -173,14 +176,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   className={cn(
                     "shrink-0 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors",
                     "w-[20vw] min-w-[64px] max-w-[88px]",
-                    active ? "text-[#1E6B5A]" : "text-gray-400",
+                    active ? "text-[#0A1F44]" : "text-gray-400",
                   )}
                 >
                   {/* Icon wrapper — badge positioned relative to icon */}
                   <div className="relative inline-flex">
                     <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
                     {isSupport && openTicketCount > 0 && (
-                      <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-[#1E6B5A]" />
+                      <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-[#0A1F44]" />
                     )}
                   </div>
                   <span className="text-[9px] font-semibold leading-tight uppercase tracking-wide">

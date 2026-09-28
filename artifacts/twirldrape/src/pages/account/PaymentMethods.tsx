@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CreditCard,
@@ -84,7 +85,7 @@ function BrandBadge({ brand }: { brand?: string | null }) {
     Visa: "bg-blue-600",
     Mastercard: "bg-orange-500",
     Amex: "bg-green-600",
-    RuPay: "bg-[#1E6B5A]",
+    RuPay: "bg-[#0A1F44]",
     Discover: "bg-amber-500",
     Card: "bg-gray-500",
   };
@@ -100,10 +101,10 @@ function BrandBadge({ brand }: { brand?: string | null }) {
 
 const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5";
 function inputCls(hasError: boolean) {
-  return `w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${hasError ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`;
+  return `w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${hasError ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`;
 }
 function selectCls(hasError: boolean) {
-  return `w-full border rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors ${hasError ? "border-red-400 bg-red-50" : "border-[#C9A84C]/30"}`;
+  return `w-full border rounded-lg px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors ${hasError ? "border-red-400 bg-red-50" : "border-[#C7CCD1]/30"}`;
 }
 
 // ─── Card form ────────────────────────────────────────────────────────────────
@@ -165,9 +166,8 @@ function AddCardForm({
     if (!validate()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/payment-methods", {
+      const res = await apiFetch("/api/payment-methods", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "card",
@@ -205,10 +205,10 @@ function AddCardForm({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="bg-white rounded-xl border border-[#C9A84C]/20 p-5 mb-4"
+      className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5 mb-4"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-[#1E6B5A] text-sm flex items-center gap-2">
+        <h3 className="font-semibold text-[#0A1F44] text-sm flex items-center gap-2">
           <CreditCard size={15} />
           Add New Card
         </h3>
@@ -291,18 +291,18 @@ function AddCardForm({
             type="checkbox"
             checked={form.isDefault}
             onChange={(e) => set("isDefault", e.target.checked)}
-            className="w-4 h-4 accent-[#1E6B5A] cursor-pointer"
+            className="w-4 h-4 accent-[#0A1F44] cursor-pointer"
           />
-          <span className="text-sm text-gray-600 group-hover:text-[#1E6B5A] transition-colors">
+          <span className="text-sm text-gray-600 group-hover:text-[#0A1F44] transition-colors">
             Set as default payment method
           </span>
         </label>
 
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C7CCD1]/40 text-[#0A1F44] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C7CCD1] transition-colors">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-60 text-[#F4F5F7] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
             {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save Card"}
           </button>
         </div>
@@ -349,9 +349,8 @@ function EditCardForm({
     if (!validate()) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/payment-methods/${method.id}`, {
+      const res = await apiFetch(`/api/payment-methods/${method.id}`, {
         method: "PATCH",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cardholderName: cardholderName.trim(),
@@ -378,10 +377,10 @@ function EditCardForm({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="bg-[#f8fbf9] rounded-xl border border-[#1E6B5A]/20 p-5 mb-4"
+      className="bg-[#f8fbf9] rounded-xl border border-[#0A1F44]/20 p-5 mb-4"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-[#1E6B5A] text-sm flex items-center gap-2">
+        <h3 className="font-semibold text-[#0A1F44] text-sm flex items-center gap-2">
           <Pencil size={14} />
           Edit Card Details
         </h3>
@@ -391,7 +390,7 @@ function EditCardForm({
       </div>
 
       {/* Read-only card number hint */}
-      <div className="flex items-center gap-2 mb-4 p-3 bg-white rounded-lg border border-[#C9A84C]/20">
+      <div className="flex items-center gap-2 mb-4 p-3 bg-white rounded-lg border border-[#C7CCD1]/20">
         <BrandBadge brand={method.cardBrand} />
         <span className="font-mono text-sm text-gray-500 tracking-wider">•••• •••• •••• {method.last4}</span>
         <span className="text-[10px] text-gray-400 ml-auto">(card number cannot be changed)</span>
@@ -430,10 +429,10 @@ function EditCardForm({
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C7CCD1]/40 text-[#0A1F44] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C7CCD1] transition-colors">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#155a4a] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#0A1F44] hover:bg-[#155a4a] disabled:opacity-60 text-[#F4F5F7] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
             {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save Changes"}
           </button>
         </div>
@@ -467,9 +466,8 @@ function AddUpiForm({
     setError("");
     setSaving(true);
     try {
-      const res = await fetch("/api/payment-methods", {
+      const res = await apiFetch("/api/payment-methods", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "upi", upiId: val, isDefault }),
       });
@@ -496,10 +494,10 @@ function AddUpiForm({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="bg-white rounded-xl border border-[#C9A84C]/20 p-5 mb-4"
+      className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5 mb-4"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-[#1E6B5A] text-sm flex items-center gap-2">
+        <h3 className="font-semibold text-[#0A1F44] text-sm flex items-center gap-2">
           <Smartphone size={15} />
           Add UPI ID
         </h3>
@@ -531,18 +529,18 @@ function AddUpiForm({
             type="checkbox"
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
-            className="w-4 h-4 accent-[#1E6B5A] cursor-pointer"
+            className="w-4 h-4 accent-[#0A1F44] cursor-pointer"
           />
-          <span className="text-sm text-gray-600 group-hover:text-[#1E6B5A] transition-colors">
+          <span className="text-sm text-gray-600 group-hover:text-[#0A1F44] transition-colors">
             Set as default payment method
           </span>
         </label>
 
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C7CCD1]/40 text-[#0A1F44] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C7CCD1] transition-colors">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-60 text-[#F4F5F7] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
             {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save UPI ID"}
           </button>
         </div>
@@ -577,9 +575,8 @@ function EditUpiForm({
     setError("");
     setSaving(true);
     try {
-      const res = await fetch(`/api/payment-methods/${method.id}`, {
+      const res = await apiFetch(`/api/payment-methods/${method.id}`, {
         method: "PATCH",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ upiId: val }),
       });
@@ -606,10 +603,10 @@ function EditUpiForm({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="bg-[#f8fbf9] rounded-xl border border-[#1E6B5A]/20 p-5 mb-4"
+      className="bg-[#f8fbf9] rounded-xl border border-[#0A1F44]/20 p-5 mb-4"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-[#1E6B5A] text-sm flex items-center gap-2">
+        <h3 className="font-semibold text-[#0A1F44] text-sm flex items-center gap-2">
           <Pencil size={14} />
           Edit UPI ID
         </h3>
@@ -638,10 +635,10 @@ function EditUpiForm({
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-[#C7CCD1]/40 text-[#0A1F44] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C7CCD1] transition-colors">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="flex-[2] bg-[#1E6B5A] hover:bg-[#155a4a] disabled:opacity-60 text-[#F3F8F5] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
+          <button type="submit" disabled={saving} className="flex-[2] bg-[#0A1F44] hover:bg-[#155a4a] disabled:opacity-60 text-[#F4F5F7] py-2.5 font-bold uppercase tracking-wider text-xs rounded-sm flex items-center justify-center gap-2 transition-colors">
             {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : "Save Changes"}
           </button>
         </div>
@@ -680,13 +677,13 @@ function DeleteDialog({
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-xl border border-[#C9A84C]/20 p-6 max-w-sm w-full"
+        className="bg-white rounded-2xl shadow-xl border border-[#C7CCD1]/20 p-6 max-w-sm w-full"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
           <Trash2 size={20} className="text-red-500" />
         </div>
-        <h3 className="font-serif text-lg font-bold text-[#1E6B5A] text-center mb-2">
+        <h3 className="font-serif text-lg font-bold text-[#0A1F44] text-center mb-2">
           Remove Payment Method?
         </h3>
         <p className="text-sm text-gray-500 text-center mb-5">
@@ -697,7 +694,7 @@ function DeleteDialog({
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C9A84C] transition-colors"
+            className="flex-1 py-2.5 border border-[#C7CCD1]/40 text-[#0A1F44] font-bold uppercase tracking-wider text-xs rounded-sm hover:border-[#C7CCD1] transition-colors"
           >
             Keep It
           </button>
@@ -735,11 +732,11 @@ function CardRow({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -16 }}
-      className={`bg-white rounded-xl border p-4 transition-all ${method.isDefault ? "border-[#1E6B5A]/40 shadow-sm" : "border-[#C9A84C]/20"}`}
+      className={`bg-white rounded-xl border p-4 transition-all ${method.isDefault ? "border-[#0A1F44]/40 shadow-sm" : "border-[#C7CCD1]/20"}`}
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-[#1E6B5A]/5 flex items-center justify-center shrink-0">
-          <CreditCard size={18} className="text-[#1E6B5A]" />
+        <div className="w-10 h-10 rounded-lg bg-[#0A1F44]/5 flex items-center justify-center shrink-0">
+          <CreditCard size={18} className="text-[#0A1F44]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -748,7 +745,7 @@ function CardRow({
               •••• •••• •••• {method.last4}
             </span>
             {method.isDefault && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1E6B5A] bg-[#1E6B5A]/8 px-2 py-0.5 rounded-full border border-[#1E6B5A]/20">
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#0A1F44] bg-[#0A1F44]/8 px-2 py-0.5 rounded-full border border-[#0A1F44]/20">
                 <CheckCircle size={10} />
                 Default
               </span>
@@ -765,7 +762,7 @@ function CardRow({
               onClick={() => onSetDefault(method.id)}
               disabled={settingDefault === method.id}
               title="Set as default"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-[#C9A84C] hover:bg-[#C9A84C]/5 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-[#C7CCD1] hover:bg-[#C7CCD1]/5 transition-colors disabled:opacity-50"
             >
               {settingDefault === method.id
                 ? <Loader2 size={15} className="animate-spin" />
@@ -776,7 +773,7 @@ function CardRow({
           <button
             onClick={() => onEdit(method)}
             title="Edit card details"
-            className="p-1.5 rounded-lg text-gray-400 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-[#0A1F44] hover:bg-[#0A1F44]/5 transition-colors"
           >
             <Pencil size={15} />
           </button>
@@ -813,17 +810,17 @@ function UpiRow({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -16 }}
-      className={`bg-white rounded-xl border p-4 transition-all ${method.isDefault ? "border-[#1E6B5A]/40 shadow-sm" : "border-[#C9A84C]/20"}`}
+      className={`bg-white rounded-xl border p-4 transition-all ${method.isDefault ? "border-[#0A1F44]/40 shadow-sm" : "border-[#C7CCD1]/20"}`}
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-[#1E6B5A]/5 flex items-center justify-center shrink-0">
-          <Smartphone size={18} className="text-[#1E6B5A]" />
+        <div className="w-10 h-10 rounded-lg bg-[#0A1F44]/5 flex items-center justify-center shrink-0">
+          <Smartphone size={18} className="text-[#0A1F44]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-sm font-semibold text-[#3D1A1A] font-mono">{method.upiId}</span>
             {method.isDefault && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1E6B5A] bg-[#1E6B5A]/8 px-2 py-0.5 rounded-full border border-[#1E6B5A]/20">
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#0A1F44] bg-[#0A1F44]/8 px-2 py-0.5 rounded-full border border-[#0A1F44]/20">
                 <CheckCircle size={10} />
                 Default
               </span>
@@ -837,7 +834,7 @@ function UpiRow({
               onClick={() => onSetDefault(method.id)}
               disabled={settingDefault === method.id}
               title="Set as default"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-[#C9A84C] hover:bg-[#C9A84C]/5 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-[#C7CCD1] hover:bg-[#C7CCD1]/5 transition-colors disabled:opacity-50"
             >
               {settingDefault === method.id
                 ? <Loader2 size={15} className="animate-spin" />
@@ -848,7 +845,7 @@ function UpiRow({
           <button
             onClick={() => onEdit(method)}
             title="Edit UPI ID"
-            className="p-1.5 rounded-lg text-gray-400 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/5 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-[#0A1F44] hover:bg-[#0A1F44]/5 transition-colors"
           >
             <Pencil size={15} />
           </button>
@@ -868,7 +865,7 @@ function UpiRow({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function AccountPaymentMethodsPage() {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
@@ -887,7 +884,7 @@ export function AccountPaymentMethodsPage() {
 
   const fetchMethods = useCallback(async () => {
     try {
-      const res = await fetch("/api/payment-methods", { credentials: "include" });
+      const res = await apiFetch("/api/payment-methods");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setMethods(data.paymentMethods ?? []);
@@ -900,16 +897,15 @@ export function AccountPaymentMethodsPage() {
   }, []);
 
   useEffect(() => {
-    if (isLoaded && isSignedIn) fetchMethods();
-    else if (isLoaded) setLoading(false);
-  }, [isLoaded, isSignedIn, fetchMethods]);
+    if (!authLoading && isSignedIn) fetchMethods();
+    else if (!authLoading) setLoading(false);
+  }, [authLoading, isSignedIn, fetchMethods]);
 
   async function handleSetDefault(id: string) {
     setSettingDefault(id);
     try {
-      const res = await fetch(`/api/payment-methods/${id}/set-default`, {
+      const res = await apiFetch(`/api/payment-methods/${id}/set-default`, {
         method: "PATCH",
-        credentials: "include",
       });
       if (res.ok) {
         setMethods((prev) => prev.map((m) => ({ ...m, isDefault: m.id === id })));
@@ -928,9 +924,8 @@ export function AccountPaymentMethodsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/payment-methods/${deleteTarget.id}`, {
+      const res = await apiFetch(`/api/payment-methods/${deleteTarget.id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (res.ok) {
         setMethods((prev) => {
@@ -975,12 +970,12 @@ export function AccountPaymentMethodsPage() {
   const cards = methods.filter((m) => m.type === "card");
   const upis = methods.filter((m) => m.type === "upi");
 
-  if (!isLoaded || loading) {
+  if (authLoading || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
-            <div className="animate-spin w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full mx-auto mb-4" />
+            <div className="animate-spin w-10 h-10 border-2 border-[#C7CCD1] border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-sm text-gray-400">Loading your payment methods…</p>
           </div>
         </div>
@@ -1010,10 +1005,10 @@ export function AccountPaymentMethodsPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-white rounded-xl border border-[#C9A84C]/20 flex flex-col items-center justify-center py-16 gap-4 text-center"
+            className="bg-white rounded-xl border border-[#C7CCD1]/20 flex flex-col items-center justify-center py-16 gap-4 text-center"
           >
-            <div className="w-14 h-14 rounded-full bg-[#1E6B5A]/5 flex items-center justify-center">
-              <CreditCard size={28} className="text-[#1E6B5A]/30" />
+            <div className="w-14 h-14 rounded-full bg-[#0A1F44]/5 flex items-center justify-center">
+              <CreditCard size={28} className="text-[#0A1F44]/30" />
             </div>
             <div>
               <p className="text-gray-600 text-sm font-medium">No saved payment methods yet</p>
@@ -1027,11 +1022,11 @@ export function AccountPaymentMethodsPage() {
         {/* ── Saved Cards ── */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-sm font-bold text-[#0A1F44] uppercase tracking-wider flex items-center gap-2">
               <CreditCard size={13} />
               Saved Cards
               {cards.length > 0 && (
-                <span className="text-[10px] bg-[#1E6B5A]/10 text-[#1E6B5A] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-[#0A1F44]/10 text-[#0A1F44] px-1.5 py-0.5 rounded-full font-bold">
                   {cards.length}
                 </span>
               )}
@@ -1039,7 +1034,7 @@ export function AccountPaymentMethodsPage() {
             {!showCardForm && (
               <button
                 onClick={() => { setShowCardForm(true); setShowUpiForm(false); setEditTarget(null); }}
-                className="flex items-center gap-1.5 text-xs font-bold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
+                className="flex items-center gap-1.5 text-xs font-bold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors"
               >
                 <Plus size={13} />
                 Add Card
@@ -1082,7 +1077,7 @@ export function AccountPaymentMethodsPage() {
               </AnimatePresence>
             </div>
           ) : !showCardForm ? (
-            <div className="bg-white rounded-xl border border-[#C9A84C]/15 p-5 text-center text-sm text-gray-400">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/15 p-5 text-center text-sm text-gray-400">
               No saved cards yet
             </div>
           ) : null}
@@ -1091,11 +1086,11 @@ export function AccountPaymentMethodsPage() {
         {/* ── Saved UPI IDs ── */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-sm font-bold text-[#0A1F44] uppercase tracking-wider flex items-center gap-2">
               <Smartphone size={13} />
               Saved UPI IDs
               {upis.length > 0 && (
-                <span className="text-[10px] bg-[#1E6B5A]/10 text-[#1E6B5A] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-[#0A1F44]/10 text-[#0A1F44] px-1.5 py-0.5 rounded-full font-bold">
                   {upis.length}
                 </span>
               )}
@@ -1103,7 +1098,7 @@ export function AccountPaymentMethodsPage() {
             {!showUpiForm && (
               <button
                 onClick={() => { setShowUpiForm(true); setShowCardForm(false); setEditTarget(null); }}
-                className="flex items-center gap-1.5 text-xs font-bold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
+                className="flex items-center gap-1.5 text-xs font-bold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors"
               >
                 <Plus size={13} />
                 Add UPI ID
@@ -1146,7 +1141,7 @@ export function AccountPaymentMethodsPage() {
               </AnimatePresence>
             </div>
           ) : !showUpiForm ? (
-            <div className="bg-white rounded-xl border border-[#C9A84C]/15 p-5 text-center text-sm text-gray-400">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/15 p-5 text-center text-sm text-gray-400">
               No saved UPI IDs yet
             </div>
           ) : null}

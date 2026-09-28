@@ -6,11 +6,11 @@ const LAST_UPDATED = "1 July 2025";
 const SECTIONS = [
   {
     title: "1. Acceptance of Terms",
-    content: `By accessing or using TwirlDrape ("the Platform"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to all of these Terms, you must not use the Platform. We may update these Terms from time to time; your continued use after any update constitutes acceptance of the revised Terms.`,
+    content: `By accessing or using VASTRAA ("the Platform"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to all of these Terms, you must not use the Platform. We may update these Terms from time to time; your continued use after any update constitutes acceptance of the revised Terms.`,
   },
   {
     title: "2. Eligibility",
-    content: `You must be at least 18 years of age to use TwirlDrape. By using the Platform, you represent and warrant that you are 18 years of age or older and have the legal capacity to enter into a binding agreement.`,
+    content: `You must be at least 18 years of age to use VASTRAA. By using the Platform, you represent and warrant that you are 18 years of age or older and have the legal capacity to enter into a binding agreement.`,
   },
   {
     title: "3. Accounts",
@@ -18,13 +18,13 @@ const SECTIONS = [
 
 • Keeping your login credentials confidential.
 • All activity that occurs under your account.
-• Notifying us immediately of any unauthorised use at support@twirldrape.com.
+• Notifying us immediately of any unauthorised use at support@vastraa.com.
 
 We reserve the right to suspend or terminate accounts that violate these Terms or are used for fraudulent activity.`,
   },
   {
     title: "4. Products and Listings",
-    content: `TwirlDrape is a marketplace that connects buyers with independent artisan vendors. We make reasonable efforts to ensure listing accuracy, but:
+    content: `VASTRAA is a marketplace that connects buyers with independent artisan vendors. We make reasonable efforts to ensure listing accuracy, but:
 
 • Product colours may appear slightly different depending on your screen settings.
 • Minor variations in handwoven items (pattern placement, weight) are inherent to handcraft and are not defects.
@@ -32,11 +32,11 @@ We reserve the right to suspend or terminate accounts that violate these Terms o
   },
   {
     title: "5. Pricing and Payment",
-    content: `All prices on TwirlDrape are listed in Indian Rupees (INR) and include applicable GST unless otherwise stated. A Cash on Delivery (COD) handling fee of ₹49 applies where COD is selected. We reserve the right to modify prices at any time; the price at the time of order confirmation is the price you pay. We accept UPI, cards, net banking, digital wallets, and COD. Payments are processed by certified third-party gateways; we do not store full card or bank details.`,
+    content: `All prices on VASTRAA are listed in Indian Rupees (INR) and include applicable GST unless otherwise stated. A Cash on Delivery (COD) handling fee of ₹49 applies where COD is selected. We reserve the right to modify prices at any time; the price at the time of order confirmation is the price you pay. We accept UPI, cards, net banking, digital wallets, and COD. Payments are processed by certified third-party gateways; we do not store full card or bank details.`,
   },
   {
     title: "6. Shipping and Delivery",
-    content: `Orders are typically dispatched within 48 hours of confirmation. Delivery timelines (5–8 business days standard, 2–3 business days express) are estimates and not guarantees. TwirlDrape is not liable for delays caused by courier partners, natural events, or conditions beyond our control. For full details, see our Shipping Info page.`,
+    content: `Orders are typically dispatched within 48 hours of confirmation. Delivery timelines (5–8 business days standard, 2–3 business days express) are estimates and not guarantees. VASTRAA is not liable for delays caused by courier partners, natural events, or conditions beyond our control. For full details, see our Shipping Info page.`,
   },
   {
     title: "7. Returns and Refunds",
@@ -44,7 +44,7 @@ We reserve the right to suspend or terminate accounts that violate these Terms o
   },
   {
     title: "8. Intellectual Property",
-    content: `All content on TwirlDrape — including text, images, logos, designs, and software — is the property of TwirlDrape or its licensors and is protected by applicable intellectual property laws. You may not reproduce, distribute, modify, or create derivative works of any content without our explicit written consent.`,
+    content: `All content on VASTRAA — including text, images, logos, designs, and software — is the property of VASTRAA or its licensors and is protected by applicable intellectual property laws. You may not reproduce, distribute, modify, or create derivative works of any content without our explicit written consent.`,
   },
   {
     title: "9. User Conduct",
@@ -60,11 +60,11 @@ Violation of these restrictions may result in immediate account suspension and l
   },
   {
     title: "10. Vendor Relationships",
-    content: `Vendors on TwirlDrape are independent third parties. TwirlDrape facilitates the marketplace but is not a party to the underlying sale contract between buyer and vendor. TwirlDrape does not represent or warrant the accuracy of vendor-provided product descriptions and is not liable for vendor non-performance, except as expressly stated in our buyer protection policies.`,
+    content: `Vendors on VASTRAA are independent third parties. VASTRAA facilitates the marketplace but is not a party to the underlying sale contract between buyer and vendor. VASTRAA does not represent or warrant the accuracy of vendor-provided product descriptions and is not liable for vendor non-performance, except as expressly stated in our buyer protection policies.`,
   },
   {
     title: "11. Limitation of Liability",
-    content: `To the fullest extent permitted by law, TwirlDrape and its officers, directors, employees, and agents are not liable for:
+    content: `To the fullest extent permitted by law, VASTRAA and its officers, directors, employees, and agents are not liable for:
 
 • Indirect, incidental, consequential, or punitive damages arising from your use of the Platform.
 • Loss of data, profits, or business opportunities.
@@ -84,8 +84,8 @@ Our total liability for any claim arising out of or related to these Terms shall
     title: "14. Contact",
     content: `For questions about these Terms, contact us at:
 
-TwirlDrape Legal Team
-Email: support@twirldrape.com
+VASTRAA Legal Team
+Email: support@vastraa.com
 Address: 123 Silk Route, Colaba, Mumbai 400005, India`,
   },
 ];
@@ -95,7 +95,7 @@ function renderContent(text: string) {
     if (line.startsWith("• ")) {
       return (
         <li key={i} className="flex items-start gap-2 text-sm text-[#7a5f4e] leading-relaxed">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] mt-1.5 shrink-0" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C7CCD1] mt-1.5 shrink-0" />
           <span>{line.slice(2)}</span>
         </li>
       );
@@ -110,24 +110,24 @@ function renderContent(text: string) {
 export default function TermsOfService() {
   return (
     <Layout>
-      <div className="bg-[#F3F8F5] min-h-screen">
+      <div className="bg-[#F4F5F7] min-h-screen">
 
         {/* Hero */}
-        <section className="bg-[#1E6B5A] py-16 md:py-20">
+        <section className="bg-[#0A1F44] py-16 md:py-20">
           <div className="container mx-auto px-4 text-center">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-4">Legal</p>
-            <h1 className="font-serif text-4xl md:text-5xl text-[#F3F8F5] font-bold mb-3">
+            <p className="text-[#C7CCD1] uppercase tracking-[0.3em] text-xs font-bold mb-4">Legal</p>
+            <h1 className="font-serif text-4xl md:text-5xl text-[#F4F5F7] font-bold mb-3">
               Terms of Service
             </h1>
-            <p className="text-[#E6F0EA] text-sm">Last updated: {LAST_UPDATED}</p>
+            <p className="text-[#E5E8EC] text-sm">Last updated: {LAST_UPDATED}</p>
           </div>
         </section>
 
         {/* Intro */}
         <section className="container mx-auto px-4 py-10 max-w-3xl">
-          <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 shadow-sm">
+          <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 shadow-sm">
             <p className="text-sm text-[#7a5f4e] leading-relaxed">
-              Please read these Terms of Service carefully before using TwirlDrape. These Terms govern your
+              Please read these Terms of Service carefully before using VASTRAA. These Terms govern your
               access to and use of our website, mobile application, and related services. By creating an
               account or placing an order, you agree to these Terms in full.
             </p>
@@ -138,7 +138,7 @@ export default function TermsOfService() {
         <section className="container mx-auto px-4 pb-16 max-w-3xl space-y-10">
           {SECTIONS.map((sec) => (
             <div key={sec.title}>
-              <h2 className="font-serif text-lg text-[#1E6B5A] font-bold mb-4">{sec.title}</h2>
+              <h2 className="font-serif text-lg text-[#0A1F44] font-bold mb-4">{sec.title}</h2>
               <ul className="space-y-2">{renderContent(sec.content)}</ul>
             </div>
           ))}

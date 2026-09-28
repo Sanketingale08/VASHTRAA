@@ -20,14 +20,14 @@ const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"];
 const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"];
 const COLORS = [
   { value: "red", label: "Red", hex: "#c0392b" },
-  { value: "maroon", label: "Maroon", hex: "#1E6B5A" },
+  { value: "maroon", label: "Maroon", hex: "#0A1F44" },
   { value: "blue", label: "Blue", hex: "#2980b9" },
   { value: "green", label: "Green", hex: "#27ae60" },
   { value: "yellow", label: "Yellow", hex: "#f1c40f" },
   { value: "pink", label: "Pink", hex: "#e91e8c" },
   { value: "purple", label: "Purple", hex: "#8e44ad" },
   { value: "cream", label: "Cream", hex: "#f5e6c8" },
-  { value: "gold", label: "Gold", hex: "#C9A84C" },
+  { value: "gold", label: "Gold", hex: "#C7CCD1" },
   { value: "black", label: "Black", hex: "#2c2c2c" },
   { value: "orange", label: "Orange", hex: "#e67e22" },
   { value: "mint", label: "Mint", hex: "#1abc9c" },
@@ -212,8 +212,8 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
   const totalPages = data?.totalPages ?? 1;
 
   const chipBase = "shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full border transition-all";
-  const chipActive = "bg-[#C9A84C] text-[#1E6B5A] border-[#C9A84C]";
-  const chipInactive = "border-[#C9A84C]/30 text-[#3D1A1A]/70 hover:border-[#C9A84C] hover:text-[#3D1A1A]";
+  const chipActive = "bg-[#C7CCD1] text-[#0A1F44] border-[#C7CCD1]";
+  const chipInactive = "border-[#C7CCD1]/30 text-[#3D1A1A]/70 hover:border-[#C7CCD1] hover:text-[#3D1A1A]";
 
   const priceMin = priceRange[0];
   const priceMax = priceRange[1];
@@ -221,11 +221,11 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#F3F8F5] text-[#3D1A1A]">
+      <div className="min-h-screen bg-[#F4F5F7] text-[#3D1A1A]">
 
         {/* Page Header */}
         {heroBanner ? (
-          <div className="w-full border-b border-[#C9A84C]/20">
+          <div className="w-full border-b border-[#C7CCD1]/20">
             <img
               src={heroBanner}
               alt={title}
@@ -233,15 +233,15 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
             />
           </div>
         ) : (
-          <div className="py-12 border-b border-[#C9A84C]/20 bg-[#E6F0EA]">
+          <div className="py-12 border-b border-[#C7CCD1]/20 bg-[#E5E8EC]">
             <div className="container mx-auto px-4 text-center">
               {subtitle && (
-                <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-3">{subtitle}</p>
+                <p className="text-xs uppercase tracking-[0.25em] text-[#C7CCD1] font-bold mb-3">{subtitle}</p>
               )}
-              <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#1E6B5A]">
+              <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#0A1F44]">
                 {title}
               </h1>
-              <div className="w-16 h-0.5 bg-[#C9A84C] mx-auto mt-6" />
+              <div className="w-16 h-0.5 bg-[#C7CCD1] mx-auto mt-6" />
             </div>
           </div>
         )}
@@ -287,7 +287,7 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder={`Search ${category} sarees…`}
-                className="w-full pl-9 pr-4 py-3 border rounded-sm text-sm focus:outline-none focus:border-[#C9A84C] transition-colors bg-[#F3F8F5] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
+                className="w-full pl-9 pr-4 py-3 border rounded-sm text-sm focus:outline-none focus:border-[#C7CCD1] transition-colors bg-[#F4F5F7] border-[#C7CCD1]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
               />
             </div>
 
@@ -296,7 +296,7 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                 <select
                   value={sort}
                   onChange={(e) => { setSort(e.target.value as ListProductsSort); setPage(1); }}
-                  className="appearance-none pl-4 pr-9 py-3 border rounded-sm text-sm font-medium focus:outline-none focus:border-[#C9A84C] cursor-pointer transition-colors bg-[#F3F8F5] border-[#C9A84C]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
+                  className="appearance-none pl-4 pr-9 py-3 border rounded-sm text-sm font-medium focus:outline-none focus:border-[#C7CCD1] cursor-pointer transition-colors bg-[#F4F5F7] border-[#C7CCD1]/30 text-[#3D1A1A] placeholder-[#3D1A1A]/40"
                 >
                   {SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -310,14 +310,14 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                 className={cn(
                   "flex items-center gap-2 px-4 py-3 border rounded-sm text-sm font-semibold transition-all",
                   hasActiveFilters
-                    ? "bg-[#C9A84C] text-[#1E6B5A] border-[#C9A84C]"
-                    : "border-[#C9A84C]/30 text-[#3D1A1A] hover:border-[#C9A84C]"
+                    ? "bg-[#C7CCD1] text-[#0A1F44] border-[#C7CCD1]"
+                    : "border-[#C7CCD1]/30 text-[#3D1A1A] hover:border-[#C7CCD1]"
                 )}
               >
                 <SlidersHorizontal size={16} />
                 Filters
                 {hasActiveFilters && (
-                  <span className="bg-[#1E6B5A] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  <span className="bg-[#0A1F44] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
                     {activeFilterCount}
                   </span>
                 )}
@@ -406,9 +406,9 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                   transition={{ duration: 0.3 }}
                   className="shrink-0 overflow-hidden"
                 >
-                  <div className="w-[280px] p-5 rounded-lg border bg-white border-[#C9A84C]/10 space-y-6 sticky top-24">
+                  <div className="w-[280px] p-5 rounded-lg border bg-white border-[#C7CCD1]/10 space-y-6 sticky top-24">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-bold uppercase tracking-wider text-xs text-[#C9A84C]">Filters</h3>
+                      <h3 className="font-bold uppercase tracking-wider text-xs text-[#C7CCD1]">Filters</h3>
                       {hasActiveFilters && (
                         <button
                           onClick={resetFilters}
@@ -433,16 +433,16 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                                 name="minRating"
                                 checked={minRating === opt.value}
                                 onChange={() => { setMinRating(opt.value); setPage(1); }}
-                                className="accent-[#C9A84C]"
+                                className="accent-[#C7CCD1]"
                               />
-                              <span className="text-sm flex items-center gap-1 group-hover:text-[#C9A84C] transition-colors">
+                              <span className="text-sm flex items-center gap-1 group-hover:text-[#C7CCD1] transition-colors">
                                 {opt.value !== undefined && (
                                   <span className="flex">
                                     {[1, 2, 3, 4, 5].map((s) => (
                                       <Star
                                         key={s}
                                         size={10}
-                                        className={s <= Math.floor(opt.value!) ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-300"}
+                                        className={s <= Math.floor(opt.value!) ? "fill-[#C7CCD1] text-[#C7CCD1]" : "text-gray-300"}
                                       />
                                     ))}
                                   </span>
@@ -466,9 +466,9 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                           type="checkbox"
                           checked={hasDiscount}
                           onChange={(e) => { setHasDiscount(e.target.checked); setPage(1); }}
-                          className="accent-[#C9A84C]"
+                          className="accent-[#C7CCD1]"
                         />
-                        <span className="text-sm group-hover:text-[#C9A84C] transition-colors">🏷️ On Sale only</span>
+                        <span className="text-sm group-hover:text-[#C7CCD1] transition-colors">🏷️ On Sale only</span>
                       </label>
                     </div>
 
@@ -485,11 +485,11 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                           onValueCommit={handlePriceRangeCommit}
                           className="relative flex w-full touch-none select-none items-center"
                         >
-                          <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[#C9A84C]/20">
-                            <SliderPrimitive.Range className="absolute h-full bg-[#C9A84C]" />
+                          <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[#C7CCD1]/20">
+                            <SliderPrimitive.Range className="absolute h-full bg-[#C7CCD1]" />
                           </SliderPrimitive.Track>
-                          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-[#C9A84C] bg-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C9A84C]" />
-                          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-[#C9A84C] bg-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C9A84C]" />
+                          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-[#C7CCD1] bg-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7CCD1]" />
+                          <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border-2 border-[#C7CCD1] bg-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7CCD1]" />
                         </SliderPrimitive.Root>
                       </div>
                       <div className="flex justify-between mt-3 text-xs text-[#3D1A1A]/70 font-medium">
@@ -513,10 +513,10 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                               className={cn(
                                 "w-7 h-7 rounded-full border-2 transition-all",
                                 color === c.value
-                                  ? "border-[#C9A84C] scale-110 shadow-md"
+                                  ? "border-[#C7CCD1] scale-110 shadow-md"
                                   : isZero
                                     ? "border-transparent opacity-30 cursor-not-allowed"
-                                    : "border-transparent hover:border-[#C9A84C]/50"
+                                    : "border-transparent hover:border-[#C7CCD1]/50"
                               )}
                               style={{ backgroundColor: c.hex }}
                             />
@@ -547,9 +547,9 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                                   type="checkbox"
                                   checked={fabric === f}
                                   onChange={() => { setFabric(fabric === f ? undefined : f); setPage(1); }}
-                                  className="accent-[#C9A84C]"
+                                  className="accent-[#C7CCD1]"
                                 />
-                                <span className="text-sm capitalize group-hover:text-[#C9A84C] transition-colors">{f}</span>
+                                <span className="text-sm capitalize group-hover:text-[#C7CCD1] transition-colors">{f}</span>
                               </div>
                               <span className="text-[11px] opacity-50 shrink-0">({fabricCount})</span>
                             </label>
@@ -572,9 +572,9 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                                   type="checkbox"
                                   checked={occasion === o}
                                   onChange={() => { setOccasion(occasion === o ? undefined : o); setPage(1); }}
-                                  className="accent-[#C9A84C]"
+                                  className="accent-[#C7CCD1]"
                                 />
-                                <span className="text-sm capitalize group-hover:text-[#C9A84C] transition-colors">{o}</span>
+                                <span className="text-sm capitalize group-hover:text-[#C7CCD1] transition-colors">{o}</span>
                               </div>
                               <span className="text-[11px] opacity-50 shrink-0">({occasionCount})</span>
                             </label>
@@ -598,9 +598,9 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                                     type="checkbox"
                                     checked={vendorId === v.id}
                                     onChange={() => { setVendorId(vendorId === v.id ? undefined : v.id); setPage(1); }}
-                                    className="accent-[#C9A84C]"
+                                    className="accent-[#C7CCD1]"
                                   />
-                                  <span className="text-sm group-hover:text-[#C9A84C] transition-colors">{v.name}</span>
+                                  <span className="text-sm group-hover:text-[#C7CCD1] transition-colors">{v.name}</span>
                                 </div>
                                 <span className="text-[11px] opacity-50 shrink-0">({vendorCount})</span>
                               </label>
@@ -627,7 +627,7 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
               {isLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="rounded-lg aspect-[3/4] animate-pulse bg-[#E6F0EA]" />
+                    <div key={i} className="rounded-lg aspect-[3/4] animate-pulse bg-[#E5E8EC]" />
                   ))}
                 </div>
               ) : products.length === 0 ? (
@@ -637,7 +637,7 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                   <p className="opacity-60 mb-6 text-sm">Try adjusting your filters or search term</p>
                   <button
                     onClick={resetFilters}
-                    className="bg-[#1E6B5A] text-[#F3F8F5] border border-[#C9A84C]/50 px-6 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C9A84C] hover:text-[#1E6B5A] transition-colors"
+                    className="bg-[#0A1F44] text-[#F4F5F7] border border-[#C7CCD1]/50 px-6 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#C7CCD1] hover:text-[#0A1F44] transition-colors"
                   >
                     Clear Filters
                   </button>
@@ -656,7 +656,7 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
-                    className="px-4 py-2 border rounded text-sm font-medium transition-colors disabled:opacity-30 border-[#C9A84C]/30 text-[#3D1A1A] hover:border-[#C9A84C]"
+                    className="px-4 py-2 border rounded text-sm font-medium transition-colors disabled:opacity-30 border-[#C7CCD1]/30 text-[#3D1A1A] hover:border-[#C7CCD1]"
                   >
                     ← Prev
                   </button>
@@ -670,8 +670,8 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                         className={cn(
                           "w-10 h-10 border rounded text-sm font-medium transition-colors",
                           page === pg
-                            ? "bg-[#C9A84C] text-[#1E6B5A] border-[#C9A84C]"
-                            : "border-[#C9A84C]/30 text-[#3D1A1A] hover:border-[#C9A84C]"
+                            ? "bg-[#C7CCD1] text-[#0A1F44] border-[#C7CCD1]"
+                            : "border-[#C7CCD1]/30 text-[#3D1A1A] hover:border-[#C7CCD1]"
                         )}
                       >
                         {pg}
@@ -682,7 +682,7 @@ export function ProductsListing({ category, title, subtitle, heroBanner }: Produ
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="px-4 py-2 border rounded text-sm font-medium transition-colors disabled:opacity-30 border-[#C9A84C]/30 text-[#3D1A1A] hover:border-[#C9A84C]"
+                    className="px-4 py-2 border rounded text-sm font-medium transition-colors disabled:opacity-30 border-[#C7CCD1]/30 text-[#3D1A1A] hover:border-[#C7CCD1]"
                   >
                     Next →
                   </button>
@@ -708,7 +708,7 @@ function FilterChip({ label, color, onRemove }: FilterChipProps) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#3D1A1A] text-xs font-semibold"
+      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C7CCD1]/15 border border-[#C7CCD1]/40 text-[#3D1A1A] text-xs font-semibold"
     >
       {color && (
         <span
@@ -719,7 +719,7 @@ function FilterChip({ label, color, onRemove }: FilterChipProps) {
       <span className="capitalize">{label}</span>
       <button
         onClick={onRemove}
-        className="ml-0.5 rounded-full hover:bg-[#C9A84C]/30 transition-colors p-0.5"
+        className="ml-0.5 rounded-full hover:bg-[#C7CCD1]/30 transition-colors p-0.5"
         aria-label={`Remove ${label} filter`}
       >
         <X size={10} />

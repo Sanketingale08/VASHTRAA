@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 type TicketStatus = "Open" | "In Progress" | "Resolved" | "Closed" | "Waiting for Customer";
 
@@ -256,7 +256,7 @@ function AdminSupportContent() {
                 onClick={() => setSelectedId(t.id)}
                 className={cn(
                   "w-full text-left rounded-xl p-3.5 border transition-all bg-white",
-                  t.id === selectedId ? "border-[#0D1B36]/40 ring-1 ring-[#0D1B36]/10" : "border-gray-200 hover:border-[#C9A84C]/50"
+                  t.id === selectedId ? "border-[#0D1B36]/40 ring-1 ring-[#0D1B36]/10" : "border-gray-200 hover:border-[#C7CCD1]/50"
                 )}
               >
                 <div className="flex items-start justify-between gap-2">

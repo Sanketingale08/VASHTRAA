@@ -9,9 +9,9 @@ import {
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -71,7 +71,7 @@ export default function SellerCustomers() {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 p-1.5 flex flex-wrap gap-1"
+          className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-1.5 flex flex-wrap gap-1"
         >
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
@@ -135,7 +135,7 @@ function OverviewTab({ summary, dashSummary, onNavigate }: { summary: any; dashS
               animate="visible"
               variants={fadeUp}
               onClick={c.nav}
-              className="text-left bg-white rounded-2xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/50 transition-colors"
+              className="text-left bg-white rounded-2xl border border-[#C7CCD1]/20 p-5 hover:border-[#C7CCD1]/50 transition-colors"
             >
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: GOLD }}>
                 <c.icon size={16} style={{ color: MAROON }} />
@@ -159,7 +159,7 @@ function OverviewTab({ summary, dashSummary, onNavigate }: { summary: any; dashS
               animate="visible"
               variants={fadeUp}
               onClick={() => onNavigate(c.tab)}
-              className="text-left bg-white rounded-2xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/50 transition-colors"
+              className="text-left bg-white rounded-2xl border border-[#C7CCD1]/20 p-5 hover:border-[#C7CCD1]/50 transition-colors"
             >
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: MAROON }}>
                 <c.icon size={16} className="text-white" />
@@ -220,7 +220,7 @@ function CustomersTab({ onSelect }: { onSelect: (userId: string) => void }) {
   }, [load]);
 
   return (
-    <motion.div initial="hidden" animate="visible" variants={fadeUp} className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
+    <motion.div initial="hidden" animate="visible" variants={fadeUp} className="bg-white rounded-2xl border border-[#C7CCD1]/20 overflow-hidden">
       {/* Search bar */}
       <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
         <div className="relative flex-1">
@@ -229,7 +229,7 @@ function CustomersTab({ onSelect }: { onSelect: (userId: string) => void }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, mobile, email, or address…"
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/30 focus:border-[#C9A84C]"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/30 focus:border-[#C7CCD1]"
           />
         </div>
         <span className="text-xs text-gray-400 shrink-0">{customers.length} customers</span>
@@ -299,7 +299,7 @@ function CustomersTab({ onSelect }: { onSelect: (userId: string) => void }) {
                     <div>
                       <button
                         onClick={() => onSelect(c.userId)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors hover:border-[#1E6B5A]/40 hover:text-[#1E6B5A]"
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors hover:border-[#0A1F44]/40 hover:text-[#0A1F44]"
                         style={{ borderColor: "#e5e7eb", color: "#6b7280" }}
                       >
                         View <ChevronRight size={11} />
@@ -510,7 +510,7 @@ function CustomerDetailModal({ userId, onClose }: { userId: string; onClose: () 
                       <div key={r.id} className="p-3 rounded-xl border border-gray-100">
                         <div className="flex items-center gap-1 mb-1.5">
                           {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} size={11} className={i < r.rating ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-200"} />
+                            <Star key={i} size={11} className={i < r.rating ? "fill-[#C7CCD1] text-[#C7CCD1]" : "text-gray-200"} />
                           ))}
                           <span className="text-[10px] text-gray-400 ml-1">{formatDate(r.createdAt)}</span>
                         </div>
@@ -614,20 +614,20 @@ function ReviewsTab({ onChange }: { onChange: () => void }) {
       {loading ? (
         <div className="space-y-3">{[1, 2, 3].map((n) => <div key={n} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}</div>
       ) : reviews.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 py-16 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 py-16 text-center text-gray-400 text-sm">
           <Star size={32} className="mx-auto mb-3 opacity-30" />
           No reviews yet.
         </div>
       ) : (
         <div className="space-y-3">
           {reviews.map((r) => (
-            <div key={r.id} className="bg-white rounded-2xl border border-[#C9A84C]/20 p-5">
+            <div key={r.id} className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-700">{r.customerName} · {r.productName}</p>
                   <div className="flex items-center gap-1 mt-1">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} size={12} className={i < r.rating ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-200"} />
+                      <Star key={i} size={12} className={i < r.rating ? "fill-[#C7CCD1] text-[#C7CCD1]" : "text-gray-200"} />
                     ))}
                     <span className="text-[10px] text-gray-400 ml-2">{formatDate(r.createdAt)}</span>
                     {r.reported && (
@@ -660,7 +660,7 @@ function ReviewsTab({ onChange }: { onChange: () => void }) {
                     value={replyDraft[r.id] ?? ""}
                     onChange={(e) => setReplyDraft((d) => ({ ...d, [r.id]: e.target.value }))}
                     placeholder="Write a reply..."
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C7CCD1]"
                   />
                   <button
                     onClick={() => reply(r.id)}
@@ -741,14 +741,14 @@ function QueriesTab({ onChange }: { onChange: () => void }) {
       {loading ? (
         <div className="space-y-3">{[1, 2, 3].map((n) => <div key={n} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}</div>
       ) : queries.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 py-16 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 py-16 text-center text-gray-400 text-sm">
           <MessageCircle size={32} className="mx-auto mb-3 opacity-30" />
           No product queries yet.
         </div>
       ) : (
         <div className="space-y-3">
           {queries.map((q) => (
-            <div key={q.id} className="bg-white rounded-2xl border border-[#C9A84C]/20 p-5">
+            <div key={q.id} className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-700">{q.customerName} · {q.productName}</p>
@@ -777,7 +777,7 @@ function QueriesTab({ onChange }: { onChange: () => void }) {
                     value={replyDraft[q.id] ?? ""}
                     onChange={(e) => setReplyDraft((d) => ({ ...d, [q.id]: e.target.value }))}
                     placeholder="Write a reply..."
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C7CCD1]"
                   />
                   <button
                     onClick={() => reply(q.id)}
@@ -887,7 +887,7 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tickets..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#C9A84C]"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#C7CCD1]"
           />
         </div>
         <select
@@ -914,12 +914,12 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
       {loading ? (
         <div className="space-y-3">{[1, 2, 3].map((n) => <div key={n} className="h-16 rounded-xl bg-gray-100 animate-pulse" />)}</div>
       ) : pageItems.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 py-16 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 py-16 text-center text-gray-400 text-sm">
           <LifeBuoy size={32} className="mx-auto mb-3 opacity-30" />
           No support tickets found.
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 divide-y divide-gray-50">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 divide-y divide-gray-50">
           {pageItems.map((t) => {
             const pc = priorityColor(t.priority);
             return (
@@ -957,7 +957,7 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 text-xs font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-lg disabled:opacity-40"
+            className="px-3 py-1.5 text-xs font-medium text-[#0A1F44] border border-[#C7CCD1]/30 rounded-lg disabled:opacity-40"
           >
             Previous
           </button>
@@ -965,7 +965,7 @@ function TicketsTab({ onChange }: { onChange: () => void }) {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1.5 text-xs font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-lg disabled:opacity-40"
+            className="px-3 py-1.5 text-xs font-medium text-[#0A1F44] border border-[#C7CCD1]/30 rounded-lg disabled:opacity-40"
           >
             Next
           </button>
@@ -1147,7 +1147,7 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
                       href={u}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:border-[#C9A84C] hover:text-[#1E6B5A] transition-colors"
+                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:border-[#C7CCD1] hover:text-[#0A1F44] transition-colors"
                     >
                       <Paperclip size={11} /> Evidence {i + 1}
                     </a>
@@ -1161,12 +1161,12 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
                 value={evidenceUrl}
                 onChange={(e) => setEvidenceUrl(e.target.value)}
                 placeholder="Paste evidence link (image/document URL)..."
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C7CCD1]"
               />
               <button
                 onClick={addEvidence}
                 disabled={busy || !evidenceUrl.trim()}
-                className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 border border-gray-200 text-gray-600 hover:border-[#C9A84C] disabled:opacity-50"
+                className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 border border-gray-200 text-gray-600 hover:border-[#C7CCD1] disabled:opacity-50"
               >
                 <Paperclip size={12} /> Attach
               </button>
@@ -1217,7 +1217,7 @@ function TicketDetailModal({ ticketId, onClose, onChanged }: { ticketId: string;
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
                   placeholder="Reply to customer..."
-                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C7CCD1]"
                 />
                 <button
                   onClick={sendReply}

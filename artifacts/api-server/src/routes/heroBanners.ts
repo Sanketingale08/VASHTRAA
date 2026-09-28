@@ -1,16 +1,14 @@
 import { Router } from "express";
 import express from "express";
-import { db } from "@workspace/db";
+import { db, mongoGeneric, mongoSiteSettings } from "@workspace/db";
 import { heroBannersTable, siteSettingsTable } from "@workspace/db";
-import { eq, asc, desc, ne } from "drizzle-orm";
+import { eq, asc, desc, ne } from "@workspace/db";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { requireAdminKey } from "../middlewares/isAdmin";
 
 const router: Router = Router();
 const objectStorageService = new ObjectStorageService();
-
 const GLOBAL_INTERVAL_KEY = "hero_global_interval_ms";
-
-import { requireAdminKey } from "../middlewares/isAdmin";
 
 /**
  * GET /api/hero-banners — public
@@ -18,12 +16,19 @@ import { requireAdminKey } from "../middlewares/isAdmin";
  */
 router.get("/hero-banners", async (_req, res) => {
   try {
-    const banners = await db
-      .select()
-      .from(heroBannersTable)
-      .where(eq(heroBannersTable.isActive, true))
-      .orderBy(desc(heroBannersTable.isDefault), asc(heroBannersTable.displayOrder));
-    res.json(banners);
+    try {
+      const col = mongoGeneric.getCollection("hero_banners");
+      const banners = await col.find({ isActive: true }).sort({ isDefault: -1, displayOrder: 1 }).toArray();
+      res.json(banners);
+      return;
+    } catch {
+      const banners = await db
+        .select()
+        .from(heroBannersTable)
+        .where(eq(heroBannersTable.isActive, true))
+        .orderBy(desc(heroBannersTable.isDefault), asc(heroBannersTable.displayOrder));
+      res.json(banners);
+    }
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch banners" });
   }
@@ -34,11 +39,18 @@ router.get("/hero-banners", async (_req, res) => {
  */
 router.get("/admin/hero-banners", requireAdminKey, async (_req, res) => {
   try {
-    const banners = await db
-      .select()
-      .from(heroBannersTable)
-      .orderBy(desc(heroBannersTable.isDefault), asc(heroBannersTable.displayOrder));
-    res.json(banners);
+    try {
+      const col = mongoGeneric.getCollection("hero_banners");
+      const banners = await col.find({}).sort({ isDefault: -1, displayOrder: 1 }).toArray();
+      res.json(banners);
+      return;
+    } catch {
+      const banners = await db
+        .select()
+        .from(heroBannersTable)
+        .orderBy(desc(heroBannersTable.isDefault), asc(heroBannersTable.displayOrder));
+      res.json(banners);
+    }
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch banners" });
   }
@@ -49,6 +61,11 @@ router.get("/admin/hero-banners", requireAdminKey, async (_req, res) => {
  */
 router.get("/admin/hero-settings", requireAdminKey, async (_req, res) => {
   try {
+    const val = await mongoSiteSettings.get(GLOBAL_INTERVAL_KEY);
+    if (val !== null) {
+      res.json({ globalIntervalMs: Number(val) || 6000 });
+      return;
+    }
     const rows = await db
       .select()
       .from(siteSettingsTable)
@@ -71,10 +88,14 @@ router.put(
     try {
       const { globalIntervalMs } = req.body;
       const ms = Math.max(2000, Math.min(30000, Number(globalIntervalMs) || 6000));
-      await db
-        .insert(siteSettingsTable)
-        .values({ key: GLOBAL_INTERVAL_KEY, value: String(ms) })
-        .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value: String(ms) } });
+      try {
+        await mongoSiteSettings.set(GLOBAL_INTERVAL_KEY, String(ms));
+      } catch {
+        await db
+          .insert(siteSettingsTable)
+          .values({ key: GLOBAL_INTERVAL_KEY, value: String(ms) })
+          .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value: String(ms) } });
+      }
       res.json({ globalIntervalMs: ms });
     } catch {
       res.status(500).json({ error: "Failed to save settings" });
@@ -127,27 +148,54 @@ router.post("/admin/hero-banners", requireAdminKey, express.json(), async (req: 
     const { imageUrl, title, slideIntervalMs, isDefault } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
 
-    const all = await db
-      .select({ displayOrder: heroBannersTable.displayOrder })
-      .from(heroBannersTable)
-      .orderBy(asc(heroBannersTable.displayOrder));
-    const maxOrder = all.length > 0 ? Math.max(...all.map((b) => b.displayOrder)) : -1;
+    try {
+      const col = mongoGeneric.getCollection("hero_banners");
+      const all = await col.find({}).sort({ displayOrder: 1 }).toArray();
+      const maxOrder = all.length > 0 ? Math.max(...all.map((b: any) => b.displayOrder ?? 0)) : -1;
 
-    if (isDefault) {
-      await db.update(heroBannersTable).set({ isDefault: false });
-    }
+      if (isDefault) {
+        await col.updateMany({}, { $set: { isDefault: false } });
+      }
 
-    const [banner] = await db
-      .insert(heroBannersTable)
-      .values({
+      const id = crypto.randomUUID();
+      const doc = {
+        id,
+        _id: id,
         imageUrl,
         title: title || null,
         displayOrder: maxOrder + 1,
         slideIntervalMs: slideIntervalMs || 6000,
         isDefault: isDefault === true,
-      })
-      .returning();
-    res.json(banner);
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await col.insertOne(doc as any);
+      res.json(doc);
+      return;
+    } catch {
+      const all = await db
+        .select({ displayOrder: heroBannersTable.displayOrder })
+        .from(heroBannersTable)
+        .orderBy(asc(heroBannersTable.displayOrder));
+      const maxOrder = all.length > 0 ? Math.max(...all.map((b) => b.displayOrder)) : -1;
+
+      if (isDefault) {
+        await db.update(heroBannersTable).set({ isDefault: false });
+      }
+
+      const [banner] = await db
+        .insert(heroBannersTable)
+        .values({
+          imageUrl,
+          title: title || null,
+          displayOrder: maxOrder + 1,
+          slideIntervalMs: slideIntervalMs || 6000,
+          isDefault: isDefault === true,
+        })
+        .returning();
+      res.json(banner);
+    }
   } catch (err) {
     res.status(500).json({ error: "Failed to create banner" });
   }
@@ -155,7 +203,6 @@ router.post("/admin/hero-banners", requireAdminKey, express.json(), async (req: 
 
 /**
  * PUT /api/admin/hero-banners/reorder — reorder banners by id array
- * (Must be before /:id to avoid "reorder" being interpreted as an id)
  */
 router.put(
   "/admin/hero-banners/reorder",
@@ -165,15 +212,30 @@ router.put(
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids)) return res.status(400).json({ error: "ids must be an array" });
-      await Promise.all(
-        ids.map((id: string, index: number) =>
-          db
-            .update(heroBannersTable)
-            .set({ displayOrder: index, updatedAt: new Date() })
-            .where(eq(heroBannersTable.id, id)),
-        ),
-      );
-      res.json({ success: true });
+
+      try {
+        const col = mongoGeneric.getCollection("hero_banners");
+        await Promise.all(
+          ids.map((id: string, index: number) =>
+            col.updateOne(
+              { $or: [{ id }, { _id: id as any }] },
+              { $set: { displayOrder: index, updatedAt: new Date() } }
+            )
+          )
+        );
+        res.json({ success: true });
+        return;
+      } catch {
+        await Promise.all(
+          ids.map((id: string, index: number) =>
+            db
+              .update(heroBannersTable)
+              .set({ displayOrder: index, updatedAt: new Date() })
+              .where(eq(heroBannersTable.id, id)),
+          ),
+        );
+        res.json({ success: true });
+      }
     } catch (err) {
       res.status(500).json({ error: "Failed to reorder banners" });
     }
@@ -191,29 +253,52 @@ router.patch(
     try {
       const { id } = req.params;
       const { title, isActive, isDefault, displayOrder, slideIntervalMs } = req.body;
-      const updates: Record<string, unknown> = { updatedAt: new Date() };
-      if (title !== undefined) updates.title = title;
-      if (isActive !== undefined) updates.isActive = isActive;
-      if (displayOrder !== undefined) updates.displayOrder = displayOrder;
-      if (slideIntervalMs !== undefined) updates.slideIntervalMs = slideIntervalMs;
 
-      if (isDefault === true) {
-        await db
+      try {
+        const col = mongoGeneric.getCollection("hero_banners");
+        const updates: Record<string, unknown> = { updatedAt: new Date() };
+        if (title !== undefined) updates.title = title;
+        if (isActive !== undefined) updates.isActive = isActive;
+        if (displayOrder !== undefined) updates.displayOrder = displayOrder;
+        if (slideIntervalMs !== undefined) updates.slideIntervalMs = slideIntervalMs;
+
+        if (isDefault === true) {
+          await col.updateMany({ id: { $ne: id } }, { $set: { isDefault: false, updatedAt: new Date() } });
+          updates.isDefault = true;
+        } else if (isDefault === false) {
+          updates.isDefault = false;
+        }
+
+        await col.updateOne({ $or: [{ id }, { _id: id as any }] }, { $set: updates });
+        const banner = await col.findOne({ $or: [{ id }, { _id: id as any }] });
+        if (!banner) return res.status(404).json({ error: "Banner not found" });
+        res.json(banner);
+        return;
+      } catch {
+        const updates: Record<string, unknown> = { updatedAt: new Date() };
+        if (title !== undefined) updates.title = title;
+        if (isActive !== undefined) updates.isActive = isActive;
+        if (displayOrder !== undefined) updates.displayOrder = displayOrder;
+        if (slideIntervalMs !== undefined) updates.slideIntervalMs = slideIntervalMs;
+
+        if (isDefault === true) {
+          await db
+            .update(heroBannersTable)
+            .set({ isDefault: false, updatedAt: new Date() })
+            .where(ne(heroBannersTable.id, id));
+          updates.isDefault = true;
+        } else if (isDefault === false) {
+          updates.isDefault = false;
+        }
+
+        const [banner] = await db
           .update(heroBannersTable)
-          .set({ isDefault: false, updatedAt: new Date() })
-          .where(ne(heroBannersTable.id, id));
-        updates.isDefault = true;
-      } else if (isDefault === false) {
-        updates.isDefault = false;
+          .set(updates)
+          .where(eq(heroBannersTable.id, id))
+          .returning();
+        if (!banner) return res.status(404).json({ error: "Banner not found" });
+        res.json(banner);
       }
-
-      const [banner] = await db
-        .update(heroBannersTable)
-        .set(updates)
-        .where(eq(heroBannersTable.id, id))
-        .returning();
-      if (!banner) return res.status(404).json({ error: "Banner not found" });
-      res.json(banner);
     } catch (err) {
       res.status(500).json({ error: "Failed to update banner" });
     }
@@ -225,8 +310,15 @@ router.patch(
  */
 router.delete("/admin/hero-banners/:id", requireAdminKey, async (req: any, res: any) => {
   try {
-    await db.delete(heroBannersTable).where(eq(heroBannersTable.id, req.params.id));
-    res.json({ success: true });
+    try {
+      const col = mongoGeneric.getCollection("hero_banners");
+      await col.deleteOne({ $or: [{ id: req.params.id }, { _id: req.params.id as any }] });
+      res.json({ success: true });
+      return;
+    } catch {
+      await db.delete(heroBannersTable).where(eq(heroBannersTable.id, req.params.id));
+      res.json({ success: true });
+    }
   } catch (err) {
     res.status(500).json({ error: "Failed to delete banner" });
   }

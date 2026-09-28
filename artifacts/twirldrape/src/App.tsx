@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ClerkProvider, SignIn, SignUp } from "@clerk/react";
+import { ClerkProvider } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
@@ -54,7 +54,6 @@ import AdminNotifications from "@/pages/admin/AdminNotifications";
 import AdminBusinessIntelligence from "@/pages/admin/AdminBusinessIntelligence";
 import AdminFinancialManagement from "@/pages/admin/AdminFinancialManagement";
 import AdminAboutContent from "@/pages/admin/AdminAboutContent";
-import AdminHeroBanners from "@/pages/admin/AdminHeroBanners";
 import AdminProducts from "@/pages/admin/AdminProducts";
 import AdminReports from "@/pages/admin/AdminReports";
 import AdminSettings from "@/pages/admin/AdminSettings";
@@ -87,6 +86,13 @@ import Returns from "@/pages/Returns";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import { SellerGuard } from "@/components/SellerGuard";
+import { CustomerGuard } from "@/components/CustomerGuard";
+import { AuthProvider } from "@/context/AuthContext";
+import CustomSignInPage from "@/pages/SignIn";
+import CustomSignUpPage from "@/pages/SignUp";
+import ForgotPasswordPage from "@/pages/ForgotPassword";
+import ResetPasswordPage from "@/pages/ResetPassword";
+import GoogleOAuthCallback from "@/pages/GoogleOAuthCallback";
 import MaintenancePage from "@/pages/MaintenancePage";
 
 const queryClient = new QueryClient();
@@ -116,84 +122,48 @@ const clerkAppearance = {
   options: {
     logoPlacement: "inside" as const,
     logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/images/logo.png`,
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
   },
   variables: {
-    colorPrimary: "#1E6B5A",
+    colorPrimary: "#0A1F44",
     colorForeground: "#3D1A1A",
     colorMutedForeground: "#7a5f4e",
     colorDanger: "#c0392b",
-    colorBackground: "#F3F8F5",
-    colorInput: "#E6F0EA",
+    colorBackground: "#F4F5F7",
+    colorInput: "#E5E8EC",
     colorInputForeground: "#3D1A1A",
-    colorNeutral: "#C9A84C",
+    colorNeutral: "#C7CCD1",
     fontFamily: "'DM Sans', sans-serif",
     borderRadius: "0.5rem",
   },
   elements: {
     rootBox: "w-full flex justify-center",
-    cardBox: "bg-[#F3F8F5] rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl border border-[#C9A84C]/30",
+    cardBox: "bg-[#F4F5F7] rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl border border-[#C7CCD1]/30",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "text-[#1E6B5A] font-serif text-2xl",
+    headerTitle: "text-[#0A1F44] font-serif text-2xl",
     headerSubtitle: "text-[#7a5f4e]",
     socialButtonsBlockButtonText: "text-[#3D1A1A]",
     formFieldLabel: "text-[#3D1A1A] font-medium",
-    footerActionLink: "text-[#1E6B5A] font-semibold hover:text-[#C9A84C]",
+    footerActionLink: "text-[#0A1F44] font-semibold hover:text-[#C7CCD1]",
     footerActionText: "text-[#7a5f4e]",
     dividerText: "text-[#7a5f4e]",
-    identityPreviewEditButton: "text-[#1E6B5A]",
+    identityPreviewEditButton: "text-[#0A1F44]",
     formFieldSuccessText: "text-green-700",
     alertText: "text-[#3D1A1A]",
     logoBox: "flex justify-center py-2",
     logoImage: "h-16 w-auto object-contain",
-    socialButtonsBlockButton: "border border-[#C9A84C]/40 hover:border-[#C9A84C] bg-white",
-    formButtonPrimary: "bg-[#1E6B5A] hover:bg-[#5e1421] text-[#F3F8F5]",
-    formFieldInput: "bg-[#E6F0EA] border-[#C9A84C]/40 text-[#3D1A1A]",
-    footerAction: "bg-[#E6F0EA] border-t border-[#C9A84C]/20",
-    dividerLine: "bg-[#C9A84C]/30",
-    alert: "bg-[#E6F0EA] border border-[#C9A84C]/30",
-    otpCodeFieldInput: "bg-[#E6F0EA] border-[#C9A84C]/40 text-[#3D1A1A]",
+    socialButtonsBlockButton: "border border-[#C7CCD1]/40 hover:border-[#C7CCD1] bg-white",
+    formButtonPrimary: "bg-[#0A1F44] hover:bg-[#2C3E6B] text-[#F4F5F7]",
+    formFieldInput: "bg-[#E5E8EC] border-[#C7CCD1]/40 text-[#3D1A1A]",
+    footerAction: "bg-[#E5E8EC] border-t border-[#C7CCD1]/20",
+    dividerLine: "bg-[#C7CCD1]/30",
+    alert: "bg-[#E5E8EC] border border-[#C7CCD1]/30",
+    otpCodeFieldInput: "bg-[#E5E8EC] border-[#C7CCD1]/40 text-[#3D1A1A]",
     formFieldRow: "",
     main: "",
   },
 };
-
-function SignInPage() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F3F8F5] px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <p className="text-sm tracking-[0.2em] uppercase text-[#7a5f4e]">Welcome back</p>
-        </div>
-        <SignIn
-          routing="path"
-          path={`${basePath}/sign-in`}
-          signUpUrl={`${basePath}/sign-up`}
-          forceRedirectUrl={`${basePath}/`}
-        />
-      </div>
-    </div>
-  );
-}
-
-function SignUpPage() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F3F8F5] px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <p className="text-sm tracking-[0.2em] uppercase text-[#7a5f4e]">Join TwirlDrape</p>
-        </div>
-        <SignUp
-          routing="path"
-          path={`${basePath}/sign-up`}
-          signInUrl={`${basePath}/sign-in`}
-          forceRedirectUrl={`${basePath}/`}
-        />
-      </div>
-    </div>
-  );
-}
 
 const REFERRAL_STORAGE_KEY = "td_ref_code";
 
@@ -243,17 +213,17 @@ function Router() {
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/orders" component={OrderHistoryPage} />
       <Route path="/orders/:id" component={OrderConfirmationPage} />
-      <Route path="/account" component={() => <Redirect to="/account/overview" />} />
-      <Route path="/account/overview" component={AccountOverviewPage} />
-      <Route path="/account/profile" component={AccountProfilePage} />
-      <Route path="/account/coupons" component={AccountCouponsPage} />
-      <Route path="/account/orders" component={AccountOrdersPage} />
-      <Route path="/account/wishlist" component={AccountWishlistPage} />
-      <Route path="/account/rewards" component={AccountRewardsPage} />
-      <Route path="/account/notifications" component={AccountNotificationsPage} />
-      <Route path="/account/support" component={AccountSupportPage} />
-      <Route path="/account/payment-methods" component={AccountPaymentMethodsPage} />
-      <Route path="/account/addresses" component={AddressBookPage} />
+      <Route path="/account" component={() => <CustomerGuard><Redirect to="/account/overview" /></CustomerGuard>} />
+      <Route path="/account/overview" component={() => <CustomerGuard><AccountOverviewPage /></CustomerGuard>} />
+      <Route path="/account/profile" component={() => <CustomerGuard><AccountProfilePage /></CustomerGuard>} />
+      <Route path="/account/coupons" component={() => <CustomerGuard><AccountCouponsPage /></CustomerGuard>} />
+      <Route path="/account/orders" component={() => <CustomerGuard><AccountOrdersPage /></CustomerGuard>} />
+      <Route path="/account/wishlist" component={() => <CustomerGuard><AccountWishlistPage /></CustomerGuard>} />
+      <Route path="/account/rewards" component={() => <CustomerGuard><AccountRewardsPage /></CustomerGuard>} />
+      <Route path="/account/notifications" component={() => <CustomerGuard><AccountNotificationsPage /></CustomerGuard>} />
+      <Route path="/account/support" component={() => <CustomerGuard><AccountSupportPage /></CustomerGuard>} />
+      <Route path="/account/payment-methods" component={() => <CustomerGuard><AccountPaymentMethodsPage /></CustomerGuard>} />
+      <Route path="/account/addresses" component={() => <CustomerGuard><AddressBookPage /></CustomerGuard>} />
       <Route path="/bridal" component={BridalCollection} />
       <Route path="/festival" component={Festival} />
       <Route path="/party-wear" component={PartyWear} />
@@ -281,7 +251,6 @@ function Router() {
       <Route path="/admin/business-intelligence" component={AdminBusinessIntelligence} />
       <Route path="/admin/financial" component={AdminFinancialManagement} />
       <Route path="/admin/about-content" component={AdminAboutContent} />
-      <Route path="/admin/hero-banners" component={AdminHeroBanners} />
       <Route path="/admin/products" component={AdminProducts} />
       <Route path="/admin/reports" component={AdminReports} />
       <Route path="/admin/settings" component={AdminSettings} />
@@ -333,8 +302,15 @@ function Router() {
       <Route path="/stores/:vendorId" component={VendorStore} />
       <Route path="/weavers/:id" component={WeaverProfile} />
       <Route path="/weavers" component={Weavers} />
-      <Route path="/sign-in/*?" component={SignInPage} />
-      <Route path="/sign-up/*?" component={SignUpPage} />
+      <Route path="/seller/forgot-password" component={() => <ForgotPasswordPage role="seller" />} />
+      <Route path="/seller/reset-password" component={() => <ResetPasswordPage role="seller" />} />
+      <Route path="/forgot-password" component={() => <ForgotPasswordPage role="customer" />} />
+      <Route path="/reset-password" component={() => <ResetPasswordPage role="customer" />} />
+      <Route path="/sign-in/*?" component={CustomSignInPage} />
+      <Route path="/sign-in" component={CustomSignInPage} />
+      <Route path="/sign-up/*?" component={CustomSignUpPage} />
+      <Route path="/sign-up" component={CustomSignUpPage} />
+      <Route path="/google-callback" component={GoogleOAuthCallback} />
       <Route path="/unauthorized" component={Unauthorized} />
       <Route component={NotFound} />
     </Switch>
@@ -399,21 +375,23 @@ function ClerkProviderWithRoutes() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <ReferralCapture />
-        <TooltipProvider>
-          <WishlistProvider>
-            <CartProvider>
-              <OrdersProvider>
-                <MaintenanceGuard>
-                  <Router />
-                </MaintenanceGuard>
-                <CartDrawer />
-                <Toaster />
-              </OrdersProvider>
-            </CartProvider>
-          </WishlistProvider>
-        </TooltipProvider>
+        <AuthProvider>
+          <ClerkQueryClientCacheInvalidator />
+          <ReferralCapture />
+          <TooltipProvider>
+            <WishlistProvider>
+              <CartProvider>
+                <OrdersProvider>
+                  <MaintenanceGuard>
+                    <Router />
+                  </MaintenanceGuard>
+                  <CartDrawer />
+                  <Toaster />
+                </OrdersProvider>
+              </CartProvider>
+            </WishlistProvider>
+          </TooltipProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );

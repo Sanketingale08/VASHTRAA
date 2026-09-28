@@ -37,12 +37,12 @@ export function FlashSaleTimer() {
   const formatNumber = (num: number) => num.toString().padStart(2, '0');
 
   return (
-    <div className="flex gap-2 items-center justify-center text-[#1E6B5A]">
+    <div className="flex gap-2 items-center justify-center text-[#0A1F44]">
       <motion.div 
         key={timeLeft.hours}
         initial={{ y: -5, opacity: 0.5 }}
         animate={{ y: 0, opacity: 1 }}
-        className="bg-[#C9A84C]/20 px-3 py-2 rounded font-mono text-xl md:text-2xl font-bold"
+        className="bg-[#C7CCD1]/20 px-3 py-2 rounded font-mono text-xl md:text-2xl font-bold"
       >
         {formatNumber(timeLeft.hours)}
       </motion.div>
@@ -51,7 +51,7 @@ export function FlashSaleTimer() {
         key={timeLeft.minutes}
         initial={{ y: -5, opacity: 0.5 }}
         animate={{ y: 0, opacity: 1 }}
-        className="bg-[#C9A84C]/20 px-3 py-2 rounded font-mono text-xl md:text-2xl font-bold"
+        className="bg-[#C7CCD1]/20 px-3 py-2 rounded font-mono text-xl md:text-2xl font-bold"
       >
         {formatNumber(timeLeft.minutes)}
       </motion.div>
@@ -60,7 +60,7 @@ export function FlashSaleTimer() {
         key={timeLeft.seconds}
         initial={{ y: -5, opacity: 0.5 }}
         animate={{ y: 0, opacity: 1 }}
-        className="bg-[#C9A84C]/20 px-3 py-2 rounded font-mono text-xl md:text-2xl font-bold"
+        className="bg-[#C7CCD1]/20 px-3 py-2 rounded font-mono text-xl md:text-2xl font-bold"
       >
         {formatNumber(timeLeft.seconds)}
       </motion.div>

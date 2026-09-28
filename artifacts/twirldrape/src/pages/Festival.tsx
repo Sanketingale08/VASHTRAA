@@ -9,9 +9,9 @@ import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
 import { CategoryCard } from "@/components/CategoryCard";
 
-const GOLD = "#C9A84C";
-const GREEN = "#1E6B5A";
-const MAROON = "#3D1515";
+const GOLD = "#C7CCD1";
+const GREEN = "#0A1F44";
+const MAROON = "#0A1F44";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -30,7 +30,7 @@ const FESTIVAL_CARDS = [
       "Radiant silks and vibrant Paithani sarees to celebrate India's most beloved festivals in full splendour.",
     image: "/images/hero-paithani-3.png",
     fallback: "/images/product-1.png",
-    bg: "#3D1515",
+    bg: "#0A1F44",
     chipLabel: "Diwali Special",
     href: "/paithani/shop?occasion=festival",
   },
@@ -67,7 +67,7 @@ const FEATURES = [
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl overflow-hidden bg-[#E6F0EA] animate-pulse">
+    <div className="rounded-xl overflow-hidden bg-[#E5E8EC] animate-pulse">
       <div className="aspect-[3/4] bg-gray-200" />
       <div className="p-4 space-y-2">
         <div className="h-3 bg-gray-200 rounded w-3/4" />
@@ -92,10 +92,10 @@ export default function Festival() {
 
   return (
     <Layout>
-      <div className="bg-[#F3F8F5] min-h-screen">
+      <div className="bg-[#F4F5F7] min-h-screen">
 
         {/* Category Cards */}
-        <section className="py-10 md:py-14" style={{ background: "#F3F8F5" }}>
+        <section className="py-10 md:py-14" style={{ background: "#F4F5F7" }}>
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-7">
               {FESTIVAL_CARDS.map((item, i) => (
@@ -151,13 +151,13 @@ export default function Festival() {
               : products.length === 0
               ? (
                 <div className="col-span-full py-20 text-center">
-                  <p className="font-serif text-xl text-[#1E6B5A] font-semibold mb-3">No festival sarees yet</p>
+                  <p className="font-serif text-xl text-[#0A1F44] font-semibold mb-3">No festival sarees yet</p>
                   <p className="text-sm text-[#7a5f4e] mb-6 max-w-sm mx-auto">
                     Our festival edit is being curated. In the meantime, explore our full Paithani collection.
                   </p>
                   <Link
                     href="/paithani"
-                    className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-3 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
+                    className="inline-flex items-center gap-2 bg-[#0A1F44] text-white px-8 py-3 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
                   >
                     Browse Paithani Sarees <ArrowRight size={16} />
                   </Link>
@@ -189,7 +189,7 @@ export default function Festival() {
             >
               <Link
                 href="/paithani/shop?occasion=festival"
-                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#3D1515]/5"
+                className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#0A1F44]/5"
                 style={{ borderColor: MAROON, color: MAROON }}
               >
                 View All Festival Sarees <ArrowRight size={14} />
@@ -199,20 +199,20 @@ export default function Festival() {
         </section>
 
         {/* Features */}
-        <section className="bg-[#E6F0EA] py-16 md:py-24">
+        <section className="bg-[#E5E8EC] py-16 md:py-24">
           <div className="container mx-auto px-4">
             <div className="text-center mb-12">
-              <h2 className="font-serif text-2xl md:text-3xl text-[#1E6B5A] font-bold">
+              <h2 className="font-serif text-2xl md:text-3xl text-[#0A1F44] font-bold">
                 Dressed for Every Festival
               </h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {FEATURES.map((f) => (
-                <div key={f.title} className="bg-white rounded-2xl p-6 border border-[#C9A84C]/20 shadow-sm text-center">
-                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#1E6B5A]/8 flex items-center justify-center">
+                <div key={f.title} className="bg-white rounded-2xl p-6 border border-[#C7CCD1]/20 shadow-sm text-center">
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#0A1F44]/8 flex items-center justify-center">
                     {f.icon}
                   </div>
-                  <h3 className="font-semibold text-[#3D1515] text-base mb-2">{f.title}</h3>
+                  <h3 className="font-semibold text-[#0A1F44] text-base mb-2">{f.title}</h3>
                   <p className="text-sm text-[#7a5f4e] leading-relaxed">{f.desc}</p>
                 </div>
               ))}
@@ -222,7 +222,7 @@ export default function Festival() {
 
         {/* CTA */}
         <section className="container mx-auto px-4 py-16 text-center">
-          <h2 className="font-serif text-2xl md:text-3xl text-[#1E6B5A] font-bold mb-4">
+          <h2 className="font-serif text-2xl md:text-3xl text-[#0A1F44] font-bold mb-4">
             Celebrate in the Finest Silk
           </h2>
           <p className="text-[#7a5f4e] mb-8 max-w-lg mx-auto text-sm">
@@ -230,7 +230,7 @@ export default function Festival() {
           </p>
           <Link
             href="/paithani"
-            className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
+            className="inline-flex items-center gap-2 bg-[#0A1F44] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#155248] transition-colors"
           >
             Browse All Paithani Sarees <ArrowRight size={16} />
           </Link>

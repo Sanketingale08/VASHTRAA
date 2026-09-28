@@ -10,10 +10,10 @@ import {
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders, adminKey, initAdmin2FAInterceptor } from '@/lib/adminApi';
 
-const NAVY = "#0D1B36";
-const NAVY2 = "#091429";
-const GOLD = "#C9A84C";
-const GOLD_DIM = "rgba(201,168,76,0.6)";
+const NAVY = "#0A1F44";
+const NAVY2 = "#0B0C10";
+const GOLD = "#C7CCD1";
+const GOLD_DIM = "rgba(199,204,209,0.6)";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -28,7 +28,6 @@ const NAV_ITEMS = [
   { label: "Support", href: "/admin/support", icon: HelpCircle },
   { label: "Notifications", href: "/admin/notifications", icon: Bell },
   { label: "About Page", href: "/admin/about-content", icon: FileText },
-  { label: "Hero Banners", href: "/admin/hero-banners", icon: Image },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Reports", href: "/admin/reports", icon: BarChart2 },
   { label: "Settings", href: "/admin/settings", icon: Settings },
@@ -62,14 +61,25 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       headers,
       credentials: "include",
     }).then(async (r) => {
-      if (r.status === 403) {
+      if (r.status === 403 || r.status === 401) {
         const body = await r.json().catch(() => ({}));
         if (body.code === "2FA_REQUIRED") {
           // Session exists but 2FA verification is required — send to verify screen
           const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
           setLocation(`/admin/2fa-verify?returnTo=${returnTo}`);
+        } else if (body.code === "SESSION_REVOKED" || sessionToken) {
+          // Stale/revoked session token attached to valid key — clear stale session token & retry with key only
+          sessionStorage.removeItem("td_admin_session_token");
+          sessionStorage.removeItem("td_admin_session_id");
+          fetch(`/api/admin/vendors`, {
+            headers: { "x-admin-key": key },
+            credentials: "include",
+          }).then((r2) => {
+            if (r2.ok) setVerified(true);
+            else { clearAdminSession(); setLocation("/admin/login"); }
+          }).catch(() => setVerified(true));
         } else {
-          // Key invalid or session revoked — clear all auth and redirect to login
+          // Key invalid — clear all auth and redirect to login
           clearAdminSession();
           setLocation("/admin/login");
         }
@@ -130,17 +140,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       className="flex flex-col h-full"
       style={{ background: NAVY2 }}
     >
-      <div className="px-5 py-6 border-b" style={{ borderColor: "rgba(201,168,76,0.15)" }}>
+      <div className="px-5 py-6 border-b" style={{ borderColor: "rgba(199,204,209,0.15)" }}>
         <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: GOLD }}
-          >
-            <Shield size={16} style={{ color: NAVY }} />
-          </div>
+          <img
+            src={`${basePath}/logo.svg`}
+            alt="VASTRAA"
+            className="h-10 w-auto object-contain bg-white/90 p-1.5 rounded-lg shadow-sm"
+          />
           <div>
             <div className="font-serif text-sm font-bold text-white leading-tight">Super Admin</div>
-            <div className="text-xs" style={{ color: GOLD_DIM }}>TwirlDrape Portal</div>
+            <div className="text-xs" style={{ color: GOLD_DIM }}>VASTRAA Portal</div>
           </div>
         </div>
       </div>
@@ -154,7 +163,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               onClick={() => { setLocation(href); setSidebarOpen(false); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left"
               style={{
-                background: active ? "rgba(201,168,76,0.12)" : "transparent",
+                background: active ? "rgba(199,204,209,0.12)" : "transparent",
                 color: active ? GOLD : "rgba(255,255,255,0.65)",
                 cursor: "pointer",
               }}
@@ -166,7 +175,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         })}
       </nav>
 
-      <div className="px-3 py-4 border-t" style={{ borderColor: "rgba(201,168,76,0.1)" }}>
+      <div className="px-3 py-4 border-t" style={{ borderColor: "rgba(199,204,209,0.1)" }}>
         <button
           onClick={signOut}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
@@ -180,7 +189,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#F1F5F9" }}>
+    <div className="min-h-screen flex" style={{ background: "#F4F5F7" }}>
       <aside className="hidden lg:flex lg:flex-col w-56 shrink-0 fixed inset-y-0 left-0 z-20">
         {sidebar}
       </aside>

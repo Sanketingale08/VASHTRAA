@@ -22,9 +22,9 @@ export function generateIdempotencyKey(): string {
   });
 }
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 
 // ── Supported product fields ──────────────────────────────────────────────────
 export const PRODUCT_FIELDS = [
@@ -645,8 +645,8 @@ export function mapAttachedImages(reviewRows: ReviewRow[], bundle: ImageBundleRe
 function downloadTemplate() {
   const a = document.createElement("a");
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  a.href = `${basePath}/twirldrape_product_template.xlsx`;
-  a.download = "twirldrape_product_template.xlsx";
+  a.href = `${basePath}/vastraa_product_template.xlsx`;
+  a.download = "vastraa_product_template.xlsx";
   a.click();
 }
 
@@ -668,7 +668,7 @@ function downloadErrorReport(
   ws["!cols"] = headers.map(() => ({ wch: 22 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Failed Rows");
-  XLSX.writeFile(wb, "twirldrape_upload_errors.xlsx");
+  XLSX.writeFile(wb, "vastraa_upload_errors.xlsx");
 }
 
 // ── Module-level types ────────────────────────────────────────────────────────
@@ -1029,7 +1029,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
             <div className="flex items-center gap-1.5 mt-1">
               {(["upload", "processing", "results"] as Step[]).map((s, i) => (
                 <React.Fragment key={s}>
-                  <span className={`text-[10px] font-semibold ${step === s ? "text-[#1E6B5A]" : "text-gray-300"}`}>
+                  <span className={`text-[10px] font-semibold ${step === s ? "text-[#0A1F44]" : "text-gray-300"}`}>
                     {i + 1}. {s.charAt(0).toUpperCase() + s.slice(1)}
                   </span>
                   {i < 2 && <span className="text-gray-200 text-[10px]">›</span>}
@@ -1057,7 +1057,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                 className="border-2 border-dashed rounded-2xl p-10 text-center transition-colors"
                 style={{ borderColor: isDragging ? MAROON : "#D6C9BA", background: isDragging ? `${MAROON}08` : "#FAFAF8" }}
               >
-                <FileSpreadsheet size={36} className="mx-auto mb-3" style={{ color: isDragging ? MAROON : "#C9A84C" }} />
+                <FileSpreadsheet size={36} className="mx-auto mb-3" style={{ color: isDragging ? MAROON : "#C7CCD1" }} />
                 <p className="font-semibold text-gray-700 mb-1">Drop your Excel file here</p>
                 <p className="text-xs text-gray-400 mb-4">.xlsx, .xls, or .csv — up to 500 rows</p>
                 <label className="cursor-pointer">
@@ -1070,7 +1070,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
 
               {/* Attached image bundle — chosen before the spreadsheet so images
                   can be matched and uploaded as the sheet is processed. */}
-              <div className="rounded-2xl border border-dashed p-4" style={{ borderColor: "#C9A84C66", background: "#FFFDF6" }}>
+              <div className="rounded-2xl border border-dashed p-4" style={{ borderColor: "#C7CCD166", background: "#FFFDF6" }}>
                 <div className="flex gap-3">
                   <div className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center" style={{ background: `${GOLD}1F`, color: MAROON }}>
                     <FolderOpen size={18} />
@@ -1084,7 +1084,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       <label className="cursor-pointer">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C9A84C]/50 text-xs font-semibold hover:bg-[#C9A84C]/10" style={{ color: MAROON }}>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C7CCD1]/50 text-xs font-semibold hover:bg-[#C7CCD1]/10" style={{ color: MAROON }}>
                           <FolderOpen size={13} /> Choose Folder
                         </span>
                         <input
@@ -1097,13 +1097,13 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                         />
                       </label>
                       <label className="cursor-pointer">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C9A84C]/50 text-xs font-semibold hover:bg-[#C9A84C]/10" style={{ color: MAROON }}>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C7CCD1]/50 text-xs font-semibold hover:bg-[#C7CCD1]/10" style={{ color: MAROON }}>
                           <Archive size={13} /> Choose ZIP
                         </span>
                         <input type="file" accept=".zip,application/zip" className="sr-only" onChange={handleImageBundleInput} />
                       </label>
                       {imageBundleLabel && (
-                        <span className="inline-flex items-center gap-1 text-xs text-[#1E6B5A] font-medium truncate max-w-56">
+                        <span className="inline-flex items-center gap-1 text-xs text-[#0A1F44] font-medium truncate max-w-56">
                           <FileImage size={13} /> {imageBundleLabel}
                         </span>
                       )}
@@ -1119,14 +1119,14 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
               )}
 
               {/* Template download — serves the canonical static workbook */}
-              <div className="flex items-center justify-between px-4 py-3 rounded-xl border" style={{ borderColor: "#C9A84C33", background: CREAM }}>
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl border" style={{ borderColor: "#C7CCD133", background: CREAM }}>
                 <div>
                   <p className="text-sm font-semibold" style={{ color: MAROON }}>Download template</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">Use direct image URLs, public product-image paths, or attached image filenames; page and share links will be rejected</p>
                 </div>
                 <button
                   onClick={downloadTemplate}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[#C9A84C]/40 hover:bg-[#C9A84C]/10 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-[#C7CCD1]/40 hover:bg-[#C7CCD1]/10 transition-colors"
                   style={{ color: MAROON }}
                 >
                   <Download size={13} /> Template
@@ -1141,7 +1141,7 @@ export default function SellerBulkUpload({ onClose, onDone }: Props) {
                 <div className="p-4 space-y-2 text-xs text-gray-600">
                   {PRODUCT_FIELDS.map(f => (
                     <div key={f.key} className="flex gap-2">
-                      <code className="font-mono text-[#1E6B5A] w-32 shrink-0">{f.key}</code>
+                      <code className="font-mono text-[#0A1F44] w-32 shrink-0">{f.key}</code>
                       <span className="text-gray-400">{f.required ? "required" : "optional"}</span>
                       {f.key === "category" && <span className="text-gray-500">{CATEGORIES.join(", ")}</span>}
                       {f.key === "fabric"   && <span className="text-gray-500">{FABRICS.join(", ")}</span>}

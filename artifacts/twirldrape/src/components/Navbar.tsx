@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, ChevronDown } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, ChevronDown, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
-import { useUser, useClerk, Show } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -25,8 +26,23 @@ export function Navbar() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const collectionsDropdownRef = useRef<HTMLDivElement>(null);
 
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const { user: customUser, isSignedIn: isCustomSignedIn, signOut: customSignOut } = useAuth();
+  const { user: clerkUser, isSignedIn: isClerkSignedIn } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
+
+  const isSignedIn = isCustomSignedIn || isClerkSignedIn;
+  const user = customUser ? {
+    firstName: customUser.firstName || customUser.name.split(" ")[0],
+    lastName: customUser.lastName || customUser.name.split(" ").slice(1).join(" "),
+    email: customUser.email,
+    imageUrl: customUser.imageUrl,
+  } : clerkUser ? {
+    firstName: clerkUser.firstName || "Customer",
+    lastName: clerkUser.lastName || "",
+    email: clerkUser.primaryEmailAddress?.emailAddress || "",
+    imageUrl: clerkUser.imageUrl,
+  } : null;
+
   const { wishlistedIds } = useWishlist();
   const { totalItems: cartCount, openDrawer: openCart } = useCart();
   const wishlistCount = wishlistedIds.size;
@@ -96,7 +112,7 @@ export function Navbar() {
   const isDesignerDark = false;
   const isDesigner = location.startsWith("/designer");
 
-  const navBg = "bg-[#F3F8F5]/98 text-[#3D1515] border-[#C9A84C]/30";
+  const navBg = "bg-[#F4F5F7]/98 text-[#0A1F44] border-[#C7CCD1]/30";
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -139,9 +155,9 @@ export function Navbar() {
             {/* ── Logo (left-anchored, fixed width so nav stays centred) ── */}
             <Link href="/" className="shrink-0 flex items-center group mr-auto lg:mr-0">
               <img
-                src="/images/logo.png"
-                alt="TwirlDrape"
-                className="h-[52px] md:h-[64px] w-auto max-w-[180px] md:max-w-[220px] object-contain group-hover:opacity-90 transition-opacity"
+                src={`${basePath}/logo.svg`}
+                alt="VASTRAA — Paithani & Designer Sarees"
+                className="h-[52px] md:h-[64px] w-auto max-w-[200px] md:max-w-[240px] object-contain group-hover:opacity-90 transition-opacity"
               />
             </Link>
 
@@ -157,11 +173,11 @@ export function Navbar() {
                         className={cn(
                           "relative flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest transition-colors rounded-sm",
                           active
-                            ? "text-[#C9A84C]"
+                            ? "text-[#C7CCD1]"
                             : isDark || isDesignerDark
-                              ? "text-[#F3F8F5]/80 hover:text-[#C9A84C]"
-                              : "text-[#3D1515]/75 hover:text-[#1E6B5A]",
-                          "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C9A84C] after:rounded-full after:transition-opacity",
+                              ? "text-[#F4F5F7]/80 hover:text-[#C7CCD1]"
+                              : "text-[#0A1F44]/75 hover:text-[#0A1F44]",
+                          "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C7CCD1] after:rounded-full after:transition-opacity",
                           active ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-40"
                         )}
                       >
@@ -173,7 +189,7 @@ export function Navbar() {
                           <Link
                             href="/collections"
                             onClick={() => setCollectionsDropdownOpen(false)}
-                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
+                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors"
                           >
                             All Collections
                           </Link>
@@ -181,14 +197,14 @@ export function Navbar() {
                           <Link
                             href="/bridal"
                             onClick={() => setCollectionsDropdownOpen(false)}
-                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
+                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors"
                           >
                             Bridal Collection
                           </Link>
                           <Link
                             href="/party-wear"
                             onClick={() => setCollectionsDropdownOpen(false)}
-                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
+                            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors"
                           >
                             Party Wear
                           </Link>
@@ -206,11 +222,11 @@ export function Navbar() {
                     className={cn(
                       "relative px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest transition-colors rounded-sm",
                       active
-                        ? "text-[#C9A84C]"
+                        ? "text-[#C7CCD1]"
                         : isDark || isDesignerDark
-                          ? "text-[#F3F8F5]/80 hover:text-[#C9A84C]"
-                          : "text-[#3D1515]/75 hover:text-[#1E6B5A]",
-                      "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C9A84C] after:rounded-full after:transition-opacity",
+                          ? "text-[#F4F5F7]/80 hover:text-[#C7CCD1]"
+                          : "text-[#0A1F44]/75 hover:text-[#0A1F44]",
+                      "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C7CCD1] after:rounded-full after:transition-opacity",
                       active ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-40"
                     )}
                   >
@@ -221,15 +237,15 @@ export function Navbar() {
             </div>
 
             {/* ── Action icons (right-anchored) ── */}
-            {/* Order: Search | Notifications | Wishlist | Cart | My Account */}
-            <div className="flex items-center gap-1 sm:gap-2 ml-auto lg:ml-0 lg:w-52 xl:w-60 justify-end">
+            {/* Order: Search | Notifications | User/Login | Wishlist | Cart */}
+            <div className="flex items-center gap-3.5 sm:gap-4 ml-auto lg:ml-0 justify-end shrink-0">
 
               {/* Search */}
               <div ref={searchContainerRef} className="relative">
                 <button
                   className={cn(
                     "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                    isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
+                    isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#0A1F44]/10"
                   )}
                   onClick={() => setSearchOpen(!searchOpen)}
                   aria-label="Search"
@@ -281,7 +297,7 @@ export function Navbar() {
                             ))}
                             <button
                               onClick={handleSearchSubmit as any}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-[#1E6B5A] bg-[#F3F8F5] hover:bg-[#E6F0EA] transition-colors border-t border-gray-100"
+                              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-[#0A1F44] bg-[#F4F5F7] hover:bg-[#E5E8EC] transition-colors border-t border-gray-100"
                             >
                               View all results for "{debouncedQuery}" <ArrowRight size={12} />
                             </button>
@@ -296,14 +312,14 @@ export function Navbar() {
                       <div className="p-4">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Quick Links</p>
                         <div className="space-y-2">
-                          <Link href="/paithani/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1">
-                            <ArrowRight size={12} className="text-[#C9A84C]" /> All Paithani Sarees
+                          <Link href="/paithani/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#0A1F44] transition-colors py-1">
+                            <ArrowRight size={12} className="text-[#C7CCD1]" /> All Paithani Sarees
                           </Link>
-                          <Link href="/designer/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1">
-                            <ArrowRight size={12} className="text-[#C9A84C]" /> All Designer Sarees
+                          <Link href="/designer/shop" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#0A1F44] transition-colors py-1">
+                            <ArrowRight size={12} className="text-[#C7CCD1]" /> All Designer Sarees
                           </Link>
-                          <Link href="/collections" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#1E6B5A] transition-colors py-1">
-                            <ArrowRight size={12} className="text-[#C9A84C]" /> Collections
+                          <Link href="/collections" onClick={() => setSearchOpen(false)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#0A1F44] transition-colors py-1">
+                            <ArrowRight size={12} className="text-[#C7CCD1]" /> Collections
                           </Link>
                         </div>
                       </div>
@@ -315,18 +331,120 @@ export function Navbar() {
               {/* Notifications (signed-in only) */}
               <NotificationBell isDark={isDark || isDesignerDark} />
 
+              {/* User/Login icon — Positioned before Wishlist & Cart icons, responsive across desktop, tablet, and mobile */}
+              <div ref={userMenuRef} className="relative flex items-center">
+                {isSignedIn ? (
+                  <>
+                    <button
+                      className={cn(
+                        "flex items-center justify-center w-9 h-9 rounded-full transition-all border-2",
+                        userMenuOpen
+                          ? "border-[#C7CCD1]"
+                          : isDark || isDesignerDark
+                          ? "border-white/20 hover:border-white/50"
+                          : "border-[#C7CCD1]/30 hover:border-[#C7CCD1]",
+                      )}
+                      onClick={() => setUserMenuOpen(!userMenuOpen)}
+                      title={user?.firstName ?? "Account"}
+                      aria-label="User Account"
+                    >
+                      {user?.imageUrl ? (
+                        <img
+                          src={user.imageUrl}
+                          alt=""
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className={cn(
+                          "text-[11px] font-bold",
+                          isDark || isDesignerDark ? "text-[#F4F5F7]" : "text-[#0A1F44]",
+                        )}>
+                          {[user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || <User size={15} />}
+                        </span>
+                      )}
+                    </button>
+                    {userMenuOpen && (
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white text-gray-800 shadow-2xl border border-gray-100 rounded-xl py-2 z-50">
+                        <div className="px-4 py-3 border-b border-gray-100">
+                          <p className="text-sm font-semibold text-[#0A1F44] truncate">
+                            {user?.firstName} {user?.lastName}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate mt-0.5">
+                            {user?.email}
+                          </p>
+                        </div>
+                        <Link
+                          href="/account"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors font-medium"
+                        >
+                          <LayoutDashboard size={14} className="text-[#C7CCD1]" /> My Account
+                        </Link>
+                        <Link
+                          href="/orders"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors"
+                        >
+                          <ClipboardList size={14} className="text-[#C7CCD1]" /> My Orders
+                        </Link>
+                        <Link
+                          href="/wishlist"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors"
+                        >
+                          <Heart size={14} className="text-[#C7CCD1]" /> My Wishlist
+                          {wishlistCount > 0 && (
+                            <span className="ml-auto text-[10px] bg-[#0A1F44] text-white rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                              {wishlistCount}
+                            </span>
+                          )}
+                        </Link>
+                        <div className="border-t border-gray-100 mt-1 pt-1">
+                          <button
+                            onClick={async () => {
+                              setUserMenuOpen(false);
+                              if (isCustomSignedIn) {
+                                await customSignOut();
+                              }
+                              if (isClerkSignedIn) {
+                                await clerkSignOut({ redirectUrl: basePath || "/" });
+                              }
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F4F5F7] hover:text-[#0A1F44] transition-colors"
+                          >
+                            <LogOut size={14} className="text-[#C7CCD1]" /> Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Link
+                    href="/sign-in"
+                    className={cn(
+                      "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
+                      isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#0A1F44]/10"
+                    )}
+                    title="Sign In / User Login"
+                    aria-label="User Login"
+                  >
+                    <User size={19} />
+                  </Link>
+                )}
+              </div>
+
               {/* Wishlist */}
               <Link
                 href="/wishlist"
                 className={cn(
                   "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
+                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#0A1F44]/10"
                 )}
                 aria-label="Wishlist"
               >
                 <Heart size={19} />
                 {wishlistCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#1E6B5A] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute top-0.5 right-0.5 bg-[#C7CCD1] text-[#0A1F44] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
                     {wishlistCount > 9 ? "9+" : wishlistCount}
                   </span>
                 )}
@@ -337,110 +455,17 @@ export function Navbar() {
                 onClick={openCart}
                 className={cn(
                   "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
+                  isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#0A1F44]/10"
                 )}
                 aria-label="Cart"
               >
                 <ShoppingBag size={19} />
                 {cartCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C9A84C] text-[#1E6B5A] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute top-0.5 right-0.5 bg-[#C7CCD1] text-[#0A1F44] text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center leading-none">
                     {cartCount > 9 ? "9+" : cartCount}
                   </span>
                 )}
               </button>
-
-              {/* My Account — extreme right corner (hidden on xs) */}
-              <div ref={userMenuRef} className="relative hidden sm:block">
-                <Show when="signed-out">
-                  <div className="flex items-center gap-1">
-                    <Link
-                      href="/sign-in"
-                      className={cn(
-                        "flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-                        isDark || isDesignerDark ? "hover:bg-white/10" : "hover:bg-[#1E6B5A]/10"
-                      )}
-                      title="Sign In"
-                    >
-                      <User size={19} />
-                    </Link>
-                  </div>
-                </Show>
-                <Show when="signed-in">
-                  <button
-                    className={cn(
-                      "flex items-center justify-center w-9 h-9 rounded-full transition-all border-2",
-                      userMenuOpen
-                        ? "border-[#C9A84C]"
-                        : isDark || isDesignerDark
-                        ? "border-white/20 hover:border-white/50"
-                        : "border-[#C9A84C]/30 hover:border-[#C9A84C]",
-                    )}
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    title={user?.firstName ?? "Account"}
-                  >
-                    {user?.imageUrl ? (
-                      <img
-                        src={user.imageUrl}
-                        alt=""
-                        className="w-full h-full rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className={cn(
-                        "text-[11px] font-bold",
-                        isDark || isDesignerDark ? "text-[#F3F8F5]" : "text-[#1E6B5A]",
-                      )}>
-                        {[user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || <User size={15} />}
-                      </span>
-                    )}
-                  </button>
-                  {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white text-gray-800 shadow-2xl border border-gray-100 rounded-xl py-2 z-50">
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-[#1E6B5A] truncate">
-                          {user?.firstName} {user?.lastName}
-                        </p>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">
-                          {user?.primaryEmailAddress?.emailAddress}
-                        </p>
-                      </div>
-                      <Link
-                        href="/account"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors font-medium"
-                      >
-                        <LayoutDashboard size={14} className="text-[#C9A84C]" /> My Account
-                      </Link>
-                      <Link
-                        href="/orders"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
-                      >
-                        <ClipboardList size={14} className="text-[#C9A84C]" /> My Orders
-                      </Link>
-                      <Link
-                        href="/wishlist"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
-                      >
-                        <Heart size={14} className="text-[#C9A84C]" /> My Wishlist
-                        {wishlistCount > 0 && (
-                          <span className="ml-auto text-[10px] bg-[#1E6B5A] text-white rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                            {wishlistCount}
-                          </span>
-                        )}
-                      </Link>
-                      <div className="border-t border-gray-100 mt-1 pt-1">
-                        <button
-                          onClick={() => { setUserMenuOpen(false); signOut({ redirectUrl: basePath || "/" }); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[#F3F8F5] hover:text-[#1E6B5A] transition-colors"
-                        >
-                          <LogOut size={14} className="text-[#C9A84C]" /> Sign Out
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </Show>
-              </div>
 
             </div>
           </div>
@@ -457,10 +482,10 @@ export function Navbar() {
           />
 
           {/* Drawer panel */}
-          <div className="relative w-72 max-w-[85vw] h-full bg-[#1E6B5A] text-[#F3F8F5] flex flex-col shadow-2xl">
+          <div className="relative w-72 max-w-[85vw] h-full bg-[#0A1F44] text-[#F4F5F7] flex flex-col shadow-2xl">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#C9A84C]/20">
-              <img src="/images/logo.png" alt="TwirlDrape" className="h-10 w-auto object-contain" />
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#C7CCD1]/20">
+              <img src={`${basePath}/logo.svg`} alt="VASTRAA" className="h-10 w-auto object-contain bg-white/95 p-1 rounded-md shadow-sm" />
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-white/10 transition-colors"
@@ -481,8 +506,8 @@ export function Navbar() {
                       className={cn(
                         "flex items-center px-3 py-3 rounded-lg text-sm font-semibold uppercase tracking-widest transition-colors",
                         active
-                          ? "bg-[#C9A84C]/20 text-[#C9A84C]"
-                          : "hover:bg-white/10 text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
+                          ? "bg-[#C7CCD1]/20 text-[#C7CCD1]"
+                          : "hover:bg-white/10 text-[#F4F5F7]/80 hover:text-[#F4F5F7]"
                       )}
                     >
                       {label}
@@ -495,8 +520,8 @@ export function Navbar() {
                           className={cn(
                             "flex items-center pl-7 pr-3 py-2.5 rounded-lg text-sm transition-colors",
                             location.startsWith("/bridal")
-                              ? "bg-[#C9A84C]/20 text-[#C9A84C] font-semibold"
-                              : "hover:bg-white/10 text-[#F3F8F5]/70 hover:text-[#F3F8F5]"
+                              ? "bg-[#C7CCD1]/20 text-[#C7CCD1] font-semibold"
+                              : "hover:bg-white/10 text-[#F4F5F7]/70 hover:text-[#F4F5F7]"
                           )}
                         >
                           ↳ Bridal Collection
@@ -507,8 +532,8 @@ export function Navbar() {
                           className={cn(
                             "flex items-center pl-7 pr-3 py-2.5 rounded-lg text-sm transition-colors",
                             location.startsWith("/party-wear")
-                              ? "bg-[#C9A84C]/20 text-[#C9A84C] font-semibold"
-                              : "hover:bg-white/10 text-[#F3F8F5]/70 hover:text-[#F3F8F5]"
+                              ? "bg-[#C7CCD1]/20 text-[#C7CCD1] font-semibold"
+                              : "hover:bg-white/10 text-[#F4F5F7]/70 hover:text-[#F4F5F7]"
                           )}
                         >
                           ↳ Party Wear
@@ -519,59 +544,60 @@ export function Navbar() {
                 );
               })}
 
-              <div className="border-t border-[#C9A84C]/20 mt-3 pt-3 space-y-1">
-                <Show when="signed-in">
-                  <Link
-                    href="/account"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5] font-semibold"
-                  >
-                    <LayoutDashboard size={16} className="text-[#C9A84C]" /> My Account
-                  </Link>
-                  <Link
-                    href="/orders"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
-                  >
-                    <ClipboardList size={16} className="text-[#C9A84C]" /> My Orders
-                  </Link>
-                </Show>
+              <div className="border-t border-[#C7CCD1]/20 mt-3 pt-3 space-y-1">
+                {isSignedIn && (
+                  <>
+                    <Link
+                      href="/account"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F4F5F7]/80 hover:text-[#F4F5F7] font-semibold"
+                    >
+                      <LayoutDashboard size={16} className="text-[#C7CCD1]" /> My Account
+                    </Link>
+                    <Link
+                      href="/orders"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F4F5F7]/80 hover:text-[#F4F5F7]"
+                    >
+                      <ClipboardList size={16} className="text-[#C7CCD1]" /> My Orders
+                    </Link>
+                  </>
+                )}
                 <Link
                   href="/wishlist"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F4F5F7]/80 hover:text-[#F4F5F7]"
                 >
-                  <Heart size={16} className="text-[#C9A84C]" /> My Wishlist
+                  <Heart size={16} className="text-[#C7CCD1]" /> My Wishlist
                   {wishlistCount > 0 && (
-                    <span className="ml-auto text-[10px] bg-[#C9A84C] text-[#1E6B5A] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    <span className="ml-auto text-[10px] bg-[#C7CCD1] text-[#0A1F44] font-bold rounded-full w-5 h-5 flex items-center justify-center">
                       {wishlistCount}
                     </span>
                   )}
                 </Link>
-                <Show when="signed-out">
+                {!isSignedIn ? (
                   <Link
                     href="/sign-in"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F4F5F7]/80 hover:text-[#F4F5F7]"
                   >
-                    <LogIn size={16} className="text-[#C9A84C]" /> Sign In
+                    <LogIn size={16} className="text-[#C7CCD1]" /> Sign In
                   </Link>
-                </Show>
-                <Show when="signed-in">
+                ) : (
                   <button
                     onClick={() => { setMobileMenuOpen(false); signOut({ redirectUrl: basePath || "/" }); }}
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F3F8F5]/80 hover:text-[#F3F8F5]"
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 transition-colors text-[#F4F5F7]/80 hover:text-[#F4F5F7]"
                   >
-                    <LogOut size={16} className="text-[#C9A84C]" /> Sign Out
+                    <LogOut size={16} className="text-[#C7CCD1]" /> Sign Out
                   </button>
-                </Show>
+                )}
               </div>
             </nav>
 
             {/* Footer strip */}
-            <div className="px-5 py-4 border-t border-[#C9A84C]/20 text-[10px] uppercase tracking-wider text-[#C9A84C]/60 flex gap-4">
-              <Link href="/track-order" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#C9A84C] transition-colors">Track Order</Link>
-              <Link href="#" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#C9A84C] transition-colors">Support</Link>
+            <div className="px-5 py-4 border-t border-[#C7CCD1]/20 text-[10px] uppercase tracking-wider text-[#C7CCD1]/60 flex gap-4">
+              <Link href="/track-order" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#C7CCD1] transition-colors">Track Order</Link>
+              <Link href="#" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#C7CCD1] transition-colors">Support</Link>
             </div>
           </div>
         </div>

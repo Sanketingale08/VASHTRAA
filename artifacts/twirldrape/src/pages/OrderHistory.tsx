@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { motion } from "framer-motion";
 import { Package, ShoppingBag } from "lucide-react";
@@ -40,19 +41,20 @@ const statusColors: Record<string, string> = {
 };
 
 export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?: boolean }) {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoading: authLoading } = useAuth();
   const { patches, invalidateAt } = useOrdersContext();
   const [rawOrders, setRawOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (authLoading) return;
     if (!isSignedIn) {
       setLoading(false);
       return;
     }
-    fetch(`/api/orders`, { credentials: "include" })
+    setLoading(true);
+    apiFetch(`/api/orders`)
       .then(async r => {
         if (!r.ok) throw new Error("Failed to load orders");
         const data = await r.json();
@@ -60,18 +62,18 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isLoaded, isSignedIn, invalidateAt]);
+  }, [authLoading, isSignedIn, invalidateAt]);
 
   // Merge in any optimistic patches applied from the order detail page
   const orders = rawOrders.map(o =>
     patches[o.id] ? { ...o, ...patches[o.id] } : o
   );
 
-  if (!isLoaded || loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full mx-auto mb-4" />
+          <div className="animate-spin w-10 h-10 border-2 border-[#C7CCD1] border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-sm opacity-60">Loading your orders…</p>
         </div>
       </div>
@@ -83,10 +85,10 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 px-4">
         <ShoppingBag size={48} className="text-gray-300" />
-        <h2 className="font-serif text-2xl text-[#1E6B5A]">Sign in to view your orders</h2>
+        <h2 className="font-serif text-2xl text-[#0A1F44]">Sign in to view your orders</h2>
         <Link
           href="/sign-in"
-          className="bg-[#1E6B5A] text-[#F3F8F5] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
+          className="bg-[#0A1F44] text-[#F4F5F7] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
         >
           Sign In
         </Link>
@@ -104,7 +106,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#1E2329]">
+    <div className="min-h-screen bg-[#F4F5F7] dark:bg-[#1E2329]">
       <div className="container mx-auto px-4 py-10 max-w-3xl">
         {!dashboardMode && (
           <motion.div
@@ -112,7 +114,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] mb-1">My Orders</h1>
+            <h1 className="font-serif text-3xl font-bold text-[#0A1F44] mb-1">My Orders</h1>
             <p className="text-sm text-gray-500 mb-8">
               {orders.length === 0 ? "You haven't placed any orders yet." : `${orders.length} order${orders.length !== 1 ? "s" : ""} placed`}
             </p>
@@ -130,7 +132,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
             <p className="text-gray-400 text-sm">No orders yet. Start shopping to see them here!</p>
             <Link
               href="/"
-              className="bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
+              className="bg-[#0A1F44] hover:bg-[#6a1826] text-[#F4F5F7] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
             >
               Browse Collection
             </Link>
@@ -151,7 +153,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                   transition={{ delay: 0.05 * idx }}
                 >
                   <Link href={`/orders/${order.id}`}>
-                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5 hover:border-[#C9A84C]/60 hover:shadow-lg hover:shadow-[#C9A84C]/8 hover:-translate-y-0.5 hover:bg-[#FDFAF5] dark:hover:bg-[#2F3540] transition-all duration-200 cursor-pointer">
+                    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5 hover:border-[#C7CCD1]/60 hover:shadow-lg hover:shadow-[#C7CCD1]/8 hover:-translate-y-0.5 hover:bg-[#FDFAF5] dark:hover:bg-[#2F3540] transition-all duration-200 cursor-pointer">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -185,7 +187,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                             {previewItems.map((item, i) => (
                               <div
                                 key={`${item.productId}-${i}`}
-                                className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-[#C9A84C]/10 shrink-0"
+                                className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-[#C7CCD1]/10 shrink-0"
                               >
                                   <img
                                     src={getProductImageSrc(item.images?.[0])}
@@ -196,7 +198,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                               </div>
                             ))}
                             {(order.items as OrderItem[]).length > 3 && (
-                              <div className="w-12 h-12 rounded-lg bg-gray-100 border border-[#C9A84C]/10 flex items-center justify-center text-xs font-semibold text-gray-500 shrink-0">
+                              <div className="w-12 h-12 rounded-lg bg-gray-100 border border-[#C7CCD1]/10 flex items-center justify-center text-xs font-semibold text-gray-500 shrink-0">
                                 +{(order.items as OrderItem[]).length - 3}
                               </div>
                             )}
@@ -211,7 +213,7 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                         </div>
 
                         <div className="flex flex-col items-end gap-2 shrink-0">
-                          <p className="font-bold text-[#1E6B5A] text-base">₹{order.total.toLocaleString("en-IN")}</p>
+                          <p className="font-bold text-[#0A1F44] text-base">₹{order.total.toLocaleString("en-IN")}</p>
                         </div>
                       </div>
                     </div>

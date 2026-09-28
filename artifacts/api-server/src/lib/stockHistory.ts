@@ -1,5 +1,4 @@
-import { db } from "@workspace/db";
-import { stockHistoryTable } from "@workspace/db";
+import { db, stockHistoryTable, mongoGeneric } from "@workspace/db";
 
 type StockHistorySource = "order" | "cancel" | "return" | "manual" | "bulk";
 
@@ -16,10 +15,12 @@ interface RecordStockChangeOpts {
 }
 
 export async function recordStockChange(opts: RecordStockChangeOpts) {
-  const client = opts.tx ?? db;
   const delta = opts.newStock - opts.previousStock;
   if (delta === 0) return;
-  await client.insert(stockHistoryTable).values({
+  const id = crypto.randomUUID();
+  const doc = {
+    id,
+    _id: id,
     productId: opts.productId,
     vendorId: opts.vendorId ?? null,
     delta,
@@ -29,5 +30,23 @@ export async function recordStockChange(opts: RecordStockChangeOpts) {
     reason: opts.reason ?? "",
     actorId: opts.actorId ?? null,
     orderId: opts.orderId ?? null,
-  });
+    createdAt: new Date(),
+  };
+
+  try {
+    await mongoGeneric.getCollection("stock_history").insertOne(doc as any);
+  } catch {
+    const client = opts.tx ?? db;
+    await client.insert(stockHistoryTable).values({
+      productId: opts.productId,
+      vendorId: opts.vendorId ?? null,
+      delta,
+      previousStock: opts.previousStock,
+      newStock: opts.newStock,
+      source: opts.source,
+      reason: opts.reason ?? "",
+      actorId: opts.actorId ?? null,
+      orderId: opts.orderId ?? null,
+    });
+  }
 }

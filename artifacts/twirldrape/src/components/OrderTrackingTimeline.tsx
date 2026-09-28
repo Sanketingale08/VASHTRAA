@@ -77,15 +77,15 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
     const completedBeforeCancel = NORMAL_STAGES.filter(s => historyMap.has(s.key));
 
     return (
-      <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
-        <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-4">Order Timeline</h2>
+      <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5">
+        <h2 className="font-serif text-lg font-bold text-[#0A1F44] mb-4">Order Timeline</h2>
         <div className="relative pl-8">
           {[...completedBeforeCancel.map(s => ({ key: s.key, label: s.label, ts: historyMap.get(s.key)!, cancelled: false })),
             { key: "cancelled", label: "Order Cancelled", ts: cancelledEntry ?? null, cancelled: true }
           ].map((step, i, arr) => (
             <div key={step.key} className="relative pb-6 last:pb-0">
               {i < arr.length - 1 && (
-                <div className={`absolute left-[-16px] top-4 w-0.5 h-full ${step.cancelled ? "bg-red-200" : "bg-gradient-to-b from-[#1E6B5A] to-[#C9A84C]"}`} />
+                <div className={`absolute left-[-16px] top-4 w-0.5 h-full ${step.cancelled ? "bg-red-200" : "bg-gradient-to-b from-[#0A1F44] to-[#C7CCD1]"}`} />
               )}
               <div className="absolute left-[-20px] top-0">
                 {step.cancelled ? (
@@ -93,13 +93,13 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                     <XCircle size={13} className="text-white" />
                   </div>
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-[#1E6B5A] flex items-center justify-center shadow-sm">
-                    <CheckCircle2 size={13} className="text-[#C9A84C]" />
+                  <div className="w-5 h-5 rounded-full bg-[#0A1F44] flex items-center justify-center shadow-sm">
+                    <CheckCircle2 size={13} className="text-[#C7CCD1]" />
                   </div>
                 )}
               </div>
               <div className="ml-1">
-                <p className={`font-semibold text-sm leading-tight ${step.cancelled ? "text-red-600 dark:text-red-400" : "text-[#1E6B5A]"}`}>
+                <p className={`font-semibold text-sm leading-tight ${step.cancelled ? "text-red-600 dark:text-red-400" : "text-[#0A1F44]"}`}>
                   {step.label}
                 </p>
                 {step.ts && (
@@ -116,8 +116,8 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
   const currentIdx = STATUS_ORDER.indexOf(currentStatus);
 
   return (
-    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
-      <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-4">Order Tracking</h2>
+    <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5">
+      <h2 className="font-serif text-lg font-bold text-[#0A1F44] mb-4">Order Tracking</h2>
       <div className="relative pl-8">
         {NORMAL_STAGES.map((stage, idx) => {
           const isCompleted = idx < currentIdx;
@@ -132,7 +132,7 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                 <div
                   className={`absolute left-[-16px] top-4 w-0.5 h-full ${
                     isCompleted || isCurrent
-                      ? "bg-gradient-to-b from-[#1E6B5A] to-[#C9A84C]"
+                      ? "bg-gradient-to-b from-[#0A1F44] to-[#C7CCD1]"
                       : "bg-gray-200 dark:bg-gray-700"
                   }`}
                 />
@@ -140,12 +140,12 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
 
               <div className="absolute left-[-20px] top-0">
                 {isCompleted ? (
-                  <div className="w-5 h-5 rounded-full bg-[#1E6B5A] flex items-center justify-center shadow-sm">
-                    <CheckCircle2 size={13} className="text-[#C9A84C]" />
+                  <div className="w-5 h-5 rounded-full bg-[#0A1F44] flex items-center justify-center shadow-sm">
+                    <CheckCircle2 size={13} className="text-[#C7CCD1]" />
                   </div>
                 ) : isCurrent ? (
-                  <div className="w-5 h-5 rounded-full bg-[#C9A84C] flex items-center justify-center shadow-md ring-2 ring-[#C9A84C]/30">
-                    <Clock size={11} className="text-[#1E6B5A]" />
+                  <div className="w-5 h-5 rounded-full bg-[#C7CCD1] flex items-center justify-center shadow-md ring-2 ring-[#C7CCD1]/30">
+                    <Clock size={11} className="text-[#0A1F44]" />
                   </div>
                 ) : (
                   <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
@@ -158,15 +158,15 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                 <p
                   className={`font-semibold text-sm leading-tight ${
                     isCompleted
-                      ? "text-[#1E6B5A]"
+                      ? "text-[#0A1F44]"
                       : isCurrent
-                      ? "text-[#C9A84C]"
+                      ? "text-[#C7CCD1]"
                       : "text-gray-400 dark:text-gray-600"
                   }`}
                 >
                   {stage.label}
                   {isCurrent && (
-                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C9A84C]/15 text-[#C9A84C] uppercase tracking-wide">
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C7CCD1]/15 text-[#C7CCD1] uppercase tracking-wide">
                       Current
                     </span>
                   )}
@@ -182,7 +182,7 @@ export function OrderTrackingTimeline({ statusHistory, currentStatus, createdAt 
                   <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(resolvedTs)}</p>
                 )}
                 {isCurrent && (
-                  <p className="text-xs font-medium text-[#C9A84C]/80 mt-0.5">
+                  <p className="text-xs font-medium text-[#C7CCD1]/80 mt-0.5">
                     Expected by {estimatedLabel(stage.key, createdAt)}
                   </p>
                 )}

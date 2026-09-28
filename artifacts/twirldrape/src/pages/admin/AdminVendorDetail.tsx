@@ -14,7 +14,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 const VENDOR_DETAIL_POLL_MS = 5_000;
 
 interface VendorDetail {
@@ -277,7 +277,7 @@ function VendorDetailContent() {
               </div>
 
               {vendor.vendorId && (
-                <div className="mb-4 px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}>
+                <div className="mb-4 px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: "rgba(199,204,209,0.08)", border: "1px solid rgba(199,204,209,0.25)" }}>
                   <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: GOLD }}>Vendor ID</span>
                   <span className="text-sm font-mono font-semibold ml-auto" style={{ color: NAVY }}>{vendor.vendorId}</span>
                 </div>
@@ -378,7 +378,7 @@ function VendorDetailContent() {
           <div className="lg:col-span-2 space-y-5">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: "Total Revenue", value: fmt(vendor.totalRevenue), icon: IndianRupee, color: GOLD, bg: "rgba(201,168,76,0.1)" },
+                { label: "Total Revenue", value: fmt(vendor.totalRevenue), icon: IndianRupee, color: GOLD, bg: "rgba(199,204,209,0.1)" },
                 { label: "Commission", value: fmt(vendor.commissionEarned), icon: BadgeCheck, color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
                 { label: "Products", value: `${vendor.activeProducts}/${vendor.totalProducts}`, icon: Package, color: "#10B981", bg: "rgba(16,185,129,0.1)" },
                 { label: "Total Orders", value: totalOrders, icon: ShoppingBag, color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },

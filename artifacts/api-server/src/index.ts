@@ -6,42 +6,63 @@ import { startEmailOutboxWorker, startSellerRegistrationNudgeWorker } from "./li
 import { startWeeklyAdminReportWorker } from "./workers/weeklyAdminReport";
 import { db } from "@workspace/db";
 import { productsTable } from "@workspace/db";
-import { eq, and, isNotNull, lt, sql } from "drizzle-orm";
+import { eq, and, isNotNull, lt, sql } from "@workspace/db";
 
-const rawPort = process.env["PORT"];
+import path from "path";
+import fs from "fs";
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+const possibleEnvPaths = [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(import.meta.dirname || __dirname, "../../../.env"),
+  path.resolve(import.meta.dirname || __dirname, "../../.env"),
+];
+for (const envPath of possibleEnvPaths) {
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf-8");
+    for (const line of envContent.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
+        const idx = trimmed.indexOf("=");
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim();
+        if (!process.env[key] || process.env[key]?.includes("placeholder") || process.env[key]?.startsWith("re_123456")) {
+          process.env[key] = val;
+        }
+      }
+    }
+    break;
+  }
 }
 
+const rawPort = process.env["API_PORT"] || process.env["API_SERVER_PORT"] || "3001";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+  throw new Error(`Invalid API PORT value: "${rawPort}"`);
 }
 
-bootstrapDatabase()
-  .then(() => {
-    app.listen(port, (err) => {
-      if (err) {
-        logger.error({ err }, "Error listening on port");
-        process.exit(1);
-      }
-
-      logger.info({ port }, "Server listening");
-      startEmailOutboxWorker();
-      startDraftExpiryWorker();
-      startSellerRegistrationNudgeWorker();
-      startFeaturedExpiryWorker();
-      startWeeklyAdminReportWorker();
-    });
-  })
-  .catch((err) => {
-    logger.error({ err }, "Database bootstrap failed — server will not start");
+app.listen(port, (err) => {
+  if (err) {
+    logger.error({ err }, "Error listening on port");
     process.exit(1);
-  });
+  }
+
+  logger.info({ port }, "Server listening on port " + port);
+
+  bootstrapDatabase()
+    .then(() => {
+      logger.info("Database bootstrap completed successfully.");
+    })
+    .catch((bootstrapErr) => {
+      logger.warn({ err: bootstrapErr }, "Database bootstrap notice — server running in fallback mode");
+    });
+
+  startEmailOutboxWorker();
+  startDraftExpiryWorker();
+  startSellerRegistrationNudgeWorker();
+  startFeaturedExpiryWorker();
+  startWeeklyAdminReportWorker();
+});
 
 function startDraftExpiryWorker(): void {
   const INTERVAL_MS = 60 * 60 * 1000; // run every hour

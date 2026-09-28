@@ -4,9 +4,9 @@ import { IndianRupee, Clock, Wallet, Package } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 
 interface Payout {
   orderId: string;
@@ -73,7 +73,7 @@ export default function SellerPayouts() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.06 }}
-              className="bg-white rounded-2xl border border-[#C9A84C]/20 p-5"
+              className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-5"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: card.iconBg }}>
@@ -90,7 +90,7 @@ export default function SellerPayouts() {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Payout History</h3>
           </div>
@@ -110,7 +110,7 @@ export default function SellerPayouts() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b" style={{ borderColor: "#C9A84C22", background: CREAM }}>
+                <tr className="border-b" style={{ borderColor: "#C7CCD122", background: CREAM }}>
                   {["Order ID", "Delivered On", "Items", "Amount", "Status"].map((h) => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
                   ))}
@@ -123,7 +123,7 @@ export default function SellerPayouts() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.03 }}
-                    className="border-b last:border-b-0 hover:bg-[#F3F8F5]/60 transition-colors"
+                    className="border-b last:border-b-0 hover:bg-[#F4F5F7]/60 transition-colors"
                     style={{ borderColor: "#F3F4F6" }}
                   >
                     <td className="px-5 py-3.5 font-mono text-xs text-gray-500">

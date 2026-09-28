@@ -2,37 +2,36 @@ import React, { useState } from "react";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import {
   TrendingUp, ShoppingBag, Package, Users, Store,
-  CheckCircle, XCircle, RotateCcw, Clock, IndianRupee, AlertTriangle,
+  RotateCcw, Clock, IndianRupee, AlertTriangle, AlertCircle, RefreshCw
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
+import { adminHeaders } from "@/lib/adminApi";
 
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-import { adminHeaders } from '@/lib/adminApi';
-const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const NAVY = "#0A1F44";
+const GOLD = "#C7CCD1";
 
 interface Stats {
-  totalOrders: number;
-  totalRevenue: number;
-  totalCustomers: number;
-  deliveredOrders: number;
-  cancelledOrders: number;
-  returnedOrders: number;
-  confirmedOrders: number;
-  lateAcceptanceOrders: number;
-  dispatchedOrders: number;
-  refundedRevenue: number;
-  totalProducts: number;
-  totalVendors: number;
-  approvedVendors: number;
-  activeVendors: number;
-  pendingVendors: number;
-  growthPct: number;
-  dailyRevenue: { date: string; revenue: number; orders: number }[];
+  totalOrders?: number;
+  totalRevenue?: number;
+  totalCustomers?: number;
+  deliveredOrders?: number;
+  cancelledOrders?: number;
+  returnedOrders?: number;
+  confirmedOrders?: number;
+  lateAcceptanceOrders?: number;
+  dispatchedOrders?: number;
+  refundedRevenue?: number;
+  totalProducts?: number;
+  totalVendors?: number;
+  approvedVendors?: number;
+  activeVendors?: number;
+  pendingVendors?: number;
+  growthPct?: number;
+  dailyRevenue?: { date: string; revenue: number; orders: number }[];
 }
 
 function fmt(n: number) {
@@ -43,7 +42,11 @@ function fmt(n: number) {
 }
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  try {
+    return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  } catch {
+    return d;
+  }
 }
 
 interface MetricCardProps {
@@ -58,7 +61,7 @@ interface MetricCardProps {
 
 function MetricCard({ label, value, icon: Icon, iconBg, iconColor, sub, alert }: MetricCardProps) {
   return (
-    <div className={`bg-white rounded-2xl border p-5 shadow-sm ${alert ? "border-amber-300" : "border-gray-200"}`}>
+    <div className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${alert ? "border-amber-300" : "border-[#C7CCD1]/30"}`}>
       <div className="flex items-start justify-between mb-4">
         <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: iconBg }}>
@@ -69,6 +72,53 @@ function MetricCard({ label, value, icon: Icon, iconBg, iconColor, sub, alert }:
       {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
     </div>
   );
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class AdminErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("AdminDashboard ErrorBoundary caught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-white rounded-2xl border border-red-200 p-8 shadow-sm text-center max-w-md mx-auto my-12 space-y-4">
+          <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto text-red-600">
+            <AlertCircle size={24} />
+          </div>
+          <h2 className="font-serif font-bold text-lg text-gray-900">Dashboard Loading Error</h2>
+          <p className="text-xs text-gray-500">
+            {this.state.error?.message || "An unexpected error occurred while rendering the dashboard."}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.reload();
+            }}
+            className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer shadow-md inline-flex items-center gap-2"
+            style={{ background: NAVY, color: GOLD }}
+          >
+            <RefreshCw size={14} /> Reload Dashboard
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 const DASHBOARD_POLL_MS = 30_000;
@@ -83,9 +133,20 @@ function DashboardContent() {
       headers: adminHeaders(),
       credentials: "include",
     })
-      .then((r) => r.json())
-      .then((d) => setStats(d))
-      .catch(() => setError("Failed to load platform stats"))
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `Failed to fetch stats (HTTP ${r.status})`);
+        }
+        return r.json();
+      })
+      .then((d: Stats) => {
+        setStats(d);
+        setError("");
+      })
+      .catch((err: Error) => {
+        setError(err.message || "Failed to load platform stats");
+      })
       .finally(() => setLoading(false));
   }
 
@@ -94,13 +155,15 @@ function DashboardContent() {
 
   const orderStatusData = stats
     ? [
-        { name: "Awaiting", value: stats.confirmedOrders, color: "#F59E0B" },
-        { name: "Dispatched", value: stats.dispatchedOrders, color: GOLD },
-        { name: "Delivered", value: stats.deliveredOrders, color: "#10B981" },
-        { name: "Cancelled", value: stats.cancelledOrders, color: "#EF4444" },
-        { name: "Returned", value: stats.returnedOrders, color: "#8B5CF6" },
+        { name: "Awaiting", value: stats.confirmedOrders ?? 0, color: "#F59E0B" },
+        { name: "Dispatched", value: stats.dispatchedOrders ?? 0, color: GOLD },
+        { name: "Delivered", value: stats.deliveredOrders ?? 0, color: "#10B981" },
+        { name: "Cancelled", value: stats.cancelledOrders ?? 0, color: "#EF4444" },
+        { name: "Returned", value: stats.returnedOrders ?? 0, color: "#8B5CF6" },
       ]
     : [];
+
+  const dailyRevenueData = stats?.dailyRevenue ?? [];
 
   return (
     <div className="space-y-6">
@@ -116,32 +179,41 @@ function DashboardContent() {
           ))}
         </div>
       )}
+
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600 flex items-center justify-between">
+          <span>{error}</span>
+          <button
+            onClick={() => { setLoading(true); loadStats(); }}
+            className="text-xs font-bold underline cursor-pointer ml-4"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {stats && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard label="Total Revenue" value={fmt(stats.totalRevenue)} icon={IndianRupee}
-              iconBg="rgba(201,168,76,0.12)" iconColor={GOLD} sub="All completed orders" />
-            <MetricCard label="Total Orders" value={stats.totalOrders.toLocaleString("en-IN")} icon={ShoppingBag}
-              iconBg="rgba(59,130,246,0.1)" iconColor="#3B82F6" sub={`${stats.deliveredOrders} delivered`} />
-            <MetricCard label="Products" value={stats.totalProducts.toLocaleString("en-IN")} icon={Package}
+            <MetricCard label="Total Revenue" value={fmt(stats.totalRevenue ?? 0)} icon={IndianRupee}
+              iconBg="rgba(199,204,209,0.12)" iconColor={GOLD} sub="All completed orders" />
+            <MetricCard label="Total Orders" value={(stats.totalOrders ?? 0).toLocaleString("en-IN")} icon={ShoppingBag}
+              iconBg="rgba(59,130,246,0.1)" iconColor="#3B82F6" sub={`${stats.deliveredOrders ?? 0} delivered`} />
+            <MetricCard label="Products" value={(stats.totalProducts ?? 0).toLocaleString("en-IN")} icon={Package}
               iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" sub="Active catalogue" />
-            <MetricCard label="Customers" value={stats.totalCustomers.toLocaleString("en-IN")} icon={Users}
+            <MetricCard label="Customers" value={(stats.totalCustomers ?? 0).toLocaleString("en-IN")} icon={Users}
               iconBg="rgba(139,92,246,0.1)" iconColor="#8B5CF6" sub="Unique buyers" />
-            <MetricCard label="Active Vendors" value={stats.activeVendors} icon={Store}
-              iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} sub={`${stats.totalVendors} total`} />
-            <MetricCard label="Pending Approval" value={stats.pendingVendors} icon={Clock}
+            <MetricCard label="Active Vendors" value={stats.activeVendors ?? 0} icon={Store}
+              iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} sub={`${stats.totalVendors ?? 0} total`} />
+            <MetricCard label="Pending Approval" value={stats.pendingVendors ?? 0} icon={Clock}
               iconBg="rgba(245,158,11,0.1)" iconColor="#D97706" sub="Awaiting review" />
-            <MetricCard label="Awaiting Acceptance" value={stats.confirmedOrders} icon={AlertTriangle}
+            <MetricCard label="Awaiting Acceptance" value={stats.confirmedOrders ?? 0} icon={AlertTriangle}
               iconBg="rgba(245,158,11,0.1)" iconColor="#D97706"
-              sub={stats.lateAcceptanceOrders > 0 ? `${stats.lateAcceptanceOrders} overdue >24h` : "Pending vendor action"}
-              alert={stats.lateAcceptanceOrders > 0} />
-            <MetricCard label="Revenue Growth" value={`${stats.growthPct > 0 ? "+" : ""}${stats.growthPct}%`}
-              icon={TrendingUp} iconBg={stats.growthPct >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)"}
-              iconColor={stats.growthPct >= 0 ? "#10B981" : "#EF4444"}
+              sub={(stats.lateAcceptanceOrders ?? 0) > 0 ? `${stats.lateAcceptanceOrders} overdue >24h` : "Pending vendor action"}
+              alert={(stats.lateAcceptanceOrders ?? 0) > 0} />
+            <MetricCard label="Revenue Growth" value={`${(stats.growthPct ?? 0) > 0 ? "+" : ""}${stats.growthPct ?? 0}%`}
+              icon={TrendingUp} iconBg={(stats.growthPct ?? 0) >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)"}
+              iconColor={(stats.growthPct ?? 0) >= 0 ? "#10B981" : "#EF4444"}
               sub="vs prior 30 days" />
           </div>
 
@@ -154,11 +226,11 @@ function DashboardContent() {
                 </div>
                 <TrendingUp size={16} className="text-green-500" />
               </div>
-              {stats.dailyRevenue.length === 0 ? (
+              {dailyRevenueData.length === 0 ? (
                 <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No revenue data yet</div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={stats.dailyRevenue} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+                  <LineChart data={dailyRevenueData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9CA3AF" }}
                       tickFormatter={fmtDate} interval="preserveStartEnd" />
@@ -192,12 +264,12 @@ function DashboardContent() {
             </div>
           </div>
 
-          {stats.refundedRevenue > 0 && (
+          {(stats.refundedRevenue ?? 0) > 0 && (
             <div className="flex items-center gap-3 bg-purple-50 border border-purple-100 rounded-xl p-4">
               <RotateCcw size={16} className="text-purple-500 shrink-0" />
               <div className="text-sm">
                 <span className="font-semibold text-purple-700">Refunds Processed: </span>
-                <span className="text-purple-600">{fmt(stats.refundedRevenue)}</span>
+                <span className="text-purple-600">{fmt(stats.refundedRevenue ?? 0)}</span>
               </div>
             </div>
           )}
@@ -211,7 +283,9 @@ export default function AdminDashboard() {
   return (
     <AdminGuard>
       <AdminLayout>
-        <DashboardContent />
+        <AdminErrorBoundary>
+          <DashboardContent />
+        </AdminErrorBoundary>
       </AdminLayout>
     </AdminGuard>
   );

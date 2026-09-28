@@ -43,15 +43,13 @@
  */
 
 import { Resend } from "resend";
-import { db, siteSettingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { db, siteSettingsTable, eq, sql } from "@workspace/db";
 import { logger } from "../lib/logger";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const APP_NAME = "TwirlDrape";
-const FROM_ADDRESS = "orders@twirldrape.com";
+const APP_NAME = "VASTRAA";
+const FROM_ADDRESS = "orders@vastraa.com";
 
 /** site_settings key used to persist the last-sent ISO week. */
 export const LAST_SENT_WEEK_KEY = "weekly_report_last_sent_week";
@@ -332,7 +330,7 @@ export function buildReportEmail(kpis: WeeklyKpis): { subject: string; html: str
     </table>
 
     <p style="margin:24px 0;">
-      <a href="https://twirldrape.com/admin/reports"
+      <a href="https://vastraa.com/admin/reports"
          style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
         View Full Reports
       </a>

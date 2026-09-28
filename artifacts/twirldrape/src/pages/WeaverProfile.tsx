@@ -6,9 +6,9 @@ import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { getApiUrl } from "@/lib/api";
 
-const GOLD = "#C9A84C";
-const MAROON = "#1E6B5A";
-const IVORY = "#F3F8F5";
+const GOLD = "#C7CCD1";
+const MAROON = "#0A1F44";
+const IVORY = "#F4F5F7";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -171,12 +171,12 @@ export default function WeaverProfile() {
         {/* Hero Banner */}
         <div
           className="relative overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${MAROON} 0%, #5e1421 100%)` }}
+          style={{ background: `linear-gradient(135deg, ${MAROON} 0%, #2C3E6B 100%)` }}
         >
           <div
             className="absolute inset-0 opacity-10"
             style={{
-              backgroundImage: "repeating-linear-gradient(45deg, rgba(201,168,76,0.4) 0, rgba(201,168,76,0.4) 1px, transparent 0, transparent 50%)",
+              backgroundImage: "repeating-linear-gradient(45deg, rgba(199,204,209,0.4) 0, rgba(199,204,209,0.4) 1px, transparent 0, transparent 50%)",
               backgroundSize: "10px 10px",
             }}
           />
@@ -185,7 +185,7 @@ export default function WeaverProfile() {
             {/* Back nav */}
             <Link
               href="/weavers"
-              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F3F8F5]/60 hover:text-[#F3F8F5] transition-colors mb-8"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F4F5F7]/60 hover:text-[#F4F5F7] transition-colors mb-8"
             >
               <ArrowLeft size={12} /> All Weavers
             </Link>
@@ -196,7 +196,7 @@ export default function WeaverProfile() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5 }}
-                className="w-32 h-32 rounded-2xl border-4 overflow-hidden bg-[#F3F8F5]/10 shrink-0"
+                className="w-32 h-32 rounded-2xl border-4 overflow-hidden bg-[#F4F5F7]/10 shrink-0"
                 style={{ borderColor: `${GOLD}80` }}
               >
                 <img
@@ -226,9 +226,9 @@ export default function WeaverProfile() {
                   {vendor.name}
                 </h1>
                 {vendor.tagline && (
-                  <p className="text-[#F3F8F5]/70 text-sm mb-4 max-w-lg">{vendor.tagline}</p>
+                  <p className="text-[#F4F5F7]/70 text-sm mb-4 max-w-lg">{vendor.tagline}</p>
                 )}
-                <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start text-sm text-[#F3F8F5]/60">
+                <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start text-sm text-[#F4F5F7]/60">
                   <span className="flex items-center gap-1.5">
                     <MapPin size={13} style={{ color: GOLD }} />
                     {vendor.location}
@@ -264,7 +264,7 @@ export default function WeaverProfile() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.15 }}
-              className="bg-white rounded-2xl border border-[#C9A84C]/20 p-7 mb-10 max-w-3xl"
+              className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-7 mb-10 max-w-3xl"
             >
               <h2 className="font-serif text-lg font-bold mb-4" style={{ color: MAROON }}>
                 About the Collective
@@ -288,7 +288,7 @@ export default function WeaverProfile() {
             ].map((item) => (
               <div
                 key={item.label}
-                className="bg-white rounded-xl border border-[#C9A84C]/15 p-4 text-center"
+                className="bg-white rounded-xl border border-[#C7CCD1]/15 p-4 text-center"
               >
                 <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">{item.label}</p>
                 <p className="font-semibold text-sm" style={{ color: MAROON }}>{item.value}</p>
@@ -333,7 +333,7 @@ export default function WeaverProfile() {
           )}
 
           {/* Back link */}
-          <div className="mt-16 pt-8 border-t border-[#C9A84C]/20">
+          <div className="mt-16 pt-8 border-t border-[#C7CCD1]/20">
             <Link
               href="/weavers"
               className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"

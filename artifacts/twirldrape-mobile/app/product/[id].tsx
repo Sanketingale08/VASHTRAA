@@ -338,13 +338,13 @@ export default function ProductDetailScreen() {
             style={s.topOverlay}
           />
           <Pressable onPress={() => router.back()} style={s.backBtn} testID="back-btn">
-            <Ionicons name="chevron-back" size={22} color="#FAF6EE" />
+            <Ionicons name="chevron-back" size={22} color="#F4F5F7" />
           </Pressable>
           <Pressable onPress={handleWishlist} style={s.wishBtn} testID="wishlist-toggle">
             <Ionicons
               name={inWishlist ? "heart" : "heart-outline"}
               size={20}
-              color={inWishlist ? "#E53935" : "#FAF6EE"}
+              color={inWishlist ? "#E53935" : "#F4F5F7"}
             />
           </Pressable>
         </View>

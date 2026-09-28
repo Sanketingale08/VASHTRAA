@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
 import type { StockAdjustment } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
 import { useListProducts } from "@workspace/api-client-react";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
@@ -26,7 +26,7 @@ function getRecentlyViewed(): string[] {
 export function CartPage() {
   const { items, removeItem, updateQuantity, clearCart, refreshStock } = useCart();
   const { wishlistedIds, toggle: toggleWishlist } = useWishlist();
-  const { isSignedIn } = useUser();
+  const { isSignedIn } = useAuth();
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: "percent" | "flat"; value: number; description: string; expiresAt: string | null }>(null);
   const [couponError, setCouponError] = useState("");
@@ -136,19 +136,19 @@ export function CartPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="text-center"
           >
-            <ShoppingBag size={72} className="text-[#C9A84C]/30 mx-auto mb-4" />
-            <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5] mb-2">
+            <ShoppingBag size={72} className="text-[#C7CCD1]/30 mx-auto mb-4" />
+            <h1 className="font-serif text-3xl font-bold text-[#0A1F44] dark:text-[#F4F5F7] mb-2">
               Your cart is empty
             </h1>
             <p className="text-gray-500 mb-8">Discover our exquisite saree collection</p>
             <div className="flex gap-4 justify-center flex-wrap">
               <Link href="/paithani/shop">
-                <button className="px-8 py-3 bg-[#1E6B5A] text-[#F3F8F5] font-semibold rounded-sm hover:bg-[#6a1826] transition-colors">
+                <button className="px-8 py-3 bg-[#0A1F44] text-[#F4F5F7] font-semibold rounded-sm hover:bg-[#6a1826] transition-colors">
                   Shop Paithani
                 </button>
               </Link>
               <Link href="/designer/shop">
-                <button className="px-8 py-3 border-2 border-[#C9A84C] text-[#1E6B5A] dark:text-[#C9A84C] font-semibold rounded-sm hover:bg-[#C9A84C]/10 transition-colors">
+                <button className="px-8 py-3 border-2 border-[#C7CCD1] text-[#0A1F44] dark:text-[#C7CCD1] font-semibold rounded-sm hover:bg-[#C7CCD1]/10 transition-colors">
                   Shop Designer
                 </button>
               </Link>
@@ -167,15 +167,15 @@ export function CartPage() {
 
   return (
     <Layout>
-    <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#111418] pt-6 pb-20">
+    <div className="min-h-screen bg-[#F4F5F7] dark:bg-[#111418] pt-6 pb-20">
       <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-1">Shopping</p>
-          <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
+          <p className="text-xs uppercase tracking-[0.25em] text-[#C7CCD1] font-bold mb-1">Shopping</p>
+          <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#0A1F44] dark:text-[#F4F5F7]">
             Your Cart
           </h1>
           <p className="text-gray-500 text-sm mt-1">{items.length} item{items.length !== 1 ? "s" : ""}</p>
@@ -224,7 +224,7 @@ export function CartPage() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className={`bg-white dark:bg-[#1E2329] rounded-lg border p-4 flex flex-col gap-2 ${item.stock === 0 ? "border-red-400/60" : "border-[#C9A84C]/10"}`}
+                className={`bg-white dark:bg-[#1E2329] rounded-lg border p-4 flex flex-col gap-2 ${item.stock === 0 ? "border-red-400/60" : "border-[#C7CCD1]/10"}`}
               >
                 {item.stock === 0 && (
                   <div className="flex items-center gap-1.5 text-red-500 text-xs font-semibold bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">
@@ -237,23 +237,23 @@ export function CartPage() {
                   <img
                     src={getProductImageSrc(item.images[0])}
                     alt={item.name}
-                    className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-md border border-[#C9A84C]/10 hover:opacity-90 transition-opacity"
+                    className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-md border border-[#C7CCD1]/10 hover:opacity-90 transition-opacity"
                     onError={replaceProductImageWithFallback}
                   />
                 </Link>
                 <div className="flex-1 min-w-0">
                   <Link href={`/products/${item.productId}`}>
-                    <h3 className="font-serif text-base md:text-lg font-semibold text-[#1E6B5A] dark:text-[#F3F8F5] hover:text-[#C9A84C] transition-colors line-clamp-2">
+                    <h3 className="font-serif text-base md:text-lg font-semibold text-[#0A1F44] dark:text-[#F4F5F7] hover:text-[#C7CCD1] transition-colors line-clamp-2">
                       {item.name}
                     </h3>
                   </Link>
                   <p className="text-xs text-gray-500 mt-0.5 capitalize">{item.category} · {item.vendorName}</p>
 
                   <div className="flex items-center gap-3 mt-3 flex-wrap">
-                    <div className="flex items-center border border-[#C9A84C]/30 rounded">
+                    <div className="flex items-center border border-[#C7CCD1]/30 rounded">
                       <button
                         onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                        className="p-1.5 hover:bg-[#C9A84C]/10 transition-colors"
+                        className="p-1.5 hover:bg-[#C7CCD1]/10 transition-colors"
                       >
                         <Minus size={14} />
                       </button>
@@ -263,12 +263,12 @@ export function CartPage() {
                       <button
                         onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                         disabled={item.quantity >= item.stock}
-                        className="p-1.5 hover:bg-[#C9A84C]/10 transition-colors disabled:opacity-40"
+                        className="p-1.5 hover:bg-[#C7CCD1]/10 transition-colors disabled:opacity-40"
                       >
                         <Plus size={14} />
                       </button>
                     </div>
-                    <p className="font-bold text-[#1E6B5A] dark:text-[#C9A84C]">
+                    <p className="font-bold text-[#0A1F44] dark:text-[#C7CCD1]">
                       ₹{(item.price * item.quantity).toLocaleString("en-IN")}
                     </p>
                     {item.quantity > 1 && (
@@ -281,7 +281,7 @@ export function CartPage() {
                   <div className="flex items-center gap-3 mt-3">
                     <button
                       onClick={() => moveToWishlist(item.productId)}
-                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#1E6B5A] dark:hover:text-[#C9A84C] transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#0A1F44] dark:hover:text-[#C7CCD1] transition-colors"
                     >
                       <Heart size={13} /> Save for Later
                     </button>
@@ -312,9 +312,9 @@ export function CartPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C9A84C]/10 p-6 sticky top-24 space-y-5"
+              className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C7CCD1]/10 p-6 sticky top-24 space-y-5"
             >
-              <h2 className="font-serif text-xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
+              <h2 className="font-serif text-xl font-bold text-[#0A1F44] dark:text-[#F4F5F7]">
                 Order Summary
               </h2>
 
@@ -349,12 +349,12 @@ export function CartPage() {
                         onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
                         onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
                         placeholder="Coupon code"
-                        className="flex-1 border border-[#C9A84C]/30 rounded-md px-3 py-2 text-sm bg-transparent text-[#1E6B5A] dark:text-[#F3F8F5] placeholder-gray-400 focus:outline-none focus:border-[#C9A84C]"
+                        className="flex-1 border border-[#C7CCD1]/30 rounded-md px-3 py-2 text-sm bg-transparent text-[#0A1F44] dark:text-[#F4F5F7] placeholder-gray-400 focus:outline-none focus:border-[#C7CCD1]"
                       />
                       <button
                         onClick={applyCoupon}
                         disabled={couponLoading}
-                        className="px-4 py-2 bg-[#C9A84C] text-[#1E6B5A] text-sm font-bold rounded-md hover:bg-[#b59539] transition-colors disabled:opacity-60"
+                        className="px-4 py-2 bg-[#C7CCD1] text-[#0A1F44] text-sm font-bold rounded-md hover:bg-[#b59539] transition-colors disabled:opacity-60"
                       >
                         {couponLoading ? "..." : "Apply"}
                       </button>
@@ -386,19 +386,19 @@ export function CartPage() {
                   <span>GST (5%)</span>
                   <span>₹{gst.toLocaleString("en-IN")}</span>
                 </div>
-                <div className="flex justify-between font-bold text-lg text-[#1E6B5A] dark:text-[#F3F8F5] pt-3 border-t border-[#C9A84C]/20">
+                <div className="flex justify-between font-bold text-lg text-[#0A1F44] dark:text-[#F4F5F7] pt-3 border-t border-[#C7CCD1]/20">
                   <span>Total</span>
                   <span>₹{total.toLocaleString("en-IN")}</span>
                 </div>
               </div>
 
               {afterDiscount > 0 && afterDiscount < 5000 && (
-                <p className="text-xs text-center text-gray-500 bg-[#F3F8F5] dark:bg-[#2A2E35] rounded px-3 py-2">
+                <p className="text-xs text-center text-gray-500 bg-[#F4F5F7] dark:bg-[#2A2E35] rounded px-3 py-2">
                   Add ₹{(5000 - afterDiscount).toLocaleString("en-IN")} more for free shipping
                 </p>
               )}
 
-              <div className="text-xs text-center text-gray-500 bg-[#F3F8F5] dark:bg-[#2A2E35] rounded px-3 py-2">
+              <div className="text-xs text-center text-gray-500 bg-[#F4F5F7] dark:bg-[#2A2E35] rounded px-3 py-2">
                 📦 Estimated delivery: <span className="font-semibold">{getDeliveryDate()}</span>
               </div>
 
@@ -418,7 +418,7 @@ export function CartPage() {
                 </button>
               ) : (
                 <Link href="/checkout">
-                  <button className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
+                  <button className="w-full bg-[#0A1F44] hover:bg-[#6a1826] text-[#F4F5F7] py-4 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors">
                     Proceed to Checkout
                   </button>
                 </Link>
@@ -426,7 +426,7 @@ export function CartPage() {
 
               <button
                 onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.href = `${basePath}/`; }}
-                className="w-full py-2.5 border border-[#C9A84C]/40 text-[#1E6B5A] dark:text-[#C9A84C] hover:border-[#C9A84C] text-sm font-semibold rounded-sm transition-colors"
+                className="w-full py-2.5 border border-[#C7CCD1]/40 text-[#0A1F44] dark:text-[#C7CCD1] hover:border-[#C7CCD1] text-sm font-semibold rounded-sm transition-colors"
               >
                 Continue Shopping
               </button>
@@ -454,15 +454,15 @@ function RecentlyViewedSection({ products }: { products: any[] }) {
   return (
     <section className="mt-16">
       <div className="flex items-center gap-3 mb-6">
-        <Clock size={18} className="text-[#C9A84C]" />
-        <h2 className="font-serif text-2xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5]">
+        <Clock size={18} className="text-[#C7CCD1]" />
+        <h2 className="font-serif text-2xl font-bold text-[#0A1F44] dark:text-[#F4F5F7]">
           Recently Viewed
         </h2>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {products.slice(0, 8).map((product) => (
           <Link key={product.id} href={`/products/${product.id}`}>
-            <div className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C9A84C]/10 overflow-hidden hover:border-[#C9A84C] hover:shadow-md transition-all cursor-pointer group">
+            <div className="bg-white dark:bg-[#1E2329] rounded-lg border border-[#C7CCD1]/10 overflow-hidden hover:border-[#C7CCD1] hover:shadow-md transition-all cursor-pointer group">
               <div className="aspect-square overflow-hidden">
                 <img
                   src={getProductImageSrc(product.images?.[0])}
@@ -473,10 +473,10 @@ function RecentlyViewedSection({ products }: { products: any[] }) {
               </div>
               <div className="p-3">
                 <p className="text-xs text-gray-500 mb-0.5">{product.vendorName}</p>
-                <p className="text-sm font-serif font-semibold text-[#1E6B5A] dark:text-[#F3F8F5] line-clamp-2">
+                <p className="text-sm font-serif font-semibold text-[#0A1F44] dark:text-[#F4F5F7] line-clamp-2">
                   {product.name}
                 </p>
-                <p className="text-sm font-bold text-[#1E6B5A] dark:text-[#C9A84C] mt-1">
+                <p className="text-sm font-bold text-[#0A1F44] dark:text-[#C7CCD1] mt-1">
                   ₹{product.price?.toLocaleString("en-IN")}
                 </p>
               </div>

@@ -8,9 +8,9 @@ import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 
 type TicketStatus = "Open" | "In Progress" | "Resolved" | "Closed" | "Waiting for Customer";
 
@@ -229,7 +229,7 @@ export default function SellerSupport() {
         </div>
 
         {/* Combined filter bar */}
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-4 space-y-3">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-2">
             {/* Free-text search */}
             <div className="relative flex-1">
@@ -239,7 +239,7 @@ export default function SellerSupport() {
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder="Search by Ticket ID, subject, or category…"
-                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/30 focus:border-[#C9A84C]"
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/30 focus:border-[#C7CCD1]"
               />
             </div>
 
@@ -247,7 +247,7 @@ export default function SellerSupport() {
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              className="px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-[#C9A84C] shrink-0"
+              className="px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-[#C7CCD1] shrink-0"
             >
               <option value="">All statuses</option>
               <option value="Open">Open</option>
@@ -265,14 +265,14 @@ export default function SellerSupport() {
               type="date"
               value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+              className="px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C7CCD1]"
             />
             <span className="text-xs text-gray-400">–</span>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+              className="px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C7CCD1]"
             />
             {hasFilters && (
               <button
@@ -294,7 +294,7 @@ export default function SellerSupport() {
             {isLoading ? (
               [...Array(3)].map((_, i) => <div key={i} className="bg-white border rounded-xl p-4 h-[70px] animate-pulse" />)
             ) : tickets.length === 0 ? (
-              <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-8 text-center">
+              <div className="bg-white border border-[#C7CCD1]/20 rounded-xl p-8 text-center">
                 <TicketIcon size={28} className="mx-auto mb-2" style={{ color: `${GOLD}66` }} />
                 <p className="text-gray-400 text-sm">
                   {hasFilters ? "No tickets match your filters." : "No customer tickets yet."}
@@ -312,7 +312,7 @@ export default function SellerSupport() {
                   onClick={() => { setSelectedId(t.id); setShowNew(false); }}
                   className={cn(
                     "w-full text-left rounded-xl p-3.5 border transition-all",
-                    t.id === selectedId ? "border-[#1E6B5A]/40" : "border-gray-200 hover:border-[#C9A84C]/50"
+                    t.id === selectedId ? "border-[#0A1F44]/40" : "border-gray-200 hover:border-[#C7CCD1]/50"
                   )}
                   style={t.id === selectedId ? { backgroundColor: `${MAROON}0d` } : { backgroundColor: "white" }}
                 >
@@ -357,12 +357,12 @@ export default function SellerSupport() {
                   type="text" placeholder="Subject"
                   value={form.subject}
                   onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#C9A84C]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#C7CCD1]"
                 />
                 <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-[#C9A84C]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-[#C7CCD1]"
                 >
                   <option value="">Select a category</option>
                   {categories.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -372,7 +372,7 @@ export default function SellerSupport() {
                   rows={5}
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[#C9A84C]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-[#C7CCD1]"
                 />
                 {formError && <p className="text-sm text-red-600">{formError}</p>}
                 <div className="flex gap-2">
@@ -414,7 +414,7 @@ export default function SellerSupport() {
                         onChange={(e) => setReplyBody(e.target.value)}
                         placeholder="Write a reply…"
                         rows={2}
-                        className="flex-1 resize-none text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#C9A84C]"
+                        className="flex-1 resize-none text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#C7CCD1]"
                       />
                       <button type="submit" disabled={!replyBody.trim() || addReply.isPending} className="self-end px-3 py-2 text-white rounded-lg disabled:opacity-40" style={{ backgroundColor: MAROON }}>
                         <Send size={15} />

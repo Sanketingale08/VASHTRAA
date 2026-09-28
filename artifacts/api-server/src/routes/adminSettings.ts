@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, siteSettingsTable, adminLoginSessionsTable, adminAuditLogsTable } from "@workspace/db";
-import { eq, ne, and, isNull, desc, gte, lte, sql } from "drizzle-orm";
+import { db, siteSettingsTable, adminLoginSessionsTable, adminAuditLogsTable, mongoSiteSettings, mongoGeneric } from "@workspace/db";
+import { eq, ne, and, isNull, desc, gte, lte, sql } from "@workspace/db";
 import { requireAdminKey, clearAdminKeyCache, sha256hex } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { clearAdminNotifPrefCache } from "../lib/adminNotifications";
@@ -35,6 +35,10 @@ function parseUA(ua: string = ""): { device: string; os: string; browser: string
 }
 
 async function getSetting(key: string): Promise<string | null> {
+  try {
+    const val = await mongoSiteSettings.get(key);
+    if (val !== null) return val;
+  } catch {}
   const [row] = await db
     .select({ value: siteSettingsTable.value })
     .from(siteSettingsTable)
@@ -43,6 +47,9 @@ async function getSetting(key: string): Promise<string | null> {
 }
 
 async function upsertSetting(key: string, value: string) {
+  try {
+    await mongoSiteSettings.set(key, value);
+  } catch {}
   await db
     .insert(siteSettingsTable)
     .values({ key, value })
@@ -348,7 +355,7 @@ router.get("/settings/maintenance-status", async (_req: any, res: any) => {
 // ── Platform Settings ─────────────────────────────────────────────────────────
 
 const PLATFORM_DEFAULTS: Record<string, string> = {
-  platform_name:    "TwirlDrape",
+  platform_name:    "VASTRAA",
   platform_logo_url:"",
   country:          "India",
   currency:         "INR",

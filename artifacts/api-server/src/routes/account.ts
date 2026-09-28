@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { clerkClient } from "@clerk/express";
 import { requireAuth } from "../middlewares/isAuthenticated";
+import { mongoUsers } from "@workspace/db";
 import { Resend } from "resend";
 import crypto from "crypto";
 
@@ -30,26 +31,27 @@ function generateOtp(): string {
 async function getUserEmail(userId: string): Promise<string | null> {
   try {
     const u = await clerkClient.users.getUser(userId);
-    return u.primaryEmailAddress?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? null;
-  } catch { return null; }
+    const email = u.primaryEmailAddress?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? null;
+    if (email) return email;
+  } catch { /* ignore */ }
+  const mongoUser = await mongoUsers.findById(userId);
+  return mongoUser?.email ?? null;
 }
 
 async function sendOtpEmail(toEmail: string, otp: string, phone: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     if (process.env.NODE_ENV === "production") {
-      // Production must have a mailer configured — fail loudly so engineers notice
       throw new Error("RESEND_API_KEY is not set; cannot send OTP in production");
     }
-    // Development fallback: log the OTP so the flow works without Resend configured
     console.info(`[phone-otp] DEV: OTP for +91${phone} → ${otp} (email: ${toEmail})`);
     return;
   }
   const resend = new Resend(apiKey);
   await resend.emails.send({
-    from: "noreply@twirldrape.com",
+    from: "noreply@vastraa.com",
     to: toEmail,
-    subject: "Your TwirlDrape mobile number verification code",
+    subject: "Your VASTRAA mobile number verification code",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
         <h2 style="color:#1E6B5A;font-size:20px;margin:0 0 8px">Mobile Number Change</h2>
@@ -66,6 +68,92 @@ async function sendOtpEmail(toEmail: string, otp: string, phone: string): Promis
     `,
   });
 }
+
+// ─── Profile GET ─────────────────────────────────────────────────────────────
+router.get("/account/profile", requireAuth, async (req: any, res: any): Promise<void> => {
+  try {
+    const userId = req.userId;
+    let mongoUser = await mongoUsers.findById(userId);
+    if (!mongoUser && req.user?.email) {
+      mongoUser = await mongoUsers.findByEmail(req.user.email);
+    }
+
+    let firstName = "";
+    let lastName = "";
+    if (mongoUser?.name) {
+      const parts = mongoUser.name.split(" ");
+      firstName = parts[0] || "";
+      lastName = parts.slice(1).join(" ") || "";
+    }
+
+    let email = mongoUser?.email || req.user?.email || "";
+    let phone = mongoUser?.phone || "";
+    let alternateMobile = mongoUser?.alternateMobile || "";
+    let dateOfBirth = mongoUser?.dateOfBirth || "";
+    let gender = mongoUser?.gender || "";
+    let location = mongoUser?.location || "";
+    let language = mongoUser?.language || "English";
+    let profilePicture = (mongoUser as any)?.profilePicture || (mongoUser as any)?.avatar || "";
+    let address = (mongoUser as any)?.address || "";
+
+    // If address is not explicitly on mongoUser, try to fetch default address from saved addresses
+    if (!address) {
+      try {
+        const { mongoAddresses } = await import("@workspace/db");
+        const addrs = await mongoAddresses.findByUserId(userId);
+        const defAddr = addrs.find((a) => a.isDefault) || addrs[0];
+        if (defAddr) {
+          address = [defAddr.line1, defAddr.line2, defAddr.city, defAddr.state, defAddr.pincode].filter(Boolean).join(", ");
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Merge Clerk user metadata fallback if available
+    try {
+      const clerkUser = await clerkClient.users.getUser(userId);
+      if (clerkUser) {
+        if (!firstName) firstName = clerkUser.firstName || "";
+        if (!lastName) lastName = clerkUser.lastName || "";
+        if (!email) email = clerkUser.primaryEmailAddress?.emailAddress || "";
+        if (!profilePicture && clerkUser.imageUrl) profilePicture = clerkUser.imageUrl;
+        const meta = (clerkUser.publicMetadata ?? {}) as Record<string, string>;
+        if (!phone && meta.phone) phone = meta.phone;
+        if (!alternateMobile && meta.alternateMobile) alternateMobile = meta.alternateMobile;
+        if (!dateOfBirth && meta.dateOfBirth) dateOfBirth = meta.dateOfBirth;
+        if (!gender && meta.gender) gender = meta.gender;
+        if (!location && meta.location) location = meta.location;
+        if (!language && meta.language) language = meta.language;
+        if (!profilePicture && meta.profilePicture) profilePicture = meta.profilePicture;
+        if (!address && meta.address) address = meta.address;
+      }
+    } catch { /* ignore */ }
+
+    const fullName = [firstName, lastName].filter(Boolean).join(" ") || mongoUser?.name || "Customer";
+
+    res.json({
+      success: true,
+      user: {
+        id: userId,
+        name: fullName,
+        firstName,
+        lastName,
+        email,
+        phone,
+        alternateMobile,
+        dateOfBirth,
+        gender,
+        location,
+        language,
+        profilePicture,
+        avatar: profilePicture,
+        address,
+      },
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "Failed to fetch profile");
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
 
 // ─── Phone OTP: request ──────────────────────────────────────────────────────
 router.post("/account/phone-otp/request", requireAuth, async (req: any, res: any): Promise<void> => {
@@ -105,9 +193,6 @@ router.post("/account/phone-otp/request", requireAuth, async (req: any, res: any
   try {
     await sendOtpEmail(toEmail, otp, phone);
   } catch (err) {
-    // sendOtpEmail only throws in production (missing key or Resend error).
-    // In dev it logs the OTP to console and returns normally, so this branch
-    // is never reached in development.
     req.log?.error({ err }, "[phone-otp] Failed to send OTP email — invalidating entry");
     phoneOtpStore.delete(userId);
     res.status(500).json({ error: "Failed to send verification email. Please try again." });
@@ -162,64 +247,204 @@ router.post("/account/phone-otp/verify", requireAuth, async (req: any, res: any)
     return;
   }
 
-  // OTP valid — update publicMetadata.phone
+  // OTP valid — update phone in database and metadata
   phoneOtpStore.delete(userId);
   try {
-    await clerkClient.users.updateUserMetadata(userId, {
-      publicMetadata: { phone },
-    });
-    res.json({ success: true });
+    const updatedUser = await mongoUsers.update(userId, { phone, updatedAt: new Date() });
+    try {
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: { phone },
+      });
+    } catch { /* ignore Clerk errors for custom auth users */ }
+
+    res.json({ success: true, phone, user: updatedUser });
   } catch (err) {
-    req.log?.error({ err }, "[phone-otp] Failed to update phone metadata");
+    req.log?.error({ err }, "[phone-otp] Failed to update phone number");
     res.status(500).json({ error: "Failed to update phone number. Please try again." });
   }
 });
 
 // ─── Profile PATCH ───────────────────────────────────────────────────────────
 router.patch("/account/profile", requireAuth, async (req: any, res: any): Promise<void> => {
-  // `phone` is intentionally excluded here — phone changes require OTP verification
-  // via POST /api/account/phone-otp/request + /api/account/phone-otp/verify.
-  const { firstName, lastName, alternateMobile, dateOfBirth, gender, language, location } = req.body;
+  const {
+    firstName,
+    lastName,
+    name,
+    phone,
+    email,
+    alternateMobile,
+    dateOfBirth,
+    gender,
+    language,
+    location,
+    profilePicture,
+    avatar,
+    address,
+  } = req.body;
+
   try {
-    // Update core name fields via the admin API.
-    // OAuth-managed accounts (Google, Facebook, etc.) have provider-controlled names;
-    // Clerk rejects admin name updates for those users. Isolate this in its own try/catch
-    // so a Clerk rejection does NOT abort the metadata update that follows.
-    const nameUpdate: Record<string, string> = {};
-    if (typeof firstName === "string") nameUpdate.firstName = firstName.trim();
-    if (typeof lastName === "string") nameUpdate.lastName = lastName.trim();
-    if (Object.keys(nameUpdate).length > 0) {
-      try {
-        await clerkClient.users.updateUser(req.userId, nameUpdate);
-      } catch (nameErr: any) {
-        // 400/422 indicate a Clerk validation rejection — typically provider-managed
-        // names that OAuth identity providers don't allow the app to override.
-        // Those are tolerated here so the metadata fields below (dateOfBirth, gender,
-        // etc.) are still persisted. Any other status (network error, 5xx, etc.)
-        // is re-thrown so the caller knows the request genuinely failed.
-        const httpStatus = nameErr?.status ?? nameErr?.statusCode;
-        if (httpStatus === 400 || httpStatus === 422) {
-          req.log?.warn({ nameErr }, "Name update rejected by Clerk (likely provider-managed name); continuing with metadata update");
-        } else {
-          throw nameErr;
-        }
+    // Validations
+    if (email !== undefined && email !== null && email !== "") {
+      const cleanEmail = String(email).trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        res.status(400).json({ error: "Please enter a valid email address." });
+        return;
+      }
+      // Check if email belongs to another user
+      const existingWithEmail = await mongoUsers.findByEmail(cleanEmail);
+      if (existingWithEmail && existingWithEmail.id !== req.userId && (existingWithEmail as any)._id !== req.userId) {
+        res.status(400).json({ error: "Email address is already in use by another account." });
+        return;
       }
     }
 
-    await clerkClient.users.updateUserMetadata(req.userId, {
-      publicMetadata: {
-        alternateMobile: alternateMobile ?? "",
-        dateOfBirth: dateOfBirth ?? "",
-        gender: gender ?? "",
-        language: language ?? "English",
-        location: location ?? "",
+    if (phone !== undefined && phone !== null && phone !== "") {
+      const phoneDigits = String(phone).replace(/\D/g, "");
+      if (phoneDigits.length !== 10) {
+        res.status(400).json({ error: "Mobile number must be a valid 10-digit number." });
+        return;
+      }
+    }
+
+    if (alternateMobile !== undefined && alternateMobile !== null && alternateMobile !== "") {
+      const altDigits = String(alternateMobile).replace(/\D/g, "");
+      if (altDigits.length !== 10) {
+        res.status(400).json({ error: "Alternate mobile must be exactly 10 digits." });
+        return;
+      }
+    }
+
+    // Build update object
+    const updateFields: Record<string, any> = { updatedAt: new Date() };
+
+    let computedName = "";
+    if (typeof firstName === "string" || typeof lastName === "string") {
+      computedName = [firstName ?? "", lastName ?? ""].filter(Boolean).join(" ").trim();
+    } else if (typeof name === "string") {
+      computedName = name.trim();
+    }
+
+    if (computedName) {
+      updateFields.name = computedName;
+    }
+
+    if (typeof email === "string" && email.trim()) {
+      updateFields.email = email.trim().toLowerCase();
+    }
+
+    if (typeof phone === "string" && phone.trim()) {
+      updateFields.phone = phone.replace(/\D/g, "").slice(0, 10);
+    }
+
+    if (alternateMobile !== undefined) updateFields.alternateMobile = String(alternateMobile).trim();
+    if (dateOfBirth !== undefined) updateFields.dateOfBirth = String(dateOfBirth).trim();
+    if (gender !== undefined) updateFields.gender = String(gender).trim();
+    if (language !== undefined) updateFields.language = String(language).trim();
+    if (location !== undefined) updateFields.location = String(location).trim();
+
+    const pic = profilePicture ?? avatar;
+    if (pic !== undefined) {
+      updateFields.profilePicture = String(pic).trim();
+      updateFields.avatar = String(pic).trim();
+    }
+
+    if (address !== undefined) {
+      updateFields.address = String(address).trim();
+    }
+
+    // 1. Permanently update database record (mongoUsers)
+    const updatedUser = await mongoUsers.update(req.userId, updateFields);
+
+    // 2. Synchronize address to saved_addresses if address is provided
+    if (address !== undefined && String(address).trim()) {
+      try {
+        const { mongoAddresses } = await import("@workspace/db");
+        const userAddrs = await mongoAddresses.findByUserId(req.userId);
+        const defaultAddr = userAddrs.find((a) => a.isDefault) || userAddrs[0];
+
+        const fullAddrStr = String(address).trim();
+        const userName = updatedUser?.name || computedName || "Customer";
+        const userPhone = updatedUser?.phone || (typeof phone === "string" ? phone : "") || "9876543210";
+
+        if (defaultAddr) {
+          await mongoAddresses.update(defaultAddr.id, {
+            name: userName,
+            phone: userPhone,
+            line1: fullAddrStr,
+            isDefault: true,
+          });
+        } else {
+          await mongoAddresses.insert({
+            userId: req.userId,
+            name: userName,
+            phone: userPhone,
+            line1: fullAddrStr,
+            line2: null,
+            landmark: null,
+            city: updateFields.location || "City",
+            state: "State",
+            pincode: "400001",
+            country: "India",
+            addressType: "home",
+            isDefault: true,
+          });
+        }
+      } catch { /* ignore address sync errors */ }
+    }
+
+    // 3. Best-effort update for Clerk user if Clerk is active
+    try {
+      const nameUpdate: Record<string, string> = {};
+      if (typeof firstName === "string" && firstName.trim()) nameUpdate.firstName = firstName.trim();
+      if (typeof lastName === "string" && lastName.trim()) nameUpdate.lastName = lastName.trim();
+      if (Object.keys(nameUpdate).length > 0) {
+        await clerkClient.users.updateUser(req.userId, nameUpdate).catch(() => {});
+      }
+
+      await clerkClient.users.updateUserMetadata(req.userId, {
+        publicMetadata: {
+          phone: updateFields.phone ?? updatedUser?.phone ?? "",
+          alternateMobile: updateFields.alternateMobile ?? updatedUser?.alternateMobile ?? "",
+          dateOfBirth: updateFields.dateOfBirth ?? updatedUser?.dateOfBirth ?? "",
+          gender: updateFields.gender ?? updatedUser?.gender ?? "",
+          language: updateFields.language ?? updatedUser?.language ?? "English",
+          location: updateFields.location ?? updatedUser?.location ?? "",
+          profilePicture: updateFields.profilePicture ?? (updatedUser as any)?.profilePicture ?? "",
+          address: updateFields.address ?? (updatedUser as any)?.address ?? "",
+        },
+      }).catch(() => {});
+    } catch { /* ignore Clerk errors for custom auth users */ }
+
+    // Parse names for response
+    const nameParts = (updatedUser?.name || computedName || "").split(" ");
+    const fName = nameParts[0] || "";
+    const lName = nameParts.slice(1).join(" ") || "";
+
+    res.json({
+      success: true,
+      user: {
+        id: updatedUser?.id || req.userId,
+        name: updatedUser?.name || computedName,
+        firstName: fName,
+        lastName: lName,
+        email: updatedUser?.email || (typeof email === "string" ? email.trim() : ""),
+        phone: updatedUser?.phone || (typeof phone === "string" ? phone : ""),
+        alternateMobile: updatedUser?.alternateMobile || "",
+        dateOfBirth: updatedUser?.dateOfBirth || "",
+        gender: updatedUser?.gender || "",
+        location: updatedUser?.location || "",
+        language: updatedUser?.language || "English",
+        profilePicture: (updatedUser as any)?.profilePicture || updateFields.profilePicture || "",
+        avatar: (updatedUser as any)?.avatar || updateFields.avatar || "",
+        address: (updatedUser as any)?.address || updateFields.address || "",
       },
     });
-    res.json({ success: true });
-  } catch (err) {
-    req.log.error({ err }, "Failed to update profile metadata");
-    res.status(500).json({ error: "Failed to update profile" });
+  } catch (err: any) {
+    req.log?.error({ err }, "Failed to update profile metadata");
+    res.status(500).json({ error: err?.message ?? "Failed to save profile" });
   }
 });
 
 export default router;
+

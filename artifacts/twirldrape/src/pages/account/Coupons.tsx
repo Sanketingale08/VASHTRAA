@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tag, Copy, CheckCircle, Clock, Ticket, History, XCircle } from "lucide-react";
@@ -41,7 +42,7 @@ function useAvailableCoupons(enabled: boolean) {
   return useQuery<{ coupons: AvailableCoupon[] }>({
     queryKey: ["coupons-available"],
     queryFn: async () => {
-      const res = await fetch(`/api/coupons/available`, { credentials: "include" });
+      const res = await apiFetch(`/api/coupons/available`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -53,7 +54,7 @@ function useUsedCoupons(enabled: boolean) {
   return useQuery<{ redemptions: Redemption[] }>({
     queryKey: ["coupons-used"],
     queryFn: async () => {
-      const res = await fetch(`/api/coupons/used`, { credentials: "include" });
+      const res = await apiFetch(`/api/coupons/used`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -65,7 +66,7 @@ function useExpiredCoupons() {
   return useQuery<{ coupons: ExpiredCoupon[] }>({
     queryKey: ["coupons-expired"],
     queryFn: async () => {
-      const res = await fetch(`/api/coupons/expired`);
+      const res = await apiFetch(`/api/coupons/expired`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -85,7 +86,7 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1.5 text-xs font-bold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
+      className="flex items-center gap-1.5 text-xs font-bold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors"
       title="Copy code"
     >
       {copied ? (
@@ -118,17 +119,17 @@ function AvailableCouponCard({ coupon, delay }: { coupon: AvailableCoupon; delay
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="bg-white rounded-xl border border-[#C9A84C]/25 p-4 relative overflow-hidden group hover:border-[#C9A84C]/50 hover:shadow-md transition-all"
+      className="bg-white rounded-xl border border-[#C7CCD1]/25 p-4 relative overflow-hidden group hover:border-[#C7CCD1]/50 hover:shadow-md transition-all"
     >
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#1E6B5A] rounded-l-xl" />
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0A1F44] rounded-l-xl" />
       <div className="pl-2">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="inline-block font-mono font-bold text-base text-[#1E6B5A] tracking-wider bg-[#1E6B5A]/5 px-2.5 py-1 rounded-md border border-[#1E6B5A]/10">
+              <span className="inline-block font-mono font-bold text-base text-[#0A1F44] tracking-wider bg-[#0A1F44]/5 px-2.5 py-1 rounded-md border border-[#0A1F44]/10">
                 {coupon.code}
               </span>
-              <span className="text-xs font-bold text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-bold text-[#C7CCD1] bg-[#C7CCD1]/10 px-2 py-0.5 rounded-full">
                 {discountLabel(coupon.type, coupon.value)}
               </span>
             </div>
@@ -179,12 +180,12 @@ function RedemptionCard({ r, delay }: { r: Redemption; delay: number }) {
       transition={{ delay }}
       className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4"
     >
-      <div className="w-10 h-10 rounded-lg bg-[#1E6B5A]/5 flex items-center justify-center shrink-0">
-        <History size={16} className="text-[#1E6B5A]" />
+      <div className="w-10 h-10 rounded-lg bg-[#0A1F44]/5 flex items-center justify-center shrink-0">
+        <History size={16} className="text-[#0A1F44]" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="font-mono font-bold text-sm text-[#1E6B5A]">{r.couponCode}</span>
+          <span className="font-mono font-bold text-sm text-[#0A1F44]">{r.couponCode}</span>
           <span className="text-xs text-gray-500">· {discountLabel(r.type, r.value)}</span>
         </div>
         <p className="text-xs text-gray-500 line-clamp-1">{r.description}</p>
@@ -247,7 +248,7 @@ const TABS = ["Available", "Used", "Expired"] as const;
 type Tab = (typeof TABS)[number];
 
 export function AccountCouponsPage() {
-  const { isSignedIn } = useUser();
+  const { isSignedIn } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("Available");
 
   const { data: availableData, isLoading: availLoading } = useAvailableCoupons(!!isSignedIn);
@@ -272,8 +273,8 @@ export function AccountCouponsPage() {
       if (coupons.length === 0) {
         return (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-            <div className="w-14 h-14 rounded-full bg-[#1E6B5A]/5 flex items-center justify-center">
-              <Ticket size={28} className="text-[#1E6B5A]/30" />
+            <div className="w-14 h-14 rounded-full bg-[#0A1F44]/5 flex items-center justify-center">
+              <Ticket size={28} className="text-[#0A1F44]/30" />
             </div>
             <p className="text-gray-400 text-sm">No coupons available right now.</p>
             <p className="text-gray-400 text-xs max-w-xs">
@@ -353,15 +354,15 @@ export function AccountCouponsPage() {
       <div className="space-y-5">
         <p className="text-sm text-gray-500">Your exclusive discounts and coupon history</p>
 
-        <div className="flex gap-1 bg-white rounded-xl border border-[#C9A84C]/15 p-1 shadow-sm">
+        <div className="flex gap-1 bg-white rounded-xl border border-[#C7CCD1]/15 p-1 shadow-sm">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 text-sm font-semibold py-2 rounded-lg transition-all ${
                 activeTab === tab
-                  ? "bg-[#1E6B5A] text-[#F3F8F5] shadow-sm"
-                  : "text-gray-500 hover:text-[#1E6B5A]"
+                  ? "bg-[#0A1F44] text-[#F4F5F7] shadow-sm"
+                  : "text-gray-500 hover:text-[#0A1F44]"
               }`}
             >
               {tab}
@@ -369,8 +370,8 @@ export function AccountCouponsPage() {
                 <span
                   className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
                     activeTab === tab
-                      ? "bg-[#F3F8F5]/20 text-[#F3F8F5]"
-                      : "bg-[#1E6B5A]/10 text-[#1E6B5A]"
+                      ? "bg-[#F4F5F7]/20 text-[#F4F5F7]"
+                      : "bg-[#0A1F44]/10 text-[#0A1F44]"
                   }`}
                 >
                   {coupons.length}
@@ -380,7 +381,7 @@ export function AccountCouponsPage() {
                 <span
                   className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
                     activeTab === tab
-                      ? "bg-[#F3F8F5]/20 text-[#F3F8F5]"
+                      ? "bg-[#F4F5F7]/20 text-[#F4F5F7]"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >
@@ -391,7 +392,7 @@ export function AccountCouponsPage() {
                 <span
                   className={`ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
                     activeTab === tab
-                      ? "bg-[#F3F8F5]/20 text-[#F3F8F5]"
+                      ? "bg-[#F4F5F7]/20 text-[#F4F5F7]"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >

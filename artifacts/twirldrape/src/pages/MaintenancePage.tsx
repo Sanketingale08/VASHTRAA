@@ -7,7 +7,7 @@
  */
 import { useEffect } from "react";
 
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 const NAVY = "#0D1B36";
 
 export default function MaintenancePage() {
@@ -35,7 +35,7 @@ export default function MaintenancePage() {
       {/* Logo mark */}
       <div
         className="w-20 h-20 rounded-3xl flex items-center justify-center mb-8 shadow-2xl"
-        style={{ background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)" }}
+        style={{ background: "rgba(199,204,209,0.15)", border: "1px solid rgba(199,204,209,0.3)" }}
       >
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
           <path
@@ -56,7 +56,7 @@ export default function MaintenancePage() {
         className="text-sm tracking-[0.35em] uppercase font-medium mb-2"
         style={{ color: GOLD }}
       >
-        TwirlDrape
+        VASTRAA
       </p>
 
       {/* Headline */}
@@ -72,14 +72,14 @@ export default function MaintenancePage() {
         className="text-center max-w-sm leading-relaxed mb-10"
         style={{ color: "rgba(245,240,232,0.6)", fontSize: "0.95rem" }}
       >
-        We're doing a bit of maintenance to make TwirlDrape even better.
+        We're doing a bit of maintenance to make VASTRAA even better.
         The site will be back up shortly — thank you for your patience.
       </p>
 
       {/* Live indicator */}
       <div
         className="flex items-center gap-2 px-4 py-2 rounded-full"
-        style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)" }}
+        style={{ background: "rgba(199,204,209,0.1)", border: "1px solid rgba(199,204,209,0.2)" }}
       >
         <span
           className="w-2 h-2 rounded-full animate-pulse"

@@ -1,4 +1,4 @@
-import { db, adminAuditLogsTable } from "@workspace/db";
+import { db, adminAuditLogsTable, mongoGeneric } from "@workspace/db";
 
 export interface AuditLogParams {
   action: string;
@@ -16,14 +16,31 @@ export interface AuditLogParams {
  */
 export async function writeAuditLog(params: AuditLogParams): Promise<void> {
   try {
-    await db.insert(adminAuditLogsTable).values({
+    const id = crypto.randomUUID();
+    const doc = {
+      id,
+      _id: id,
       actor: params.actor ?? "Super Admin",
       action: params.action,
       module: params.module,
       details: params.details ?? null,
       ipAddress: params.ipAddress ?? null,
       status: params.status ?? "success",
-    });
+      createdAt: new Date(),
+    };
+
+    try {
+      await mongoGeneric.getCollection("admin_audit_logs").insertOne(doc as any);
+    } catch {
+      await db.insert(adminAuditLogsTable).values({
+        actor: params.actor ?? "Super Admin",
+        action: params.action,
+        module: params.module,
+        details: params.details ?? null,
+        ipAddress: params.ipAddress ?? null,
+        status: params.status ?? "success",
+      });
+    }
   } catch (err) {
     // Intentionally swallowed — audit writes must not crash callers
     console.error("[auditLog] write failed:", err);

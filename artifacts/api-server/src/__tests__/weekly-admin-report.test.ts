@@ -82,7 +82,7 @@ function makeDeps(overrides: Partial<{
   return {
     readLastSentWeek: vi.fn(async () => null),
     claimWeek:        vi.fn(async (_w: string) => true),
-    getAdminEmail:    vi.fn(async () => "admin@twirldrape.com"),
+    getAdminEmail:    vi.fn(async () => "admin@vastraa.com"),
     fetchWeeklyKpis:  vi.fn(async (_now: Date) => ({ ...SAMPLE_KPIS })),
     sendEmail:        vi.fn(async (_opts: { to: string; subject: string; html: string }) => {}),
     ...overrides,

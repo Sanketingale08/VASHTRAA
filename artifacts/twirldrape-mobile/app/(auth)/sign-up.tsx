@@ -211,7 +211,7 @@ export default function SignUpScreen() {
             <View style={s.header}>
               <Text style={s.title}>Create Account</Text>
               <View style={s.goldAccent} />
-              <Text style={[s.subtitle, { marginTop: 8 }]}>Join TwirlDrape to start shopping</Text>
+              <Text style={[s.subtitle, { marginTop: 8 }]}>Join VASTRAA to start shopping</Text>
             </View>
 
             <Text style={s.label}>Email Address</Text>

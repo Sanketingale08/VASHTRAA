@@ -13,7 +13,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders, adminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 interface VendorRow {
   id: string;

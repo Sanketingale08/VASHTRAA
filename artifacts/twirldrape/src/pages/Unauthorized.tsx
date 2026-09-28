@@ -7,9 +7,9 @@ export default function Unauthorized() {
   return (
     <div
       className="min-h-screen flex items-center justify-center px-4"
-      style={{ background: "#F3F8F5" }}
+      style={{ background: "#F4F5F7" }}
     >
-      <div className="max-w-md w-full bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm p-10 text-center">
+      <div className="max-w-md w-full bg-white rounded-2xl border border-[#C7CCD1]/20 shadow-sm p-10 text-center">
         {/* Icon */}
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
@@ -21,7 +21,7 @@ export default function Unauthorized() {
         {/* Heading */}
         <h1
           className="font-serif text-2xl font-bold mb-2"
-          style={{ color: "#1E6B5A" }}
+          style={{ color: "#0A1F44" }}
         >
           Access Denied
         </h1>
@@ -34,7 +34,7 @@ export default function Unauthorized() {
         <a
           href={basePath || "/"}
           className="inline-flex items-center justify-center w-full py-3 px-8 mb-3 font-bold text-sm uppercase tracking-widest rounded-sm transition-opacity hover:opacity-90"
-          style={{ background: "#1E6B5A", color: "#F3F8F5" }}
+          style={{ background: "#0A1F44", color: "#F4F5F7" }}
         >
           Back to Shopping
         </a>
@@ -44,13 +44,6 @@ export default function Unauthorized() {
           <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">
             Or sign in to a different portal
           </p>
-          <Link
-            href="/seller/login"
-            className="inline-flex items-center justify-center py-2.5 px-6 text-sm font-semibold rounded-sm border transition-colors hover:bg-[#E6F0EA]"
-            style={{ borderColor: "#C9A84C60", color: "#1E6B5A" }}
-          >
-            Seller Portal
-          </Link>
           <Link
             href="/admin/login"
             className="inline-flex items-center justify-center py-2.5 px-6 text-sm font-semibold rounded-sm border transition-colors hover:bg-gray-50"

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { useLocation } from "wouter";
 
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 export const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -108,7 +108,7 @@ export function CategoryCard({
             handleClick();
           }}
           className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-6 py-3 rounded-sm transition-all duration-300 group-hover:gap-3"
-          style={{ background: GOLD, color: "#1E6B5A" }}
+          style={{ background: GOLD, color: "#0A1F44" }}
         >
           {buttonLabel} <ArrowRight size={14} />
         </button>

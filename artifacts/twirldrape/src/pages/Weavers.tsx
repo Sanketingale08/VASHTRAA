@@ -5,9 +5,9 @@ import { MapPin, Star, Package, ArrowRight, Users, X, Filter } from "lucide-reac
 import { Layout } from "@/components/Layout";
 import { getApiUrl } from "@/lib/api";
 
-const GOLD = "#C9A84C";
-const MAROON = "#1E6B5A";
-const IVORY = "#F3F8F5";
+const GOLD = "#C7CCD1";
+const MAROON = "#0A1F44";
+const IVORY = "#F4F5F7";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -122,11 +122,11 @@ export default function Weavers() {
       <div style={{ background: IVORY, minHeight: "100vh" }}>
 
         {/* Hero */}
-        <section className="relative overflow-hidden py-24 md:py-32" style={{ background: `linear-gradient(135deg, ${MAROON} 0%, #5e1421 100%)` }}>
+        <section className="relative overflow-hidden py-24 md:py-32" style={{ background: `linear-gradient(135deg, ${MAROON} 0%, #2C3E6B 100%)` }}>
           <div
             className="absolute inset-0 opacity-10"
             style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A84C' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C7CCD1' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             }}
           />
           <div className="relative z-10 container mx-auto px-4 text-center">
@@ -145,7 +145,7 @@ export default function Weavers() {
               animate="visible"
               custom={1}
               variants={fadeUp}
-              className="font-serif text-4xl md:text-6xl font-bold mb-6 leading-tight text-[#F3F8F5]"
+              className="font-serif text-4xl md:text-6xl font-bold mb-6 leading-tight text-[#F4F5F7]"
             >
               Meet Our Weavers
             </motion.h1>
@@ -154,9 +154,9 @@ export default function Weavers() {
               animate="visible"
               custom={2}
               variants={fadeUp}
-              className="text-[#E6F0EA] max-w-2xl mx-auto text-base md:text-lg leading-relaxed"
+              className="text-[#E5E8EC] max-w-2xl mx-auto text-base md:text-lg leading-relaxed"
             >
-              Every saree on TwirlDrape is handwoven by a master craftsperson. These are the families,
+              Every saree on VASTRAA is handwoven by a master craftsperson. These are the families,
               collectives, and studios behind every thread — admitted by hand, paid fairly, and supported directly.
             </motion.p>
           </div>
@@ -164,7 +164,7 @@ export default function Weavers() {
 
         {/* Filter Bar */}
         {showFilterBar && (
-          <div className="border-b border-[#C9A84C]/20 bg-white sticky top-0 z-20 shadow-sm">
+          <div className="border-b border-[#C7CCD1]/20 bg-white sticky top-0 z-20 shadow-sm">
             <div className="container mx-auto px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 shrink-0 mr-1">
@@ -184,7 +184,7 @@ export default function Weavers() {
                           className="text-[11px] font-semibold px-3 py-1 rounded-full border transition-all duration-150"
                           style={
                             active
-                              ? { background: MAROON, color: "#F3F8F5", borderColor: MAROON }
+                              ? { background: MAROON, color: "#F4F5F7", borderColor: MAROON }
                               : { background: "transparent", color: "#555", borderColor: "#d1d5db" }
                           }
                         >
@@ -333,11 +333,11 @@ export default function Weavers() {
                           variants={fadeUp}
                         >
                           <Link href={`/weavers/${vendor.id}`}>
-                            <div className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm hover:shadow-lg transition-all duration-300 group overflow-hidden cursor-pointer">
+                            <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 shadow-sm hover:shadow-lg transition-all duration-300 group overflow-hidden cursor-pointer">
                               {/* Avatar / header */}
                               <div
                                 className="relative h-44 overflow-hidden"
-                                style={{ background: `linear-gradient(135deg, ${MAROON}cc, #5e1421cc)` }}
+                                style={{ background: `linear-gradient(135deg, ${MAROON}cc, #2C3E6Bcc)` }}
                               >
                                 <img
                                   src={vendor.avatar || getFallbackAvatar(i)}
@@ -358,7 +358,7 @@ export default function Weavers() {
                                   {techniqueLabel && (
                                     <span
                                       className="text-[10px] font-bold uppercase tracking-[0.15em] px-2 py-0.5 rounded"
-                                      style={{ background: "rgba(30,107,90,0.85)", color: "#F3F8F5" }}
+                                      style={{ background: "rgba(30,107,90,0.85)", color: "#F4F5F7" }}
                                     >
                                       {techniqueLabel}
                                     </span>
@@ -367,7 +367,7 @@ export default function Weavers() {
                               </div>
 
                               <div className="p-5">
-                                <h2 className="font-serif text-lg font-bold mb-1 group-hover:text-[#1E6B5A] transition-colors" style={{ color: "#3D1A1A" }}>
+                                <h2 className="font-serif text-lg font-bold mb-1 group-hover:text-[#0A1F44] transition-colors" style={{ color: "#3D1A1A" }}>
                                   {vendor.name}
                                 </h2>
 
@@ -414,7 +414,7 @@ export default function Weavers() {
         </section>
 
         {/* CTA */}
-        <section className="bg-[#E6F0EA] py-14 md:py-20">
+        <section className="bg-[#E5E8EC] py-14 md:py-20">
           <div className="container mx-auto px-4 text-center">
             <motion.div
               initial="hidden"
@@ -432,11 +432,11 @@ export default function Weavers() {
                 We personally vet every artisan partner. If you weave with tradition and care, we'd love to hear from you.
               </p>
               <Link
-                href="/seller/register"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider text-[#F3F8F5] hover:opacity-90 transition-opacity"
+                href="/contact"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider text-[#F4F5F7] hover:opacity-90 transition-opacity"
                 style={{ background: MAROON }}
               >
-                Apply as a Partner <ArrowRight size={16} />
+                Get In Touch <ArrowRight size={16} />
               </Link>
             </motion.div>
           </div>

@@ -431,7 +431,7 @@ function ReturnsContent() {
     const tabLabel = tab === "all" ? "All" : tab === "returns" ? "Returns" : "Refunds";
     doc.setFontSize(14);
     doc.setTextColor(13, 27, 54);
-    doc.text(`TwirlDrape — Returns & Refunds Report (${tabLabel})`, 14, 14);
+    doc.text(`VASTRAA — Returns & Refunds Report (${tabLabel})`, 14, 14);
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
     doc.text(

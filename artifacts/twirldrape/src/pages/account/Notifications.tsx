@@ -261,7 +261,7 @@ export function AccountNotificationsPage() {
       <div className="space-y-5">
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-[#E6F0EA] rounded-xl w-fit">
+        <div className="flex gap-1 p-1 bg-[#E5E8EC] rounded-xl w-fit">
           {TYPE_FILTERS.map(({ key, label }) => (
             <button
               key={key}
@@ -269,8 +269,8 @@ export function AccountNotificationsPage() {
               className={cn(
                 "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all",
                 activeTab === key
-                  ? "bg-white text-[#1E6B5A] shadow-sm"
-                  : "text-gray-500 hover:text-[#1E6B5A]"
+                  ? "bg-white text-[#0A1F44] shadow-sm"
+                  : "text-gray-500 hover:text-[#0A1F44]"
               )}
             >
               {label}
@@ -287,26 +287,26 @@ export function AccountNotificationsPage() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search notifications…"
-              className="w-full pl-9 pr-3 py-2.5 text-sm bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A]/50 placeholder:text-gray-400 text-gray-700 shadow-sm"
+              className="w-full pl-9 pr-3 py-2.5 text-sm bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44]/50 placeholder:text-gray-400 text-gray-700 shadow-sm"
             />
           </div>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-            className="px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-xl text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A]/50 shadow-sm"
+            className="px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-xl text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44]/50 shadow-sm"
           />
           <span className="text-xs text-gray-400">to</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-            className="px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-xl text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A]/50 shadow-sm"
+            className="px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-xl text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44]/50 shadow-sm"
           />
           {(search || dateFrom || dateTo) && (
             <button
               onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setPage(1); }}
-              className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
+              className="text-xs font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors"
             >
               Clear
             </button>
@@ -318,13 +318,13 @@ export function AccountNotificationsPage() {
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between bg-[#1E6B5A]/5 border border-[#1E6B5A]/15 rounded-2xl px-5 py-3"
+            className="flex items-center justify-between bg-[#0A1F44]/5 border border-[#0A1F44]/15 rounded-2xl px-5 py-3"
           >
-            <p className="text-sm text-[#1E6B5A] font-medium">You have unread notifications</p>
+            <p className="text-sm text-[#0A1F44] font-medium">You have unread notifications</p>
             <button
               onClick={() => markAllRead.mutate()}
               disabled={markAllRead.isPending}
-              className="flex items-center gap-1.5 text-sm font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 text-sm font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors disabled:opacity-50"
             >
               <CheckCheck size={15} />
               Mark all as read
@@ -391,7 +391,7 @@ export function AccountNotificationsPage() {
                         {deepLinkFor(n) && (
                           <Link
                             href={deepLinkFor(n)!}
-                            className="flex items-center gap-0.5 text-[11px] font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors"
+                            className="flex items-center gap-0.5 text-[11px] font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors"
                           >
                             View details <ExternalLink size={10} className="ml-0.5" />
                           </Link>
@@ -405,7 +405,7 @@ export function AccountNotificationsPage() {
                         <button
                           onClick={() => markRead.mutate(n.id)}
                           title="Mark as read"
-                          className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/8 transition-colors"
+                          className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-300 hover:text-[#0A1F44] hover:bg-[#0A1F44]/8 transition-colors"
                         >
                           <CheckCircle size={15} />
                         </button>
@@ -413,7 +413,7 @@ export function AccountNotificationsPage() {
                         <button
                           onClick={() => markUnread.mutate(n.id)}
                           title="Mark as unread"
-                          className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-[#1E6B5A]/8 transition-colors"
+                          className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-300 hover:text-[#0A1F44] hover:bg-[#0A1F44]/8 transition-colors"
                         >
                           <Circle size={15} />
                         </button>
@@ -452,7 +452,7 @@ export function AccountNotificationsPage() {
 
                     {/* Unread dot */}
                     {!n.read && (
-                      <span className="mt-2.5 w-2 h-2 rounded-full bg-[#1E6B5A] shrink-0" />
+                      <span className="mt-2.5 w-2 h-2 rounded-full bg-[#0A1F44] shrink-0" />
                     )}
                   </div>
                 ))}
@@ -467,7 +467,7 @@ export function AccountNotificationsPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 text-sm font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-xl hover:bg-[#F3F8F5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium text-[#0A1F44] border border-[#C7CCD1]/30 rounded-xl hover:bg-[#F4F5F7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Previous
             </button>
@@ -475,7 +475,7 @@ export function AccountNotificationsPage() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-4 py-2 text-sm font-medium text-[#1E6B5A] border border-[#C9A84C]/30 rounded-xl hover:bg-[#F3F8F5] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium text-[#0A1F44] border border-[#C7CCD1]/30 rounded-xl hover:bg-[#F4F5F7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Next
             </button>
@@ -485,7 +485,7 @@ export function AccountNotificationsPage() {
         {/* In-App Notification Preferences */}
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-sm font-bold text-[#1E6B5A]">In-App Notifications</h3>
+            <h3 className="text-sm font-bold text-[#0A1F44]">In-App Notifications</h3>
           </div>
           {prefsLoading ? (
             <div className="p-5 space-y-5 animate-pulse">
@@ -517,7 +517,7 @@ export function AccountNotificationsPage() {
                     disabled={updatePrefs.isPending}
                     className={cn(
                       "relative w-10 h-6 rounded-full transition-colors focus:outline-none disabled:opacity-50",
-                      (prefs?.[key] ?? true) ? "bg-[#1E6B5A]" : "bg-gray-200"
+                      (prefs?.[key] ?? true) ? "bg-[#0A1F44]" : "bg-gray-200"
                     )}
                   >
                     <span className={cn(
@@ -534,7 +534,7 @@ export function AccountNotificationsPage() {
         {/* Email Notification Preferences */}
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-sm font-bold text-[#1E6B5A]">Email Notifications</h3>
+            <h3 className="text-sm font-bold text-[#0A1F44]">Email Notifications</h3>
           </div>
           {prefsLoading ? (
             <div className="p-5 space-y-5 animate-pulse">
@@ -568,7 +568,7 @@ export function AccountNotificationsPage() {
                     disabled={updatePrefs.isPending}
                     className={cn(
                       "relative w-10 h-6 rounded-full transition-colors focus:outline-none disabled:opacity-50",
-                      (prefs?.[key] ?? true) ? "bg-[#1E6B5A]" : "bg-gray-200"
+                      (prefs?.[key] ?? true) ? "bg-[#0A1F44]" : "bg-gray-200"
                     )}
                   >
                     <span className={cn(

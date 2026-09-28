@@ -5,7 +5,7 @@ import { SellerLayout } from "./SellerDashboard";
 import ProductForm, { emptyFormData, ProductFormData } from "./SellerProductForm";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
+const MAROON = "#0A1F44";
 
 function validate(data: ProductFormData): Partial<Record<keyof ProductFormData, string>> {
   const errs: Partial<Record<keyof ProductFormData, string>> = {};
@@ -207,7 +207,7 @@ export default function SellerProductEdit() {
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => setLocation("/seller/products")}
-            className="p-2 rounded-lg hover:bg-[#E6F0EA] transition-colors"
+            className="p-2 rounded-lg hover:bg-[#E5E8EC] transition-colors"
           >
             <ArrowLeft size={18} style={{ color: MAROON }} />
           </button>

@@ -14,7 +14,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders, adminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 type Period = "daily" | "weekly" | "monthly" | "yearly" | "custom";
 
@@ -82,7 +82,7 @@ function KpiCard({ label, value, icon: Icon, growth, sub }: { label: string; val
     <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-start justify-between mb-4">
         <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(201,168,76,0.12)" }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(199,204,209,0.12)" }}>
           <Icon size={16} style={{ color: GOLD }} />
         </div>
       </div>

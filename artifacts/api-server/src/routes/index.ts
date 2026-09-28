@@ -33,9 +33,13 @@ import adminReportsRouter from "./adminReports";
 import adminSettingsRouter from "./adminSettings";
 import admin2faRouter from "./admin2fa";
 import paymentMethodsRouter from "./paymentMethods";
+import authRouter from "./auth";
+import googleAuthRouter from "./googleAuth";
 
 const router: IRouter = Router();
 
+router.use(authRouter);
+router.use(googleAuthRouter);
 router.use(healthRouter);
 router.use(storageRouter);
 router.use(productsRouter);

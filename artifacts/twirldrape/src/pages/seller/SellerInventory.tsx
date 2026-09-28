@@ -7,10 +7,10 @@ import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const IVORY = "#F3F8F5";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const IVORY = "#F4F5F7";
+const CREAM = "#E5E8EC";
 
 interface InventoryItem {
   id: string;

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Gift, Copy, CheckCheck, Star, Zap, Crown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -50,7 +51,7 @@ const TIER_CONFIG = {
   },
   gold: {
     label: "Gold",
-    color: "#C9A84C",
+    color: "#C7CCD1",
     bg: "bg-emerald-50",
     text: "text-emerald-700",
     border: "border-emerald-200",
@@ -66,10 +67,10 @@ const TIER_CONFIG = {
   },
   platinum: {
     label: "Platinum",
-    color: "#1E6B5A",
+    color: "#0A1F44",
     bg: "bg-emerald-50",
-    text: "text-[#1E6B5A]",
-    border: "border-[#C9A84C]/40",
+    text: "text-[#0A1F44]",
+    border: "border-[#C7CCD1]/40",
     icon: Crown,
     next: null,
     nextThreshold: null,
@@ -134,7 +135,7 @@ function SkeletonBlock({ className }: { className?: string }) {
 }
 
 export function AccountRewardsPage() {
-  const { isSignedIn } = useUser();
+  const { isSignedIn } = useAuth();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
@@ -142,7 +143,7 @@ export function AccountRewardsPage() {
   const { data: summary, isLoading: summaryLoading } = useQuery<RewardsSummary>({
     queryKey: ["rewards-summary"],
     queryFn: async () => {
-      const res = await fetch(`/api/rewards/summary`, { credentials: "include" });
+      const res = await apiFetch(`/api/rewards/summary`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -152,7 +153,7 @@ export function AccountRewardsPage() {
   const { data: historyData, isLoading: historyLoading } = useQuery<HistoryResponse>({
     queryKey: ["rewards-history", historyPage],
     queryFn: async () => {
-      const res = await fetch(`/api/rewards/history?page=${historyPage}`, { credentials: "include" });
+      const res = await apiFetch(`/api/rewards/history?page=${historyPage}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -183,7 +184,7 @@ export function AccountRewardsPage() {
   const pointsToNext = tierCfg.nextThreshold ? Math.max(0, tierCfg.nextThreshold - balance) : 0;
 
   const shareText = summary
-    ? `Join TwirlDrape — India's finest saree marketplace! Use my referral code ${summary.referralCode} when you sign up and shop. 🎁`
+    ? `Join VASTRAA — India's finest saree marketplace! Use my referral code ${summary.referralCode} when you sign up and shop. 🎁`
     : "";
 
   return (
@@ -240,7 +241,7 @@ export function AccountRewardsPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-[#1E6B5A] font-semibold mt-3">
+                  <p className="text-xs text-[#0A1F44] font-semibold mt-3">
                     You've reached the highest tier!
                   </p>
                 )}
@@ -266,11 +267,11 @@ export function AccountRewardsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, delay: 0.08 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 p-5 shadow-sm"
+          className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-5 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-3">
-            <Gift size={16} className="text-[#C9A84C]" />
-            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">Refer & Earn</h3>
+            <Gift size={16} className="text-[#C7CCD1]" />
+            <h3 className="text-sm font-bold text-[#0A1F44] uppercase tracking-wider">Refer & Earn</h3>
           </div>
           <p className="text-xs text-gray-500 mb-4">
             Share your referral code. When a friend signs up and places their first order, you earn <strong>200 bonus points</strong>.
@@ -280,18 +281,18 @@ export function AccountRewardsPage() {
             <SkeletonBlock className="h-12 w-full" />
           ) : (
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-              <div className="flex-1 flex items-center gap-2 bg-[#F3F8F5] border border-[#C9A84C]/30 rounded-xl px-4 py-3">
-                <span className="font-mono text-lg font-bold text-[#1E6B5A] tracking-[0.2em] flex-1 text-center sm:text-left">
+              <div className="flex-1 flex items-center gap-2 bg-[#F4F5F7] border border-[#C7CCD1]/30 rounded-xl px-4 py-3">
+                <span className="font-mono text-lg font-bold text-[#0A1F44] tracking-[0.2em] flex-1 text-center sm:text-left">
                   {summary?.referralCode}
                 </span>
                 <button
                   onClick={copyReferralCode}
-                  className="shrink-0 p-1.5 rounded-lg hover:bg-[#C9A84C]/10 transition-colors"
+                  className="shrink-0 p-1.5 rounded-lg hover:bg-[#C7CCD1]/10 transition-colors"
                   title="Copy code"
                 >
                   {copied
                     ? <CheckCheck size={16} className="text-green-600" />
-                    : <Copy size={16} className="text-[#C9A84C]" />
+                    : <Copy size={16} className="text-[#C7CCD1]" />
                   }
                 </button>
               </div>
@@ -324,10 +325,10 @@ export function AccountRewardsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, delay: 0.14 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
+          className="bg-white rounded-2xl border border-[#C7CCD1]/20 shadow-sm overflow-hidden"
         >
           <div className="px-5 py-4 border-b border-gray-50">
-            <h3 className="text-sm font-bold text-[#1E6B5A] uppercase tracking-wider">Points History</h3>
+            <h3 className="text-sm font-bold text-[#0A1F44] uppercase tracking-wider">Points History</h3>
           </div>
 
           {historyLoading ? (
@@ -376,7 +377,7 @@ export function AccountRewardsPage() {
                           {entry.orderId && (
                             <a
                               href={`/orders/${entry.orderId}`}
-                              className="text-[10px] font-medium text-[#1E6B5A] bg-[#1E6B5A]/5 hover:bg-[#1E6B5A]/10 px-1.5 py-0.5 rounded transition-colors"
+                              className="text-[10px] font-medium text-[#0A1F44] bg-[#0A1F44]/5 hover:bg-[#0A1F44]/10 px-1.5 py-0.5 rounded transition-colors"
                             >
                               Order #{entry.orderId?.startsWith("TD") ? entry.orderId : entry.orderId ? `TD-${entry.orderId.replace(/-/g,"").slice(0,8).toUpperCase()}` : "—"}
                             </a>
@@ -405,14 +406,14 @@ export function AccountRewardsPage() {
                     <button
                       disabled={historyPage <= 1}
                       onClick={() => setHistoryPage(p => p - 1)}
-                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#1E6B5A] hover:border-[#C9A84C]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#0A1F44] hover:border-[#C7CCD1]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronLeft size={14} />
                     </button>
                     <button
                       disabled={historyPage >= historyData.pages}
                       onClick={() => setHistoryPage(p => p + 1)}
-                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#1E6B5A] hover:border-[#C9A84C]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-[#0A1F44] hover:border-[#C7CCD1]/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronRight size={14} />
                     </button>

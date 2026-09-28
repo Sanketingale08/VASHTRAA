@@ -9,9 +9,9 @@ import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 
 const PERIOD_OPTIONS = [
   { label: "7 days", value: 7 },
@@ -55,7 +55,7 @@ interface Analytics {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-[#C9A84C]/20 rounded-lg px-3 py-2 shadow-md text-xs">
+    <div className="bg-white border border-[#C7CCD1]/20 rounded-lg px-3 py-2 shadow-md text-xs">
       <p className="font-semibold mb-1" style={{ color: MAROON }}>{label}</p>
       <p>Revenue: <span className="font-bold">₹{payload[0]?.value?.toLocaleString("en-IN")}</span></p>
       {payload[1] && <p>Orders: <span className="font-bold">{payload[1]?.value}</span></p>}
@@ -116,7 +116,7 @@ export default function SellerAnalytics() {
 
         {/* Period Selector */}
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-white rounded-lg border p-1" style={{ borderColor: "#C9A84C33" }}>
+          <div className="flex gap-1 bg-white rounded-lg border p-1" style={{ borderColor: "#C7CCD133" }}>
             {PERIOD_OPTIONS.map(({ label, value }) => (
               <button
                 key={value}
@@ -149,7 +149,7 @@ export default function SellerAnalytics() {
                   key={label}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-xl border border-[#C9A84C]/20 p-4"
+                  className="bg-white rounded-xl border border-[#C7CCD1]/20 p-4"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: MAROON + "15" }}>
@@ -163,7 +163,7 @@ export default function SellerAnalytics() {
             </div>
 
             {/* Daily Revenue Bar Chart */}
-            <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
               <h3 className="font-serif text-base font-bold mb-4" style={{ color: MAROON }}>Daily Revenue</h3>
               {totalRevenue === 0 ? (
                 <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No revenue data for this period</div>
@@ -185,7 +185,7 @@ export default function SellerAnalytics() {
             </div>
 
             {/* Orders by Status — full-width with interactive filter */}
-            <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h3 className="font-serif text-base font-bold" style={{ color: MAROON }}>Orders by Status</h3>
                 {activeStatus && (
@@ -300,14 +300,14 @@ export default function SellerAnalytics() {
             </div>
 
             {/* Top Products */}
-            <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
               <h3 className="font-serif text-base font-bold mb-4" style={{ color: MAROON }}>Top Products</h3>
               {data.topProducts.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 text-sm">No sales data yet</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b" style={{ borderColor: "#C9A84C22" }}>
+                    <tr className="border-b" style={{ borderColor: "#C7CCD122" }}>
                       <th className="text-left pb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Product</th>
                       <th className="text-right pb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Units Sold</th>
                       <th className="text-right pb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Revenue</th>

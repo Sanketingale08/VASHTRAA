@@ -7,9 +7,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { useListProducts } from "@workspace/api-client-react";
 import type { ListProductsParams, ProductSummary } from "@workspace/api-client-react";
 
-const GOLD = "#C9A84C";
-const MAROON = "#1E6B5A";
-const IVORY = "#F3F8F5";
+const GOLD = "#C7CCD1";
+const MAROON = "#0A1F44";
+const IVORY = "#F4F5F7";
 
 export interface SectionTab {
   label: string;
@@ -30,7 +30,7 @@ export interface ProductSectionProps {
 
 function SkeletonCard() {
   return (
-    <div className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)] rounded-xl overflow-hidden bg-white border border-[#C9A84C]/15 shadow-sm animate-pulse">
+    <div className="flex-none w-[calc(50%-8px)] md:w-[calc(25%-12px)] rounded-xl overflow-hidden bg-white border border-[#C7CCD1]/15 shadow-sm animate-pulse">
       <div className="aspect-square bg-[#F5F0E8]" />
       <div className="p-4 space-y-2 bg-white">
         <div className="h-3 bg-[#EDE8DF] rounded w-3/4" />
@@ -161,7 +161,7 @@ export function ProductSection({
                   className="flex-1 max-w-[80px] h-px"
                   style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }}
                 />
-                <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#1E6B5A]">
+                <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#0A1F44]">
                   {title}
                 </h2>
                 <span
@@ -184,8 +184,8 @@ export function ProductSection({
                       onClick={() => setActiveTabIdx(idx)}
                       className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                         activeTabIdx === idx
-                          ? "bg-[#1E6B5A] text-[#F3F8F5] shadow-sm"
-                          : "text-gray-500 hover:text-[#1E6B5A]"
+                          ? "bg-[#0A1F44] text-[#F4F5F7] shadow-sm"
+                          : "text-gray-500 hover:text-[#0A1F44]"
                       }`}
                     >
                       {tab.label}
@@ -195,7 +195,7 @@ export function ProductSection({
               ) : <div />}
               <Link
                 href={effectiveViewAll}
-                className="text-xs font-bold uppercase tracking-wider text-[#1E6B5A] hover:text-[#C9A84C] flex items-center gap-1 transition-colors"
+                className="text-xs font-bold uppercase tracking-wider text-[#0A1F44] hover:text-[#C7CCD1] flex items-center gap-1 transition-colors"
                 style={flashSale ? { color: GOLD } : {}}
               >
                 View All →

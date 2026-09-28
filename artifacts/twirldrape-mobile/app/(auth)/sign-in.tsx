@@ -215,7 +215,7 @@ export default function SignInScreen() {
             <View style={s.header}>
               <Text style={s.title}>Welcome Back</Text>
               <View style={s.goldAccent} />
-              <Text style={[s.subtitle, { marginTop: 8 }]}>Sign in to your TwirlDrape account</Text>
+              <Text style={[s.subtitle, { marginTop: 8 }]}>Sign in to your VASTRAA account</Text>
             </View>
 
             <Text style={s.label}>Email Address</Text>

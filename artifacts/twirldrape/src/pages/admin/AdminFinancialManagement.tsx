@@ -15,7 +15,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 function fmt(n: number) {
   if (Math.abs(n) >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
@@ -1098,7 +1098,7 @@ function ReportSchedulesPanel() {
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Recipient Email (optional)</label>
-            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder="finance@twirldrape.com" className="text-xs px-2 py-2 rounded-lg border border-gray-200 w-56" />
+            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder="finance@vastraa.com" className="text-xs px-2 py-2 rounded-lg border border-gray-200 w-56" />
           </div>
           <button onClick={createSchedule} disabled={creating} className="text-xs font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: NAVY }}>
             {creating ? "Saving…" : "Schedule Report"}

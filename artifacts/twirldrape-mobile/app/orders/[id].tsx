@@ -82,7 +82,7 @@ const REFUND_OPTIONS = [
   {
     value: "store_credit",
     label: "Store Credit",
-    sub: "Added to your TwirlDrape wallet instantly",
+    sub: "Added to your VASTRAA wallet instantly",
   },
 ];
 
@@ -524,7 +524,7 @@ export default function OrderDetailScreen() {
               <Ionicons name="checkmark-circle" size={44} color="#22A66A" />
             </View>
             <Text testID="order-confirmed-title" style={s.successTitle}>Order Confirmed!</Text>
-            <Text style={s.successSub}>Thank you for shopping with TwirlDrape.</Text>
+            <Text style={s.successSub}>Thank you for shopping with VASTRAA.</Text>
           </View>
         )}
 

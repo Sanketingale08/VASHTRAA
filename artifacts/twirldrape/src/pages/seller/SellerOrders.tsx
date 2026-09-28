@@ -5,9 +5,9 @@ import { Search, ChevronRight, Package, AlertCircle } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
@@ -126,7 +126,7 @@ export default function SellerOrders() {
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search by order ID…"
               className="w-full pl-9 pr-4 py-2.5 text-sm rounded-lg border outline-none transition"
-              style={{ borderColor: "#C9A84C44", background: "white" }}
+              style={{ borderColor: "#C7CCD144", background: "white" }}
             />
           </div>
           <button type="submit" className="px-4 py-2.5 text-sm font-semibold rounded-lg" style={{ background: MAROON, color: "white" }}>
@@ -157,17 +157,17 @@ export default function SellerOrders() {
         ) : error ? (
           <div className="text-center py-16 text-sm text-red-500">{error}</div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-xl border border-[#C9A84C]/20">
+          <div className="text-center py-20 bg-white rounded-xl border border-[#C7CCD1]/20">
             <Package size={40} className="mx-auto mb-3 text-gray-300" />
             <p className="font-medium text-gray-500">No orders found</p>
             <p className="text-xs text-gray-400 mt-1">Orders containing your products will appear here</p>
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-xl border border-[#C9A84C]/20 overflow-hidden">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/20 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b" style={{ borderColor: "#C9A84C22", background: CREAM }}>
+                  <tr className="border-b" style={{ borderColor: "#C7CCD122", background: CREAM }}>
                     {["Order ID", "Customer", "Items", "Your Total", "Date", "Status", ""].map((h) => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
                     ))}
@@ -179,10 +179,10 @@ export default function SellerOrders() {
                     const isLate = order.needsAcceptance && (Date.now() - new Date(order.createdAt).getTime()) > 24 * 60 * 60 * 1000;
                     return (
                       <motion.tr key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                        className={`border-b last:border-b-0 transition-colors ${order.needsAcceptance ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-[#F3F8F5]/60"}`}
+                        className={`border-b last:border-b-0 transition-colors ${order.needsAcceptance ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-[#F4F5F7]/60"}`}
                         style={{ borderColor: "#F3F4F6" }}>
                         <td className="px-4 py-3.5 font-mono text-xs text-gray-500">
-                          #{order.displayId ?? order.id}
+                          #{(order as any).displayId ?? order.id}
                         </td>
                         <td className="px-4 py-3.5 font-medium" style={{ color: MAROON }}>{order.customerName}</td>
                         <td className="px-4 py-3.5 text-gray-600 max-w-[180px]">
@@ -225,11 +225,11 @@ export default function SellerOrders() {
                 </p>
                 <div className="flex gap-1">
                   <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                    className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40" style={{ borderColor: "#C9A84C44" }}>
+                    className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40" style={{ borderColor: "#C7CCD144" }}>
                     Previous
                   </button>
                   <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                    className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40" style={{ borderColor: "#C9A84C44" }}>
+                    className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40" style={{ borderColor: "#C7CCD144" }}>
                     Next
                   </button>
                 </div>

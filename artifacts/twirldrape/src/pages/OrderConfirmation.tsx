@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "wouter";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Truck, Zap, MapPin, CreditCard, Smartphone,
@@ -155,7 +156,7 @@ function ActionForm({
       transition={{ duration: 0.25 }}
       className="overflow-hidden"
     >
-      <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C9A84C]/20 space-y-3">
+      <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C7CCD1]/20 space-y-3">
         <div>
           <p className="font-semibold text-sm text-gray-800 dark:text-gray-200">{title}</p>
           {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
@@ -171,14 +172,14 @@ function ActionForm({
                   value={r}
                   checked={reason === r}
                   onChange={() => setReason(r)}
-                  className="accent-[#1E6B5A]"
+                  className="accent-[#0A1F44]"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300">{r}</span>
               </label>
             ))}
             {reason === "Other" && (
               <textarea
-                className="w-full mt-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-[#2A2E35] resize-none focus:outline-none focus:ring-1 focus:ring-[#C9A84C]"
+                className="w-full mt-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-[#2A2E35] resize-none focus:outline-none focus:ring-1 focus:ring-[#C7CCD1]"
                 rows={2}
                 placeholder="Please describe your reason…"
                 value={custom}
@@ -249,7 +250,7 @@ function RefundForm({
       transition={{ duration: 0.25 }}
       className="overflow-hidden"
     >
-      <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C9A84C]/20 space-y-3">
+      <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C7CCD1]/20 space-y-3">
         <div>
           <p className="font-semibold text-sm text-gray-800 dark:text-gray-200">Request a Refund</p>
           <p className="text-xs text-gray-500 mt-0.5">Choose how you'd like to receive your refund.</p>
@@ -258,11 +259,11 @@ function RefundForm({
         <div className="space-y-2">
           {[
             { value: "original_payment", label: "Original Payment Method", sub: "Refunded to your UPI / card / bank account (5–7 business days)" },
-            { value: "store_credit", label: "Store Credit", sub: "Added to your TwirlDrape wallet instantly" },
+            { value: "store_credit", label: "Store Credit", sub: "Added to your VASTRAA wallet instantly" },
           ].map(opt => (
             <label
               key={opt.value}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${method === opt.value ? "border-[#C9A84C] bg-[#C9A84C]/5" : "border-gray-200 dark:border-gray-600 hover:border-[#C9A84C]/40"}`}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${method === opt.value ? "border-[#C7CCD1] bg-[#C7CCD1]/5" : "border-gray-200 dark:border-gray-600 hover:border-[#C7CCD1]/40"}`}
             >
               <input
                 type="radio"
@@ -270,7 +271,7 @@ function RefundForm({
                 value={opt.value}
                 checked={method === opt.value}
                 onChange={() => setMethod(opt.value)}
-                className="mt-0.5 accent-[#1E6B5A]"
+                className="mt-0.5 accent-[#0A1F44]"
               />
               <div>
                 <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{opt.label}</p>
@@ -290,7 +291,7 @@ function RefundForm({
           <button
             onClick={handle}
             disabled={submitting}
-            className="flex-1 py-2 text-sm font-bold text-white bg-[#1E6B5A] hover:bg-[#6a1826] rounded-lg transition-colors disabled:opacity-50"
+            className="flex-1 py-2 text-sm font-bold text-white bg-[#0A1F44] hover:bg-[#6a1826] rounded-lg transition-colors disabled:opacity-50"
           >
             {submitting ? "Please wait…" : "Submit Refund Request"}
           </button>
@@ -351,7 +352,7 @@ function ReturnForm({
       transition={{ duration: 0.25 }}
       className="overflow-hidden"
     >
-      <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C9A84C]/20 space-y-4">
+      <div className="mt-3 p-4 bg-gray-50 dark:bg-[#1E2329] rounded-xl border border-[#C7CCD1]/20 space-y-4">
         <div>
           <p className="font-semibold text-sm text-gray-800 dark:text-gray-200">Why do you want to return?</p>
           <p className="text-xs text-gray-500 mt-0.5">Returns accepted within 7 days of delivery. Our team will arrange a pickup.</p>
@@ -366,14 +367,14 @@ function ReturnForm({
                 value={r}
                 checked={reason === r}
                 onChange={() => setReason(r)}
-                className="accent-[#1E6B5A]"
+                className="accent-[#0A1F44]"
               />
               <span className="text-sm text-gray-700 dark:text-gray-300">{r}</span>
             </label>
           ))}
           {reason === "Other" && (
             <textarea
-              className="w-full mt-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-[#2A2E35] resize-none focus:outline-none focus:ring-1 focus:ring-[#C9A84C]"
+              className="w-full mt-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-[#2A2E35] resize-none focus:outline-none focus:ring-1 focus:ring-[#C7CCD1]"
               rows={2}
               placeholder="Please describe your reason…"
               value={custom}
@@ -390,7 +391,7 @@ function ReturnForm({
             <div className="space-y-2">
               {items.map((item) => (
                 <div key={item.productId} className="flex gap-2 items-start">
-                  <div className="w-10 h-10 rounded-md overflow-hidden bg-gray-100 border border-[#C9A84C]/10 shrink-0 mt-0.5">
+                  <div className="w-10 h-10 rounded-md overflow-hidden bg-gray-100 border border-[#C7CCD1]/10 shrink-0 mt-0.5">
                     <img src={getProductImageSrc(item.images?.[0])} alt={item.name} className="w-full h-full object-cover"
                       onError={replaceProductImageWithFallback} />
                   </div>
@@ -398,7 +399,7 @@ function ReturnForm({
                     <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name}</p>
                     <input
                       type="text"
-                      className="w-full mt-1 text-xs border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1.5 bg-white dark:bg-[#2A2E35] focus:outline-none focus:ring-1 focus:ring-[#C9A84C]"
+                      className="w-full mt-1 text-xs border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1.5 bg-white dark:bg-[#2A2E35] focus:outline-none focus:ring-1 focus:ring-[#C7CCD1]"
                       placeholder="Any specific issue with this item?"
                       value={itemNotes[item.productId] ?? ""}
                       onChange={e => setItemNotes(prev => ({ ...prev, [item.productId]: e.target.value }))}
@@ -462,9 +463,8 @@ function OrderActions({
   if (!canCancel && !canReturn && !canRefund && !successMessage && !order.refundStatus) return null;
 
   async function doCancel(reason: string) {
-    const r = await fetch(`/api/orders/${order.id}/cancel`, {
+    const r = await apiFetch(`/api/orders/${order.id}/cancel`, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason }),
     });
@@ -478,9 +478,8 @@ function OrderActions({
   }
 
   async function doReturn(reason: string, itemNotes?: Record<string, string>) {
-    const r = await fetch(`/api/orders/${order.id}/return`, {
+    const r = await apiFetch(`/api/orders/${order.id}/return`, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason, itemNotes }),
     });
@@ -494,9 +493,8 @@ function OrderActions({
   }
 
   async function doRefund(method: string) {
-    const r = await fetch(`/api/orders/${order.id}/refund`, {
+    const r = await apiFetch(`/api/orders/${order.id}/refund`, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ method }),
     });
@@ -518,9 +516,9 @@ function OrderActions({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.28 }}
-      className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
+      className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5"
     >
-      <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-1">Order Actions</h2>
+      <h2 className="font-serif text-lg font-bold text-[#0A1F44] mb-1">Order Actions</h2>
 
       {/* Refund status banner */}
       {order.refundStatus && (
@@ -646,13 +644,13 @@ function OrderActions({
 
 export function OrderConfirmationPage() {
   const { id: orderId } = useParams<{ id: string }>();
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoading: authLoading } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (authLoading) return;
     if (!isSignedIn) {
       setLoading(false);
       return;
@@ -662,7 +660,7 @@ export function OrderConfirmationPage() {
       setLoading(false);
       return;
     }
-    fetch(`/api/orders/${orderId}`, { credentials: "include" })
+    apiFetch(`/api/orders/${orderId}`)
       .then(async r => {
         if (!r.ok) throw new Error("Order not found");
         const data = await r.json();
@@ -670,7 +668,7 @@ export function OrderConfirmationPage() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isLoaded, isSignedIn, orderId]);
+  }, [authLoading, isSignedIn, orderId]);
 
   const handleOrderUpdate = useCallback((updated: Partial<Order>) => {
     setOrder(prev => prev ? { ...prev, ...updated } : prev);
@@ -681,7 +679,7 @@ export function OrderConfirmationPage() {
       <Layout>
         <div className="min-h-[60vh] flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full mx-auto mb-4" />
+            <div className="animate-spin w-10 h-10 border-2 border-[#C7CCD1] border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-sm opacity-60">Loading your order…</p>
           </div>
         </div>
@@ -694,9 +692,9 @@ export function OrderConfirmationPage() {
       <Layout>
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 px-4">
           <Package size={48} className="text-gray-300" />
-          <h2 className="font-serif text-2xl text-[#1E6B5A]">Order Not Found</h2>
+          <h2 className="font-serif text-2xl text-[#0A1F44]">Order Not Found</h2>
           <p className="text-gray-500 text-sm">{error || "This order doesn't exist or belongs to another account."}</p>
-          <Link href="/" className="bg-[#1E6B5A] text-[#F3F8F5] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm">
+          <Link href="/" className="bg-[#0A1F44] text-[#F4F5F7] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm">
             Continue Shopping
           </Link>
         </div>
@@ -713,7 +711,7 @@ export function OrderConfirmationPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#F3F8F5] dark:bg-[#1E2329]">
+      <div className="min-h-screen bg-[#F4F5F7] dark:bg-[#1E2329]">
         <div className="container mx-auto px-4 py-8 max-w-3xl">
 
           {/* Success / status header */}
@@ -737,7 +735,7 @@ export function OrderConfirmationPage() {
                 : <CheckCircle2 size={40} className="text-green-500" />
               }
             </div>
-            <h1 className="font-serif text-3xl font-bold text-[#1E6B5A] mb-2">
+            <h1 className="font-serif text-3xl font-bold text-[#0A1F44] mb-2">
               {order.status === "cancelled"
                 ? "Order Cancelled"
                 : order.status === "return_requested"
@@ -757,7 +755,7 @@ export function OrderConfirmationPage() {
                 : order.status === "return_rejected"
                 ? "We're sorry — your return request was not approved."
                 : isNewOrder
-                ? "Thank you for shopping with TwirlDrape. Your order has been placed successfully."
+                ? "Thank you for shopping with VASTRAA. Your order has been placed successfully."
                 : "Here are the details for your order."
               }
             </p>
@@ -792,7 +790,7 @@ export function OrderConfirmationPage() {
                       </p>
                     )}
                     <a
-                      href="mailto:support@twirldrape.com"
+                      href="mailto:support@vastraa.com"
                       className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
                     >
                       Contact Support
@@ -807,12 +805,12 @@ export function OrderConfirmationPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
+              className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5"
             >
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Order ID</p>
-                  <p className="font-mono font-bold text-xs text-[#1E6B5A] break-all">#{order.displayId ?? order.id}</p>
+                  <p className="font-mono font-bold text-xs text-[#0A1F44] break-all">#{order.displayId ?? order.id}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Placed On</p>
@@ -833,19 +831,19 @@ export function OrderConfirmationPage() {
 
               {/* Cancel / return reason */}
               {order.cancelReason && (
-                <div className="mt-3 pt-3 border-t border-[#C9A84C]/10">
+                <div className="mt-3 pt-3 border-t border-[#C7CCD1]/10">
                   <p className="text-xs text-gray-400 uppercase tracking-wider mb-0.5">Cancellation Reason</p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">{order.cancelReason}</p>
                 </div>
               )}
               {order.returnReason && (
-                <div className="mt-3 pt-3 border-t border-[#C9A84C]/10">
+                <div className="mt-3 pt-3 border-t border-[#C7CCD1]/10">
                   <p className="text-xs text-gray-400 uppercase tracking-wider mb-0.5">Return Reason</p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">{order.returnReason}</p>
                 </div>
               )}
               {order.refundStatus === "processed" && (
-                <div className="mt-3 pt-3 border-t border-[#C9A84C]/10 flex items-start gap-2.5">
+                <div className="mt-3 pt-3 border-t border-[#C7CCD1]/10 flex items-start gap-2.5">
                   <CheckCircle2 size={15} className="text-green-500 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-xs text-gray-400 uppercase tracking-wider mb-0.5">Refund Payout</p>
@@ -888,10 +886,10 @@ export function OrderConfirmationPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
+              className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5"
             >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-serif text-lg font-bold text-[#1E6B5A]">
+                <h2 className="font-serif text-lg font-bold text-[#0A1F44]">
                   Items Ordered ({(order.items as OrderItem[]).reduce((s, i) => s + i.quantity, 0)})
                 </h2>
                 <button
@@ -911,7 +909,7 @@ export function OrderConfirmationPage() {
                     couponCode: order.couponCode,
                     status: order.status,
                   })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#C9A84C]/10 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#C7CCD1]/40 text-[#0A1F44] hover:bg-[#C7CCD1]/10 rounded-lg transition-colors"
                 >
                   <Download size={13} />
                   Download Invoice
@@ -920,7 +918,7 @@ export function OrderConfirmationPage() {
               <div className="space-y-4">
                 {(order.items as OrderItem[]).map((item, idx) => (
                   <div key={`${item.productId}-${idx}`} className="flex gap-3 items-start">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-[#C9A84C]/10">
+                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-[#C7CCD1]/10">
                       <img
                         src={getProductImageSrc(item.images?.[0])}
                         alt={item.name}
@@ -944,9 +942,9 @@ export function OrderConfirmationPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5"
+              className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5"
             >
-              <h2 className="font-serif text-lg font-bold text-[#1E6B5A] mb-4">Price Breakdown</h2>
+              <h2 className="font-serif text-lg font-bold text-[#0A1F44] mb-4">Price Breakdown</h2>
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between"><span className="opacity-60">Subtotal</span><span>₹{order.subtotal.toLocaleString("en-IN")}</span></div>
                 {order.discount > 0 && (
@@ -960,7 +958,7 @@ export function OrderConfirmationPage() {
                   <span>{order.shipping === 0 ? <span className="text-green-600 font-semibold">Free</span> : `₹${order.shipping}`}</span>
                 </div>
                 <div className="flex justify-between"><span className="opacity-60">GST (5%)</span><span>₹{order.tax.toLocaleString("en-IN")}</span></div>
-                <div className="border-t border-[#C9A84C]/20 pt-2.5 flex justify-between font-bold text-[#1E6B5A] text-base">
+                <div className="border-t border-[#C7CCD1]/20 pt-2.5 flex justify-between font-bold text-[#0A1F44] text-base">
                   <span>Total Paid</span>
                   <span>₹{order.total.toLocaleString("en-IN")}</span>
                 </div>
@@ -974,9 +972,9 @@ export function OrderConfirmationPage() {
               transition={{ delay: 0.25 }}
               className="grid grid-cols-1 sm:grid-cols-2 gap-5"
             >
-              <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
+              <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <MapPin size={14} className="text-[#C9A84C]" />
+                  <MapPin size={14} className="text-[#C7CCD1]" />
                   <h3 className="font-semibold text-sm">Shipping Address</h3>
                 </div>
                 <p className="text-sm font-bold">{(order.address as OrderAddress).name}</p>
@@ -985,16 +983,16 @@ export function OrderConfirmationPage() {
                   {[(order.address as OrderAddress).line1, (order.address as OrderAddress).line2, (order.address as OrderAddress).city, (order.address as OrderAddress).state, (order.address as OrderAddress).pincode].filter(Boolean).join(", ")}
                 </p>
               </div>
-              <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C9A84C]/20 p-5">
+              <div className="bg-white dark:bg-[#2A2E35] rounded-xl border border-[#C7CCD1]/20 p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  {order.deliveryMethod === "express" ? <Zap size={14} className="text-[#C9A84C]" /> : <Truck size={14} className="text-[#C9A84C]" />}
+                  {order.deliveryMethod === "express" ? <Zap size={14} className="text-[#C7CCD1]" /> : <Truck size={14} className="text-[#C7CCD1]" />}
                   <h3 className="font-semibold text-sm">Delivery Method</h3>
                 </div>
                 <p className="text-sm font-bold capitalize">{order.deliveryMethod === "express" ? "⚡ Express (3 days)" : "🚚 Standard (7 days)"}</p>
                 <p className="text-xs text-gray-500 mt-1">Est. delivery by</p>
-                <p className="text-xs font-semibold text-[#1E6B5A] mt-0.5">{deliveryEst}</p>
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#C9A84C]/10">
-                  <PayIcon size={14} className="text-[#C9A84C]" />
+                <p className="text-xs font-semibold text-[#0A1F44] mt-0.5">{deliveryEst}</p>
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#C7CCD1]/10">
+                  <PayIcon size={14} className="text-[#C7CCD1]" />
                   <div>
                     <p className="text-xs text-gray-400">Payment</p>
                     <p className="text-xs font-semibold">{payLabel}</p>
@@ -1015,18 +1013,18 @@ export function OrderConfirmationPage() {
             >
               <Link
                 href="/"
-                className="inline-block bg-[#1E6B5A] hover:bg-[#6a1826] text-[#F3F8F5] px-10 py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
+                className="inline-block bg-[#0A1F44] hover:bg-[#6a1826] text-[#F4F5F7] px-10 py-3.5 font-bold uppercase tracking-wider text-sm rounded-sm transition-colors"
               >
                 Continue Shopping
               </Link>
               <Link
                 href="/orders"
-                className="text-sm text-[#1E6B5A] hover:underline font-medium"
+                className="text-sm text-[#0A1F44] hover:underline font-medium"
               >
                 View all orders
               </Link>
               <p className="mt-1 text-xs text-gray-400">
-                Questions? <a href="mailto:support@twirldrape.com" className="text-[#1E6B5A] hover:underline">Contact support</a>
+                Questions? <a href="mailto:support@vastraa.com" className="text-[#0A1F44] hover:underline">Contact support</a>
               </p>
             </motion.div>
           </div>

@@ -65,7 +65,7 @@ const CategoryTile = ({
           style={{
             fontFamily: "CormorantGaramond_700Bold",
             fontSize: 20,
-            color: "#FAF6EE",
+            color: "#F4F5F7",
             lineHeight: 24,
           }}
         >
@@ -198,7 +198,7 @@ export default function HomeScreen() {
       <View style={s.header}>
         <View style={s.brandRow}>
           <View>
-            <Text style={s.brand}>TwirlDrape</Text>
+            <Text style={s.brand}>VASTRAA</Text>
             <Text style={s.tagline}>Luxury Indian Silks</Text>
           </View>
           <Pressable

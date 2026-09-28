@@ -102,8 +102,8 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3) }}
-        className="group relative bg-white rounded-xl overflow-hidden border border-[#C9A84C]/20 shadow-sm hover:border-[#C9A84C]/55 hover:shadow-lg transition-all duration-300 cursor-pointer"
-        style={{ boxShadow: "0 1px 4px rgba(201,168,76,0.07), 0 0 0 1px rgba(201,168,76,0.12)" }}
+        className="group relative bg-white rounded-xl overflow-hidden border border-[#C7CCD1]/20 shadow-sm hover:border-[#C7CCD1]/55 hover:shadow-lg transition-all duration-300 cursor-pointer"
+        style={{ boxShadow: "0 1px 4px rgba(199,204,209,0.07), 0 0 0 1px rgba(199,204,209,0.12)" }}
         data-testid={`card-product-${product.id}`}
       >
         {/* Badges */}
@@ -144,14 +144,14 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
         <button
           onClick={handleWishlistClick}
           title={isSignedIn ? (isWishlisted ? "Remove from wishlist" : "Add to wishlist") : "Sign in to save"}
-          className="absolute top-2 right-2 z-10 p-1.5 bg-white/90 backdrop-blur-sm border border-[#C9A84C]/20 rounded-full hover:bg-white hover:border-[#C9A84C]/50 transition-all shadow-sm"
+          className="absolute top-2 right-2 z-10 p-1.5 bg-white/90 backdrop-blur-sm border border-[#C7CCD1]/20 rounded-full hover:bg-white hover:border-[#C7CCD1]/50 transition-all shadow-sm"
         >
           <Heart
             size={16}
             className={cn(
               "transition-colors",
               isWishlisted
-                ? "fill-[#1E6B5A] text-[#1E6B5A]"
+                ? "fill-[#0A1F44] text-[#0A1F44]"
                 : "text-gray-400",
             )}
           />
@@ -169,7 +169,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
           {/* Flash Sale Countdown Badge */}
           {flashSaleEndMs != null && discount > 0 && (
             <div className="absolute top-0 inset-x-0 z-20 bg-[#3D1A1A]/90 px-3 py-1.5 flex items-center justify-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#C9A84C]">⚡ Sale ends in</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#C7CCD1]">⚡ Sale ends in</span>
               <CardCountdown endMs={flashSaleEndMs} />
             </div>
           )}
@@ -221,7 +221,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
             <Link
               href={`/weavers/${product.vendorId}`}
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              className="inline-block text-[11px] text-[#1E6B5A]/70 hover:text-[#1E6B5A] mb-1 font-medium tracking-wide uppercase transition-colors"
+              className="inline-block text-[11px] text-[#0A1F44]/70 hover:text-[#0A1F44] mb-1 font-medium tracking-wide uppercase transition-colors"
             >
               by {vendorLabel}
             </Link>
@@ -233,13 +233,13 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
           </h3>
 
           <div className="flex items-center gap-1 mb-3">
-            <Star size={12} className="fill-[#C9A84C] text-[#C9A84C]" />
+            <Star size={12} className="fill-[#C7CCD1] text-[#C7CCD1]" />
             <span className="text-xs font-semibold text-[#2D1B1B]">{product.rating}</span>
             <span className="text-xs text-gray-300">({reviewCount})</span>
           </div>
 
-          <div className="flex items-end gap-2 flex-wrap border-t border-[#C9A84C]/10 pt-3">
-            <span className="font-bold text-[15px] text-[#1E6B5A]">
+          <div className="flex items-end gap-2 flex-wrap border-t border-[#C7CCD1]/10 pt-3">
+            <span className="font-bold text-[15px] text-[#0A1F44]">
               ₹{product.price.toLocaleString("en-IN")}
             </span>
             {product.originalPrice && (

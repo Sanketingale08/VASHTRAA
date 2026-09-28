@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 const CREAM = "#F1F5F9";
 
 interface AdminNotification {
@@ -481,21 +481,21 @@ function AdminNotificationsContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search notifications..."
-            className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C9A84C]"
+            className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-[#C7CCD1]"
           />
         </div>
         <input
           type="date"
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
-          className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+          className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C7CCD1]"
         />
         <span className="text-xs text-gray-400">to</span>
         <input
           type="date"
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
-          className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+          className="px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:border-[#C7CCD1]"
         />
         {(search || dateFrom || dateTo) && (
           <button
@@ -559,7 +559,7 @@ function AdminNotificationsContent() {
                   )}
                   style={!n.read ? { background: `${NAVY}05` } : {}}
                 >
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: n.read ? "#f3f4f6" : "#fff", border: n.read ? "none" : "1px solid #C9A84C33" }}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: n.read ? "#f3f4f6" : "#fff", border: n.read ? "none" : "1px solid #C7CCD133" }}>
                     {typeIcon(n.type)}
                   </div>
                   <div className="flex-1 min-w-0">

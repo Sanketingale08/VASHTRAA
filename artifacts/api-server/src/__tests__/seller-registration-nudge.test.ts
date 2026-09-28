@@ -263,10 +263,10 @@ describe("sendSellerRegistrationNudgeEmail", () => {
   it("includes the registration URL in the email HTML", async () => {
     await sendSellerRegistrationNudgeEmail({
       userId: "user-1",
-      registrationUrl: "https://twirldrape.com/seller/register?ref=nudge",
+      registrationUrl: "https://vastraa.com/seller/register?ref=nudge",
     });
     expect(state.capturedOutboxInserts[0]?.html as string).toContain(
-      "https://twirldrape.com/seller/register?ref=nudge"
+      "https://vastraa.com/seller/register?ref=nudge"
     );
   });
 });

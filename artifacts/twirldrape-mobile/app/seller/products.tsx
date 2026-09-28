@@ -240,7 +240,7 @@ export default function SellerProductsScreen() {
             <View style={[s.center, { paddingVertical: 60 }]}>
               <Ionicons name="storefront-outline" size={56} color={colors.muted} />
               <Text style={s.emptyTitle}>No Products Yet</Text>
-              <Text style={s.emptySubtitle}>Add your first saree listing to start selling on TwirlDrape.</Text>
+              <Text style={s.emptySubtitle}>Add your first saree listing to start selling on VASTRAA.</Text>
               <Pressable style={s.primaryBtn} onPress={() => router.push("/seller/product-new")}>
                 <Text style={s.primaryBtnText}>Add Your First Product</Text>
               </Pressable>

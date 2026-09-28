@@ -130,10 +130,10 @@ function FileChip({ file, onRemove }: { file: File; onRemove: () => void }) {
   }, [file, isImage]);
 
   return (
-    <div className="flex items-center gap-1.5 bg-[#F3F8F5] border border-[#C9A84C]/30 rounded-lg px-2 py-1.5 text-xs max-w-[160px]">
+    <div className="flex items-center gap-1.5 bg-[#F4F5F7] border border-[#C7CCD1]/30 rounded-lg px-2 py-1.5 text-xs max-w-[160px]">
       {preview
         ? <img src={preview} alt="" className="w-5 h-5 rounded object-cover shrink-0" />
-        : <FileText size={13} className="text-[#1E6B5A] shrink-0" />}
+        : <FileText size={13} className="text-[#0A1F44] shrink-0" />}
       <span className="truncate text-gray-700">{file.name}</span>
       <button type="button" onClick={onRemove} className="shrink-0 text-gray-400 hover:text-red-500 transition-colors">
         <X size={11} />
@@ -431,13 +431,13 @@ export function AccountSupportPage() {
             value={ticketSearch}
             onChange={(e) => { setTicketSearch(e.target.value); setTicketPage(1); }}
             placeholder="Search your tickets…"
-            className="w-full pl-8 pr-3 py-2 text-sm border border-[#C9A84C]/30 rounded-lg focus:outline-none focus:border-[#1E6B5A]/40 bg-white"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-[#C7CCD1]/30 rounded-lg focus:outline-none focus:border-[#0A1F44]/40 bg-white"
           />
         </div>
         <select
           value={ticketStatusFilter}
           onChange={(e) => { setTicketStatusFilter(e.target.value); setTicketPage(1); }}
-          className="px-3 py-2 text-sm border border-[#C9A84C]/30 rounded-lg bg-white"
+          className="px-3 py-2 text-sm border border-[#C7CCD1]/30 rounded-lg bg-white"
         >
           <option value="">All statuses</option>
           <option value="Open">Open</option>
@@ -449,15 +449,15 @@ export function AccountSupportPage() {
       </div>
       {ticketsLoading ? (
         [...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white border border-[#C9A84C]/15 rounded-xl p-4 animate-pulse h-[72px]" />
+          <div key={i} className="bg-white border border-[#C7CCD1]/15 rounded-xl p-4 animate-pulse h-[72px]" />
         ))
       ) : tickets.length === 0 ? (
-        <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-8 text-center">
-          <Ticket size={30} className="text-[#C9A84C]/40 mx-auto mb-2" />
+        <div className="bg-white border border-[#C7CCD1]/20 rounded-xl p-8 text-center">
+          <Ticket size={30} className="text-[#C7CCD1]/40 mx-auto mb-2" />
           <p className="text-gray-400 text-sm">No tickets yet.</p>
           <button
             onClick={() => { setRightPanel("new"); setMobileView("new"); }}
-            className="mt-2 text-sm text-[#1E6B5A] font-semibold hover:underline"
+            className="mt-2 text-sm text-[#0A1F44] font-semibold hover:underline"
           >
             Raise your first ticket →
           </button>
@@ -472,14 +472,14 @@ export function AccountSupportPage() {
               className={cn(
                 "w-full text-left rounded-xl p-3.5 border transition-all group",
                 isSelected
-                  ? "bg-[#1E6B5A]/5 border-[#1E6B5A]/30"
-                  : "bg-white border-[#C9A84C]/20 hover:border-[#C9A84C]/50 hover:shadow-sm"
+                  ? "bg-[#0A1F44]/5 border-[#0A1F44]/30"
+                  : "bg-white border-[#C7CCD1]/20 hover:border-[#C7CCD1]/50 hover:shadow-sm"
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <p className={cn(
                   "font-semibold text-sm line-clamp-1",
-                  isSelected ? "text-[#1E6B5A]" : "text-[#3D1A1A] group-hover:text-[#1E6B5A] transition-colors"
+                  isSelected ? "text-[#0A1F44]" : "text-[#3D1A1A] group-hover:text-[#0A1F44] transition-colors"
                 )}>
                   {ticket.subject}
                 </p>
@@ -492,7 +492,7 @@ export function AccountSupportPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
-                <span className="text-[#C9A84C] font-medium">{ticket.category}</span>
+                <span className="text-[#C7CCD1] font-medium">{ticket.category}</span>
                 <span>·</span>
                 <span>Opened {relativeTime(ticket.createdAt)}</span>
                 <span>·</span>
@@ -507,7 +507,7 @@ export function AccountSupportPage() {
           <button
             disabled={ticketPage <= 1}
             onClick={() => setTicketPage((p) => Math.max(1, p - 1))}
-            className="px-2 py-1 rounded border border-[#C9A84C]/30 disabled:opacity-40"
+            className="px-2 py-1 rounded border border-[#C7CCD1]/30 disabled:opacity-40"
           >
             Prev
           </button>
@@ -515,7 +515,7 @@ export function AccountSupportPage() {
           <button
             disabled={ticketPage >= ticketTotalPages}
             onClick={() => setTicketPage((p) => Math.min(ticketTotalPages, p + 1))}
-            className="px-2 py-1 rounded border border-[#C9A84C]/30 disabled:opacity-40"
+            className="px-2 py-1 rounded border border-[#C7CCD1]/30 disabled:opacity-40"
           >
             Next
           </button>
@@ -525,9 +525,9 @@ export function AccountSupportPage() {
   );
 
   const NewTicketPanel = (
-    <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-5 shadow-sm">
+    <div className="bg-white border border-[#C7CCD1]/20 rounded-xl p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <Plus size={16} className="text-[#1E6B5A]" />
+        <Plus size={16} className="text-[#0A1F44]" />
         <h3 className="font-serif font-bold text-[#3D1A1A]">Raise a Support Ticket</h3>
       </div>
       <form onSubmit={handleSubmitTicket} className="space-y-4">
@@ -540,7 +540,7 @@ export function AccountSupportPage() {
             value={form.subject}
             onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
             placeholder="Brief description of your issue"
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
+            className="w-full border border-[#C7CCD1]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0A1F44]/50 bg-[#F4F5F7] text-[#3D1A1A] placeholder:text-gray-400"
           />
         </div>
         <div>
@@ -550,7 +550,7 @@ export function AccountSupportPage() {
           <select
             value={form.category}
             onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as Category }))}
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A]"
+            className="w-full border border-[#C7CCD1]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0A1F44]/50 bg-[#F4F5F7] text-[#3D1A1A]"
           >
             <option value="">Select a category</option>
             {categories.map((c) => (
@@ -565,7 +565,7 @@ export function AccountSupportPage() {
           <select
             value={form.orderId}
             onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A]"
+            className="w-full border border-[#C7CCD1]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0A1F44]/50 bg-[#F4F5F7] text-[#3D1A1A]"
           >
             <option value="">Not related to an order</option>
             {orders.map((o) => (
@@ -585,15 +585,15 @@ export function AccountSupportPage() {
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             placeholder="Please describe your issue in detail. Include order numbers if applicable."
             rows={5}
-            className="w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#1E6B5A]/50 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400 resize-none"
+            className="w-full border border-[#C7CCD1]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#0A1F44]/50 bg-[#F4F5F7] text-[#3D1A1A] placeholder:text-gray-400 resize-none"
           />
         </div>
         <div>
           <label className="block text-xs font-semibold text-[#3D1A1A] mb-1.5 uppercase tracking-wide">
             Attachments <span className="font-normal text-gray-400 normal-case">(optional · JPG, PNG, PDF, DOC — max 10 MB total)</span>
           </label>
-          <label className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-[#C9A84C]/50 rounded-lg cursor-pointer hover:bg-[#F3F8F5] transition-colors">
-            <Paperclip size={14} className="text-[#1E6B5A] shrink-0" />
+          <label className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-[#C7CCD1]/50 rounded-lg cursor-pointer hover:bg-[#F4F5F7] transition-colors">
+            <Paperclip size={14} className="text-[#0A1F44] shrink-0" />
             <span className="text-sm text-gray-400">Click to attach files…</span>
             <input
               type="file"
@@ -623,7 +623,7 @@ export function AccountSupportPage() {
         <button
           type="submit"
           disabled={createTicket.isPending}
-          className="w-full py-2.5 bg-[#1E6B5A] text-white text-sm font-semibold rounded-lg hover:bg-[#5e1421] disabled:opacity-50 transition-colors"
+          className="w-full py-2.5 bg-[#0A1F44] text-white text-sm font-semibold rounded-lg hover:bg-[#2C3E6B] disabled:opacity-50 transition-colors"
         >
           {createTicket.isPending ? "Submitting…" : "Submit Ticket"}
         </button>
@@ -640,23 +640,23 @@ export function AccountSupportPage() {
           value={faqSearch}
           onChange={(e) => { setFaqSearch(e.target.value); setOpenFaq(null); }}
           placeholder="Search frequently asked questions…"
-          className="w-full pl-9 pr-4 py-2.5 border border-[#C9A84C]/30 rounded-xl text-sm focus:outline-none focus:border-[#1E6B5A]/40 bg-white text-[#3D1A1A] placeholder:text-gray-400 shadow-sm"
+          className="w-full pl-9 pr-4 py-2.5 border border-[#C7CCD1]/30 rounded-xl text-sm focus:outline-none focus:border-[#0A1F44]/40 bg-white text-[#3D1A1A] placeholder:text-gray-400 shadow-sm"
         />
       </div>
       {filteredFaq.length === 0 ? (
-        <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-8 text-center">
+        <div className="bg-white border border-[#C7CCD1]/20 rounded-xl p-8 text-center">
           <p className="text-gray-400 text-sm">No results for "{faqSearch}".</p>
         </div>
       ) : (
         filteredFaq.map((item, i) => (
-          <div key={i} className="bg-white border border-[#C9A84C]/20 rounded-xl overflow-hidden shadow-sm">
+          <div key={i} className="bg-white border border-[#C7CCD1]/20 rounded-xl overflow-hidden shadow-sm">
             <button
               onClick={() => setOpenFaq(openFaq === i ? null : i)}
               className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left"
             >
               <span className="text-sm font-semibold text-[#3D1A1A]">{item.q}</span>
               {openFaq === i
-                ? <ChevronUp size={14} className="text-[#C9A84C] shrink-0" />
+                ? <ChevronUp size={14} className="text-[#C7CCD1] shrink-0" />
                 : <ChevronDown size={14} className="text-gray-400 shrink-0" />
               }
             </button>
@@ -669,7 +669,7 @@ export function AccountSupportPage() {
                   transition={{ duration: 0.18 }}
                   className="overflow-hidden"
                 >
-                  <p className="px-4 pb-4 text-sm text-[#7a5f4e] leading-relaxed border-t border-[#C9A84C]/15 pt-3">
+                  <p className="px-4 pb-4 text-sm text-[#7a5f4e] leading-relaxed border-t border-[#C7CCD1]/15 pt-3">
                     {item.a}
                   </p>
                 </motion.div>
@@ -678,11 +678,11 @@ export function AccountSupportPage() {
           </div>
         ))
       )}
-      <div className="bg-[#F3F8F5] border border-[#C9A84C]/20 rounded-xl p-4 text-center">
+      <div className="bg-[#F4F5F7] border border-[#C7CCD1]/20 rounded-xl p-4 text-center">
         <p className="text-sm text-gray-500">Can't find what you're looking for?</p>
         <button
           onClick={() => { setRightPanel("new"); setMobileView("new"); }}
-          className="mt-1 text-sm font-semibold text-[#1E6B5A] hover:underline"
+          className="mt-1 text-sm font-semibold text-[#0A1F44] hover:underline"
         >
           Raise a support ticket →
         </button>
@@ -691,16 +691,16 @@ export function AccountSupportPage() {
   );
 
   const DetailPanel = (
-    <div className="bg-white border border-[#C9A84C]/20 rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-white border border-[#C7CCD1]/20 rounded-xl overflow-hidden shadow-sm">
       {detailLoading ? (
         <div className="p-10 text-center text-gray-400 text-sm animate-pulse">Loading ticket…</div>
       ) : ticketDetail ? (
         <>
-          <div className="border-b border-[#C9A84C]/15 p-4">
+          <div className="border-b border-[#C7CCD1]/15 p-4">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-serif font-bold text-[#3D1A1A] text-base">{ticketDetail.subject}</p>
-                <p className="text-xs text-[#C9A84C] font-medium mt-0.5">{ticketDetail.category}</p>
+                <p className="text-xs text-[#C7CCD1] font-medium mt-0.5">{ticketDetail.category}</p>
               </div>
               <span className={cn(
                 "flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border shrink-0",
@@ -721,11 +721,11 @@ export function AccountSupportPage() {
                 <div className={cn(
                   "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
                   msg.isStaff
-                    ? "bg-[#F3F8F5] border border-[#C9A84C]/20 text-[#3D1A1A] rounded-tl-sm"
-                    : "bg-[#1E6B5A] text-white rounded-tr-sm"
+                    ? "bg-[#F4F5F7] border border-[#C7CCD1]/20 text-[#3D1A1A] rounded-tl-sm"
+                    : "bg-[#0A1F44] text-white rounded-tr-sm"
                 )}>
                   {msg.isStaff && (
-                    <p className="text-[10px] font-semibold text-[#C9A84C] uppercase tracking-wide mb-1">
+                    <p className="text-[10px] font-semibold text-[#C7CCD1] uppercase tracking-wide mb-1">
                       Support Team
                     </p>
                   )}
@@ -741,14 +741,14 @@ export function AccountSupportPage() {
 
           {ticketDetail.status !== "Closed" && ticketDetail.status !== "Resolved" ? (
             <>
-              <div className="border-t border-[#C9A84C]/15 p-3 space-y-2">
+              <div className="border-t border-[#C7CCD1]/15 p-3 space-y-2">
                 <form onSubmit={handleSendReply} className="flex gap-2">
                   <textarea
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
                     placeholder="Write a reply…"
                     rows={2}
-                    className="flex-1 resize-none text-sm border border-[#C9A84C]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B5A]/40 bg-[#F3F8F5] text-[#3D1A1A] placeholder:text-gray-400"
+                    className="flex-1 resize-none text-sm border border-[#C7CCD1]/30 rounded-lg px-3 py-2 focus:outline-none focus:border-[#0A1F44]/40 bg-[#F4F5F7] text-[#3D1A1A] placeholder:text-gray-400"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -760,11 +760,11 @@ export function AccountSupportPage() {
                     <button
                       type="submit"
                       disabled={!replyBody.trim() || addReply.isPending || uploadingFiles}
-                      className="px-3 py-2 bg-[#1E6B5A] text-white rounded-lg hover:bg-[#5e1421] disabled:opacity-40 transition-colors"
+                      className="px-3 py-2 bg-[#0A1F44] text-white rounded-lg hover:bg-[#2C3E6B] disabled:opacity-40 transition-colors"
                     >
                       {uploadingFiles ? <span className="text-xs">…</span> : <Send size={15} />}
                     </button>
-                    <label className="px-3 py-2 text-gray-400 hover:text-[#1E6B5A] cursor-pointer rounded-lg hover:bg-[#F3F8F5] transition-colors flex justify-center" title="Attach files">
+                    <label className="px-3 py-2 text-gray-400 hover:text-[#0A1F44] cursor-pointer rounded-lg hover:bg-[#F4F5F7] transition-colors flex justify-center" title="Attach files">
                       <Paperclip size={15} />
                       <input
                         type="file"
@@ -789,12 +789,12 @@ export function AccountSupportPage() {
                 )}
               </div>
               {ticketDetail.assignedTo === "seller" && !ticketDetail.escalated && (
-                <div className="border-t border-[#C9A84C]/15 p-3 flex items-center justify-between gap-2">
+                <div className="border-t border-[#C7CCD1]/15 p-3 flex items-center justify-between gap-2">
                   <p className="text-[11px] text-gray-400">Not hearing back from the seller?</p>
                   <button
                     onClick={() => escalateTicket.mutate()}
                     disabled={escalateTicket.isPending}
-                    className="text-xs font-semibold text-[#1E6B5A] hover:underline disabled:opacity-50"
+                    className="text-xs font-semibold text-[#0A1F44] hover:underline disabled:opacity-50"
                   >
                     {escalateTicket.isPending ? "Escalating…" : "Escalate to Super Admin"}
                   </button>
@@ -802,14 +802,14 @@ export function AccountSupportPage() {
               )}
             </>
           ) : (
-            <div className="border-t border-[#C9A84C]/15 p-3 flex items-center justify-between gap-2">
+            <div className="border-t border-[#C7CCD1]/15 p-3 flex items-center justify-between gap-2">
               <p className="text-xs text-gray-400">
                 This ticket is {ticketDetail.status.toLowerCase()}.
               </p>
               <button
                 onClick={() => reopenTicket.mutate()}
                 disabled={reopenTicket.isPending}
-                className="text-xs font-semibold text-[#1E6B5A] hover:underline disabled:opacity-50"
+                className="text-xs font-semibold text-[#0A1F44] hover:underline disabled:opacity-50"
               >
                 {reopenTicket.isPending ? "Reopening…" : "Reopen ticket"}
               </button>
@@ -823,20 +823,20 @@ export function AccountSupportPage() {
   );
 
   const EmptyPanel = (
-    <div className="bg-white border border-[#C9A84C]/20 rounded-xl p-12 text-center">
-      <MessageSquare size={36} className="text-[#C9A84C]/30 mx-auto mb-3" />
+    <div className="bg-white border border-[#C7CCD1]/20 rounded-xl p-12 text-center">
+      <MessageSquare size={36} className="text-[#C7CCD1]/30 mx-auto mb-3" />
       <p className="text-gray-400 text-sm">Select a ticket to view the conversation,</p>
       <p className="text-gray-400 text-sm">or raise a new ticket.</p>
       <div className="flex justify-center gap-3 mt-4">
         <button
           onClick={() => setRightPanel("new")}
-          className="px-4 py-2 bg-[#1E6B5A] text-white text-sm font-semibold rounded-lg hover:bg-[#5e1421] transition-colors"
+          className="px-4 py-2 bg-[#0A1F44] text-white text-sm font-semibold rounded-lg hover:bg-[#2C3E6B] transition-colors"
         >
           New Ticket
         </button>
         <button
           onClick={() => { setFaqSearch(""); setRightPanel("faq"); }}
-          className="px-4 py-2 border border-[#C9A84C]/40 text-[#1E6B5A] text-sm font-semibold rounded-lg hover:bg-[#F3F8F5] transition-colors"
+          className="px-4 py-2 border border-[#C7CCD1]/40 text-[#0A1F44] text-sm font-semibold rounded-lg hover:bg-[#F4F5F7] transition-colors"
         >
           View FAQ
         </button>
@@ -859,7 +859,7 @@ export function AccountSupportPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {openCount > 0 && (
-              <span className="text-[10px] bg-[#1E6B5A] text-white font-bold px-1.5 py-0.5 rounded-full">
+              <span className="text-[10px] bg-[#0A1F44] text-white font-bold px-1.5 py-0.5 rounded-full">
                 {openCount} open
               </span>
             )}
@@ -871,8 +871,8 @@ export function AccountSupportPage() {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors",
                 rightPanel === "new"
-                  ? "bg-[#1E6B5A] text-white border-[#1E6B5A]"
-                  : "border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#F3F8F5]"
+                  ? "bg-[#0A1F44] text-white border-[#0A1F44]"
+                  : "border-[#C7CCD1]/40 text-[#0A1F44] hover:bg-[#F4F5F7]"
               )}
             >
               New Ticket
@@ -882,8 +882,8 @@ export function AccountSupportPage() {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors",
                 rightPanel === "faq"
-                  ? "bg-[#1E6B5A] text-white border-[#1E6B5A]"
-                  : "border-[#C9A84C]/40 text-[#1E6B5A] hover:bg-[#F3F8F5]"
+                  ? "bg-[#0A1F44] text-white border-[#0A1F44]"
+                  : "border-[#C7CCD1]/40 text-[#0A1F44] hover:bg-[#F4F5F7]"
               )}
             >
               <HelpCircle size={14} /> FAQ
@@ -918,7 +918,7 @@ export function AccountSupportPage() {
         {/* ───── MOBILE: Tabbed + back-nav layout ───── */}
         <div className="md:hidden space-y-3">
           {mobileView !== "detail" && (
-            <div className="flex gap-1 bg-white border border-[#C9A84C]/20 rounded-xl p-1 shadow-sm">
+            <div className="flex gap-1 bg-white border border-[#C7CCD1]/20 rounded-xl p-1 shadow-sm">
               {([
                 { key: "list" as MobileView, label: "My Tickets" },
                 { key: "new"  as MobileView, label: "New Ticket" },
@@ -930,13 +930,13 @@ export function AccountSupportPage() {
                   className={cn(
                     "flex-1 py-2 px-2 rounded-lg text-sm font-medium transition-colors",
                     mobileView === key
-                      ? "bg-[#1E6B5A] text-white"
-                      : "text-gray-500 hover:text-[#1E6B5A]"
+                      ? "bg-[#0A1F44] text-white"
+                      : "text-gray-500 hover:text-[#0A1F44]"
                   )}
                 >
                   {label}
                   {key === "list" && openCount > 0 && (
-                    <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-white text-[#1E6B5A] font-bold">
+                    <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-white text-[#0A1F44] font-bold">
                       {openCount}
                     </span>
                   )}
@@ -960,7 +960,7 @@ export function AccountSupportPage() {
                 <div className="space-y-3">
                   <button
                     onClick={() => setMobileView("list")}
-                    className="flex items-center gap-1.5 text-sm text-[#1E6B5A] font-medium hover:underline"
+                    className="flex items-center gap-1.5 text-sm text-[#0A1F44] font-medium hover:underline"
                   >
                     <ChevronLeft size={15} /> Back to My Tickets
                   </button>

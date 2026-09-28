@@ -10,10 +10,10 @@ import { getApiUrl } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import SellerBulkUpload, { PRODUCT_FIELDS } from "./SellerBulkUpload";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const IVORY = "#F3F8F5";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const IVORY = "#F4F5F7";
+const CREAM = "#E5E8EC";
 
 interface Product {
   id: string;
@@ -240,7 +240,7 @@ export default function SellerProducts() {
     ws["!cols"] = headers.map(() => ({ wch: 22 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Products");
-    XLSX.writeFile(wb, "twirldrape_catalogue.xlsx");
+    XLSX.writeFile(wb, "vastraa_catalogue.xlsx");
   }
 
   const skeletonRows = Array.from({ length: 5 });
@@ -448,7 +448,7 @@ export default function SellerProducts() {
                           <div className="flex items-center justify-center gap-2">
                             <Link href={`/seller/products/${product.id}/edit`}>
                               <button
-                                className="p-1.5 rounded-lg hover:bg-[#E6F0EA] transition-colors"
+                                className="p-1.5 rounded-lg hover:bg-[#E5E8EC] transition-colors"
                                 title="Edit"
                               >
                                 <Pencil size={14} style={{ color: MAROON }} />
@@ -457,7 +457,7 @@ export default function SellerProducts() {
                             <button
                               onClick={() => handleDuplicate(product)}
                               disabled={duplicatingId === product.id}
-                              className="p-1.5 rounded-lg hover:bg-[#E6F0EA] transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-[#E5E8EC] transition-colors"
                               title="Duplicate"
                             >
                               {duplicatingId === product.id ? (

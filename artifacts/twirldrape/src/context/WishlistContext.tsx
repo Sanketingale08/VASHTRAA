@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch as globalApiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface WishlistContextType {
@@ -14,20 +15,14 @@ const WishlistContext = createContext<WishlistContextType>({
   isLoading: false,
 });
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 async function apiFetch(path: string, options?: RequestInit) {
-  // path is always an absolute /api/... path — never prepend BASE_URL
-  const res = await fetch(path, {
-    credentials: "include",
-    ...options,
-  });
+  const res = await globalApiFetch(path, options);
   if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json();
 }
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
@@ -41,16 +36,16 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (authLoading) return;
     if (!isSignedIn) {
       setWishlistedIds(new Set());
       return;
     }
     fetchWishlist();
-  }, [isSignedIn, isLoaded, fetchWishlist]);
+  }, [isSignedIn, authLoading, fetchWishlist]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
+    if (authLoading || !isSignedIn) return;
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         fetchWishlist();
@@ -58,7 +53,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [isLoaded, isSignedIn, fetchWishlist]);
+  }, [authLoading, isSignedIn, fetchWishlist]);
 
   const toggle = useCallback(async (productId: string) => {
     if (!isSignedIn) return;

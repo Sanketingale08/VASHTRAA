@@ -41,11 +41,19 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
 
-  --color-twirl-maroon: #1E6B5A;
-  --color-twirl-gold: #C9A84C;
-  --color-twirl-ivory: #F3F8F5;
-  --color-twirl-cream: #E6F0EA;
-  --color-twirl-beige: #C8D8D0;
+  --color-twirl-navy: #0A1F44;
+  --color-twirl-accent: #2C3E6B;
+  --color-twirl-platinum: #C7CCD1;
+  --color-twirl-light-platinum: #E5E8EC;
+  --color-twirl-dark: #0B0C10;
+  --color-twirl-light: #F4F5F7;
+
+  /* Aliases for legacy tokens mapped to Navy & Platinum */
+  --color-twirl-maroon: #0A1F44;
+  --color-twirl-gold: #C7CCD1;
+  --color-twirl-ivory: #F4F5F7;
+  --color-twirl-cream: #E5E8EC;
+  --color-twirl-beige: #C7CCD1;
 
   --font-sans: 'DM Sans', sans-serif;
   --font-serif: 'Cormorant Garamond', serif;
@@ -57,69 +65,69 @@
 }
 
 :root {
-  --background: 144 27% 96%; /* cool ivory F3F8F5 */
-  --foreground: 348 63% 30%; /* maroon text — keep unchanged */
+  --background: 220 14% 96%; /* #F4F5F7 light base */
+  --foreground: 225 18% 9%;  /* #12141A primary text light */
   
-  --card: 145 25% 92%; /* sage cream E6F0EA */
-  --card-foreground: 348 63% 30%;
-  --card-border: 44 44% 60%; /* gold C9A84C */
+  --card: 0 0% 100%;
+  --card-foreground: 225 18% 9%;
+  --card-border: 210 10% 80%; /* #C7CCD1 */
   
-  --popover: 144 27% 96%;
-  --popover-foreground: 348 63% 30%;
-  --popover-border: 44 44% 60%;
+  --popover: 220 14% 96%;
+  --popover-foreground: 225 18% 9%;
+  --popover-border: 210 10% 80%;
   
-  --primary: 167 56% 27%; /* deep emerald 1E6B5A */
-  --primary-foreground: 144 27% 96%; /* cool ivory */
+  --primary: 218 74% 15%; /* #0A1F44 button default */
+  --primary-foreground: 220 10% 94%; /* #EDEEF0 button text */
   
-  --secondary: 44 44% 60%; /* gold */
-  --secondary-foreground: 144 27% 96%;
+  --secondary: 223 42% 30%; /* #2C3E6B button hover */
+  --secondary-foreground: 220 10% 94%;
   
-  --muted: 151 17% 82%; /* sage muted C8D8D0 */
-  --muted-foreground: 167 30% 35%;
+  --muted: 214 17% 91%; /* #E5E8EC icon/emoji background light */
+  --muted-foreground: 218 17% 35%; /* #4A5568 secondary text light */
   
-  --accent: 44 44% 60%; /* gold */
-  --accent-foreground: 144 27% 96%;
+  --accent: 210 10% 80%; /* #C7CCD1 platinum highlight */
+  --accent-foreground: 218 74% 15%;
   
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 44 44% 60%;
-  --input: 151 17% 82%;
-  --ring: 167 56% 27%;
+  --border: 218 17% 35%;
+  --input: 214 17% 91%;
+  --ring: 218 74% 15%;
 
   --radius: 0.5rem;
 }
 
 .dark {
-  --background: 220 10% 15%; /* charcoal */
-  --foreground: 44 48% 95%; /* ivory */
+  --background: 228 19% 5%; /* #0B0C10 dark base */
+  --foreground: 220 10% 94%; /* #EDEEF0 primary text dark */
   
-  --card: 220 15% 20%;
-  --card-foreground: 44 48% 95%;
-  --card-border: 44 44% 60%; /* gold */
+  --card: 225 18% 9%;
+  --card-foreground: 220 10% 94%;
+  --card-border: 218 17% 35%;
   
-  --popover: 220 10% 15%;
-  --popover-foreground: 44 48% 95%;
-  --popover-border: 44 44% 60%;
+  --popover: 228 19% 5%;
+  --popover-foreground: 220 10% 94%;
+  --popover-border: 218 17% 35%;
   
-  --primary: 44 44% 60%; /* gold */
-  --primary-foreground: 220 10% 15%; /* charcoal */
+  --primary: 218 74% 15%; /* #0A1F44 */
+  --primary-foreground: 220 10% 94%;
   
-  --secondary: 220 15% 30%;
-  --secondary-foreground: 44 48% 95%;
+  --secondary: 223 42% 30%; /* #2C3E6B */
+  --secondary-foreground: 220 10% 94%;
   
-  --muted: 220 15% 25%;
-  --muted-foreground: 44 20% 70%;
+  --muted: 225 15% 18%; /* #1E222D icon/emoji background dark */
+  --muted-foreground: 210 10% 80%; /* #C7CCD1 secondary text dark */
   
-  --accent: 44 44% 60%;
-  --accent-foreground: 220 10% 15%;
+  --accent: 210 10% 80%; /* #C7CCD1 */
+  --accent-foreground: 228 19% 5%;
   
   --destructive: 0 62% 30%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 220 15% 30%;
-  --input: 220 15% 30%;
-  --ring: 44 44% 60%;
+  --border: 218 17% 35%;
+  --input: 225 15% 20%;
+  --ring: 210 10% 80%;
 }
 
 @layer base {
@@ -131,6 +139,28 @@
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
+  }
+}
+
+@layer components {
+  /* Global button recoloring rules */
+  .btn-primary, button[type="submit"] {
+    background-color: #0A1F44;
+    color: #EDEEF0;
+    transition: background-color 0.2s ease;
+  }
+  .btn-primary:hover, button[type="submit"]:hover {
+    background-color: #2C3E6B;
+  }
+
+  /* Icon & Emoji background container recoloring rules */
+  .icon-bg, .emoji-bg, .avatar-badge {
+    background-color: #E5E8EC;
+    color: #0A1F44;
+  }
+  .dark .icon-bg, .dark .emoji-bg, .dark .avatar-badge {
+    background-color: #1E222D;
+    color: #EDEEF0;
   }
 }
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, X, Loader2, CheckCircle, ArrowLeft, AlertCircle } from "lucide-react";
 // EmailAddressResource inferred from useUser() return type
 
 const inputCls =
-  "w-full border border-[#C9A84C]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white text-center tracking-widest";
+  "w-full border border-[#C7CCD1]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors bg-white text-center tracking-widest";
 
 const RESEND_SECS = 60;
 
@@ -17,7 +17,7 @@ interface Props {
 type Step = "enter" | "verify" | "success";
 
 export function ChangeEmailModal({ onClose, onSuccess }: Props) {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [step, setStep] = useState<Step>("enter");
   const [newEmail, setNewEmail] = useState("");
   const [code, setCode] = useState("");
@@ -42,7 +42,7 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
   }, [onClose]);
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
-  const currentEmail = user?.primaryEmailAddress?.emailAddress ?? "";
+  const currentEmail = user?.email ?? "";
 
   async function sendVerification() {
     const trimmed = newEmail.trim().toLowerCase();
@@ -107,14 +107,33 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
-      // Verify the code
-      const verified = await emailAddrObj.attemptVerification({ code: code.trim() });
-      // Make the new email the primary one — user.update() already updates the
-      // local Clerk user object, so primaryEmailAddress reflects the new value
-      // immediately. Calling user.reload() here can return stale data and cause
-      // the parent to display the old email; the parent handles the UI update
-      // optimistically via the onSuccess callback instead.
-      await user.update({ primaryEmailAddressId: verified.id });
+      // Verify the code with Clerk if available
+      let verifiedId: string | null = null;
+      if (emailAddrObj) {
+        const verified = await emailAddrObj.attemptVerification({ code: code.trim() });
+        verifiedId = verified?.id;
+      }
+
+      if (user && verifiedId) {
+        try {
+          await user.update({ primaryEmailAddressId: verifiedId });
+        } catch { /* ignore */ }
+      }
+
+      // Sync updated email address directly to backend database
+      try {
+        const token = localStorage.getItem("vastraa_auth_token");
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        await fetch(`/api/account/profile`, {
+          method: "PATCH",
+          credentials: "include",
+          headers,
+          body: JSON.stringify({ email: newEmail.trim().toLowerCase() }),
+        });
+      } catch { /* ignore error, parent callback will finish sync */ }
+
       setStep("success");
       onSuccess(newEmail.trim().toLowerCase());
     } catch (err: any) {
@@ -170,7 +189,7 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
               </button>
             )}
             <div>
-              <h3 className="font-serif text-lg font-bold text-[#1E6B5A]">Change Email Address</h3>
+              <h3 className="font-serif text-lg font-bold text-[#0A1F44]">Change Email Address</h3>
               <p className="text-xs text-gray-400 mt-0.5">
                 {step === "enter" && "Enter your new email address"}
                 {step === "verify" && "Enter the verification code"}
@@ -188,10 +207,10 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
         <AnimatePresence mode="wait">
           {step === "enter" && (
             <motion.div key="enter" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
-              <div className="bg-[#F3F8F5] rounded-xl p-3 flex items-start gap-2.5">
-                <AlertCircle size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
+              <div className="bg-[#F4F5F7] rounded-xl p-3 flex items-start gap-2.5">
+                <AlertCircle size={14} className="text-[#C7CCD1] mt-0.5 shrink-0" />
                 <p className="text-xs text-gray-600">
-                  Current email: <span className="font-semibold text-[#1E6B5A]">{currentEmail}</span>. A verification code will be sent to your <strong>new email</strong>.
+                  Current email: <span className="font-semibold text-[#0A1F44]">{currentEmail}</span>. A verification code will be sent to your <strong>new email</strong>.
                 </p>
               </div>
               <div>
@@ -201,7 +220,7 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
                   onChange={(e) => { setNewEmail(e.target.value); setError(""); }}
                   placeholder="you@example.com"
                   type="email"
-                  className="w-full border border-[#C9A84C]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white"
+                  className="w-full border border-[#C7CCD1]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors bg-white"
                   autoFocus
                 />
               </div>
@@ -209,7 +228,7 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
               <button
                 onClick={sendVerification}
                 disabled={loading || !isValidEmail(newEmail.trim())}
-                className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : <><Mail size={14} /> Send Verification Code</>}
               </button>
@@ -218,9 +237,9 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
 
           {step === "verify" && (
             <motion.div key="verify" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
-              <div className="bg-[#F3F8F5] rounded-xl p-3 text-center">
+              <div className="bg-[#F4F5F7] rounded-xl p-3 text-center">
                 <p className="text-xs text-gray-500">Code sent to your new email</p>
-                <p className="text-xs font-semibold text-[#1E6B5A] mt-0.5">{newEmail.trim()}</p>
+                <p className="text-xs font-semibold text-[#0A1F44] mt-0.5">{newEmail.trim()}</p>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 text-center">Enter 6-Digit Code</label>
@@ -239,15 +258,15 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
               <button
                 onClick={verifyCode}
                 disabled={loading || code.trim().length !== 6}
-                className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <><Loader2 size={14} className="animate-spin" /> Verifying…</> : "Verify & Update Email"}
               </button>
               <p className="text-center text-xs text-gray-400">
                 {countdown > 0 ? (
-                  <>Resend in <span className="font-semibold text-[#1E6B5A]">{countdown}s</span></>
+                  <>Resend in <span className="font-semibold text-[#0A1F44]">{countdown}s</span></>
                 ) : (
-                  <button onClick={resendCode} disabled={loading} className="text-[#1E6B5A] font-semibold hover:underline disabled:opacity-50">
+                  <button onClick={resendCode} disabled={loading} className="text-[#0A1F44] font-semibold hover:underline disabled:opacity-50">
                     Resend Code
                   </button>
                 )}
@@ -266,7 +285,7 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
               </div>
               <button
                 onClick={onClose}
-                className="w-full bg-[#1E6B5A] text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl transition-colors hover:bg-[#6a1826]"
+                className="w-full bg-[#0A1F44] text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl transition-colors hover:bg-[#6a1826]"
               >
                 Done
               </button>

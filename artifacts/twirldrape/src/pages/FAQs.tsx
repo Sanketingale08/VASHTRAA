@@ -3,8 +3,8 @@ import { Link } from "wouter";
 import { ChevronDown, ChevronUp, MessageCircle, Search, X } from "lucide-react";
 import { Layout } from "@/components/Layout";
 
-const GOLD = "#C9A84C";
-const GREEN = "#1E6B5A";
+const GOLD = "#C7CCD1";
+const GREEN = "#0A1F44";
 
 interface FAQItem {
   question: string;
@@ -23,10 +23,10 @@ const FAQ_SECTIONS: { section: string; items: FAQItem[] }[] = [
       {
         question: "Can I modify or cancel my order after placing it?",
         answer:
-          "You can cancel or modify your order within 24 hours of placement, before it has been dispatched. Contact our support team immediately via the Support page or email support@twirldrape.com. Once dispatched, cancellations are not possible.",
+          "You can cancel or modify your order within 24 hours of placement, before it has been dispatched. Contact our support team immediately via the Support page or email support@vastraa.com. Once dispatched, cancellations are not possible.",
       },
       {
-        question: "Is it safe to shop on TwirlDrape?",
+        question: "Is it safe to shop on VASTRAA?",
         answer:
           "Absolutely. We use bank-grade encryption for all transactions. Your payment details are never stored on our servers — all payments are processed through certified payment gateways.",
       },
@@ -91,9 +91,9 @@ const FAQ_SECTIONS: { section: string; items: FAQItem[] }[] = [
     section: "Product & Authenticity",
     items: [
       {
-        question: "Are the sarees on TwirlDrape authentic?",
+        question: "Are the sarees on VASTRAA authentic?",
         answer:
-          "Every saree listed on TwirlDrape is sourced directly from verified artisans and weaver collectives across India. Our team personally visits each vendor before onboarding, and all Paithani sarees come with an authenticity certificate.",
+          "Every saree listed on VASTRAA is sourced directly from verified artisans and weaver collectives across India. Our team personally visits each vendor before onboarding, and all Paithani sarees come with an authenticity certificate.",
       },
       {
         question: "What does 'handwoven' mean?",
@@ -145,7 +145,7 @@ function highlight(text: string, query: string): React.ReactNode {
   const parts = text.split(regex);
   return parts.map((part, i) =>
     regex.test(part) ? (
-      <mark key={i} className="bg-[#C9A84C]/30 text-[#3D1515] rounded px-0.5">
+      <mark key={i} className="bg-[#C7CCD1]/30 text-[#0A1F44] rounded px-0.5">
         {part}
       </mark>
     ) : (
@@ -174,22 +174,22 @@ function FAQAccordion({ items, query, expandFirst }: { items: FAQItem[]; query: 
       {items.map((item, i) => (
         <div
           key={i}
-          className="bg-white border border-[#C9A84C]/20 rounded-xl overflow-hidden"
+          className="bg-white border border-[#C7CCD1]/20 rounded-xl overflow-hidden"
         >
           <button
-            className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-[#F3F8F5] transition-colors"
+            className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-[#F4F5F7] transition-colors"
             onClick={() => setOpenIndex(openIndex === i ? null : i)}
             aria-expanded={openIndex === i}
           >
-            <span className="font-medium text-[#3D1515] text-sm leading-snug">
+            <span className="font-medium text-[#0A1F44] text-sm leading-snug">
               {highlight(item.question, query)}
             </span>
             {openIndex === i
-              ? <ChevronUp size={18} className="shrink-0 text-[#C9A84C]" />
+              ? <ChevronUp size={18} className="shrink-0 text-[#C7CCD1]" />
               : <ChevronDown size={18} className="shrink-0 text-[#7a5f4e]" />}
           </button>
           {openIndex === i && (
-            <div className="px-5 pb-5 text-sm text-[#7a5f4e] leading-relaxed border-t border-[#C9A84C]/10 pt-4">
+            <div className="px-5 pb-5 text-sm text-[#7a5f4e] leading-relaxed border-t border-[#C7CCD1]/10 pt-4">
               {highlight(item.answer, query)}
             </div>
           )}
@@ -241,16 +241,16 @@ export default function FAQs() {
 
   return (
     <Layout>
-      <div className="bg-[#F3F8F5] min-h-screen">
+      <div className="bg-[#F4F5F7] min-h-screen">
 
         {/* Hero */}
-        <section className="bg-[#1E6B5A] py-16 md:py-24">
+        <section className="bg-[#0A1F44] py-16 md:py-24">
           <div className="container mx-auto px-4 text-center">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-4">Help Centre</p>
-            <h1 className="font-serif text-4xl md:text-5xl text-[#F3F8F5] font-bold mb-4">
+            <p className="text-[#C7CCD1] uppercase tracking-[0.3em] text-xs font-bold mb-4">Help Centre</p>
+            <h1 className="font-serif text-4xl md:text-5xl text-[#F4F5F7] font-bold mb-4">
               Frequently Asked Questions
             </h1>
-            <p className="text-[#E6F0EA] max-w-xl mx-auto text-base leading-relaxed mb-8">
+            <p className="text-[#E5E8EC] max-w-xl mx-auto text-base leading-relaxed mb-8">
               Answers to the questions we hear most often. Can't find what you need? Our support team is happy to help.
             </p>
 
@@ -265,13 +265,13 @@ export default function FAQs() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search questions and answers…"
-                className="w-full pl-11 pr-10 py-3.5 rounded-xl bg-white text-[#3D1515] text-sm placeholder-[#b09a87] border border-transparent focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/60 shadow-sm"
+                className="w-full pl-11 pr-10 py-3.5 rounded-xl bg-white text-[#0A1F44] text-sm placeholder-[#b09a87] border border-transparent focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/60 shadow-sm"
                 aria-label="Search FAQs"
               />
               {isSearching && (
                 <button
                   onClick={() => setQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a5f4e] hover:text-[#3D1515] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a5f4e] hover:text-[#0A1F44] transition-colors"
                   aria-label="Clear search"
                 >
                   <X size={16} />
@@ -294,18 +294,18 @@ export default function FAQs() {
           {filteredSections.length === 0 ? (
             <div className="text-center py-12">
               {/* No-results icon */}
-              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[#C9A84C]/10 flex items-center justify-center">
-                <Search size={28} className="text-[#C9A84C]" />
+              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[#C7CCD1]/10 flex items-center justify-center">
+                <Search size={28} className="text-[#C7CCD1]" />
               </div>
 
-              <h3 className="font-serif text-xl text-[#3D1515] font-bold mb-2">
+              <h3 className="font-serif text-xl text-[#0A1F44] font-bold mb-2">
                 No results for "{query}"
               </h3>
               <p className="text-sm text-[#7a5f4e] mb-1">
                 Try different keywords or{" "}
                 <button
                   onClick={() => setQuery("")}
-                  className="underline hover:text-[#1E6B5A] transition-colors font-medium"
+                  className="underline hover:text-[#0A1F44] transition-colors font-medium"
                 >
                   browse all questions
                 </button>.
@@ -316,7 +316,7 @@ export default function FAQs() {
 
               <Link
                 href="/contact"
-                className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-7 py-3.5 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+                className="inline-flex items-center gap-2 bg-[#0A1F44] text-white px-7 py-3.5 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#2C3E6B] transition-colors"
               >
                 <MessageCircle size={16} />
                 Contact Support
@@ -336,9 +336,9 @@ export default function FAQs() {
                     <button
                       key={i}
                       onClick={() => setQuery(item.question.split(" ").slice(0, 3).join(" "))}
-                      className="w-full text-left bg-white border border-[#C9A84C]/20 rounded-xl px-5 py-4 hover:bg-[#F3F8F5] transition-colors group"
+                      className="w-full text-left bg-white border border-[#C7CCD1]/20 rounded-xl px-5 py-4 hover:bg-[#F4F5F7] transition-colors group"
                     >
-                      <p className="font-medium text-[#3D1515] text-sm group-hover:text-[#1E6B5A] transition-colors">
+                      <p className="font-medium text-[#0A1F44] text-sm group-hover:text-[#0A1F44] transition-colors">
                         {item.question}
                       </p>
                       <p className="text-xs text-[#7a5f4e]/70 mt-1 line-clamp-2">
@@ -360,10 +360,10 @@ export default function FAQs() {
                   ref={(el) => { sectionRefs.current[slug] = el; }}
                   className="mb-12 scroll-mt-6"
                 >
-                  <h2 className="font-serif text-xl text-[#1E6B5A] font-bold mb-5 flex items-center gap-3">
-                    <span className="h-px flex-1 bg-[#C9A84C]/30" />
+                  <h2 className="font-serif text-xl text-[#0A1F44] font-bold mb-5 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-[#C7CCD1]/30" />
                     {sec.section}
-                    <span className="h-px flex-1 bg-[#C9A84C]/30" />
+                    <span className="h-px flex-1 bg-[#C7CCD1]/30" />
                   </h2>
                   <FAQAccordion items={sec.items} query={query} expandFirst={isActive} />
                 </div>
@@ -373,10 +373,10 @@ export default function FAQs() {
         </section>
 
         {/* CTA */}
-        <section className="bg-[#E6F0EA] py-14">
+        <section className="bg-[#E5E8EC] py-14">
           <div className="container mx-auto px-4 text-center">
             <MessageCircle className="w-10 h-10 mx-auto mb-4" style={{ color: GOLD }} />
-            <h2 className="font-serif text-xl md:text-2xl text-[#1E6B5A] font-bold mb-3">
+            <h2 className="font-serif text-xl md:text-2xl text-[#0A1F44] font-bold mb-3">
               Still have questions?
             </h2>
             <p className="text-[#7a5f4e] mb-6 text-sm">
@@ -384,7 +384,7 @@ export default function FAQs() {
             </p>
             <Link
               href="/contact"
-              className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+              className="inline-flex items-center gap-2 bg-[#0A1F44] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#2C3E6B] transition-colors"
             >
               Contact Support
             </Link>

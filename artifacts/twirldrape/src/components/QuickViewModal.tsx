@@ -91,7 +91,7 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
         >
           <div className="flex flex-col md:flex-row">
             {/* Image Column */}
-            <div className="md:w-[42%] relative bg-[#E6F0EA] dark:bg-[#2A2E35] rounded-t-2xl md:rounded-l-2xl md:rounded-tr-none overflow-hidden min-h-[280px] md:min-h-[420px]">
+            <div className="md:w-[42%] relative bg-[#E5E8EC] dark:bg-[#2A2E35] rounded-t-2xl md:rounded-l-2xl md:rounded-tr-none overflow-hidden min-h-[280px] md:min-h-[420px]">
               <img
                 src={getProductImageSrc(images[imgIdx])}
                 alt={product.name}
@@ -105,20 +105,20 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
                     onClick={() => setImgIdx((i) => (i - 1 + images.length) % images.length)}
                     className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white rounded-full shadow transition-all"
                   >
-                    <ChevronLeft size={16} className="text-[#1E6B5A]" />
+                    <ChevronLeft size={16} className="text-[#0A1F44]" />
                   </button>
                   <button
                     onClick={() => setImgIdx((i) => (i + 1) % images.length)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white rounded-full shadow transition-all"
                   >
-                    <ChevronRight size={16} className="text-[#1E6B5A]" />
+                    <ChevronRight size={16} className="text-[#0A1F44]" />
                   </button>
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
                     {images.map((_, i) => (
                       <button
                         key={i}
                         onClick={() => setImgIdx(i)}
-                        className={cn("w-1.5 h-1.5 rounded-full transition-all", i === imgIdx ? "bg-[#C9A84C] scale-125" : "bg-white/60")}
+                        className={cn("w-1.5 h-1.5 rounded-full transition-all", i === imgIdx ? "bg-[#C7CCD1] scale-125" : "bg-white/60")}
                       />
                     ))}
                   </div>
@@ -157,7 +157,7 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">{product.vendorName}</p>
-                  <h2 className="font-serif text-xl md:text-2xl font-bold text-[#1E6B5A] dark:text-[#F3F8F5] leading-tight">
+                  <h2 className="font-serif text-xl md:text-2xl font-bold text-[#0A1F44] dark:text-[#F4F5F7] leading-tight">
                     {product.name}
                   </h2>
                 </div>
@@ -169,15 +169,15 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-0.5">
                   {[1,2,3,4,5].map((s) => (
-                    <Star key={s} size={14} className={cn("transition-colors", s <= Math.round(product.rating) ? "fill-[#C9A84C] text-[#C9A84C]" : "text-gray-200")} />
+                    <Star key={s} size={14} className={cn("transition-colors", s <= Math.round(product.rating) ? "fill-[#C7CCD1] text-[#C7CCD1]" : "text-gray-200")} />
                   ))}
                 </div>
-                <span className="text-sm font-semibold text-[#1E6B5A]">{product.rating}</span>
+                <span className="text-sm font-semibold text-[#0A1F44]">{product.rating}</span>
                 <span className="text-xs text-gray-400">({product.reviewCount} reviews)</span>
               </div>
 
               <div className="flex items-end gap-3">
-                <span className="font-bold text-2xl text-[#1E6B5A] dark:text-[#C9A84C]">
+                <span className="font-bold text-2xl text-[#0A1F44] dark:text-[#C7CCD1]">
                   ₹{product.price.toLocaleString("en-IN")}
                 </span>
                 {product.originalPrice && (
@@ -205,16 +205,16 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-[#1E6B5A] dark:text-[#F3F8F5]">Qty:</span>
-                  <div className="flex items-center border border-[#C9A84C]/30 rounded-lg overflow-hidden">
+                  <span className="text-sm font-semibold text-[#0A1F44] dark:text-[#F4F5F7]">Qty:</span>
+                  <div className="flex items-center border border-[#C7CCD1]/30 rounded-lg overflow-hidden">
                     <button
                       onClick={() => setQty((q) => Math.max(1, q - 1))}
                       className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-[#2A2E35] transition-colors"
                       disabled={qty <= 1}
                     >
-                      <Minus size={14} className="text-[#1E6B5A]" />
+                      <Minus size={14} className="text-[#0A1F44]" />
                     </button>
-                    <span className="px-4 py-2 font-semibold text-sm border-x border-[#C9A84C]/30 min-w-[40px] text-center">
+                    <span className="px-4 py-2 font-semibold text-sm border-x border-[#C7CCD1]/30 min-w-[40px] text-center">
                       {qty}
                     </span>
                     <button
@@ -222,7 +222,7 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
                       className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-[#2A2E35] transition-colors"
                       disabled={qty >= maxQty}
                     >
-                      <Plus size={14} className="text-[#1E6B5A]" />
+                      <Plus size={14} className="text-[#0A1F44]" />
                     </button>
                   </div>
                   {product.stock != null && product.stock <= 5 && product.stock > 0 && (
@@ -251,11 +251,11 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
                 <button
                   onClick={handleWishlist}
                   title={isWishlisted ? "Remove from wishlist" : "Save to wishlist"}
-                  className="p-3 border-2 border-[#C9A84C]/30 hover:border-[#1E6B5A] rounded-sm transition-all"
+                  className="p-3 border-2 border-[#C7CCD1]/30 hover:border-[#0A1F44] rounded-sm transition-all"
                 >
                   <Heart
                     size={18}
-                    className={cn("transition-colors", isWishlisted ? "fill-[#1E6B5A] text-[#1E6B5A]" : "text-gray-400")}
+                    className={cn("transition-colors", isWishlisted ? "fill-[#0A1F44] text-[#0A1F44]" : "text-gray-400")}
                   />
                 </button>
               </div>
@@ -263,7 +263,7 @@ export function QuickViewModal({ product, onClose }: QuickViewModalProps) {
               <Link
                 href={`/products/${product.id}`}
                 onClick={onClose}
-                className="flex items-center justify-center gap-2 text-sm font-semibold text-[#1E6B5A] hover:underline"
+                className="flex items-center justify-center gap-2 text-sm font-semibold text-[#0A1F44] hover:underline"
               >
                 View Full Details <ExternalLink size={13} />
               </Link>

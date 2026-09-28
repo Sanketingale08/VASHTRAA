@@ -5,8 +5,9 @@ import { motion } from "framer-motion";
 import { adminKey, storeAdminSession } from "@/lib/adminApi";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const NAVY = "#0A1F44";
+const ROYAL = "#2C3E6B";
+const GOLD = "#C7CCD1";
 
 export default function Admin2FAVerify() {
   const [, setLocation] = useLocation();
@@ -148,8 +149,8 @@ export default function Admin2FAVerify() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a2d50 100%)` }}
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12"
+      style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #0B0C10 50%, ${ROYAL} 100%)` }}
     >
       {/* Logo */}
       <motion.div
@@ -159,9 +160,9 @@ export default function Admin2FAVerify() {
         className="mb-8 text-center"
       >
         <img
-          src={`${basePath}/images/logo.png`}
-          alt="TwirlDrape"
-          className="h-16 w-auto object-contain mx-auto mb-3"
+          src={`${basePath}/logo.svg`}
+          alt="VASTRAA"
+          className="h-16 w-auto object-contain mx-auto mb-3 bg-white/90 p-2.5 rounded-lg shadow-sm"
         />
         <p className="text-xs font-bold uppercase tracking-[0.35em]" style={{ color: GOLD }}>
           Super Admin Portal
@@ -175,8 +176,8 @@ export default function Admin2FAVerify() {
         className="w-full max-w-sm"
       >
         <div
-          className="rounded-2xl p-8 shadow-2xl border"
-          style={{ background: "rgba(255,255,255,0.05)", borderColor: "rgba(201,168,76,0.3)" }}
+          className="rounded-2xl p-8 shadow-2xl border backdrop-blur-md transition-all"
+          style={{ background: "rgba(10, 31, 68, 0.75)", borderColor: "rgba(199, 204, 209, 0.3)" }}
         >
           {/* Header */}
           <div className="flex items-center gap-3 mb-7">
@@ -188,7 +189,7 @@ export default function Admin2FAVerify() {
             </div>
             <div>
               <h2 className="font-serif text-lg font-bold text-white">Verify Your Identity</h2>
-              <p className="text-xs" style={{ color: "rgba(201,168,76,0.7)" }}>
+              <p className="text-xs" style={{ color: "rgba(199,204,209,0.7)" }}>
                 {mode === "totp"
                   ? "Enter the 6-digit code from your authenticator app"
                   : "Enter one of your saved recovery codes"}
@@ -201,7 +202,7 @@ export default function Admin2FAVerify() {
               <div>
                 <label
                   className="block text-xs font-bold uppercase tracking-wider mb-3"
-                  style={{ color: "rgba(201,168,76,0.8)" }}
+                  style={{ color: "rgba(199,204,209,0.8)" }}
                 >
                   Authenticator Code
                 </label>
@@ -226,7 +227,7 @@ export default function Admin2FAVerify() {
                         background: "rgba(255,255,255,0.1)",
                         borderWidth: 1,
                         borderStyle: "solid",
-                        borderColor: error ? "#ef4444" : (d ? GOLD : "rgba(201,168,76,0.3)"),
+                        borderColor: error ? "#ef4444" : (d ? GOLD : "rgba(199,204,209,0.3)"),
                         color: "white",
                       }}
                       disabled={locked}
@@ -239,7 +240,7 @@ export default function Admin2FAVerify() {
               <div>
                 <label
                   className="block text-xs font-bold uppercase tracking-wider mb-2"
-                  style={{ color: "rgba(201,168,76,0.8)" }}
+                  style={{ color: "rgba(199,204,209,0.8)" }}
                 >
                   Recovery Code
                 </label>
@@ -253,7 +254,7 @@ export default function Admin2FAVerify() {
                     background: "rgba(255,255,255,0.08)",
                     borderWidth: 1,
                     borderStyle: "solid",
-                    borderColor: error ? "#ef4444" : "rgba(201,168,76,0.3)",
+                    borderColor: error ? "#ef4444" : "rgba(199,204,209,0.3)",
                     color: "white",
                   }}
                   disabled={locked}
@@ -287,7 +288,7 @@ export default function Admin2FAVerify() {
                 type="button"
                 onClick={() => switchMode("recovery")}
                 className="text-xs hover:underline transition-colors"
-                style={{ color: "rgba(201,168,76,0.7)" }}
+                style={{ color: "rgba(199,204,209,0.7)" }}
               >
                 Lost access to your authenticator? Use a recovery code →
               </button>
@@ -296,7 +297,7 @@ export default function Admin2FAVerify() {
                 type="button"
                 onClick={() => switchMode("totp")}
                 className="text-xs hover:underline transition-colors"
-                style={{ color: "rgba(201,168,76,0.7)" }}
+                style={{ color: "rgba(199,204,209,0.7)" }}
               >
                 ← Back to authenticator code
               </button>
@@ -304,7 +305,7 @@ export default function Admin2FAVerify() {
           </div>
 
           <p className="mt-5 text-xs text-center" style={{ color: "rgba(255,255,255,0.3)" }}>
-            Admin keys are managed by TwirlDrape operations team.
+            Admin keys are managed by VASTRAA operations team.
           </p>
         </div>
 

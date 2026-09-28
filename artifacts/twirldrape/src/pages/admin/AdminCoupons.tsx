@@ -8,7 +8,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 interface Coupon {
   id: string;
@@ -112,7 +112,7 @@ function CouponFormModal({
               onChange={(e) => update("code", e.target.value.toUpperCase())}
               placeholder="e.g. FESTIVE20"
               required
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C] uppercase"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1] uppercase"
             />
           </div>
 
@@ -124,7 +124,7 @@ function CouponFormModal({
               <select
                 value={form.type}
                 onChange={(e) => update("type", e.target.value as "percent" | "flat")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C]"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1]"
               >
                 <option value="percent">Percent (%)</option>
                 <option value="flat">Flat (₹)</option>
@@ -142,7 +142,7 @@ function CouponFormModal({
                 onChange={(e) => update("value", e.target.value)}
                 placeholder={form.type === "percent" ? "e.g. 20" : "e.g. 500"}
                 required
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C]"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1]"
               />
             </div>
           </div>
@@ -155,7 +155,7 @@ function CouponFormModal({
               value={form.description}
               onChange={(e) => update("description", e.target.value)}
               placeholder="Shown to shoppers, optional"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C]"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1]"
             />
           </div>
 
@@ -168,7 +168,7 @@ function CouponFormModal({
                 type="date"
                 value={form.expiresAt}
                 onChange={(e) => update("expiresAt", e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C]"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1]"
               />
             </div>
             <div>
@@ -182,7 +182,7 @@ function CouponFormModal({
                 value={form.maxUses}
                 onChange={(e) => update("maxUses", e.target.value)}
                 placeholder="Unlimited"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C]"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1]"
               />
             </div>
           </div>
@@ -388,7 +388,7 @@ function CouponsContent() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search code or description…"
-              className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border border-gray-200 outline-none focus:border-[#C9A84C]"
+              className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border border-gray-200 outline-none focus:border-[#C7CCD1]"
             />
           </div>
         </div>

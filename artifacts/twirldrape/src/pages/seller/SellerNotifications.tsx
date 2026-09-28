@@ -9,9 +9,9 @@ import {
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const CREAM = "#E5E8EC";
 const sellerBasePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface SellerNotification {
@@ -253,7 +253,7 @@ export default function SellerNotifications() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title or keyword…"
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/30 focus:border-[#C9A84C]"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/30 focus:border-[#C7CCD1]"
               style={{ borderColor: "#E5E7EB", background: "#fff" }}
             />
           </div>
@@ -262,14 +262,14 @@ export default function SellerNotifications() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C7CCD1]"
             />
             <span className="text-xs text-gray-400">–</span>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C9A84C]"
+              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 focus:outline-none focus:border-[#C7CCD1]"
             />
             {hasFilters && (
               <button
@@ -304,7 +304,7 @@ export default function SellerNotifications() {
         )}
 
         {/* Notification list */}
-        <div className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 overflow-hidden shadow-sm">
           {isLoading ? (
             <div className="p-4 space-y-3">
               {[0, 1, 2].map((i) => (
@@ -336,10 +336,10 @@ export default function SellerNotifications() {
                 {items.map((n) => (
                   <div
                     key={n.id}
-                    className={`flex items-start gap-3 px-4 py-4 border-b border-gray-50 last:border-0 group transition-colors ${!n.read ? "hover:bg-[#F3F8F5]/80" : "hover:bg-gray-50/60"}`}
+                    className={`flex items-start gap-3 px-4 py-4 border-b border-gray-50 last:border-0 group transition-colors ${!n.read ? "hover:bg-[#F4F5F7]/80" : "hover:bg-gray-50/60"}`}
                     style={!n.read ? { background: `${MAROON}08` } : {}}
                   >
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: n.read ? "#f3f4f6" : "#fff", border: n.read ? "none" : "1px solid #C9A84C33" }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: n.read ? "#f3f4f6" : "#fff", border: n.read ? "none" : "1px solid #C7CCD133" }}>
                       {typeIcon(n.type)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -364,7 +364,7 @@ export default function SellerNotifications() {
                         <button
                           onClick={() => markRead.mutate(n.id)}
                           title="Mark as read"
-                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-gray-100"
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#0A1F44] hover:bg-gray-100"
                         >
                           <CheckCircle size={14} />
                         </button>
@@ -372,7 +372,7 @@ export default function SellerNotifications() {
                         <button
                           onClick={() => markUnread.mutate(n.id)}
                           title="Mark as unread"
-                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#1E6B5A] hover:bg-gray-100"
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-[#0A1F44] hover:bg-gray-100"
                         >
                           <Circle size={14} />
                         </button>
@@ -398,7 +398,7 @@ export default function SellerNotifications() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 text-sm font-medium border border-[#C9A84C]/30 rounded-lg disabled:opacity-40"
+              className="px-4 py-2 text-sm font-medium border border-[#C7CCD1]/30 rounded-lg disabled:opacity-40"
               style={{ color: MAROON }}
             >
               Previous
@@ -407,7 +407,7 @@ export default function SellerNotifications() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-4 py-2 text-sm font-medium border border-[#C9A84C]/30 rounded-lg disabled:opacity-40"
+              className="px-4 py-2 text-sm font-medium border border-[#C7CCD1]/30 rounded-lg disabled:opacity-40"
               style={{ color: MAROON }}
             >
               Next

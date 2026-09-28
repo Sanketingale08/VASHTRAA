@@ -1,11 +1,16 @@
-import { db } from "@workspace/db";
+import { db, mongoGeneric } from "@workspace/db";
 import { commissionRulesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 
 export const DEFAULT_COMMISSION_RATE = 0.10;
 
 export async function loadActiveCommissionRules() {
-  return db.select().from(commissionRulesTable).where(eq(commissionRulesTable.active, true));
+  try {
+    const rules = await mongoGeneric.getCollection("commission_rules").find({ active: true }).toArray();
+    return rules;
+  } catch {
+    return db.select().from(commissionRulesTable).where(eq(commissionRulesTable.active, true));
+  }
 }
 
 export interface CommissionRuleLike {

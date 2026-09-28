@@ -235,7 +235,7 @@ describe("GET /api/admin/settings/platform", () => {
 
     expect(res.status).toBe(200);
     const s = res.body.settings;
-    expect(s).toHaveProperty("platform_name", "TwirlDrape");
+    expect(s).toHaveProperty("platform_name", "VASTRAA");
     expect(s).toHaveProperty("country", "India");
     expect(s).toHaveProperty("currency", "INR");
     expect(s).toHaveProperty("timezone", "Asia/Kolkata");
@@ -289,9 +289,9 @@ describe("PATCH /api/admin/settings/platform", () => {
     const res = await request(app)
       .patch("/api/admin/settings/platform")
       .set("x-admin-key", ADMIN_KEY)
-      .send({ platform_name: "  TwirlDrape  " });
+      .send({ platform_name: "  VASTRAA  " });
     expect(res.status).toBe(200);
-    expect(state.upserted.get("platform_name")).toBe("TwirlDrape");
+    expect(state.upserted.get("platform_name")).toBe("VASTRAA");
   });
 
   it("returns 403 without admin key", async () => {

@@ -9,28 +9,28 @@ export function SectionSwitcher() {
   const isDesigner = location.startsWith("/designer");
 
   return (
-    <div className="w-full border-b border-[#C9A84C]/20 bg-[#F3F8F5] dark:bg-[#1E2329] sticky top-[73px] z-30 shadow-sm">
+    <div className="w-full border-b border-[#C7CCD1]/20 bg-[#F4F5F7] dark:bg-[#1E2329] sticky top-[73px] z-30 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex justify-center space-x-8 md:space-x-16">
           <Link href="/paithani">
             <span className={cn(
               "block py-3 font-serif text-lg tracking-wide transition-colors relative cursor-pointer",
-              isPaithani ? "text-[#1E6B5A] dark:text-[#C9A84C] font-semibold" : "text-gray-500 hover:text-[#1E6B5A] dark:hover:text-[#C9A84C]"
+              isPaithani ? "text-[#0A1F44] dark:text-[#C7CCD1] font-semibold" : "text-gray-500 hover:text-[#0A1F44] dark:hover:text-[#C7CCD1]"
             )}>
               Paithani Sarees
               {isPaithani && (
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#C9A84C]"></span>
+                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#C7CCD1]"></span>
               )}
             </span>
           </Link>
           <Link href="/designer">
             <span className={cn(
               "block py-3 font-serif text-lg tracking-wide transition-colors relative cursor-pointer",
-              isDesigner ? "text-[#1E6B5A] dark:text-[#C9A84C] font-semibold" : "text-gray-500 hover:text-[#1E6B5A] dark:hover:text-[#C9A84C]"
+              isDesigner ? "text-[#0A1F44] dark:text-[#C7CCD1] font-semibold" : "text-gray-500 hover:text-[#0A1F44] dark:hover:text-[#C7CCD1]"
             )}>
               Designer Sarees
               {isDesigner && (
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#C9A84C]"></span>
+                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#C7CCD1]"></span>
               )}
             </span>
           </Link>

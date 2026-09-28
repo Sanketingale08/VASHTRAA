@@ -1,0 +1,56 @@
+export interface Seller {
+  _id: string;
+  id: string;
+  sellerId: string;
+  vendorId?: string;
+  reactivationWelcomePending?: boolean;
+  name: string;
+  sellerName?: string;
+  shopName?: string;
+  email: string;
+  contactEmail?: string;
+  mobile: string;
+  passwordHash: string;
+  location: string;
+  bio?: string | null;
+  tagline?: string | null;
+  avatar?: string;
+  rating?: number;
+  sareesCount?: number;
+  productsCount?: number;
+  status: "pending" | "approved" | "suspended";
+  statusReason?: string | null;
+
+  // Business details
+  gstin?: string | null;
+  panNumber?: string | null;
+  panCardUrl?: string | null;
+  gstCertUrl?: string | null;
+  bankHolder?: string | null;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  bankIfsc?: string | null;
+
+  // Seller address
+  shopStreet?: string | null;
+  shopCity?: string | null;
+  shopState?: string | null;
+  shopPincode?: string | null;
+  shopCountry?: string | null;
+
+  // Pickup address
+  pickupLocationName?: string | null;
+  pickupAddressLine1?: string | null;
+  pickupAddressLine2?: string | null;
+  pickupLandmark?: string | null;
+  pickupCity?: string | null;
+  pickupState?: string | null;
+  pickupPincode?: string | null;
+  pickupCountry?: string | null;
+  pickupSameAsShop?: boolean;
+
+  ownerId?: string | null;
+  termsAcceptedAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
-import { db } from "@workspace/db";
+import { db, mongoProducts, mongoOrders, mongoVendors } from "@workspace/db";
 import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, bulkImportBatchesTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
 import { eq, desc, asc, inArray, and, lte, sql } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
@@ -108,11 +108,18 @@ router.get("/seller/dashboard", requireVendorAuth, async (req: any, res: any) =>
 router.get("/seller/products", requireVendorAuth, async (req: any, res: any) => {
   const vendorId = req.vendorId;
   try {
-    const products = await db
-      .select()
-      .from(productsTable)
-      .where(eq(productsTable.vendorId, vendorId))
-      .orderBy(asc(productsTable.name));
+    let products: any[] = [];
+    try {
+      products = await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.vendorId, vendorId))
+        .orderBy(asc(productsTable.name));
+    } catch {}
+
+    if (products.length === 0) {
+      products = await mongoProducts.findMany({ vendorId }, { sort: { name: 1 } });
+    }
 
     res.json({
       products: products.map((p) => ({
@@ -789,25 +796,36 @@ router.get("/seller/orders", requireVendorAuth, async (req: any, res: any) => {
   const search = (req.query.search as string | undefined)?.toLowerCase().trim();
 
   try {
-    const products = await db
-      .select({ id: productsTable.id })
-      .from(productsTable)
-      .where(eq(productsTable.vendorId, vendorId));
+    let products: any[] = [];
+    try {
+      products = await db
+        .select({ id: productsTable.id })
+        .from(productsTable)
+        .where(eq(productsTable.vendorId, vendorId));
+    } catch {}
 
-    const productIdSet = new Set(products.map((p) => p.id));
-    if (productIdSet.size === 0) {
-      return res.json({ orders: [] });
+    if (products.length === 0) {
+      products = await mongoProducts.findMany({ vendorId });
     }
 
-    const allOrders = await db
-      .select()
-      .from(ordersTable)
-      .orderBy(desc(ordersTable.createdAt));
+    const productIdSet = new Set(products.map((p) => p.id));
+
+    let allOrders: any[] = [];
+    try {
+      allOrders = await db
+        .select()
+        .from(ordersTable)
+        .orderBy(desc(ordersTable.createdAt));
+    } catch {}
+
+    if (allOrders.length === 0) {
+      allOrders = await mongoOrders.findMany({}, { sort: { createdAt: -1 } });
+    }
 
     const vendorOrders: any[] = [];
     for (const order of allOrders) {
       const items = (order.items as any[]) ?? [];
-      const vendorItems = items.filter((i) => productIdSet.has(i.productId));
+      const vendorItems = items.filter((i) => productIdSet.has(i.productId) || i.vendorId === vendorId);
       if (vendorItems.length === 0) continue;
 
       const address = (order.address as any) ?? {};
@@ -854,25 +872,40 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
   const { orderId } = req.params;
 
   try {
-    const products = await db
-      .select({ id: productsTable.id })
-      .from(productsTable)
-      .where(eq(productsTable.vendorId, vendorId));
+    let products: any[] = [];
+    try {
+      products = await db
+        .select({ id: productsTable.id })
+        .from(productsTable)
+        .where(eq(productsTable.vendorId, vendorId));
+    } catch {}
+
+    if (products.length === 0) {
+      products = await mongoProducts.findMany({ vendorId });
+    }
 
     const productIdSet = new Set(products.map((p) => p.id));
 
-    const [order] = await db
-      .select()
-      .from(ordersTable)
-      .where(eq(ordersTable.id, orderId))
-      .limit(1);
+    let order: any = null;
+    try {
+      const rows = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, orderId))
+        .limit(1);
+      if (rows.length > 0) order = rows[0];
+    } catch {}
+
+    if (!order) {
+      order = await mongoOrders.findById(orderId);
+    }
 
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
     }
 
     const items = (order.items as any[]) ?? [];
-    const vendorItems = items.filter((i) => productIdSet.has(i.productId));
+    const vendorItems = items.filter((i) => productIdSet.has(i.productId) || i.vendorId === vendorId);
     if (vendorItems.length === 0) {
       return res.status(403).json({ error: "You don't have any items in this order" });
     }
@@ -1557,6 +1590,11 @@ router.post("/seller/reactivation-welcome/dismiss", requireVendorAuth, async (re
       .update(vendorsTable)
       .set({ reactivationWelcomePending: false })
       .where(eq(vendorsTable.id, vendorId));
+
+    if (isMongoDbConnected()) {
+      await mongoSellers.update(vendorId, { reactivationWelcomePending: false });
+    }
+
     res.json({ ok: true });
   } catch (err: any) {
     req.log?.error({ err }, "seller/reactivation-welcome/dismiss failed");

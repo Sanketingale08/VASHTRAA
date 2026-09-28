@@ -4,15 +4,14 @@ import { motion } from "framer-motion";
 import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark, LogOut, ChevronDown } from "lucide-react";
 import { useClerk } from "@clerk/react";
 import { useSellerContext } from "@/components/SellerGuard";
-import brandLogo from "@assets/Presentation1_(2)_1787549658833.jpg";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const IVORY = "#F3F8F5";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const IVORY = "#F4F5F7";
+const CREAM = "#E5E8EC";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -112,9 +111,9 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
         <div className="px-6 py-5 border-b border-white/10">
           <Link href="/">
             <img
-              src={brandLogo}
-              alt="TwirlDrape — Paithani & Designer Sarees"
-              className="block w-full max-w-[220px] h-auto object-contain object-left"
+              src={`${basePath}/logo.svg`}
+              alt="VASTRAA — Paithani & Designer Sarees"
+              className="block w-full max-w-[220px] h-auto object-contain object-left bg-white/90 p-2.5 rounded-lg shadow-sm"
               style={{ maxHeight: "96px" }}
             />
           </Link>
@@ -205,8 +204,8 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
                   </span>
                   <Link
                     href={`/stores/${vendor.id}`}
-                    className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:border-[#C9A84C]"
-                    style={{ borderColor: "#C9A84C44", color: MAROON }}
+                    className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:border-[#C7CCD1]"
+                    style={{ borderColor: "#C7CCD144", color: MAROON }}
                   >
                     <Store size={12} /> My Store
                   </Link>
@@ -217,7 +216,7 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
               <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setProfileOpen((v) => !v)}
-                  className="flex items-center gap-1 rounded-full transition-all hover:ring-2 hover:ring-[#C9A84C]/40 focus:outline-none"
+                  className="flex items-center gap-1 rounded-full transition-all hover:ring-2 hover:ring-[#C7CCD1]/40 focus:outline-none"
                   aria-label="Profile menu"
                 >
                   <div
@@ -295,7 +294,15 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
                   Cancel
                 </button>
                 <button
-                  onClick={() => signOut({ redirectUrl: `${basePath}/seller/login` })}
+                  onClick={() => {
+                    localStorage.removeItem("vastraa_seller_authenticated");
+                    localStorage.removeItem("vastraa_seller_email");
+                    try {
+                      signOut({ redirectUrl: `${basePath}/seller/login` });
+                    } catch {
+                      window.location.href = `${basePath}/seller/login`;
+                    }
+                  }}
                   className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
                   style={{ background: "#DC2626" }}
                 >
@@ -371,8 +378,8 @@ export default function SellerDashboard() {
       value: data ? `₹${data.monthlyRevenue.toLocaleString("en-IN")}` : "—",
       sub: "current month",
       icon: IndianRupee,
-      color: "from-[#1E6B5A]/10 to-[#1E6B5A]/5",
-      border: "border-[#1E6B5A]/20",
+      color: "from-[#0A1F44]/10 to-[#0A1F44]/5",
+      border: "border-[#0A1F44]/20",
       iconBg: MAROON,
     },
     {
@@ -380,8 +387,8 @@ export default function SellerDashboard() {
       value: data ? String(data.orderCount) : "—",
       sub: "all time",
       icon: ShoppingBag,
-      color: "from-[#C9A84C]/10 to-[#C9A84C]/5",
-      border: "border-[#C9A84C]/30",
+      color: "from-[#C7CCD1]/10 to-[#C7CCD1]/5",
+      border: "border-[#C7CCD1]/30",
       iconBg: GOLD,
     },
     {
@@ -389,8 +396,8 @@ export default function SellerDashboard() {
       value: data ? String(data.activeListings) : "—",
       sub: "in stock",
       icon: Package,
-      color: "from-[#1E6B5A]/10 to-[#C9A84C]/5",
-      border: "border-[#C9A84C]/20",
+      color: "from-[#0A1F44]/10 to-[#C7CCD1]/5",
+      border: "border-[#C7CCD1]/20",
       iconBg: MAROON,
     },
     {
@@ -398,8 +405,8 @@ export default function SellerDashboard() {
       value: data ? data.avgRating.toFixed(1) : "—",
       sub: "average",
       icon: Star,
-      color: "from-[#C9A84C]/10 to-[#1E6B5A]/5",
-      border: "border-[#C9A84C]/20",
+      color: "from-[#C7CCD1]/10 to-[#0A1F44]/5",
+      border: "border-[#C7CCD1]/20",
       iconBg: GOLD,
     },
   ];
@@ -413,7 +420,7 @@ export default function SellerDashboard() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+          className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4"
         >
           <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center text-xl font-bold text-white" style={{ background: MAROON }}>
             {vendor?.avatar ? (
@@ -432,8 +439,8 @@ export default function SellerDashboard() {
           </div>
           <Link
             href={`/stores/${vendor?.id ?? ""}`}
-            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg border text-xs font-bold transition-colors hover:border-[#C9A84C]"
-            style={{ borderColor: "#C9A84C44", color: MAROON }}
+            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg border text-xs font-bold transition-colors hover:border-[#C7CCD1]"
+            style={{ borderColor: "#C7CCD144", color: MAROON }}
           >
             <Store size={13} /> View Public Store
           </Link>
@@ -480,7 +487,7 @@ export default function SellerDashboard() {
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden"
+            className="bg-white rounded-2xl border border-[#C7CCD1]/20 overflow-hidden"
           >
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Recent Orders</h3>
@@ -530,7 +537,7 @@ export default function SellerDashboard() {
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="bg-white rounded-2xl border border-[#C9A84C]/20 overflow-hidden"
+            className="bg-white rounded-2xl border border-[#C7CCD1]/20 overflow-hidden"
           >
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-serif font-bold text-base" style={{ color: MAROON }}>Top Sellers</h3>
@@ -571,7 +578,7 @@ export default function SellerDashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-700 line-clamp-1">{product.name}</p>
                       <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
-                        <Star size={9} className="fill-[#C9A84C] text-[#C9A84C]" /> {product.rating.toFixed(1)}
+                        <Star size={9} className="fill-[#C7CCD1] text-[#C7CCD1]" /> {product.rating.toFixed(1)}
                         <span className="mx-1">·</span>
                         ₹{product.price.toLocaleString("en-IN")}
                       </p>
@@ -592,7 +599,7 @@ export default function SellerDashboard() {
           initial="hidden"
           animate="visible"
           variants={fadeUp}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6"
+          className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-serif text-base font-bold" style={{ color: MAROON }}>Getting Started</h3>
@@ -606,13 +613,13 @@ export default function SellerDashboard() {
               <Link
                 key={i}
                 href={step.href}
-                className="flex items-center gap-3 p-4 rounded-xl border transition-all hover:border-[#C9A84C]/40"
-                style={{ borderColor: step.done ? "#C9A84C44" : "#e5e7eb" }}
+                className="flex items-center gap-3 p-4 rounded-xl border transition-all hover:border-[#C7CCD1]/40"
+                style={{ borderColor: step.done ? "#C7CCD144" : "#e5e7eb" }}
               >
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${step.done ? "border-green-500 bg-green-500" : "border-gray-300"}`}>
                   {step.done && <svg width="12" height="12" viewBox="0 0 12 12" fill="white"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>}
                 </div>
-                <span className="text-sm flex-1" style={{ color: step.done ? "#6b7280" : "#3D1515", textDecoration: step.done ? "line-through" : "none" }}>
+                <span className="text-sm flex-1" style={{ color: step.done ? "#6b7280" : "#0A1F44", textDecoration: step.done ? "line-through" : "none" }}>
                   {step.label}
                 </span>
                 {!step.done && <ArrowRight size={14} className="text-gray-300" />}

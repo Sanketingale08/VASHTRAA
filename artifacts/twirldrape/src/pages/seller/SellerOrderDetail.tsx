@@ -7,10 +7,10 @@ import { OrderTrackingTimeline } from "@/components/OrderTrackingTimeline";
 import { getApiUrl } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const IVORY = "#F3F8F5";
-const CREAM = "#E6F0EA";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const IVORY = "#F4F5F7";
+const CREAM = "#E5E8EC";
 
 function statusColors(status: string) {
   switch (status) {
@@ -178,7 +178,7 @@ export default function SellerOrderDetail() {
             className="space-y-5">
 
             {/* Header */}
-            <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-6">
+            <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Order</p>
@@ -291,7 +291,7 @@ export default function SellerOrderDetail() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Items */}
-              <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+              <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
                 <h3 className="font-serif text-base font-bold mb-4" style={{ color: MAROON }}>Your Items</h3>
                 <div className="space-y-3">
                   {order.vendorItems.map((item) => {
@@ -325,7 +325,7 @@ export default function SellerOrderDetail() {
 
               {/* Shipping + Dispatch */}
               <div className="space-y-5">
-                <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+                <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
                   <h3 className="font-serif text-base font-bold mb-3" style={{ color: MAROON }}>Shipping To</h3>
                   <p className="text-sm text-gray-700">
                     {order.shippingCity}{order.shippingCity && order.shippingState ? ", " : ""}{order.shippingState}
@@ -337,7 +337,7 @@ export default function SellerOrderDetail() {
 
                 {/* Dispatch panel — only after acceptance */}
                 {canDispatch && (
-                  <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+                  <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <Truck size={16} style={{ color: MAROON }} />
                       <h3 className="font-serif text-base font-bold" style={{ color: MAROON }}>Mark as Dispatched</h3>
@@ -354,7 +354,7 @@ export default function SellerOrderDetail() {
 
                     <form onSubmit={handleDispatch} className="space-y-3">
                       <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#3D1515" }}>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#0A1F44" }}>
                           Courier / Carrier
                         </label>
                         <input
@@ -363,11 +363,11 @@ export default function SellerOrderDetail() {
                           onChange={(e) => { setCourierName(e.target.value); setDispatchError(""); }}
                           placeholder="e.g. Blue Dart, DTDC, Delhivery"
                           className="w-full px-3 py-2.5 text-sm rounded-lg border outline-none transition"
-                          style={{ borderColor: "#C9A84C44", background: IVORY }}
+                          style={{ borderColor: "#C7CCD144", background: IVORY }}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#3D1515" }}>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#0A1F44" }}>
                           Tracking Number
                         </label>
                         <input
@@ -376,7 +376,7 @@ export default function SellerOrderDetail() {
                           onChange={(e) => { setTrackingNumber(e.target.value); setDispatchError(""); }}
                           placeholder="Enter tracking number"
                           className="w-full px-3 py-2.5 text-sm rounded-lg border outline-none transition"
-                          style={{ borderColor: "#C9A84C44", background: IVORY }}
+                          style={{ borderColor: "#C7CCD144", background: IVORY }}
                         />
                       </div>
 
@@ -399,7 +399,7 @@ export default function SellerOrderDetail() {
                   const dispatchEntry = (order.statusHistory as any[]).find(h => h.status === "dispatched" && h.courierName);
                   if (!dispatchEntry) return null;
                   return (
-                    <div className="bg-white rounded-xl border border-[#C9A84C]/20 p-5">
+                    <div className="bg-white rounded-xl border border-[#C7CCD1]/20 p-5">
                       <div className="flex items-center gap-2 mb-3">
                         <Truck size={16} style={{ color: MAROON }} />
                         <h3 className="font-serif text-base font-bold" style={{ color: MAROON }}>Dispatch Info</h3>

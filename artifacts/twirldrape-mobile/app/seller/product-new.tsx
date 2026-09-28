@@ -185,7 +185,7 @@ export default function SellerProductNewScreen() {
         </Pressable>
         <View>
           <Text style={s.headerTitle}>Add Product</Text>
-          <Text style={s.headerSub}>List a new saree on TwirlDrape</Text>
+          <Text style={s.headerSub}>List a new saree on VASTRAA</Text>
         </View>
       </View>
 

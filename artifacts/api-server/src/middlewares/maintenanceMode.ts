@@ -9,7 +9,7 @@
  * request during normal operation.
  */
 import { db, siteSettingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 
 let _cache: { enabled: boolean; expiresAt: number } | null = null;
@@ -50,7 +50,7 @@ export function maintenanceMode(req: Request, res: Response, next: NextFunction)
       if (enabled) {
         res.status(503).json({
           maintenance: true,
-          message: "TwirlDrape is temporarily down for scheduled maintenance. We'll be back shortly!",
+          message: "VASTRAA is temporarily down for scheduled maintenance. We'll be back shortly!",
         });
       } else {
         next();

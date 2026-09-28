@@ -360,7 +360,7 @@ export default function AccountScreen() {
             <Ionicons name="storefront-outline" size={20} color={colors.mutedForeground} />
             <View style={{ flex: 1 }}>
               <Text style={s.becomeSellerTitle}>Become a Seller</Text>
-              <Text style={s.sellerBtnSub}>List your sarees on TwirlDrape</Text>
+              <Text style={s.sellerBtnSub}>List your sarees on VASTRAA</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
           </Pressable>

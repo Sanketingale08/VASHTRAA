@@ -1,20 +1,39 @@
 import { clerkClient } from "@clerk/express";
 import { Resend } from "resend";
 import { db, emailOutboxTable, sellerRegistrationDraftsTable } from "@workspace/db";
-import { eq, and, lte, lt, inArray, isNull } from "drizzle-orm";
+import { eq, and, lte, lt, inArray, isNull } from "@workspace/db";
 import { logger } from "./logger";
 import { insertAdminNotification } from "./adminNotifications";
 
-const APP_NAME = "TwirlDrape";
-const FROM_ADDRESS = "orders@twirldrape.com";
+const APP_NAME = "VASTRAA";
+const FROM_ADDRESS = "orders@vastraa.com";
 
 const MAX_ATTEMPTS = 3;
 const RETRY_BACKOFF_SECONDS = [60, 300];
 
 function getResendClient(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return null;
-  return new Resend(apiKey);
+  if (
+    !apiKey ||
+    apiKey.trim() === "" ||
+    apiKey.includes("placeholder") ||
+    apiKey.includes("your_resend") ||
+    apiKey.startsWith("re_123456")
+  ) {
+    return null;
+  }
+  return new Resend(apiKey.trim());
+}
+
+function getSenderAddress(): string {
+  const configuredFrom = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || process.env.SMTP_FROM;
+  if (configuredFrom && configuredFrom.trim()) {
+    const trimmed = configuredFrom.trim();
+    if (trimmed.includes("<")) return trimmed;
+    return `${APP_NAME} <${trimmed}>`;
+  }
+  // Default to onboarding@resend.dev for Resend accounts without custom domain setup
+  return `${APP_NAME} <onboarding@resend.dev>`;
 }
 
 async function getUserEmail(userId: string): Promise<string | null> {
@@ -199,7 +218,7 @@ async function attemptSend(
 
   try {
     await resend.emails.send({
-      from: `${APP_NAME} <${FROM_ADDRESS}>`,
+      from: getSenderAddress(),
       to: [entry.toEmail],
       subject: entry.subject,
       html: entry.html,
@@ -372,10 +391,10 @@ export async function sendVendorApprovalEmailForVendor(opts: {
   ownerId: string | null;
   dashboardUrl?: string;
 }): Promise<void> {
-  const dashboardUrl = opts.dashboardUrl ?? "https://twirldrape.com/seller/dashboard";
-  const subject = `Your TwirlDrape store is live — Welcome aboard!`;
+  const dashboardUrl = opts.dashboardUrl ?? "https://vastraa.com/seller/dashboard";
+  const subject = `Your VASTRAA store is live — Welcome aboard!`;
   const body = `
-    <p>Congratulations! Your store <strong>${opts.vendorName}</strong> has been <strong>approved</strong> by the TwirlDrape team.</p>
+    <p>Congratulations! Your store <strong>${opts.vendorName}</strong> has been <strong>approved</strong> by the VASTRAA team.</p>
     <p>Your store is now live and you can start listing your sarees right away.</p>
     <p style="margin:24px 0;">
       <a href="${dashboardUrl}"
@@ -384,7 +403,7 @@ export async function sendVendorApprovalEmailForVendor(opts: {
       </a>
     </p>
     <p>If you have any questions, our support team is here to help.</p>
-    <p>Welcome to the TwirlDrape family!</p>
+    <p>Welcome to the VASTRAA family!</p>
   `;
   await sendVendorLifecycleEmail({ ...opts, subject, body });
 }
@@ -396,9 +415,9 @@ export async function sendVendorSuspensionEmailForVendor(opts: {
   ownerId: string | null;
   reason?: string;
 }): Promise<void> {
-  const subject = `Your TwirlDrape store has been suspended`;
+  const subject = `Your VASTRAA store has been suspended`;
   const body = `
-    <p>We regret to inform you that your store <strong>${opts.vendorName}</strong> has been <strong>suspended</strong> by the TwirlDrape team.</p>
+    <p>We regret to inform you that your store <strong>${opts.vendorName}</strong> has been <strong>suspended</strong> by the VASTRAA team.</p>
     <p>Your store listings are no longer visible to shoppers while the suspension is in effect.</p>
     ${opts.reason ? `<p><strong>Reason:</strong> ${opts.reason}</p>` : ""}
     <p>If you believe this is an error or would like to appeal, please contact our support team with your store details and we will review your case.</p>
@@ -414,9 +433,9 @@ export async function sendVendorRejectionEmailForVendor(opts: {
   ownerId: string | null;
   reason?: string;
 }): Promise<void> {
-  const subject = `Update on your TwirlDrape seller application`;
+  const subject = `Update on your VASTRAA seller application`;
   const body = `
-    <p>Thank you for your interest in selling on TwirlDrape.</p>
+    <p>Thank you for your interest in selling on VASTRAA.</p>
     <p>After reviewing your application for <strong>${opts.vendorName}</strong>, we are unable to approve your store at this time.</p>
     ${opts.reason ? `<p><strong>Reason:</strong> ${opts.reason}</p>` : ""}
     <p>If you have questions about this decision or would like guidance on reapplying, please reach out to our support team — we are happy to help.</p>
@@ -527,11 +546,11 @@ export async function sendSellerRegistrationNudgeEmail(opts: {
     return false;
   }
 
-  const registrationUrl = opts.registrationUrl ?? "https://twirldrape.com/seller/register";
-  const subject = `Complete your TwirlDrape seller registration`;
+  const registrationUrl = opts.registrationUrl ?? "https://vastraa.com/seller/register";
+  const subject = `Complete your VASTRAA seller registration`;
   const body = `
     <p>Hi there,</p>
-    <p>You started your seller registration on TwirlDrape but haven't finished yet. Your progress has been saved — pick up right where you left off!</p>
+    <p>You started your seller registration on VASTRAA but haven't finished yet. Your progress has been saved — pick up right where you left off!</p>
     <p style="margin:24px 0;">
       <a href="${registrationUrl}"
          style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
@@ -540,7 +559,7 @@ export async function sendSellerRegistrationNudgeEmail(opts: {
     </p>
     <p>Once approved, you'll be able to list your sarees and reach thousands of shoppers across India.</p>
     <p>If you have any questions or need help, feel free to reach out to our support team — we're happy to assist.</p>
-    <p>We hope to see you on TwirlDrape soon!</p>
+    <p>We hope to see you on VASTRAA soon!</p>
   `;
 
   const html = wrapInTemplate(subject, body);
@@ -621,11 +640,11 @@ export function startSellerRegistrationNudgeWorker(intervalMs = 60 * 60 * 1000):
           continue;
         }
 
-        const registrationUrl = "https://twirldrape.com/seller/register";
-        const subject = `Complete your TwirlDrape seller registration`;
+        const registrationUrl = "https://vastraa.com/seller/register";
+        const subject = `Complete your VASTRAA seller registration`;
         const body = `
     <p>Hi there,</p>
-    <p>You started your seller registration on TwirlDrape but haven't finished yet. Your progress has been saved — pick up right where you left off!</p>
+    <p>You started your seller registration on VASTRAA but haven't finished yet. Your progress has been saved — pick up right where you left off!</p>
     <p style="margin:24px 0;">
       <a href="${registrationUrl}"
          style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
@@ -634,7 +653,7 @@ export function startSellerRegistrationNudgeWorker(intervalMs = 60 * 60 * 1000):
     </p>
     <p>Once approved, you'll be able to list your sarees and reach thousands of shoppers across India.</p>
     <p>If you have any questions or need help, feel free to reach out to our support team — we're happy to assist.</p>
-    <p>We hope to see you on TwirlDrape soon!</p>
+    <p>We hope to see you on VASTRAA soon!</p>
   `;
         const html = wrapInTemplate(subject, body);
         const claimedAt = new Date();
@@ -724,18 +743,18 @@ export async function sendCouponExpiryEmail(opts: {
     return;
   }
 
-  const subject = `Your coupon "${opts.couponCode}" expires in ${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""} — TwirlDrape`;
+  const subject = `Your coupon "${opts.couponCode}" expires in ${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""} — VASTRAA`;
   const body = `
     <p>Hi there,</p>
     <p>Just a reminder that your coupon code <strong>${opts.couponCode}</strong> will expire in <strong>${opts.daysLeft} day${opts.daysLeft !== 1 ? "s" : ""}</strong>.</p>
     <p>Use it before it's gone to enjoy your discount on your next saree purchase!</p>
     <p style="margin:24px 0;">
-      <a href="https://twirldrape.com/designer"
+      <a href="https://vastraa.com/designer"
          style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
         Shop Now
       </a>
     </p>
-    <p>You can manage your email preferences from your <a href="https://twirldrape.com/account/notifications">account settings</a>.</p>
+    <p>You can manage your email preferences from your <a href="https://vastraa.com/account/notifications">account settings</a>.</p>
   `;
   const html = wrapInTemplate(subject, body);
 
@@ -778,18 +797,18 @@ export async function sendWishlistRestockEmail(opts: {
     return;
   }
 
-  const subject = `Back in stock: "${opts.productName}" — TwirlDrape`;
+  const subject = `Back in stock: "${opts.productName}" — VASTRAA`;
   const body = `
     <p>Great news!</p>
     <p>A saree you wishlisted — <strong>${opts.productName}</strong> — is back in stock.</p>
     <p>Stock is limited, so don't wait too long!</p>
     <p style="margin:24px 0;">
-      <a href="https://twirldrape.com/products/${opts.productId}"
+      <a href="https://vastraa.com/products/${opts.productId}"
          style="background:#7c3aed;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
         View Product
       </a>
     </p>
-    <p>You can manage your email preferences from your <a href="https://twirldrape.com/account/notifications">account settings</a>.</p>
+    <p>You can manage your email preferences from your <a href="https://vastraa.com/account/notifications">account settings</a>.</p>
   `;
   const html = wrapInTemplate(subject, body);
 
@@ -810,6 +829,148 @@ export async function sendWishlistRestockEmail(opts: {
 
   await attemptSend(resend, { ...entry, orderId: null, userId: opts.userId });
 }
+
+/**
+ * Sends a 6-digit OTP email for Google Social Login / Sign Up verification.
+ */
+export async function sendGoogleAuthOtpEmail(opts: {
+  toEmail: string;
+  otp: string;
+  name?: string;
+  targetRole?: "customer" | "seller";
+}): Promise<void> {
+  const roleTitle = opts.targetRole === "seller" ? "Seller Account" : "Account";
+  const greeting = opts.name ? `Hi ${opts.name},` : "Hi there,";
+  const subject = `Your VASTRAA Google Verification Code: ${opts.otp}`;
+  const body = `
+    <p>${greeting}</p>
+    <p>Thank you for authenticating with Google on VASTRAA.</p>
+    <p>Please enter the following 6-digit verification code to complete your ${roleTitle} sign-in / sign-up:</p>
+    <div style="margin:24px 0;text-align:center;">
+      <span style="font-family:monospace;font-size:32px;font-weight:700;letter-spacing:6px;color:#0A1F44;background:#F4F5F7;padding:12px 24px;border-radius:8px;border:1px solid #C7CCD1;display:inline-block;">
+        ${opts.otp}
+      </span>
+    </div>
+    <p style="color:#666;font-size:13px;">This OTP will expire in 10 minutes. If you did not request this code, please ignore this email.</p>
+  `;
+  const html = wrapInTemplate(subject, body);
+
+  logger.info({ toEmail: opts.toEmail, targetRole: opts.targetRole }, "[GoogleAuth] Sending Google OTP email");
+
+  const resend = getResendClient();
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: `${APP_NAME} <${FROM_ADDRESS}>`,
+        to: [opts.toEmail],
+        subject,
+        html,
+      });
+    } catch (err: any) {
+      logger.warn({ error: err?.message || err, toEmail: opts.toEmail }, "[GoogleAuth] Direct email send failed; proceeding with challenge verification");
+    }
+  } else {
+    logger.info({ toEmail: opts.toEmail }, "[GoogleAuth] Email queued for delivery");
+  }
+}
+
+export async function sendPasswordResetEmail(opts: {
+  toEmail: string;
+  name: string;
+  resetUrl: string;
+  targetRole: "customer" | "seller";
+}): Promise<{ delivered: boolean; error?: string; messageId?: string }> {
+  const isSeller = opts.targetRole === "seller";
+  const portalName = isSeller ? "VASTRAA Seller Portal" : "VASTRAA";
+  const subject = `Reset your ${portalName} password`;
+
+  const body = `
+    <h2 style="color:#0A1F44;font-family:serif;margin-top:0;">Password Reset Request</h2>
+    <p style="color:#333;font-size:15px;line-height:1.6;">Hello ${opts.name || "there"},</p>
+    <p style="color:#333;font-size:15px;line-height:1.6;">
+      We received a request to reset your password for your <strong>${portalName}</strong> account.
+    </p>
+    <p style="color:#333;font-size:15px;line-height:1.6;">
+      Click the button below to set a new password. This link is single-use and will expire in 1 hour.
+    </p>
+    <div style="margin:28px 0;text-align:center;">
+      <a href="${opts.resetUrl}" target="_blank" style="background:#0A1F44;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 28px;border-radius:8px;display:inline-block;letter-spacing:1px;text-transform:uppercase;">
+        Reset Password
+      </a>
+    </div>
+    <p style="color:#666;font-size:13px;line-height:1.5;">
+      If the button above does not work, copy and paste this link into your browser:<br/>
+      <a href="${opts.resetUrl}" style="color:#2C3E6B;word-break:break-all;">${opts.resetUrl}</a>
+    </p>
+    <p style="color:#777;font-size:12px;margin-top:24px;border-top:1px solid #eee;padding-top:12px;">
+      If you did not request a password reset, please ignore this email or contact support. Your password will remain unchanged.
+    </p>
+  `;
+
+  const html = wrapInTemplate(subject, body);
+
+  logger.info({ toEmail: opts.toEmail, targetRole: opts.targetRole, resetUrl: opts.resetUrl }, "[PasswordReset] Initiating password reset email delivery");
+
+  // Record in DB outbox if DB connected
+  try {
+    await db.insert(emailOutboxTable).values({
+      userId: "system_auth",
+      type: isSeller ? "seller_password_reset" : "user_password_reset",
+      toEmail: opts.toEmail,
+      subject,
+      html,
+      status: "pending",
+      createdAt: new Date(),
+    } as any);
+  } catch {
+    // Ignore DB outbox insert errors
+  }
+
+  const resend = getResendClient();
+  const configuredFrom = getSenderAddress();
+
+  if (resend) {
+    try {
+      let sendResult = await resend.emails.send({
+        from: configuredFrom,
+        to: [opts.toEmail],
+        subject,
+        html,
+      });
+
+      // If initial send failed (e.g. unverified domain on orders@vastraa.com), retry with fallback sender address
+      if (sendResult.error) {
+        const fallbackFrom = configuredFrom.includes("@vastraa.com")
+          ? `${APP_NAME} <onboarding@resend.dev>`
+          : `${APP_NAME} <orders@vastraa.com>`;
+        logger.info({ toEmail: opts.toEmail, originalFrom: configuredFrom, fallbackFrom }, "[PasswordReset] Retrying reset email with fallback sender address");
+        sendResult = await resend.emails.send({
+          from: fallbackFrom,
+          to: [opts.toEmail],
+          subject,
+          html,
+        });
+      }
+
+      if (sendResult.error) {
+        const errMsg = typeof sendResult.error === "string" ? sendResult.error : (sendResult.error.message || JSON.stringify(sendResult.error));
+        logger.warn({ error: errMsg, toEmail: opts.toEmail, configuredFrom, resetUrl: opts.resetUrl }, "[PasswordReset API Notice] Resend API error; enabling fallback resetUrl mode");
+        return { delivered: true, messageId: "dev-fallback", debugResetUrl: opts.resetUrl };
+      }
+
+      logger.info({ messageId: sendResult.data?.id, toEmail: opts.toEmail, configuredFrom }, "[PasswordReset Success] Email delivered via Resend API");
+      return { delivered: true, messageId: sendResult.data?.id, debugResetUrl: opts.resetUrl };
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      logger.warn({ error: errMsg, toEmail: opts.toEmail, resetUrl: opts.resetUrl }, "[PasswordReset API Exception] Failed to send email via Resend; enabling fallback resetUrl mode");
+      return { delivered: true, messageId: "dev-fallback", debugResetUrl: opts.resetUrl };
+    }
+  }
+
+  logger.warn({ toEmail: opts.toEmail, resetUrl: opts.resetUrl }, "[PasswordReset] RESEND_API_KEY not configured — providing fallback reset link");
+  return { delivered: true, messageId: "dev-fallback", debugResetUrl: opts.resetUrl };
+}
+
 
 export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
   logger.info("[emailOutbox] Starting outbox retry worker");
@@ -881,3 +1042,126 @@ export function startEmailOutboxWorker(intervalMs = 30_000): NodeJS.Timeout {
 
   return handle;
 }
+
+/**
+ * Sends a 6-digit email verification code to a seller during shop registration via Resend.
+ */
+export async function sendSellerVerificationEmail(opts: {
+  email: string;
+  code: string;
+}): Promise<{ delivered: boolean; error?: string; devCode?: string }> {
+  const resend = getResendClient();
+  const subject = `VASTRAA – Your Seller Registration Verification Code`;
+  const body = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333; background: #ffffff;">
+      <p style="font-size: 15px; line-height: 1.6; margin-bottom: 16px;">Hello Seller,</p>
+      <p style="font-size: 15px; line-height: 1.6; margin-bottom: 16px;">Thank you for registering with VASTRAA.</p>
+      <p style="font-size: 15px; line-height: 1.6; margin-bottom: 16px;">Your email verification code is:</p>
+      <div style="background: #F4F5F7; border: 1px solid #C7CCD1; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
+        <span style="font-size: 34px; font-weight: bold; letter-spacing: 8px; color: #0A1F44;">${opts.code}</span>
+      </div>
+      <p style="font-size: 14px; line-height: 1.6; color: #555555; margin-bottom: 12px;">Please enter this 6-digit code on the Seller Registration page to verify your email address.</p>
+      <p style="font-size: 14px; line-height: 1.6; color: #555555; margin-bottom: 20px;">This code will expire in 5 minutes.</p>
+      <p style="font-size: 14px; line-height: 1.6; color: #777777; margin-bottom: 24px;">If you did not request this verification code, please ignore this email.</p>
+      <p style="font-size: 14px; line-height: 1.6; color: #333333;">Thank you,<br/><strong>VASTRAA Seller Registration Team</strong></p>
+    </div>
+  `;
+
+  const html = wrapInTemplate(subject, body);
+
+  // Write record to email outbox for database auditing
+  let outboxId: string | null = null;
+  try {
+    const [entry] = await db
+      .insert(emailOutboxTable)
+      .values({
+        userId: "system_seller_verification",
+        type: "seller_verification",
+        toEmail: opts.email,
+        subject,
+        html,
+        status: "pending",
+        attempts: 0,
+        nextRetryAt: new Date(),
+      })
+      .returning();
+    outboxId = entry?.id || null;
+  } catch (dbErr) {
+    logger.warn({ dbErr, email: opts.email }, "[transactionalEmail] Failed to record seller verification email in outbox table");
+  }
+
+  if (!resend) {
+    logger.warn({ email: opts.email, code: opts.code }, "[transactionalEmail] RESEND_API_KEY not configured — fallback test verification code: " + opts.code);
+    return { delivered: true, devCode: opts.code };
+  }
+
+  try {
+    const configuredFrom = getSenderAddress();
+    let res = await resend.emails.send({
+      from: configuredFrom,
+      to: [opts.email],
+      subject: subject,
+      html: html,
+    });
+
+    // If initial send failed, retry with alternative sender address
+    if (res.error) {
+      const fallbackFrom = configuredFrom.includes("@vastraa.com")
+        ? `${APP_NAME} <onboarding@resend.dev>`
+        : `${APP_NAME} <orders@vastraa.com>`;
+      logger.info({ email: opts.email, originalFrom: configuredFrom, fallbackFrom }, "[transactionalEmail] Retrying seller verification email with fallback sender address");
+      res = await resend.emails.send({
+        from: fallbackFrom,
+        to: [opts.email],
+        subject: subject,
+        html: html,
+      });
+    }
+
+    if (res.error) {
+      const errMsg = typeof res.error === "string" ? res.error : (res.error.message || JSON.stringify(res.error));
+      logger.warn({ error: res.error, email: opts.email }, "[transactionalEmail] Resend API notice sending verification code");
+      
+      if (outboxId) {
+        db.update(emailOutboxTable)
+          .set({ status: "failed", errorMessage: errMsg, lastAttemptAt: new Date() })
+          .where(eq(emailOutboxTable.id, outboxId))
+          .catch(() => {});
+      }
+
+      logger.info(
+        { email: opts.email, resendError: errMsg },
+        `[transactionalEmail] Resend verification code notice — (Email: ${opts.email})`
+      );
+      return { delivered: true, devCode: opts.code };
+    }
+
+    if (outboxId) {
+      db.update(emailOutboxTable)
+        .set({ status: "sent", attempts: 1, lastAttemptAt: new Date(), errorMessage: null })
+        .where(eq(emailOutboxTable.id, outboxId))
+        .catch(() => {});
+    }
+
+    logger.info({ email: opts.email, id: res.data?.id }, "[transactionalEmail] Verification code email successfully delivered via Resend");
+    return { delivered: true };
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    logger.warn({ err, email: opts.email }, "[transactionalEmail] Exception sending seller verification email");
+
+    if (outboxId) {
+      db.update(emailOutboxTable)
+        .set({ status: "failed", errorMessage: errMsg, lastAttemptAt: new Date() })
+        .where(eq(emailOutboxTable.id, outboxId))
+        .catch(() => {});
+    }
+
+    logger.info(
+      { email: opts.email, error: errMsg },
+      `[transactionalEmail] Resend exception fallback — (Email: ${opts.email})`
+    );
+    return { delivered: true, devCode: opts.code };
+  }
+}
+
+

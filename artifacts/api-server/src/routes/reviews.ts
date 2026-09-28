@@ -1,21 +1,27 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/isAuthenticated";
-import { db } from "@workspace/db";
-import { productsTable, productReviewsTable, productQueriesTable, ordersTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { db, mongoProducts, mongoGeneric } from "@workspace/db";
+import { productsTable, productReviewsTable, productQueriesTable } from "@workspace/db";
+import { eq, desc } from "@workspace/db";
 
 const router = Router();
-
 
 router.get("/products/:productId/reviews", async (req: any, res: any) => {
   const { productId } = req.params;
   try {
-    const reviews = await db
-      .select()
-      .from(productReviewsTable)
-      .where(eq(productReviewsTable.productId, productId))
-      .orderBy(desc(productReviewsTable.createdAt));
-    res.json({ reviews });
+    try {
+      const col = mongoGeneric.getCollection("product_reviews");
+      const reviews = await col.find({ productId }).sort({ createdAt: -1 }).toArray();
+      res.json({ reviews });
+      return;
+    } catch {
+      const reviews = await db
+        .select()
+        .from(productReviewsTable)
+        .where(eq(productReviewsTable.productId, productId))
+        .orderBy(desc(productReviewsTable.createdAt));
+      res.json({ reviews });
+    }
   } catch (err: any) {
     req.log?.error({ err }, "GET product reviews failed");
     res.status(500).json({ error: "Failed to load reviews" });
@@ -32,16 +38,14 @@ router.post("/products/:productId/reviews", requireAuth, async (req: any, res: a
   }
 
   try {
-    const [product] = await db
-      .select({ id: productsTable.id, vendorId: productsTable.vendorId, reviewCount: productsTable.reviewCount, rating: productsTable.rating })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId))
-      .limit(1);
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    try {
+      const product = await mongoProducts.findById(productId);
+      if (!product) return res.status(404).json({ error: "Product not found" });
 
-    const [review] = await db
-      .insert(productReviewsTable)
-      .values({
+      const id = crypto.randomUUID();
+      const reviewDoc = {
+        id,
+        _id: id,
         productId,
         vendorId: product.vendorId,
         orderId: orderId ?? null,
@@ -49,17 +53,53 @@ router.post("/products/:productId/reviews", requireAuth, async (req: any, res: a
         customerName: customerName?.trim() || "Customer",
         rating: parsedRating,
         comment: comment?.trim() ?? "",
-      })
-      .returning();
+        createdAt: new Date(),
+      };
 
-    const newCount = product.reviewCount + 1;
-    const newAvg = (product.rating * product.reviewCount + parsedRating) / newCount;
-    await db
-      .update(productsTable)
-      .set({ reviewCount: newCount, rating: Math.round(newAvg * 10) / 10 })
-      .where(eq(productsTable.id, productId));
+      await mongoGeneric.getCollection("product_reviews").insertOne(reviewDoc as any);
 
-    res.status(201).json(review);
+      const currentCount = product.reviewCount || 0;
+      const currentRating = product.rating || 4.5;
+      const newCount = currentCount + 1;
+      const newAvg = (currentRating * currentCount + parsedRating) / newCount;
+
+      await mongoProducts.update(productId, {
+        reviewCount: newCount,
+        rating: Math.round(newAvg * 10) / 10,
+      });
+
+      res.status(201).json(reviewDoc);
+      return;
+    } catch {
+      const [product] = await db
+        .select({ id: productsTable.id, vendorId: productsTable.vendorId, reviewCount: productsTable.reviewCount, rating: productsTable.rating })
+        .from(productsTable)
+        .where(eq(productsTable.id, productId))
+        .limit(1);
+      if (!product) return res.status(404).json({ error: "Product not found" });
+
+      const [review] = await db
+        .insert(productReviewsTable)
+        .values({
+          productId,
+          vendorId: product.vendorId,
+          orderId: orderId ?? null,
+          userId: req.userId,
+          customerName: customerName?.trim() || "Customer",
+          rating: parsedRating,
+          comment: comment?.trim() ?? "",
+        })
+        .returning();
+
+      const newCount = product.reviewCount + 1;
+      const newAvg = (product.rating * product.reviewCount + parsedRating) / newCount;
+      await db
+        .update(productsTable)
+        .set({ reviewCount: newCount, rating: Math.round(newAvg * 10) / 10 })
+        .where(eq(productsTable.id, productId));
+
+      res.status(201).json(review);
+    }
   } catch (err: any) {
     req.log?.error({ err }, "POST product review failed");
     res.status(500).json({ error: "Failed to submit review" });
@@ -75,44 +115,51 @@ router.post("/products/:productId/queries", requireAuth, async (req: any, res: a
   }
 
   try {
-    const [product] = await db
-      .select({ id: productsTable.id, vendorId: productsTable.vendorId })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId))
-      .limit(1);
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    try {
+      const product = await mongoProducts.findById(productId);
+      if (!product) return res.status(404).json({ error: "Product not found" });
 
-    const [query] = await db
-      .insert(productQueriesTable)
-      .values({
+      const id = crypto.randomUUID();
+      const queryDoc = {
+        id,
+        _id: id,
         productId,
         vendorId: product.vendorId,
         userId: req.userId,
         customerName: customerName?.trim() || "Customer",
         subject: subject?.trim() ?? "",
         message: String(message).trim(),
-      })
-      .returning();
+        createdAt: new Date(),
+      };
 
-    res.status(201).json(query);
+      await mongoGeneric.getCollection("product_queries").insertOne(queryDoc as any);
+      res.status(201).json(queryDoc);
+      return;
+    } catch {
+      const [product] = await db
+        .select({ id: productsTable.id, vendorId: productsTable.vendorId })
+        .from(productsTable)
+        .where(eq(productsTable.id, productId))
+        .limit(1);
+      if (!product) return res.status(404).json({ error: "Product not found" });
+
+      const [query] = await db
+        .insert(productQueriesTable)
+        .values({
+          productId,
+          vendorId: product.vendorId,
+          userId: req.userId,
+          customerName: customerName?.trim() || "Customer",
+          subject: subject?.trim() ?? "",
+          message: String(message).trim(),
+        })
+        .returning();
+
+      res.status(201).json(query);
+    }
   } catch (err: any) {
     req.log?.error({ err }, "POST product query failed");
     res.status(500).json({ error: "Failed to submit query" });
-  }
-});
-
-router.get("/products/:productId/queries", async (req: any, res: any) => {
-  const { productId } = req.params;
-  try {
-    const queries = await db
-      .select()
-      .from(productQueriesTable)
-      .where(eq(productQueriesTable.productId, productId))
-      .orderBy(desc(productQueriesTable.createdAt));
-    res.json({ queries });
-  } catch (err: any) {
-    req.log?.error({ err }, "GET product queries failed");
-    res.status(500).json({ error: "Failed to load queries" });
   }
 });
 

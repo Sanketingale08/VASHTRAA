@@ -1,5 +1,14 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
+# secrets and temporary files
+.env
+.env.*
+.tmp
+.config/
+GUEST_/
+patch-fs.js
+package-lock.json
+
 # compiled output
 dist
 tmp

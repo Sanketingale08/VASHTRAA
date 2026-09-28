@@ -14,7 +14,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders, adminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 interface AnalyticsDetail {
   shop: {
@@ -320,7 +320,7 @@ function DetailContent() {
           <div className="lg:col-span-2 space-y-5">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: "Gross Revenue", value: fmt(data.revenue.gross), icon: IndianRupee, color: GOLD, bg: "rgba(201,168,76,0.1)" },
+                { label: "Gross Revenue", value: fmt(data.revenue.gross), icon: IndianRupee, color: GOLD, bg: "rgba(199,204,209,0.1)" },
                 { label: "Commission", value: fmt(data.revenue.commission), icon: BadgeCheck, color: "#8B5CF6", bg: "rgba(139,92,246,0.1)" },
                 { label: "Products", value: `${data.products.active}/${data.products.total}`, icon: Package, color: "#10B981", bg: "rgba(16,185,129,0.1)" },
                 { label: "Customers", value: data.customers.total, icon: Users, color: "#3B82F6", bg: "rgba(59,130,246,0.1)" },

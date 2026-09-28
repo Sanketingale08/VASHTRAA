@@ -41,11 +41,11 @@ type InvoiceOrder = {
 
 // ─── Brand palette ───────────────────────────────────────────────────────────
 
-const MAROON  = [123,  28,  44] as [number, number, number];   // #7B1C2C Deep Wine
-const GOLD    = [201, 168,  76] as [number, number, number];   // #C9A84C Royal Gold
-const CREAM   = [250, 246, 238] as [number, number, number];   // #FAF6EE Soft Cream
-const IVORY   = [245, 240, 228] as [number, number, number];   // #F5F0E4 Ivory
-const DARK    = [ 30,  30,  30] as [number, number, number];   // near-black
+const MAROON  = [10,  31,  68] as [number, number, number];   // #0A1F44 Deep Navy
+const GOLD    = [199, 204, 209] as [number, number, number];   // #C7CCD1 Platinum Highlight
+const CREAM   = [244, 245, 247] as [number, number, number];   // #F4F5F7 Soft Platinum Light
+const IVORY   = [229, 232, 236] as [number, number, number];   // #E5E8EC Light Platinum
+const DARK    = [ 11,  12,  16] as [number, number, number];   // #0B0C10 Near-black
 const GRAY    = [120, 120, 120] as [number, number, number];   // mid-gray
 const LGRAY   = [200, 196, 190] as [number, number, number];   // light gray for dividers
 const GREEN   = [ 22, 101,  52] as [number, number, number];   // paid badge
@@ -143,19 +143,19 @@ export function generateInvoice(order: InvoiceOrder): void {
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GOLD);
-  doc.text("TwirlDrape", MX, 16);
+  doc.text("VASTRAA", MX, 16);
 
   // Tagline
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(...CREAM);
-  doc.text("Premium Handcrafted Sarees", MX, 22);
+  doc.text("Authentic Paithani & Designer Sarees", MX, 22);
 
   // Website & support beneath tagline
   doc.setFontSize(6.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(220, 210, 185);
-  doc.text("www.twirldrape.com  |  support@twirldrape.com", MX, 27.5);
+  doc.text("www.vastraa.com  |  support@vastraa.com", MX, 27.5);
   doc.text("GSTIN: 27AACCT1234A1Z5", MX, 32.5);
 
   // Right side: INVOICE heading + invoice number + date
@@ -405,14 +405,14 @@ export function generateInvoice(order: InvoiceOrder): void {
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GOLD);
-  doc.text("Thank you for shopping with TwirlDrape!", W / 2, FOOTER_Y + 7, { align: "center" });
+  doc.text("Thank you for shopping with VASTRAA!", W / 2, FOOTER_Y + 7, { align: "center" });
 
   // Support line
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...CREAM);
   doc.text(
-    "For queries: support@twirldrape.com  |  www.twirldrape.com  |  GSTIN: 27AACCT1234A1Z5",
+    "For queries: support@vastraa.com  |  www.vastraa.com  |  GSTIN: 27AACCT1234A1Z5",
     W / 2, FOOTER_Y + 13, { align: "center" },
   );
 

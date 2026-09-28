@@ -1,0 +1,6 @@
+$esbuild = "C:\Users\Administrator\OneDrive\Desktop\VASHTRAA_1\node_modules\.pnpm\@esbuild+win32-x64@0.27.3\node_modules\@esbuild\win32-x64\esbuild.exe"
+
+Set-Location "C:\Users\Administrator\OneDrive\Desktop\VASHTRAA_1\artifacts\api-server"
+New-Item -ItemType Directory -Force -Path "dist"
+
+& $esbuild "./src/index.ts" --platform=node --bundle --format=esm "--outfile=./dist/index.mjs" --external:sharp --external:pg-native --external:canvas --external:bcrypt --external:pdfkit --external:fontkit "--banner:js=import { createRequire as __bannerCrReq } from 'node:module'; import __bannerPath from 'node:path'; import __bannerUrl from 'node:url'; import __bannerFs from 'node:fs'; (function(){ function patch(obj, name){ const orig = obj[name]; if(!orig) return; obj[name] = function(...args){ try{ return orig.apply(this, args); }catch(e){ if(e && (e.code==='EPERM'||e.code==='EACCES')){ if(name.includes('lstat')){ try{ return __bannerFs.statSync(...args); }catch(_){} } return args[0]; } throw e; } }; } patch(__bannerFs, 'realpathSync'); patch(__bannerFs, 'lstatSync'); if(__bannerFs.promises){ patch(__bannerFs.promises, 'realpath'); patch(__bannerFs.promises, 'lstat'); } })(); globalThis.require = __bannerCrReq(import.meta.url); globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url); globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);"

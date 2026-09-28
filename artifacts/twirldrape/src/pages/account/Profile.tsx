@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useUser } from "@clerk/react";
+import { useUser as useClerkUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Pencil, Save, X, Loader2, CheckCircle,
@@ -14,28 +15,16 @@ const GENDERS = ["Male", "Female", "Other", "Prefer not to say"];
 type ProfileForm = {
   firstName: string;
   lastName: string;
+  email: string;
   phone: string;
   alternateMobile: string;
   dateOfBirth: string;
   gender: string;
   language: string;
   location: string;
+  profilePicture: string;
+  address: string;
 };
-
-/** Hydrate a ProfileForm from a Clerk user object. */
-function hydrateForm(user: NonNullable<ReturnType<typeof useUser>["user"]>): ProfileForm {
-  const meta = (user.publicMetadata ?? {}) as Record<string, string>;
-  return {
-    firstName: user.firstName ?? "",
-    lastName: user.lastName ?? "",
-    phone: meta.phone ?? "",
-    alternateMobile: meta.alternateMobile ?? "",
-    dateOfBirth: meta.dateOfBirth ?? "",
-    gender: meta.gender ?? "",
-    language: meta.language ?? "English",
-    location: meta.location ?? "",
-  };
-}
 
 function formatDob(dob: string): string {
   if (!dob) return "";
@@ -50,17 +39,31 @@ function formatDob(dob: string): string {
   }
 }
 
-/** Initials avatar disc. */
+/** Initials or photo avatar disc. */
 function AvatarCircle({
   firstName,
   lastName,
+  profilePicture,
 }: {
   firstName?: string | null;
   lastName?: string | null;
+  profilePicture?: string | null;
 }) {
   const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join("").toUpperCase();
+  if (profilePicture) {
+    return (
+      <div className="w-16 h-16 rounded-full border border-gray-200 overflow-hidden shrink-0 shadow-sm bg-gray-100">
+        <img
+          src={profilePicture}
+          alt="Profile Avatar"
+          className="w-full h-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      </div>
+    );
+  }
   return (
-    <div className="w-14 h-14 rounded-full bg-[#1E6B5A] flex items-center justify-center shrink-0 select-none">
+    <div className="w-14 h-14 rounded-full bg-[#0A1F44] flex items-center justify-center shrink-0 select-none">
       {initials ? (
         <span className="text-xl font-bold text-white leading-none">{initials}</span>
       ) : (
@@ -72,8 +75,6 @@ function AvatarCircle({
 
 /**
  * A single row in the two-column profile table.
- * Desktop: label (fixed width) | value + optional action (flex).
- * Mobile: label above value, action button below value.
  */
 function ProfileRow({
   label,
@@ -110,7 +111,7 @@ function InlineEditBtn({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="min-h-[44px] px-2 text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors flex items-center"
+      className="min-h-[44px] px-2 text-xs font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors flex items-center"
     >
       Edit
     </button>
@@ -118,7 +119,7 @@ function InlineEditBtn({ onClick }: { onClick: () => void }) {
 }
 
 const inputCls =
-  "w-full border border-[#C9A84C]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white";
+  "w-full border border-[#C7CCD1]/30 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors bg-white";
 
 function EditField({
   label,
@@ -138,61 +139,95 @@ function EditField({
 }
 
 export function AccountProfilePage() {
-  const { user, isLoaded } = useUser();
+  const { user: clerkUser, isLoaded: clerkLoaded } = useClerkUser();
+  const { user: authUser, refreshUser, updateUserLocally } = useAuth();
 
-
-  /** Displayed (view-mode) form values. */
   const [form, setForm] = useState<ProfileForm>({
     firstName: "",
     lastName: "",
+    email: "",
     phone: "",
     alternateMobile: "",
     dateOfBirth: "",
     gender: "",
     language: "English",
     location: "",
+    profilePicture: "",
+    address: "",
   });
 
-  /** Separate copy used only while editing — avoids live-updating the view card. */
   const [editForm, setEditForm] = useState<ProfileForm>(form);
-
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
-
-  // Tracks the displayed email address independently of the Clerk user object.
-  // This lets the email row update immediately after ChangeEmailModal signals
-  // success, without waiting for a potentially-slow Clerk reload to propagate.
   const [displayEmail, setDisplayEmail] = useState("");
 
-  // When true, the next user-dependency fire of the hydration effect is
-  // skipped. We set this before calling user.reload() after a save so that
-  // a new Clerk user-object reference (emitted by the SDK after the reload)
-  // doesn't overwrite the form with potentially-stale publicMetadata and
-  // cause the card to revert to old values.
   const skipNextHydrateRef = useRef(false);
 
-  // Hydrate on initial mount and genuine user-reference changes
-  // (e.g. sign-out / sign-in with a different account).
+  // Fetch full profile from database on mount & sync when user context changes
+  const fetchProfile = async () => {
+    try {
+      const token = localStorage.getItem("vastraa_auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/account/profile", { headers, credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.user) {
+          const u = data.user;
+          const fetchedForm: ProfileForm = {
+            firstName: u.firstName || authUser?.firstName || clerkUser?.firstName || "",
+            lastName: u.lastName || authUser?.lastName || clerkUser?.lastName || "",
+            email: u.email || authUser?.email || clerkUser?.primaryEmailAddress?.emailAddress || "",
+            phone: u.phone || authUser?.phone || "",
+            alternateMobile: u.alternateMobile || authUser?.alternateMobile || "",
+            dateOfBirth: u.dateOfBirth || authUser?.dateOfBirth || "",
+            gender: u.gender || authUser?.gender || "",
+            language: u.language || authUser?.language || "English",
+            location: u.location || authUser?.location || "",
+            profilePicture: u.profilePicture || u.avatar || authUser?.profilePicture || authUser?.imageUrl || clerkUser?.imageUrl || "",
+            address: u.address || authUser?.address || "",
+          };
+          setForm(fetchedForm);
+          setDisplayEmail(fetchedForm.email);
+          return;
+        }
+      }
+    } catch { /* ignore and fallback below */ }
+
+    // Fallback hydration from authUser / clerkUser
+    if (authUser || clerkUser) {
+      const meta = (clerkUser?.publicMetadata ?? {}) as Record<string, string>;
+      const fallbackForm: ProfileForm = {
+        firstName: authUser?.firstName || clerkUser?.firstName || "",
+        lastName: authUser?.lastName || clerkUser?.lastName || "",
+        email: authUser?.email || clerkUser?.primaryEmailAddress?.emailAddress || "",
+        phone: authUser?.phone || meta.phone || "",
+        alternateMobile: authUser?.alternateMobile || meta.alternateMobile || "",
+        dateOfBirth: authUser?.dateOfBirth || meta.dateOfBirth || "",
+        gender: authUser?.gender || meta.gender || "",
+        language: authUser?.language || meta.language || "English",
+        location: authUser?.location || meta.location || "",
+        profilePicture: authUser?.profilePicture || authUser?.imageUrl || clerkUser?.imageUrl || meta.profilePicture || "",
+        address: authUser?.address || meta.address || "",
+      };
+      setForm(fallbackForm);
+      setDisplayEmail(fallbackForm.email);
+    }
+  };
+
   useEffect(() => {
-    if (!user) return;
     if (skipNextHydrateRef.current) {
       skipNextHydrateRef.current = false;
       return;
     }
-    setForm(hydrateForm(user));
-    // Hydrate displayEmail from Clerk on genuine user-reference changes.
-    // Because we no longer call user.reload() inside ChangeEmailModal, this
-    // effect won't fire immediately after email OTP success — so the optimistic
-    // value written by the onSuccess callback is safe until the next real
-    // sign-out / sign-in cycle.
-    setDisplayEmail(user.primaryEmailAddress?.emailAddress || "");
-  }, [user]);
+    fetchProfile();
+  }, [authUser, clerkUser]);
 
-  /** Open edit mode — snapshot the current displayed values into editForm. */
   function openEdit() {
     setEditForm({ ...form });
     setError("");
@@ -209,11 +244,37 @@ export function AccountProfilePage() {
     setEditForm((f) => ({ ...f, [field]: value }));
   }
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image size should be less than 5MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Url = reader.result as string;
+        setField("profilePicture", base64Url);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (saving) return;
 
-    if (editForm.alternateMobile && !/^\d{10}$/.test(editForm.alternateMobile)) {
+    if (editForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    if (editForm.phone && !/^\d{10}$/.test(editForm.phone.replace(/\D/g, ""))) {
+      setError("Mobile number must be a valid 10-digit number.");
+      return;
+    }
+
+    if (editForm.alternateMobile && !/^\d{10}$/.test(editForm.alternateMobile.replace(/\D/g, ""))) {
       setError("Alternate mobile must be exactly 10 digits.");
       return;
     }
@@ -221,44 +282,59 @@ export function AccountProfilePage() {
     setSaving(true);
     setError("");
     try {
-      // All six fields — including firstName and lastName — go through the
-      // backend PATCH so they are persisted via Clerk's admin API.
-      // This replaces the old client-side user.update() best-effort call
-      // which silently failed for OAuth accounts and caused the card to
-      // revert to stale values.
+      const token = localStorage.getItem("vastraa_auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`/api/account/profile`, {
         method: "PATCH",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           firstName: editForm.firstName.trim(),
           lastName: editForm.lastName.trim(),
+          email: editForm.email.trim(),
+          phone: editForm.phone.replace(/\D/g, ""),
           alternateMobile: editForm.alternateMobile.trim(),
           dateOfBirth: editForm.dateOfBirth,
           gender: editForm.gender,
           language: editForm.language,
           location: editForm.location.trim(),
+          profilePicture: editForm.profilePicture.trim(),
+          avatar: editForm.profilePicture.trim(),
+          address: editForm.address.trim(),
         }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.success) {
         throw new Error(body.error ?? "Failed to save profile");
       }
 
-      // Prevent the useEffect from re-hydrating with potentially-stale
-      // publicMetadata after user.reload() emits a new user reference.
       skipNextHydrateRef.current = true;
-      await user.reload();
+      if (clerkUser) {
+        try { await clerkUser.reload(); } catch { /* ignore */ }
+      }
 
-      // Commit the successfully-saved edit values directly to the view form.
-      // editForm values are authoritative — do not fall back to the Clerk
-      // session value which may lag behind the just-completed server write.
-      setForm((prev) => ({
-        ...editForm,
-        firstName: editForm.firstName || user.firstName || "",
-        lastName: editForm.lastName || user.lastName || "",
-        phone: prev.phone, // phone is managed by OTP flow — never overwrite here
-      }));
+      const updatedUser = body.user || {};
+      const newForm: ProfileForm = {
+        firstName: editForm.firstName.trim() || updatedUser.firstName || "",
+        lastName: editForm.lastName.trim() || updatedUser.lastName || "",
+        email: editForm.email.trim() || updatedUser.email || form.email,
+        phone: editForm.phone.replace(/\D/g, "") || updatedUser.phone || form.phone,
+        alternateMobile: editForm.alternateMobile.trim(),
+        dateOfBirth: editForm.dateOfBirth,
+        gender: editForm.gender,
+        language: editForm.language,
+        location: editForm.location.trim(),
+        profilePicture: editForm.profilePicture.trim() || updatedUser.profilePicture || updatedUser.avatar || "",
+        address: editForm.address.trim() || updatedUser.address || "",
+      };
+
+      setForm(newForm);
+      setDisplayEmail(newForm.email);
+      updateUserLocally(newForm);
+      await refreshUser();
 
       setSaved(true);
       setEditing(false);
@@ -275,11 +351,8 @@ export function AccountProfilePage() {
   }
 
   const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ");
-  // Use displayEmail (local state) so the card updates immediately after
-  // ChangeEmailModal succeeds, without waiting for Clerk propagation.
-  const email = displayEmail || user?.primaryEmailAddress?.emailAddress || "";
-  // OAuth-linked accounts (Google, etc.) lock the display name at the provider level.
-  const isOAuthAccount = (user?.externalAccounts?.length ?? 0) > 0;
+  const email = displayEmail || form.email || authUser?.email || clerkUser?.primaryEmailAddress?.emailAddress || "";
+  const isOAuthAccount = (clerkUser?.externalAccounts?.length ?? 0) > 0;
 
   return (
     <DashboardLayout>
@@ -290,7 +363,7 @@ export function AccountProfilePage() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full self-start"
           >
-            <CheckCircle size={12} /> Saved
+            <CheckCircle size={12} /> Saved successfully!
           </motion.div>
         )}
 
@@ -298,13 +371,13 @@ export function AccountProfilePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm overflow-hidden"
+          className="bg-white rounded-2xl border border-[#C7CCD1]/20 shadow-sm overflow-hidden"
         >
           {/* Card header: avatar + name + email */}
-          <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-[#1E6B5A]/5 to-[#C9A84C]/5 border-b border-[#C9A84C]/10 flex items-center gap-4">
-            <AvatarCircle firstName={form.firstName} lastName={form.lastName} />
-            <div className="min-w-0">
-              <p className="font-serif text-base font-bold text-[#1E6B5A] truncate">
+          <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-[#0A1F44]/5 to-[#C7CCD1]/5 border-b border-[#C7CCD1]/10 flex items-center gap-4">
+            <AvatarCircle firstName={form.firstName} lastName={form.lastName} profilePicture={form.profilePicture} />
+            <div className="min-w-0 flex-1">
+              <p className="font-serif text-base font-bold text-[#0A1F44] truncate">
                 {fullName || "Your Profile"}
               </p>
               <p className="text-xs text-gray-400 mt-0.5 truncate">{email || "—"}</p>
@@ -337,6 +410,7 @@ export function AccountProfilePage() {
                   action={<InlineEditBtn onClick={() => setShowEmailModal(true)} />}
                 />
 
+                <ProfileRow label="Address" value={form.address} />
                 <ProfileRow label="Gender" value={form.gender} />
                 <ProfileRow label="Date of Birth" value={formatDob(form.dateOfBirth)} />
                 <ProfileRow label="Location" value={form.location} />
@@ -349,7 +423,7 @@ export function AccountProfilePage() {
                 <div className="py-5 flex justify-center">
                   <button
                     onClick={openEdit}
-                    className="flex items-center gap-2 bg-[#1E6B5A] hover:bg-[#6a1826] text-white text-sm font-bold uppercase tracking-wider px-8 py-2.5 rounded-xl transition-colors min-h-[44px]"
+                    className="flex items-center gap-2 bg-[#0A1F44] hover:bg-[#6a1826] text-white text-sm font-bold uppercase tracking-wider px-8 py-2.5 rounded-xl transition-colors min-h-[44px]"
                   >
                     <Pencil size={14} />
                     Edit Profile
@@ -366,14 +440,44 @@ export function AccountProfilePage() {
                 transition={{ duration: 0.15 }}
               >
                 <form onSubmit={handleSave} className="px-4 sm:px-6 py-5 space-y-4">
-                  {/* OAuth accounts (Google, etc.) lock the display name — show a notice */}
                   {isOAuthAccount && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700">
                       Your name is managed by your connected account (
-                      {user?.externalAccounts[0]?.provider ?? "OAuth provider"}) and cannot be
+                      {clerkUser?.externalAccounts[0]?.provider ?? "OAuth provider"}) and cannot be
                       changed here.
                     </div>
                   )}
+                  
+                  {/* Profile Picture Upload Field */}
+                  <EditField label="Profile Picture">
+                    <div className="flex items-center gap-4">
+                      {editForm.profilePicture ? (
+                        <div className="w-14 h-14 rounded-full overflow-hidden border border-gray-200 shrink-0">
+                          <img src={editForm.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center shrink-0 border border-dashed border-gray-300">
+                          <User size={20} className="text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoUpload}
+                          className="text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#0A1F44] file:text-white hover:file:bg-[#6a1826] cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={editForm.profilePicture}
+                          onChange={(e) => setField("profilePicture", e.target.value)}
+                          placeholder="Or enter Image URL (https://...)"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+                  </EditField>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <EditField label="First Name">
                       <input
@@ -394,6 +498,37 @@ export function AccountProfilePage() {
                       />
                     </EditField>
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <EditField label="Mobile Number">
+                      <input
+                        value={editForm.phone}
+                        onChange={(e) => setField("phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="9876543210"
+                        type="tel"
+                        className={inputCls}
+                      />
+                    </EditField>
+                    <EditField label="Email ID">
+                      <input
+                        value={editForm.email}
+                        onChange={(e) => setField("email", e.target.value)}
+                        placeholder="you@example.com"
+                        type="email"
+                        className={inputCls}
+                      />
+                    </EditField>
+                  </div>
+
+                  <EditField label="Address">
+                    <textarea
+                      rows={2}
+                      value={editForm.address}
+                      onChange={(e) => setField("address", e.target.value)}
+                      placeholder="Enter your full street address, landmark, pin code..."
+                      className={inputCls}
+                    />
+                  </EditField>
 
                   <EditField label="Gender">
                     <select
@@ -446,25 +581,24 @@ export function AccountProfilePage() {
                     </p>
                   </EditField>
 
-                  {/* Note: phone and email changes use their own OTP flow */}
-                  <div className="bg-[#F3F8F5] rounded-xl px-3 py-2.5 text-xs text-gray-500">
-                    To change your{" "}
+                  <div className="bg-[#F4F5F7] rounded-xl px-3 py-2.5 text-xs text-gray-500">
+                    You can also update your{" "}
                     <button
                       type="button"
                       onClick={() => { cancelEdit(); setShowPhoneModal(true); }}
-                      className="font-semibold text-[#1E6B5A] hover:underline"
+                      className="font-semibold text-[#0A1F44] hover:underline"
                     >
-                      mobile number
+                      mobile number via OTP
                     </button>{" "}
                     or{" "}
                     <button
                       type="button"
                       onClick={() => { cancelEdit(); setShowEmailModal(true); }}
-                      className="font-semibold text-[#1E6B5A] hover:underline"
+                      className="font-semibold text-[#0A1F44] hover:underline"
                     >
-                      email address
+                      email address via verification code
                     </button>
-                    , use the Edit buttons on the profile view.
+                    .
                   </div>
 
                   {error && (
@@ -478,14 +612,14 @@ export function AccountProfilePage() {
                       type="button"
                       onClick={cancelEdit}
                       disabled={saving}
-                      className="flex-1 border border-[#C9A84C]/30 text-gray-600 hover:bg-gray-50 disabled:opacity-50 py-2.5 text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                      className="flex-1 border border-[#C7CCD1]/30 text-gray-600 hover:bg-gray-50 disabled:opacity-50 py-2.5 text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                     >
                       <X size={14} /> Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={saving || !isLoaded}
-                      className="flex-1 bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-60 text-white py-2.5 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors min-h-[44px]"
+                      disabled={saving}
+                      className="flex-1 bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-60 text-white py-2.5 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors min-h-[44px]"
                     >
                       {saving ? (
                         <>
@@ -511,8 +645,10 @@ export function AccountProfilePage() {
         {showPhoneModal && (
           <ChangePhoneModal
             onClose={() => setShowPhoneModal(false)}
-            onSuccess={(newPhone) => {
+            onSuccess={async (newPhone) => {
               setForm((f) => ({ ...f, phone: newPhone }));
+              updateUserLocally({ phone: newPhone });
+              await refreshUser();
               setShowPhoneModal(false);
             }}
           />
@@ -520,10 +656,11 @@ export function AccountProfilePage() {
         {showEmailModal && (
           <ChangeEmailModal
             onClose={() => setShowEmailModal(false)}
-            onSuccess={(newEmail) => {
-              // Update local state immediately so the Email ID row reflects
-              // the new address without waiting for Clerk to propagate.
+            onSuccess={async (newEmail) => {
               setDisplayEmail(newEmail);
+              setForm((f) => ({ ...f, email: newEmail }));
+              updateUserLocally({ email: newEmail });
+              await refreshUser();
               setShowEmailModal(false);
             }}
           />

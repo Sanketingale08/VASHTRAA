@@ -1,28 +1,28 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useUser } from "@clerk/react";
-import { useSignUp } from "@clerk/react/legacy";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Store, ChevronRight, ChevronLeft, Check, Eye, EyeOff,
   Upload, Phone, Building2, FileText, Landmark, MapPin, ShieldCheck,
   Loader2, AlertCircle, CheckCircle2, X, Save,
 } from "lucide-react";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, apiFetch } from "@/lib/api";
+import { GoogleAuthButton } from "@/components/GoogleAuthButton";
+import { GoogleOtpModal } from "@/components/GoogleOtpModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-const EMERALD = "#1E6B5A";
-const GOLD = "#C9A84C";
-const IVORY = "#F3F8F5";
+const EMERALD = "#0A1F44";
+const GOLD = "#C7CCD1";
+const IVORY = "#F4F5F7";
 
 const STEPS = [
   { id: 1, label: "Account", icon: Store },
-  { id: 2, label: "Mobile", icon: Phone },
-  { id: 3, label: "Business", icon: Building2 },
-  { id: 4, label: "KYC", icon: FileText },
-  { id: 5, label: "Bank", icon: Landmark },
-  { id: 6, label: "Address", icon: MapPin },
-  { id: 7, label: "Review", icon: ShieldCheck },
+  { id: 2, label: "Business", icon: Building2 },
+  { id: 3, label: "KYC", icon: FileText },
+  { id: 4, label: "Bank", icon: Landmark },
+  { id: 5, label: "Address", icon: MapPin },
+  { id: 6, label: "Review", icon: ShieldCheck },
 ];
 
 interface WizardData {
@@ -90,7 +90,7 @@ function saveDraft(data: WizardData, step: number) {
     const { password, ...rest } = data;
     localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: rest, step, savedAt: Date.now() }));
   } catch {
-    // localStorage unavailable (e.g. private browsing) — fail silently, wizard still works in-session
+    // localStorage unavailable — fail silently
   }
 }
 
@@ -173,7 +173,7 @@ function ProgressBar({ step }: { step: number }) {
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
                 style={{
-                  background: done || active ? EMERALD : "#E6F0EA",
+                  background: done || active ? EMERALD : "#E5E8EC",
                   color: done || active ? "#fff" : "#9CA3AF",
                   boxShadow: active ? `0 0 0 3px ${GOLD}44` : "none",
                 }}
@@ -188,7 +188,7 @@ function ProgressBar({ step }: { step: number }) {
           );
         })}
       </div>
-      <div className="w-full bg-[#E6F0EA] rounded-full h-1.5">
+      <div className="w-full bg-[#E5E8EC] rounded-full h-1.5">
         <motion.div className="h-1.5 rounded-full" style={{ background: EMERALD }}
           animate={{ width: `${((step - 1) / (STEPS.length - 1)) * 100}%` }}
           transition={{ duration: 0.4 }} />
@@ -226,12 +226,12 @@ function Input({ value, onChange, type = "text", placeholder, maxLength }: {
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none bg-white pr-10 transition-colors"
-        style={{ borderColor: "#C8D8D0", color: "#1a1a1a" }}
+        className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none bg-[#F4F5F7] pr-10 transition-all focus:border-[#0A1F44] focus:ring-1 focus:ring-[#0A1F44]"
+        style={{ borderColor: "rgba(199, 204, 209, 0.6)", color: "#0A1F44" }}
       />
       {isPass && (
         <button type="button" onClick={() => setShow(!show)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#0A1F44] transition-colors">
           {show ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
       )}
@@ -243,18 +243,78 @@ function Textarea({ value, onChange, placeholder }: { value: string; onChange: (
   return (
     <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
       rows={3}
-      className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none resize-none bg-white"
-      style={{ borderColor: "#C8D8D0" }} />
+      className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none resize-none bg-[#F4F5F7] transition-all focus:border-[#0A1F44] focus:ring-1 focus:ring-[#0A1F44]"
+      style={{ borderColor: "rgba(199, 204, 209, 0.6)", color: "#0A1F44" }} />
   );
 }
 
 function OTPBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = (value || "").split("").concat(Array(6).fill("")).slice(0, 6);
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!digits[index] && index > 0) {
+        inputsRef.current[index - 1]?.focus();
+      }
+    }
+  };
+
+  const handleChange = (index: number, val: string) => {
+    const clean = val.replace(/\D/g, "");
+    if (!clean) {
+      const newDigits = [...digits];
+      newDigits[index] = "";
+      onChange(newDigits.join(""));
+      return;
+    }
+
+    if (clean.length > 1) {
+      const pasted = clean.slice(0, 6);
+      onChange(pasted);
+      const nextIndex = Math.min(pasted.length, 5);
+      inputsRef.current[nextIndex]?.focus();
+      return;
+    }
+
+    const newDigits = [...digits];
+    newDigits[index] = clean[0];
+    const finalVal = newDigits.join("").slice(0, 6);
+    onChange(finalVal);
+
+    if (index < 5) {
+      inputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted) {
+      onChange(pasted);
+      const nextIndex = Math.min(pasted.length, 5);
+      inputsRef.current[nextIndex]?.focus();
+    }
+  };
+
   return (
-    <input type="text" inputMode="numeric" maxLength={6} value={value}
-      onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
-      placeholder="• • • • • •"
-      className="w-full text-center text-2xl font-mono tracking-[0.5em] rounded-xl border px-4 py-3 outline-none bg-white"
-      style={{ borderColor: "#C8D8D0", color: EMERALD }} />
+    <div className="flex items-center justify-center gap-2 sm:gap-3 my-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <input
+          key={i}
+          ref={(el) => (inputsRef.current[i] = el)}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={digits[i] || ""}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onPaste={handlePaste}
+          className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold font-mono rounded-xl border bg-[#F4F5F7] transition-all focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/20 outline-none"
+          style={{ borderColor: "#C7CCD1", color: EMERALD }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -307,8 +367,8 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
     <Field label={label} helper={helper} error={err}>
       <div className="relative">
         <div onClick={() => !busy && !showConfirm && ref.current?.click()}
-          className="flex items-center gap-3 w-full rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:bg-[#E6F0EA]"
-          style={{ borderColor: objectPath ? EMERALD : "#C8D8D0" }}>
+          className="flex items-center gap-3 w-full rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:bg-[#E5E8EC]"
+          style={{ borderColor: objectPath ? EMERALD : "#C7CCD1" }}>
           <input ref={ref} type="file" accept={accept ?? "image/*,.pdf"} onChange={onFile} className="hidden" />
           {busy ? (
             <><Loader2 size={18} className="animate-spin shrink-0" style={{ color: EMERALD }} />
@@ -339,7 +399,7 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -6, scale: 0.96 }}
               transition={{ duration: 0.15 }}
-              className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-[#C8D8D0] rounded-xl shadow-lg px-4 py-3 flex flex-col gap-3 min-w-[200px] outline-none"
+              className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-[#C7CCD1] rounded-xl shadow-lg px-4 py-3 flex flex-col gap-3 min-w-[200px] outline-none"
               onClick={(e) => e.stopPropagation()}
             >
               <p className="text-sm font-semibold text-gray-700">Remove this file?</p>
@@ -355,8 +415,8 @@ function FileUpload({ label, objectPath, onUploaded, accept, helper, docType = "
                 <button
                   type="button"
                   onClick={() => setShowConfirm(false)}
-                  className="flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-[#E6F0EA]"
-                  style={{ borderColor: "#C8D8D0", color: EMERALD }}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors hover:bg-[#E5E8EC]"
+                  style={{ borderColor: "#C7CCD1", color: EMERALD }}
                 >
                   Cancel
                 </button>
@@ -376,20 +436,20 @@ function StepShell({ title, subtitle, onBack, onNext, nextLabel = "Continue", ne
   return (
     <motion.div key={title} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.28 }}>
-      <h2 className="text-xl font-serif font-bold mb-1" style={{ color: EMERALD }}>{title}</h2>
+      <h2 className="text-2xl font-serif font-bold mb-1 tracking-wide" style={{ color: EMERALD }}>{title}</h2>
       {subtitle && <p className="text-sm text-gray-500 mb-5">{subtitle}</p>}
       <div className="space-y-4">{children}</div>
       <div className="flex items-center gap-3 mt-6">
         {onBack && (
           <button onClick={onBack}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E6F0EA]"
-            style={{ borderColor: "#C8D8D0", color: EMERALD }}>
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl border text-sm font-semibold transition-all hover:bg-[#E5E8EC]"
+            style={{ borderColor: "#C7CCD1", color: EMERALD }}>
             <ChevronLeft size={15} /> Back
           </button>
         )}
         {onNext && (
           <button onClick={onNext} disabled={nextDisabled || loading}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-[#F4F5F7] uppercase tracking-wider transition-all hover:bg-[#2C3E6B] disabled:opacity-50 shadow-sm cursor-pointer"
             style={{ background: EMERALD }}>
             {loading && <Loader2 size={15} className="animate-spin" />}
             {nextLabel} {!loading && <ChevronRight size={15} />}
@@ -402,13 +462,13 @@ function StepShell({ title, subtitle, onBack, onNext, nextLabel = "Continue", ne
 
 export default function SellerRegister() {
   const { isSignedIn, isLoaded: userLoaded, user } = useUser();
-  const { isLoaded: signUpLoaded, signUp, setActive } = useSignUp();
   const [, navigate] = useLocation();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(DEFAULT_DATA);
   const [errs, setErrs] = useState<Partial<Record<keyof WizardData, string>>>({});
   const [apiErr, setApiErr] = useState("");
+  const [apiSuccess, setApiSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [already, setAlready] = useState(false);
@@ -421,13 +481,33 @@ export default function SellerRegister() {
 
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailCode, setEmailCode] = useState("");
-  const [phoneObj, setPhoneObj] = useState<any>(null);
-  const [phoneSent, setPhoneSent] = useState(false);
-  const [phoneCode, setPhoneCode] = useState("");
+  const [devCode, setDevCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((c) => Math.max(0, c - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const [uploadCount, setUploadCount] = useState(0);
   const [draftSaved, setDraftSaved] = useState(false);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Google OTP Modal State
+  const [otpModalState, setOtpModalState] = useState<{
+    isOpen: boolean;
+    challengeId: string;
+    email: string;
+    targetRole: "customer" | "seller";
+  }>({
+    isOpen: false,
+    challengeId: "",
+    email: "",
+    targetRole: "seller",
+  });
 
   const onUploadStart = useCallback(() => setUploadCount((n) => n + 1), []);
   const onUploadEnd = useCallback(() => setUploadCount((n) => Math.max(0, n - 1)), []);
@@ -436,33 +516,32 @@ export default function SellerRegister() {
     setData((d) => ({ ...d, [k]: v }));
   const e = (k: keyof WizardData) => errs[k];
 
+  // Initialize draft data on mount & handle signed-in users
   useEffect(() => {
-    if (!userLoaded || !signUpLoaded || step !== 0) return;
+    const localDraft = loadDraft();
+    if (localDraft && localDraft.data) {
+      setData((d) => ({ ...d, ...localDraft.data, email: "", password: "" }));
+    }
 
-    if (isSignedIn) {
+    if (userLoaded && isSignedIn) {
       const email = user?.primaryEmailAddress?.emailAddress ?? "";
-      // Try server draft first; fall back to localStorage
-      loadServerDraft().then((serverDraft) => {
-        const localDraft = loadDraft();
-        // Pick the most advanced / most recent draft available
-        const best = serverDraft ??
-          (localDraft && localDraft.step >= 2 ? localDraft : null);
-        if (best && best.step >= 2) {
-          setData((d) => ({ ...d, ...best.data, contactEmail: best.data.contactEmail || email }));
-          setStep(best.step);
-        } else {
+      loadServerDraft()
+        .then((serverDraft) => {
+          const best = serverDraft ?? (localDraft && localDraft.step >= 2 ? localDraft : null);
+          if (best && best.step >= 2) {
+            setData((d) => ({ ...d, ...best.data, contactEmail: best.data.contactEmail || email }));
+            setStep(best.step);
+          } else {
+            setStep(2);
+            if (email) setData((d) => ({ ...d, contactEmail: email }));
+          }
+        })
+        .catch(() => {
           setStep(2);
           if (email) setData((d) => ({ ...d, contactEmail: email }));
-        }
-      });
-    } else {
-      // Any account-creation progress from a prior session is unverified, so always
-      // restart at step 1 — but keep whatever downstream fields were already filled in.
-      const draft = loadDraft();
-      if (draft && draft.data) setData((d) => ({ ...d, ...draft.data, email: "", password: "" }));
-      setStep(1);
+        });
     }
-  }, [isSignedIn, userLoaded, signUpLoaded]);
+  }, [userLoaded, isSignedIn, user]);
 
   useEffect(() => {
     if (step === 0 || done) return;
@@ -497,44 +576,17 @@ export default function SellerRegister() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty, uploadCount]);
 
-  function askLeave(): Promise<boolean> {
-    return new Promise((resolve) => {
-      leaveResolveRef.current = resolve;
-      setShowLeaveModal(true);
-    });
-  }
-
   function resolveLeave(ok: boolean) {
     setShowLeaveModal(false);
     leaveResolveRef.current?.(ok);
     leaveResolveRef.current = null;
   }
 
-  useEffect(() => {
-    history.pushState({ sellerRegGuard: true }, "");
-
-    async function onPopState() {
-      history.pushState({ sellerRegGuard: true }, "");
-      if (!isDirtyRef.current) {
-        history.go(-2);
-        return;
-      }
-      const ok = await askLeave();
-      if (ok) {
-        history.go(-2);
-      }
-    }
-
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
   function startOver() {
     clearDraft();
     if (isSignedIn) clearServerDraft();
     setErrs({}); setApiErr("");
     setEmailOtpSent(false); setEmailCode("");
-    setPhoneObj(null); setPhoneSent(false); setPhoneCode("");
     if (isSignedIn) {
       const email = user?.primaryEmailAddress?.emailAddress ?? "";
       setData({ ...DEFAULT_DATA, contactEmail: email });
@@ -545,19 +597,11 @@ export default function SellerRegister() {
     }
   }
 
-  if (!userLoaded || !signUpLoaded || step === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY }}>
-        <Loader2 size={28} className="animate-spin" style={{ color: EMERALD }} />
-      </div>
-    );
-  }
-
   if (done) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: IVORY }}>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-2xl border border-[#C8D8D0] p-10 max-w-md w-full text-center shadow-sm">
+          className="bg-white rounded-2xl border border-[#C7CCD1] p-10 max-w-md w-full text-center shadow-sm">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
             style={{ background: EMERALD + "1A" }}>
             <CheckCircle2 size={32} style={{ color: EMERALD }} />
@@ -567,7 +611,7 @@ export default function SellerRegister() {
             Your seller application is under review. Our team will verify your KYC and bank details
             within 2–3 business days. You'll be notified by email once approved.
           </p>
-          <div className="bg-[#E6F0EA] rounded-xl p-4 text-left text-sm text-gray-600 mb-6 space-y-1.5">
+          <div className="bg-[#E5E8EC] rounded-xl p-4 text-left text-sm text-gray-600 mb-6 space-y-1.5">
             <p className="font-semibold mb-2" style={{ color: EMERALD }}>What happens next</p>
             <p>✓ KYC document verification (PAN)</p>
             <p>✓ Bank account validation</p>
@@ -587,7 +631,7 @@ export default function SellerRegister() {
   if (already) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: IVORY }}>
-        <div className="bg-white rounded-2xl border border-[#C8D8D0] p-10 max-w-md w-full text-center shadow-sm">
+        <div className="bg-white rounded-2xl border border-[#C7CCD1] p-10 max-w-md w-full text-center shadow-sm">
           <Store size={32} className="mx-auto mb-4" style={{ color: EMERALD }} />
           <h2 className="text-xl font-serif font-bold mb-2" style={{ color: EMERALD }}>Already Registered</h2>
           <p className="text-sm text-gray-500 mb-6">
@@ -605,72 +649,67 @@ export default function SellerRegister() {
 
   async function step1Create() {
     const e2: typeof errs = {};
-    if (!data.email.trim() || !/\S+@\S+\.\S+/.test(data.email)) e2.email = "Enter a valid email";
+    if (!data.email.trim() || !/\S+@\S+\.\S+/.test(data.email)) e2.email = "Please enter a valid email address.";
     if (!data.password || data.password.length < 8) e2.password = "Min. 8 characters";
     setErrs(e2);
     if (Object.keys(e2).length) return;
-    setLoading(true); setApiErr("");
+    setLoading(true); setApiErr(""); setApiSuccess("");
     try {
-      await signUp!.create({ emailAddress: data.email.trim(), password: data.password });
-      await signUp!.prepareEmailAddressVerification({ strategy: "email_code" });
+      const res = await apiFetch("/api/seller/send-verification-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setApiErr(json.error || json.message || "Unable to send the verification code. Please try again.");
+        return;
+      }
       setEmailOtpSent(true);
+      if (json.devCode) setDevCode(json.devCode);
+      setResendCooldown(30);
+      setApiSuccess(json.message || `Verification code sent successfully to ${data.email.trim()}. Please check your inbox and spam folder.`);
     } catch (err: any) {
-      setApiErr(err?.errors?.[0]?.longMessage || "Failed to create account. Email may already be in use.");
+      setApiErr("Unable to send the verification code. Please try again.");
     } finally { setLoading(false); }
   }
 
   async function step1Verify() {
-    if (emailCode.length < 6) { setApiErr("Enter the 6-digit code from your email"); return; }
-    setLoading(true); setApiErr("");
+    if (!emailCode.trim() || emailCode.trim().length < 6) { setApiErr("Invalid verification code. Please check the code and try again."); return; }
+    setLoading(true); setApiErr(""); setApiSuccess("");
     try {
-      const res = await signUp!.attemptEmailAddressVerification({ code: emailCode });
-      if (res.status === "complete") {
-        await setActive!({ session: res.createdSessionId });
-        setStep(2);
-      } else {
-        setApiErr("Verification incomplete. Please try again.");
+      const res = await apiFetch("/api/seller/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email.trim(), code: emailCode.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setApiErr(json.error || json.message || "Invalid verification code. Please check the code and try again.");
+        return;
       }
+      setApiSuccess(json.message || "Email verified successfully! You can now continue your seller registration.");
+      setTimeout(() => {
+        setStep(2);
+        setApiSuccess("");
+      }, 800);
     } catch (err: any) {
-      setApiErr(err?.errors?.[0]?.longMessage || "Invalid or expired code.");
+      setApiErr("Unable to verify code. Please try again.");
     } finally { setLoading(false); }
   }
 
-  async function sendPhoneOtp() {
-    const num = data.mobile.trim();
-    if (!num) { setApiErr("Enter your mobile number"); return; }
-    const full = num.startsWith("+") ? num : `+91${num}`;
-    setLoading(true); setApiErr("");
-    try {
-      const ph = await user!.createPhoneNumber({ phoneNumber: full });
-      await (ph as any).prepareVerification({ strategy: "phone_code" });
-      setPhoneObj(ph); setPhoneSent(true);
-    } catch (err: any) {
-      setApiErr(err?.errors?.[0]?.longMessage || "Failed to send OTP. Check the number and try again.");
-    } finally { setLoading(false); }
-  }
-
-  async function verifyPhone() {
-    if (phoneCode.length < 6) { setApiErr("Enter the 6-digit OTP"); return; }
-    setLoading(true); setApiErr("");
-    try {
-      await phoneObj.attemptVerification({ code: phoneCode });
-      setStep(3);
-    } catch (err: any) {
-      setApiErr(err?.errors?.[0]?.longMessage || "Invalid OTP. Please try again.");
-    } finally { setLoading(false); }
-  }
-
-  function v3(): boolean {
+  function v2(): boolean {
     const e2: typeof errs = {};
     if (!data.name.trim()) e2.name = "Shop name is required";
     if (!data.location.trim()) e2.location = "City / location is required";
+    if (!data.mobile.trim() || data.mobile.trim().length < 10) e2.mobile = "Enter a valid 10-digit mobile number";
     if (data.contactEmail && !/\S+@\S+\.\S+/.test(data.contactEmail)) e2.contactEmail = "Enter a valid email";
     if (data.gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(data.gstin.toUpperCase()))
       e2.gstin = "Enter a valid 15-character GSTIN";
     setErrs(e2); return !Object.keys(e2).length;
   }
 
-  function v4(): boolean {
+  function v3(): boolean {
     const e2: typeof errs = {};
     if (!data.panNumber.trim()) e2.panNumber = "PAN number is required";
     else if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.panNumber.toUpperCase())) e2.panNumber = "Enter a valid 10-character PAN";
@@ -678,7 +717,7 @@ export default function SellerRegister() {
     setErrs(e2); return !Object.keys(e2).length;
   }
 
-  function v5(): boolean {
+  function v4(): boolean {
     const e2: typeof errs = {};
     if (!data.bankHolder.trim()) e2.bankHolder = "Account holder name is required";
     if (!data.bankName.trim()) e2.bankName = "Bank name is required";
@@ -688,7 +727,7 @@ export default function SellerRegister() {
     setErrs(e2); return !Object.keys(e2).length;
   }
 
-  function v6(): boolean {
+  function v5(): boolean {
     const e2: typeof errs = {};
     if (!data.shopCity.trim()) e2.shopCity = "City is required";
     if (!data.shopState.trim()) e2.shopState = "State is required";
@@ -700,13 +739,13 @@ export default function SellerRegister() {
     if (!data.termsAccepted) { setApiErr("Please accept the terms and conditions to proceed."); return; }
     setLoading(true); setApiErr("");
     try {
-      const res = await fetch(getApiUrl("/api/seller/register"), {
+      const res = await apiFetch("/api/seller/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
+          email: data.email, password: data.password,
           name: data.name, location: data.location, bio: data.bio, gstin: data.gstin,
-          contactEmail: data.contactEmail, tagline: data.tagline, mobile: data.mobile,
+          contactEmail: data.contactEmail || data.email, tagline: data.tagline, mobile: data.mobile,
           panNumber: data.panNumber.toUpperCase(), panCardUrl: data.panCardUrl,
           gstCertUrl: data.gstCertUrl || undefined,
           bankHolder: data.bankHolder, bankName: data.bankName,
@@ -716,12 +755,12 @@ export default function SellerRegister() {
           termsAccepted: true,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) { if (res.status === 409) { setAlready(true); return; } setApiErr(json.error || "Submission failed."); return; }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { if (res.status === 409) { setAlready(true); return; } setApiErr(json.error || json.message || "Submission failed."); return; }
       clearDraft();
       clearServerDraft();
       setDone(true);
-    } catch { setApiErr("Network error. Please check your connection."); }
+    } catch (err: any) { setApiErr(err?.message ? `Submission error: ${err.message}` : "Network error. Please check your connection."); }
     finally { setLoading(false); }
   }
 
@@ -730,11 +769,11 @@ export default function SellerRegister() {
       <div className="flex-1 flex flex-col items-center justify-start py-10 px-4">
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3 mb-8">
-          <img src={`${BASE}/images/logo.png`} alt="TwirlDrape" className="h-10 w-auto object-contain" />
+          <img src={`${BASE}/logo.svg`} alt="VASTRAA" className="h-12 w-auto object-contain" />
           <span className="text-xs font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>Seller Registration</span>
         </motion.div>
 
-        <div className="w-full max-w-lg bg-white rounded-2xl border border-[#C8D8D0] p-7 shadow-sm">
+        <div className="w-full max-w-lg bg-white rounded-2xl border p-7 sm:p-8 shadow-md transition-all" style={{ borderColor: "rgba(199, 204, 209, 0.4)" }}>
           <ProgressBar step={step} />
           <AnimatePresence>
             {draftSaved && (
@@ -769,10 +808,17 @@ export default function SellerRegister() {
             </div>
           )}
 
+          {apiSuccess && (
+            <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-emerald-700">
+              <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+              <span>{apiSuccess}</span>
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             {step === 1 && (
               <StepShell key="s1" title="Create Your Account"
-                subtitle="Set up your TwirlDrape seller account with email and password."
+                subtitle="Set up your VASTRAA seller account with email and password."
                 onNext={emailOtpSent ? step1Verify : step1Create}
                 nextLabel={emailOtpSent ? "Verify Email" : "Send Verification Code"}
                 loading={loading}>
@@ -784,80 +830,103 @@ export default function SellerRegister() {
                     <Field label="Password" required error={e("password")}>
                       <Input value={data.password} onChange={set("password")} type="password" placeholder="Min. 8 characters" />
                     </Field>
-                    <p className="text-xs text-gray-400">
+                    
+                    <div className="relative my-4 text-center">
+                      <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div className="w-full border-t border-[#C7CCD1]/60" />
+                      </div>
+                      <div className="relative inline-block bg-white px-3 text-xs font-bold uppercase tracking-wider text-gray-400">
+                        OR
+                      </div>
+                    </div>
+
+                    <GoogleAuthButton
+                      targetRole="seller"
+                      mode="signup"
+                      onSuccessChallenge={(res) => {
+                        setOtpModalState({
+                          isOpen: true,
+                          challengeId: res.challengeId,
+                          email: res.email,
+                          targetRole: res.targetRole,
+                        });
+                      }}
+                      onError={(err) => setApiErr(err)}
+                    />
+
+                    <p className="text-xs text-gray-400 mt-2">
                       Already have an account?{" "}
-                      <a
-                        href={`${BASE}/seller/login`}
-                        className="underline"
+                      <Link
+                        href="/seller/login"
+                        className="underline font-semibold"
                         style={{ color: EMERALD }}
-                        onClick={async (ev) => {
-                          if (isDirtyRef.current) {
-                            ev.preventDefault();
-                            const ok = await askLeave();
-                            if (ok) navigate(`${BASE}/seller/login`);
-                          }
-                        }}
-                      >Sign in here</a>
+                      >
+                        Sign in here
+                      </Link>
                     </p>
                   </>
                 ) : (
                   <>
-                    <div className="bg-[#E6F0EA] rounded-xl p-4 text-sm text-center" style={{ color: EMERALD }}>
-                      A 6-digit code was sent to <strong>{data.email}</strong>
+                    <div className="bg-[#E5E8EC] rounded-xl p-4 text-sm text-center" style={{ color: EMERALD }}>
+                      A 6-digit verification code was sent to <strong>{data.email}</strong>
                     </div>
+
+                    {devCode && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center justify-between shadow-xs">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={15} className="text-amber-600 shrink-0" />
+                          <span>
+                            Code: <span className="font-mono text-sm font-bold">{devCode}</span> <span className="text-[11px] text-amber-700 font-medium">(Resend Sandbox Mode)</span>
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEmailCode(devCode)}
+                          className="px-2.5 py-1 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 transition-colors shrink-0 ml-2 shadow-xs cursor-pointer"
+                        >
+                          Quick Fill
+                        </button>
+                      </div>
+                    )}
+
                     <OTPBox value={emailCode} onChange={setEmailCode} />
-                    <button type="button" onClick={() => { setEmailOtpSent(false); setEmailCode(""); setApiErr(""); }}
-                      className="text-xs text-gray-400 underline w-full text-center">
-                      ← Change email or resend code
-                    </button>
+
+                    <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                      <button type="button" onClick={() => { setEmailOtpSent(false); setDevCode(""); setApiErr(""); setApiSuccess(""); setEmailCode(""); }}
+                        className="underline hover:text-gray-700">
+                        ← Change email
+                      </button>
+                      <button type="button" onClick={() => { step1Create(); }}
+                        className="underline hover:text-gray-700 font-medium disabled:opacity-50 disabled:no-underline"
+                        disabled={loading || resendCooldown > 0}>
+                        {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend verification code"}
+                      </button>
+                    </div>
                   </>
                 )}
               </StepShell>
             )}
 
             {step === 2 && (
-              <StepShell key="s2" title="Verify Mobile Number"
-                subtitle="Required for order updates and account security. We'll send a one-time password."
+              <StepShell key="s2" title="Business Profile"
+                subtitle="Tell us about your shop, craft, and contact details."
                 onBack={!isSignedIn ? () => { setErrs({}); setStep(1); } : undefined}
-                onNext={phoneSent ? verifyPhone : sendPhoneOtp}
-                nextLabel={phoneSent ? "Verify & Continue" : "Send OTP"}
-                loading={loading}>
-                {!phoneSent ? (
-                  <Field label="Mobile Number" required helper="Indian mobile number — we'll send a 6-digit OTP">
-                    <div className="flex rounded-xl border overflow-hidden" style={{ borderColor: "#C8D8D0" }}>
-                      <span className="bg-[#E6F0EA] px-4 py-2.5 text-sm font-semibold border-r text-gray-600"
-                        style={{ borderColor: "#C8D8D0" }}>+91</span>
-                      <input type="tel" maxLength={10} value={data.mobile}
-                        onChange={(e2) => set("mobile")(e2.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="9876543210"
-                        className="flex-1 px-4 py-2.5 text-sm outline-none bg-white" />
-                    </div>
-                  </Field>
-                ) : (
-                  <>
-                    <div className="bg-[#E6F0EA] rounded-xl p-4 text-sm text-center" style={{ color: EMERALD }}>
-                      OTP sent to <strong>+91 {data.mobile}</strong>
-                    </div>
-                    <OTPBox value={phoneCode} onChange={setPhoneCode} />
-                    <button type="button" onClick={() => { setPhoneSent(false); setPhoneCode(""); setApiErr(""); }}
-                      className="text-xs text-gray-400 underline w-full text-center">
-                      ← Change number or resend
-                    </button>
-                  </>
-                )}
-              </StepShell>
-            )}
-
-            {step === 3 && (
-              <StepShell key="s3" title="Business Profile"
-                subtitle="Tell us about your shop, craft, and what you sell."
-                onBack={() => { setErrs({}); setStep(2); }}
-                onNext={() => { setApiErr(""); if (v3()) setStep(4); }}>
+                onNext={() => { setApiErr(""); if (v2()) setStep(3); }}>
                 <Field label="Shop Name" required error={e("name")}>
                   <Input value={data.name} onChange={set("name")} placeholder="e.g. Silk Heritage Emporium" />
                 </Field>
                 <Field label="City / Location" required error={e("location")}>
                   <Input value={data.location} onChange={set("location")} placeholder="e.g. Varanasi, Uttar Pradesh" />
+                </Field>
+                <Field label="Mobile Number" required error={e("mobile")} helper="10-digit Indian mobile number for order updates">
+                  <div className="flex rounded-xl border overflow-hidden" style={{ borderColor: "#C7CCD1" }}>
+                    <span className="bg-[#E5E8EC] px-4 py-2.5 text-sm font-semibold border-r text-gray-600"
+                      style={{ borderColor: "#C7CCD1" }}>+91</span>
+                    <input type="tel" maxLength={10} value={data.mobile}
+                      onChange={(e2) => set("mobile")(e2.target.value.replace(/\D/g, "").slice(0, 10))}
+                      placeholder="9876543210"
+                      className="flex-1 px-4 py-2.5 text-sm outline-none bg-white" />
+                  </div>
                 </Field>
                 <Field label="Shop Tagline" helper="A short catchy line for your shop page">
                   <Input value={data.tagline} onChange={set("tagline")} placeholder="e.g. Authentic handwoven silks since 1982" />
@@ -874,11 +943,11 @@ export default function SellerRegister() {
               </StepShell>
             )}
 
-            {step === 4 && (
-              <StepShell key="s4" title="KYC Documents"
+            {step === 3 && (
+              <StepShell key="s3" title="KYC Documents"
                 subtitle="Required for identity verification as per RBI guidelines."
-                onBack={() => { setErrs({}); setStep(3); }}
-                onNext={() => { setApiErr(""); if (v4()) setStep(5); }}>
+                onBack={() => { setErrs({}); setStep(2); }}
+                onNext={() => { setApiErr(""); if (v3()) setStep(4); }}>
                 <Field label="PAN Number" required error={e("panNumber")} helper="10-character Permanent Account Number">
                   <Input value={data.panNumber} onChange={(v) => set("panNumber")(v.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} />
                 </Field>
@@ -899,11 +968,11 @@ export default function SellerRegister() {
               </StepShell>
             )}
 
-            {step === 5 && (
-              <StepShell key="s5" title="Bank Account Details"
+            {step === 4 && (
+              <StepShell key="s4" title="Bank Account Details"
                 subtitle="Your earnings will be transferred to this account weekly."
-                onBack={() => { setErrs({}); setStep(4); }}
-                onNext={() => { setApiErr(""); if (v5()) setStep(6); }}>
+                onBack={() => { setErrs({}); setStep(3); }}
+                onNext={() => { setApiErr(""); if (v4()) setStep(5); }}>
                 <Field label="Account Holder Name" required error={e("bankHolder")}>
                   <Input value={data.bankHolder} onChange={set("bankHolder")} placeholder="As per bank records" />
                 </Field>
@@ -922,11 +991,11 @@ export default function SellerRegister() {
               </StepShell>
             )}
 
-            {step === 6 && (
-              <StepShell key="s6" title="Shop Address"
+            {step === 5 && (
+              <StepShell key="s5" title="Shop Address"
                 subtitle="Your registered business or pickup address."
-                onBack={() => { setErrs({}); setStep(5); }}
-                onNext={() => { setApiErr(""); if (v6()) setStep(7); }}>
+                onBack={() => { setErrs({}); setStep(4); }}
+                onNext={() => { setApiErr(""); if (v5()) setStep(6); }}>
                 <Field label="Street / Area">
                   <Input value={data.shopStreet} onChange={set("shopStreet")} placeholder="Building, street, locality" />
                 </Field>
@@ -944,10 +1013,10 @@ export default function SellerRegister() {
               </StepShell>
             )}
 
-            {step === 7 && (
-              <StepShell key="s7" title="Review & Submit"
+            {step === 6 && (
+              <StepShell key="s6" title="Review & Submit"
                 subtitle="Confirm your details and accept our terms."
-                onBack={() => { setErrs({}); setStep(6); }}
+                onBack={() => { setErrs({}); setStep(5); }}
                 onNext={submit}
                 nextLabel="Submit Application"
                 loading={loading}
@@ -960,7 +1029,7 @@ export default function SellerRegister() {
                     { icon: Landmark, label: "Bank", value: data.bankName || "—", sub: data.bankAccount ? `A/C ••••${data.bankAccount.slice(-4)}` : "" },
                     { icon: MapPin, label: "Address", value: [data.shopCity, data.shopState].filter(Boolean).join(", ") || "—", sub: data.shopPincode || "" },
                   ].map(({ icon: Icon, label, value, sub }) => (
-                    <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-[#F3F8F5] border border-[#C8D8D0]">
+                    <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-[#F4F5F7] border border-[#C7CCD1]">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                         style={{ background: EMERALD + "1A" }}>
                         <Icon size={15} style={{ color: EMERALD }} />
@@ -974,13 +1043,13 @@ export default function SellerRegister() {
                   ))}
                 </div>
 
-                <div className="border border-[#C8D8D0] rounded-xl p-4 max-h-32 overflow-y-auto text-xs text-gray-500 leading-relaxed">
+                <div className="border border-[#C7CCD1] rounded-xl p-4 max-h-32 overflow-y-auto text-xs text-gray-500 leading-relaxed">
                   <p className="font-semibold text-gray-700 mb-2">Terms & Conditions</p>
-                  By registering as a seller on TwirlDrape, you agree to: (a) provide accurate and truthful information;
+                  By registering as a seller on VASTRAA, you agree to: (a) provide accurate and truthful information;
                   (b) comply with all applicable Indian laws including GST regulations; (c) maintain product quality
                   standards; (d) not sell counterfeit, prohibited, or restricted goods; (e) accept our commission
-                  structure and payout terms (10% commission on each sale); (f) allow TwirlDrape to use your shop name
-                  and product images for marketing. TwirlDrape reserves the right to suspend or terminate accounts for
+                  structure and payout terms (10% commission on each sale); (f) allow VASTRAA to use your shop name
+                  and product images for marketing. VASTRAA reserves the right to suspend or terminate accounts for
                   policy violations. Disputes shall be subject to the jurisdiction of courts in Mumbai, Maharashtra.
                 </div>
 
@@ -1002,7 +1071,7 @@ export default function SellerRegister() {
 
         <p className="text-xs text-gray-400 mt-6">
           Need help?{" "}
-          <a href="mailto:sellers@twirldrape.com" className="underline">sellers@twirldrape.com</a>
+          <a href="mailto:sellers@vastraa.com" className="underline">sellers@vastraa.com</a>
         </p>
       </div>
 
@@ -1011,7 +1080,7 @@ export default function SellerRegister() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl border border-[#C8D8D0] p-6 max-w-sm w-full shadow-xl"
+            className="bg-white rounded-2xl border border-[#C7CCD1] p-6 max-w-sm w-full shadow-xl"
           >
             <h3 className="text-base font-bold mb-2" style={{ color: EMERALD }}>
               Start over?
@@ -1022,8 +1091,8 @@ export default function SellerRegister() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowStartOverModal(false)}
-                className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E6F0EA]"
-                style={{ borderColor: "#C8D8D0", color: EMERALD }}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E5E8EC]"
+                style={{ borderColor: "#C7CCD1", color: EMERALD }}
               >
                 Cancel
               </button>
@@ -1044,7 +1113,7 @@ export default function SellerRegister() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl border border-[#C8D8D0] p-6 max-w-sm w-full shadow-xl"
+            className="bg-white rounded-2xl border border-[#C7CCD1] p-6 max-w-sm w-full shadow-xl"
           >
             <h3 className="text-base font-bold mb-2" style={{ color: EMERALD }}>
               Leave registration?
@@ -1056,8 +1125,8 @@ export default function SellerRegister() {
             <div className="flex gap-3">
               <button
                 onClick={() => resolveLeave(false)}
-                className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E6F0EA]"
-                style={{ borderColor: "#C8D8D0", color: EMERALD }}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors hover:bg-[#E5E8EC]"
+                style={{ borderColor: "#C7CCD1", color: EMERALD }}
               >
                 Stay
               </button>
@@ -1072,6 +1141,20 @@ export default function SellerRegister() {
           </motion.div>
         </div>
       )}
+
+      {/* Google OTP Verification Modal */}
+      <GoogleOtpModal
+        isOpen={otpModalState.isOpen}
+        challengeId={otpModalState.challengeId}
+        email={otpModalState.email}
+        targetRole={otpModalState.targetRole}
+        onClose={() => setOtpModalState((prev) => ({ ...prev, isOpen: false }))}
+        onVerified={(res) => {
+          setOtpModalState((prev) => ({ ...prev, isOpen: false }));
+          set("contactEmail")(res.user.email);
+          setStep(2);
+        }}
+      />
     </div>
   );
 }

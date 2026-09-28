@@ -5,9 +5,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { motion } from "framer-motion";
 import { MapPin, Star, Package, Mail, ExternalLink } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
-const MAROON = "#1E6B5A";
-const GOLD = "#C9A84C";
-const IVORY = "#F3F8F5";
+const MAROON = "#0A1F44";
+const GOLD = "#C7CCD1";
+const IVORY = "#F4F5F7";
 
 interface VendorData {
   id: string;
@@ -107,9 +107,9 @@ export default function VendorStore() {
     <Layout>
       <div style={{ background: IVORY, minHeight: "100vh" }}>
         {/* Store Hero Banner */}
-        <div className="relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${MAROON} 0%, #5e1421 100%)` }}>
+        <div className="relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${MAROON} 0%, #2C3E6B 100%)` }}>
           <div className="absolute inset-0 opacity-10">
-            <div className="absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(201,168,76,0.3) 0, rgba(201,168,76,0.3) 1px, transparent 0, transparent 50%)", backgroundSize: "10px 10px" }} />
+            <div className="absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(199,204,209,0.3) 0, rgba(199,204,209,0.3) 1px, transparent 0, transparent 50%)", backgroundSize: "10px 10px" }} />
           </div>
 
           <div className="relative max-w-6xl mx-auto px-6 py-14 flex flex-col sm:flex-row items-center sm:items-end gap-8">
@@ -117,7 +117,7 @@ export default function VendorStore() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5 }}
-              className="w-28 h-28 rounded-2xl border-4 border-[#C9A84C]/50 overflow-hidden bg-[#F3F8F5]/10 shrink-0 flex items-center justify-center"
+              className="w-28 h-28 rounded-2xl border-4 border-[#C7CCD1]/50 overflow-hidden bg-[#F4F5F7]/10 shrink-0 flex items-center justify-center"
             >
               <img
                 src={vendor.avatar || "/images/artisan-1.png"}
@@ -133,12 +133,12 @@ export default function VendorStore() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="flex-1 text-center sm:text-left"
             >
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#C9A84C] mb-2">Official Store</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#C7CCD1] mb-2">Official Store</p>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold text-white mb-2">{vendor.name}</h1>
               {vendor.tagline && (
-                <p className="text-[#F3F8F5]/70 text-sm mb-4 max-w-lg">{vendor.tagline}</p>
+                <p className="text-[#F4F5F7]/70 text-sm mb-4 max-w-lg">{vendor.tagline}</p>
               )}
-              <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start text-sm text-[#F3F8F5]/60">
+              <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start text-sm text-[#F4F5F7]/60">
                 <span className="flex items-center gap-1.5">
                   <MapPin size={13} style={{ color: GOLD }} />
                   {vendor.location}
@@ -154,7 +154,7 @@ export default function VendorStore() {
                 {vendor.contactEmail && (
                   <a
                     href={`mailto:${vendor.contactEmail}`}
-                    className="flex items-center gap-1.5 hover:text-[#F3F8F5] transition-colors"
+                    className="flex items-center gap-1.5 hover:text-[#F4F5F7] transition-colors"
                   >
                     <Mail size={13} style={{ color: GOLD }} />
                     Contact
@@ -173,7 +173,7 @@ export default function VendorStore() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 mb-10"
+              className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 mb-10"
             >
               <h2 className="font-serif text-lg font-bold mb-3" style={{ color: MAROON }}>About the Store</h2>
               <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{vendor.bio}</p>

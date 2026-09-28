@@ -9,10 +9,10 @@ import { QuickViewModal } from "@/components/QuickViewModal";
 import { useListProducts } from "@workspace/api-client-react";
 import type { ProductSummary } from "@workspace/api-client-react";
 
-const GOLD = "#C9A84C";
-const MAROON = "#1E6B5A";
-const IVORY = "#F3F8F5";
-const CREAM = "#E6F0EA";
+const GOLD = "#C7CCD1";
+const MAROON = "#0A1F44";
+const IVORY = "#F4F5F7";
+const CREAM = "#E5E8EC";
 
 type CategoryId = "paithani" | "designer";
 
@@ -53,7 +53,7 @@ const CATEGORY_CARDS: Array<{
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl overflow-hidden bg-[#E6F0EA] animate-pulse">
+    <div className="rounded-xl overflow-hidden bg-[#E5E8EC] animate-pulse">
       <div className="aspect-[3/4] bg-gray-200" />
       <div className="p-4 space-y-2">
         <div className="h-3 bg-gray-200 rounded w-3/4" />
@@ -215,7 +215,7 @@ export default function NewArrivals() {
               {shopAllHref ? (
                 <Link
                   href={shopAllHref}
-                  className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                  className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#0A1F44]/5"
                   style={{ borderColor: MAROON, color: MAROON }}
                 >
                   View All New {activeCard?.label} →
@@ -224,14 +224,14 @@ export default function NewArrivals() {
                 <>
                   <Link
                     href="/paithani/shop?newArrival=true"
-                    className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                    className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#0A1F44]/5"
                     style={{ borderColor: MAROON, color: MAROON }}
                   >
                     View All New Paithani →
                   </Link>
                   <Link
                     href="/designer/shop?newArrival=true"
-                    className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#1E6B5A]/5"
+                    className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-10 py-4 rounded-sm border-2 transition-all hover:bg-[#0A1F44]/5"
                     style={{ borderColor: MAROON, color: MAROON }}
                   >
                     View All New Designer →

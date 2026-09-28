@@ -1,6 +1,6 @@
-import { db, notificationsTable, ADMIN_NOTIFICATION_USER_ID, siteSettingsTable } from "@workspace/db";
+import { db, notificationsTable, ADMIN_NOTIFICATION_USER_ID, siteSettingsTable, mongoSiteSettings, mongoGeneric } from "@workspace/db";
 import type { AdminNotificationType } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq } from "@workspace/db";
 
 // ─── Map notification types → admin_notification_prefs category keys ──────────
 
@@ -25,11 +25,17 @@ let _prefCache: { prefs: Record<string, PrefRow>; expiresAt: number } | null = n
 async function getAdminNotifPrefs(): Promise<Record<string, PrefRow>> {
   if (_prefCache && Date.now() < _prefCache.expiresAt) return _prefCache.prefs;
   try {
-    const [row] = await db
-      .select({ value: siteSettingsTable.value })
-      .from(siteSettingsTable)
-      .where(eq(siteSettingsTable.key, "admin_notification_prefs"));
-    const prefs: Record<string, PrefRow> = row?.value ? JSON.parse(row.value) : {};
+    const val = await mongoSiteSettings.get("admin_notification_prefs");
+    let prefs: Record<string, PrefRow> = {};
+    if (val) {
+      prefs = JSON.parse(val);
+    } else {
+      const [row] = await db
+        .select({ value: siteSettingsTable.value })
+        .from(siteSettingsTable)
+        .where(eq(siteSettingsTable.key, "admin_notification_prefs"));
+      prefs = row?.value ? JSON.parse(row.value) : {};
+    }
     _prefCache = { prefs, expiresAt: Date.now() + 60_000 };
     return prefs;
   } catch {
@@ -59,7 +65,6 @@ export async function insertAdminNotification(opts: InsertAdminNotificationOpts)
   const { type, title, body, metadata } = opts;
 
   // Check whether the in-app channel is enabled for this notification category.
-  // If the admin has explicitly disabled in-app for this category, skip insertion.
   const prefKey = TYPE_TO_PREF_KEY[type];
   if (prefKey) {
     const prefs = await getAdminNotifPrefs();
@@ -67,12 +72,27 @@ export async function insertAdminNotification(opts: InsertAdminNotificationOpts)
     if (pref && pref.inApp === false) return; // channel disabled
   }
 
-  const client = opts.tx ?? db;
-  await client.insert(notificationsTable).values({
-    userId: ADMIN_NOTIFICATION_USER_ID,
-    type,
-    title,
-    body,
-    metadata: metadata ?? {},
-  });
+  const id = crypto.randomUUID();
+  try {
+    await mongoGeneric.getCollection("notifications").insertOne({
+      id,
+      _id: id,
+      userId: ADMIN_NOTIFICATION_USER_ID,
+      type,
+      title,
+      body,
+      isRead: false,
+      metadata: metadata ?? {},
+      createdAt: new Date(),
+    } as any);
+  } catch {
+    const client = opts.tx ?? db;
+    await client.insert(notificationsTable).values({
+      userId: ADMIN_NOTIFICATION_USER_ID,
+      type,
+      title,
+      body,
+      metadata: metadata ?? {},
+    });
+  }
 }

@@ -12,7 +12,7 @@ import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/produ
 
 // ─── constants ───────────────────────────────────────────────────────────────
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 function adminKey() {
   return typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
@@ -131,7 +131,7 @@ function KpiCard({ label, value, icon: Icon, iconBg, iconColor, active, onClick 
   return (
     <button onClick={onClick}
       className={`bg-white rounded-2xl border p-4 shadow-sm text-left transition-all w-full
-        ${active ? "border-[#C9A84C] ring-1 ring-[#C9A84C]/30" : "border-gray-200 hover:border-gray-300"}`}>
+        ${active ? "border-[#C7CCD1] ring-1 ring-[#C7CCD1]/30" : "border-gray-200 hover:border-gray-300"}`}>
       <div className="flex items-start justify-between mb-3">
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</span>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: iconBg }}>
@@ -221,7 +221,7 @@ function ProductModal({ product, onClose, onRefresh, toast }: {
           {(["detail", "approve", "reject"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-3 py-2 text-xs font-semibold rounded-t-lg capitalize transition-colors
-                ${tab === t ? "text-[#C9A84C] border-b-2 border-[#C9A84C]" : "text-gray-500 hover:text-gray-700"}`}>
+                ${tab === t ? "text-[#C7CCD1] border-b-2 border-[#C7CCD1]" : "text-gray-500 hover:text-gray-700"}`}>
               {t === "approve" ? "✓ Approve" : t === "reject" ? "✕ Reject" : "Details"}
             </button>
           ))}
@@ -394,10 +394,10 @@ function ProductsTable({
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search products or vendors…"
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/40" />
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40" />
         </div>
         <select value={sort} onChange={e => setSort(e.target.value)}
-          className="text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/40">
+          className="text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40">
           <option value="newest">Newest first</option>
           <option value="name_asc">Name A–Z</option>
           <option value="name_desc">Name Z–A</option>
@@ -722,12 +722,12 @@ function CategoriesTab({ toast }: { toast: ReturnType<typeof useToastMsg> }) {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Name</label>
               <input value={formName} onChange={e => setFormName(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/40" />
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Parent Category (optional)</label>
               <select value={formParent} onChange={e => setFormParent(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/40">
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40">
                 <option value="">None (top-level)</option>
                 {parentCats.filter(c => c.id !== modal.id).map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -873,7 +873,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToastMsg> }) {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Name</label>
               <input value={formName} onChange={e => setFormName(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/40" />
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40" />
             </div>
             <div className="flex gap-2 justify-end pt-1">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600">Cancel</button>
@@ -1045,7 +1045,7 @@ function AdminProductsContent() {
     { key: "rejected",   label: "Rejected",          value: stats?.rejected ?? "—",         icon: XCircle,       iconBg: "rgba(239,68,68,0.1)",  iconColor: "#EF4444" },
     { key: "categories", label: "Active Categories", value: stats?.activeCategories ?? "—", icon: Layers,        iconBg: "rgba(59,130,246,0.1)", iconColor: "#3B82F6" },
     { key: "brands",     label: "Active Brands",     value: stats?.activeBrands ?? "—",     icon: Tag,           iconBg: "rgba(139,92,246,0.1)", iconColor: "#8B5CF6" },
-    { key: "featured",   label: "Featured Products", value: stats?.featured ?? "—",         icon: Star,          iconBg: "rgba(201,168,76,0.12)", iconColor: GOLD },
+    { key: "featured",   label: "Featured Products", value: stats?.featured ?? "—",         icon: Star,          iconBg: "rgba(199,204,209,0.12)", iconColor: GOLD },
   ] as const;
 
   const tabs: { key: TabKey; label: string }[] = [
@@ -1080,7 +1080,7 @@ function AdminProductsContent() {
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-colors rounded-t-lg
               ${activeTab === t.key
-                ? "text-[#C9A84C] border-b-2 border-[#C9A84C]"
+                ? "text-[#C7CCD1] border-b-2 border-[#C7CCD1]"
                 : "text-gray-500 hover:text-gray-700"}`}>
             {t.label}
           </button>

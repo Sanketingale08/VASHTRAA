@@ -19,7 +19,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders, adminKey as getAdminKey } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 const PIE_COLORS = [GOLD, "#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4", "#84CC16"];
 
 function fmt(n: number) {
@@ -334,7 +334,7 @@ function RevenueTab({ period, from, to }: { period: Period; from: string; to: st
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Total Orders" value={s.totalOrders?.toLocaleString("en-IN") ?? 0} icon={ShoppingBag} iconBg="rgba(59,130,246,0.1)" iconColor="#3B82F6" />
-        <KpiCard label="Gross Revenue" value={fmt(s.grossRevenue ?? 0)} icon={IndianRupee} iconBg="rgba(201,168,76,0.12)" iconColor={GOLD} trend={s.growthPct} />
+        <KpiCard label="Gross Revenue" value={fmt(s.grossRevenue ?? 0)} icon={IndianRupee} iconBg="rgba(199,204,209,0.12)" iconColor={GOLD} trend={s.growthPct} />
         <KpiCard label="Net Revenue" value={fmt(s.netRevenue ?? 0)} icon={TrendingUp} iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" />
         <KpiCard label="Platform Commission" value={fmt(s.commission ?? 0)} icon={BarChart2} iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} />
         <KpiCard label="Vendor Earnings" value={fmt(s.vendorEarnings ?? 0)} icon={Store} iconBg="rgba(139,92,246,0.1)" iconColor="#8B5CF6" />
@@ -492,7 +492,7 @@ function SalesTab({ period, from, to }: { period: Period; from: string; to: stri
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Total Orders" value={(s.totalOrders ?? 0).toLocaleString("en-IN")} icon={ShoppingBag} iconBg="rgba(59,130,246,0.1)" iconColor="#3B82F6" />
         <KpiCard label="Items Sold" value={(s.totalItemsSold ?? 0).toLocaleString("en-IN")} icon={Package} iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" />
-        <KpiCard label="Sales Revenue" value={fmt(s.salesRevenue ?? 0)} icon={IndianRupee} iconBg="rgba(201,168,76,0.12)" iconColor={GOLD} />
+        <KpiCard label="Sales Revenue" value={fmt(s.salesRevenue ?? 0)} icon={IndianRupee} iconBg="rgba(199,204,209,0.12)" iconColor={GOLD} />
         <KpiCard label="Avg Order Value" value={fmt(s.avgOrderValue ?? 0)} icon={TrendingUp} iconBg="rgba(139,92,246,0.1)" iconColor="#8B5CF6" />
       </div>
 
@@ -766,7 +766,7 @@ function CustomerTab({ period, from, to }: { period: Period; from: string; to: s
         <KpiCard label="Total Customers" value={(s.totalCustomers ?? 0).toLocaleString("en-IN")} icon={Users} iconBg="rgba(139,92,246,0.1)" iconColor="#8B5CF6" />
         <KpiCard label="New Customers" value={(s.newCustomers ?? 0).toLocaleString("en-IN")} icon={Users} iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" />
         <KpiCard label="Returning" value={(s.returningCustomers ?? 0).toLocaleString("en-IN")} icon={Users} iconBg="rgba(59,130,246,0.1)" iconColor="#3B82F6" />
-        <KpiCard label="Avg Spend" value={fmt(s.avgSpend ?? 0)} icon={IndianRupee} iconBg="rgba(201,168,76,0.12)" iconColor={GOLD} />
+        <KpiCard label="Avg Spend" value={fmt(s.avgSpend ?? 0)} icon={IndianRupee} iconBg="rgba(199,204,209,0.12)" iconColor={GOLD} />
         <KpiCard label="Avg Orders / Customer" value={Number(s.avgOrdersPerCustomer ?? 0).toFixed(1)} icon={ShoppingBag} iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} />
       </div>
 
@@ -892,7 +892,7 @@ function ProductTab({ period, from, to }: { period: Period; from: string; to: st
         <KpiCard label="Total Products" value={(s.total ?? 0).toLocaleString("en-IN")} icon={Package} iconBg="rgba(13,27,54,0.08)" iconColor={NAVY} />
         <KpiCard label="Active" value={(s.active ?? 0).toLocaleString("en-IN")} icon={Package} iconBg="rgba(16,185,129,0.1)" iconColor="#10B981" />
         <KpiCard label="Pending Approval" value={(s.pending ?? 0).toLocaleString("en-IN")} icon={Package} iconBg="rgba(245,158,11,0.1)" iconColor="#F59E0B" />
-        <KpiCard label="Featured" value={(s.featured ?? 0).toLocaleString("en-IN")} icon={Package} iconBg="rgba(201,168,76,0.12)" iconColor={GOLD} />
+        <KpiCard label="Featured" value={(s.featured ?? 0).toLocaleString("en-IN")} icon={Package} iconBg="rgba(199,204,209,0.12)" iconColor={GOLD} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard label="Rejected" value={s.rejected ?? 0} icon={Package} iconBg="rgba(239,68,68,0.1)" iconColor="#EF4444" />

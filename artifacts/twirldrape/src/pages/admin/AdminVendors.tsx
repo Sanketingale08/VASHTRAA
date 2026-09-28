@@ -8,7 +8,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 const PAGE_SIZE = 15;
 
 interface Vendor {
@@ -89,7 +89,8 @@ function VendorsContent() {
           x.name.toLowerCase().includes(q) ||
           (x.contactEmail ?? "").toLowerCase().includes(q) ||
           (x.gstin ?? "").toLowerCase().includes(q) ||
-          x.location.toLowerCase().includes(q)
+          x.location.toLowerCase().includes(q) ||
+          (x.vendorId ?? "").toLowerCase().includes(q)
       );
     }
     return v;

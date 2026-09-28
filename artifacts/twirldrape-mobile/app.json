@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TwirlDrape",
+    "name": "VASTRAA",
     "slug": "twirldrape-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#7B1C2C"
+      "backgroundColor": "#0A1F44"
     },
     "ios": {
       "supportsTablet": false

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, X, Loader2, CheckCircle, ArrowLeft, Mail } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const inputCls =
-  "w-full border border-[#C9A84C]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E6B5A]/20 focus:border-[#1E6B5A] transition-colors bg-white text-center tracking-widest";
+  "w-full border border-[#C7CCD1]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-colors bg-white text-center tracking-widest";
 
 const RESEND_SECS = 60;
 
@@ -18,7 +18,7 @@ interface Props {
 type Step = "enter" | "verify" | "success";
 
 export function ChangePhoneModal({ onClose, onSuccess }: Props) {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [step, setStep] = useState<Step>("enter");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -33,7 +33,7 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
     return () => clearInterval(id);
   }, [countdown]);
 
-  const currentEmail = user?.primaryEmailAddress?.emailAddress ?? "";
+  const currentEmail = user?.email ?? "";
 
   async function requestOtp() {
     const digits = phone.replace(/\D/g, "");
@@ -44,10 +44,14 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
+      const token = localStorage.getItem("vastraa_auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`/api/account/phone-otp/request`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ phone: digits }),
       });
       const body = await res.json().catch(() => ({}));
@@ -70,17 +74,18 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
+      const token = localStorage.getItem("vastraa_auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`/api/account/phone-otp/verify`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ phone: phone.replace(/\D/g, ""), code }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Invalid or expired code");
-      // Do NOT call user.reload() here — the parent updates form.phone directly
-      // via onSuccess(), and a reload can return stale publicMetadata that would
-      // overwrite the just-confirmed value before onSuccess has a chance to run.
       setStep("success");
       onSuccess(phone.replace(/\D/g, ""));
     } catch (err: any) {
@@ -109,7 +114,7 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
               </button>
             )}
             <div>
-              <h3 className="font-serif text-lg font-bold text-[#1E6B5A]">Change Mobile Number</h3>
+              <h3 className="font-serif text-lg font-bold text-[#0A1F44]">Change Mobile Number</h3>
               <p className="text-xs text-gray-400 mt-0.5">
                 {step === "enter" && "Enter your new mobile number"}
                 {step === "verify" && "Enter the verification code"}
@@ -127,16 +132,16 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
         <AnimatePresence mode="wait">
           {step === "enter" && (
             <motion.div key="enter" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
-              <div className="bg-[#F3F8F5] rounded-xl p-3 flex items-start gap-2.5">
-                <Mail size={14} className="text-[#1E6B5A] mt-0.5 shrink-0" />
-                <p className="text-xs text-[#1E6B5A]">
+              <div className="bg-[#F4F5F7] rounded-xl p-3 flex items-start gap-2.5">
+                <Mail size={14} className="text-[#0A1F44] mt-0.5 shrink-0" />
+                <p className="text-xs text-[#0A1F44]">
                   A 6-digit verification code will be sent to <span className="font-semibold">{currentEmail}</span> to confirm this change.
                 </p>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Mobile Number</label>
-                <div className="flex items-center border border-[#C9A84C]/30 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#1E6B5A]/20 focus-within:border-[#1E6B5A] transition-colors bg-white">
-                  <span className="px-3 py-3 text-sm text-gray-500 border-r border-[#C9A84C]/20 bg-[#F3F8F5] font-medium">+91</span>
+                <div className="flex items-center border border-[#C7CCD1]/30 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#0A1F44]/20 focus-within:border-[#0A1F44] transition-colors bg-white">
+                  <span className="px-3 py-3 text-sm text-gray-500 border-r border-[#C7CCD1]/20 bg-[#F4F5F7] font-medium">+91</span>
                   <input
                     value={phone}
                     onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }}
@@ -152,7 +157,7 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
               <button
                 onClick={requestOtp}
                 disabled={loading || phone.replace(/\D/g, "").length !== 10}
-                className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : <><Phone size={14} /> Send Verification Code</>}
               </button>
@@ -161,8 +166,8 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
 
           {step === "verify" && (
             <motion.div key="verify" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
-              <div className="bg-[#F3F8F5] rounded-xl p-3 text-center">
-                <p className="text-xs text-gray-500">Code sent to <span className="font-semibold text-[#1E6B5A]">{currentEmail}</span></p>
+              <div className="bg-[#F4F5F7] rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500">Code sent to <span className="font-semibold text-[#0A1F44]">{currentEmail}</span></p>
                 <p className="text-xs text-gray-400 mt-0.5">Updating mobile to +91 {phone}</p>
               </div>
               <div>
@@ -182,15 +187,15 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
               <button
                 onClick={verifyOtp}
                 disabled={loading || otp.trim().length !== 6}
-                className="w-full bg-[#1E6B5A] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-[#0A1F44] hover:bg-[#6a1826] disabled:opacity-50 text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <><Loader2 size={14} className="animate-spin" /> Verifying…</> : "Verify & Update"}
               </button>
               <p className="text-center text-xs text-gray-400">
                 {countdown > 0 ? (
-                  <>Resend in <span className="font-semibold text-[#1E6B5A]">{countdown}s</span></>
+                  <>Resend in <span className="font-semibold text-[#0A1F44]">{countdown}s</span></>
                 ) : (
-                  <button onClick={resendOtp} disabled={loading} className="text-[#1E6B5A] font-semibold hover:underline disabled:opacity-50">
+                  <button onClick={resendOtp} disabled={loading} className="text-[#0A1F44] font-semibold hover:underline disabled:opacity-50">
                     Resend Code
                   </button>
                 )}
@@ -209,7 +214,7 @@ export function ChangePhoneModal({ onClose, onSuccess }: Props) {
               </div>
               <button
                 onClick={onClose}
-                className="w-full bg-[#1E6B5A] text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl transition-colors hover:bg-[#6a1826]"
+                className="w-full bg-[#0A1F44] text-white py-3 text-sm font-bold uppercase tracking-wider rounded-xl transition-colors hover:bg-[#6a1826]"
               >
                 Done
               </button>

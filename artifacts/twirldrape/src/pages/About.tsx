@@ -23,8 +23,8 @@ import { Layout } from "@/components/Layout";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const GOLD = "#C9A84C";
-const MAROON = "#1E6B5A";
+const GOLD = "#C7CCD1";
+const MAROON = "#0A1F44";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -46,7 +46,7 @@ function SectionTitle({
     <div className="text-center mb-10 md:mb-14">
       <div className="flex items-center justify-center gap-4 mb-3">
         <span className="flex-1 max-w-[80px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
-        <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#1E6B5A]">
+        <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#0A1F44]">
           {children}
         </h2>
         <span className="flex-1 max-w-[80px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
@@ -73,7 +73,7 @@ const TRUST_BADGE_ICONS = [
 ];
 
 const TEAM = [
-  { name: "Anjali Deshmukh", role: "Founder & CEO", avatar: "/images/team-anjali.png", bio: "Third-generation textile enthusiast who founded TwirlDrape to bring authentic Paithani weaves to a global audience." },
+  { name: "Anjali Deshmukh", role: "Founder & CEO", avatar: "/images/team-anjali.png", bio: "Third-generation textile enthusiast who founded VASTRAA to bring authentic Paithani weaves to a global audience." },
   { name: "Rohan Kulkarni", role: "Head of Vendor Relations", avatar: "/images/team-rohan.png", bio: "Works hand-in-hand with weaver collectives across Maharashtra to onboard and support artisan partners." },
   { name: "Meera Iyer", role: "Head of Design & Curation", avatar: "/images/team-meera.png", bio: "Curates every collection, ensuring each saree reflects timeless craftsmanship and contemporary taste." },
 ];
@@ -87,15 +87,15 @@ const DEFAULT_CONTENT = {
   ],
   heroHeadline: "Handwoven in India.\nDelivered to Your Door.",
   heroSubtext:
-    "TwirlDrape started with a single question: why is it so hard to find a genuinely handwoven saree without travelling to the source? We set out to fix that — building a marketplace where India's weavers sell directly, and every saree arrives with its full story intact.",
+    "VASTRAA started with a single question: why is it so hard to find a genuinely handwoven saree without travelling to the source? We set out to fix that — building a marketplace where India's weavers sell directly, and every saree arrives with its full story intact.",
   storyHeadline: "Born in Paithan. Built for Every Indian Wardrobe.",
   storyParagraph1:
     "In 2022, our founder Anjali Deshmukh visited a Paithani weaver co-operative in Paithan, Maharashtra, and found master weavers selling centuries-old work through local middlemen for a fraction of what buyers paid. She came back with twelve sarees and a resolve: give these artisans a direct channel to the people who would truly value their craft.",
   storyParagraph2:
-    "TwirlDrape launched with those twelve pieces and has grown steadily — never chasing volume, always vetting every seller personally. Today, every listing carries the weaver's name, their region, and the technique behind the cloth. That transparency is the product.",
+    "VASTRAA launched with those twelve pieces and has grown steadily — never chasing volume, always vetting every seller personally. Today, every listing carries the weaver's name, their region, and the technique behind the cloth. That transparency is the product.",
   weaversHeadline: "Forty Families. Dozens of Traditions.",
   weaversParagraph1:
-    "Every seller on TwirlDrape is admitted by hand — Anjali or Rohan visits the workshop, speaks with the weavers, and photographs the process before a single listing goes live. Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.",
+    "Every seller on VASTRAA is admitted by hand — Anjali or Rohan visits the workshop, speaks with the weavers, and photographs the process before a single listing goes live. Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.",
   weaversParagraph2:
     "We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee structures. If a weaver raises a concern, it goes directly to Rohan's phone. That accountability is what lets us promise you a saree made with genuine care.",
   ctaHeadline: "Discover the Craft. Wear the Story.",
@@ -108,7 +108,7 @@ const DEFAULT_CONTENT = {
   ],
   trustBadges: [
     { title: "100% Authentic Products", desc: "Every saree is verified and sourced directly from trusted weavers and artisans." },
-    { title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on TwirlDrape." },
+    { title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on VASTRAA." },
     { title: "Secure Payments & Data Protection", desc: "Bank-grade encryption keeps your payment and personal data completely safe." },
     { title: "Easy Returns & Refunds", desc: "Hassle-free returns within 7 days — no questions asked, full refund guaranteed." },
     { title: "Fast & Reliable Pan India Delivery", desc: "Swift shipping across all states with real-time tracking on every order." },
@@ -122,18 +122,43 @@ export default function About() {
   const [content, setContent] = useState<AboutContent>(DEFAULT_CONTENT);
 
   useEffect(() => {
-    fetch(`/api/about-content`, { credentials: "include" })
+    fetch(`/api/about-content?_t=${Date.now()}`, { cache: "no-store", credentials: "include" })
       .then((r) => r.json())
-      .then((data: AboutContent) => setContent(data))
+      .then((data: AboutContent) => {
+        if (data && typeof data === "object") {
+          setContent((prev) => ({ ...prev, ...data }));
+        }
+      })
       .catch(() => {});
   }, []);
 
   return (
     <Layout>
-      <div className="bg-[#F3F8F5] min-h-screen">
+      <div className="bg-[#F4F5F7] min-h-screen">
+
+        {/* ── Hero Section ──────────────────────────────────────── */}
+        <section className="bg-[#0A1F44] text-white py-16 md:py-20 border-b border-[#C7CCD1]/20">
+          <div className="container mx-auto px-4 text-center max-w-3xl">
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={fadeUp}
+            >
+              <p className="text-[#C7CCD1] uppercase tracking-[0.3em] text-xs font-bold mb-4">
+                About VASTRAA
+              </p>
+              <h1 className="font-serif text-3xl md:text-5xl font-bold tracking-tight leading-tight mb-6 whitespace-pre-line text-white">
+                {content.heroHeadline}
+              </h1>
+              <p className="text-[#C7CCD1]/90 text-base md:text-lg leading-relaxed max-w-2xl mx-auto">
+                {content.heroSubtext}
+              </p>
+            </motion.div>
+          </div>
+        </section>
 
         {/* ── Stats bar ────────────────────────────────────────── */}
-        <section className="bg-white border-b border-[#C9A84C]/20 py-10">
+        <section className="bg-white border-b border-[#C7CCD1]/20 py-10">
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
               {content.stats.map((s, i) => (
@@ -145,7 +170,7 @@ export default function About() {
                   viewport={{ once: true }}
                   variants={fadeUp}
                 >
-                  <p className="font-serif text-3xl md:text-4xl font-bold text-[#1E6B5A]">{s.value}</p>
+                  <p className="font-serif text-3xl md:text-4xl font-bold text-[#0A1F44]">{s.value}</p>
                   <p className="text-xs md:text-sm uppercase tracking-wider text-[#7a5f4e] mt-1">{s.label}</p>
                 </motion.div>
               ))}
@@ -163,8 +188,8 @@ export default function About() {
               variants={fadeUp}
               className="order-2 md:order-1"
             >
-              <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Founding Mission</p>
-              <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold mb-5">
+              <p className="text-[#C7CCD1] uppercase tracking-[0.3em] text-xs font-bold mb-3">Founding Mission</p>
+              <h2 className="font-serif text-3xl md:text-4xl text-[#0A1F44] font-bold mb-5">
                 {content.storyHeadline}
               </h2>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-4">
@@ -182,10 +207,10 @@ export default function About() {
               custom={1}
               className="order-1 md:order-2"
             >
-              <div className="relative rounded-2xl overflow-hidden shadow-xl border border-[#C9A84C]/20 aspect-[4/3]">
+              <div className="relative rounded-2xl overflow-hidden shadow-xl border border-[#C7CCD1]/20 aspect-[4/3]">
                 <img
                   src="/images/hero-paithani-2.png"
-                  alt="TwirlDrape artisan weaving"
+                  alt="VASTRAA artisan weaving"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -197,7 +222,7 @@ export default function About() {
         <section className="bg-white py-16 md:py-24">
           <div className="container mx-auto px-4">
             <SectionTitle subtitle="Your trust is our highest priority at every step">
-              Why Shop With TwirlDrape?
+              Why Shop With VASTRAA?
             </SectionTitle>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {content.trustBadges.map((f, i) => (
@@ -208,7 +233,7 @@ export default function About() {
                   whileInView="visible"
                   viewport={{ once: true }}
                   variants={fadeUp}
-                  className="flex flex-col items-start gap-4 p-6 rounded-2xl border border-[#C9A84C]/20 hover:shadow-md transition-shadow duration-300 bg-[#F3F8F5]"
+                  className="flex flex-col items-start gap-4 p-6 rounded-2xl border border-[#C7CCD1]/20 hover:shadow-md transition-shadow duration-300 bg-[#F4F5F7]"
                 >
                   <div className="p-3 rounded-xl" style={{ background: MAROON + "15" }}>{TRUST_BADGE_ICONS[i]}</div>
                   <div>
@@ -222,7 +247,7 @@ export default function About() {
         </section>
 
         {/* ── Mission & Values ─────────────────────────────────── */}
-        <section className="bg-[#E6F0EA] py-16 md:py-24">
+        <section className="bg-[#E5E8EC] py-16 md:py-24">
           <div className="container mx-auto px-4">
             <SectionTitle subtitle="The principles that guide every decision we make">
               Mission & Values
@@ -236,12 +261,12 @@ export default function About() {
                   whileInView="visible"
                   viewport={{ once: true }}
                   variants={fadeUp}
-                  className="bg-white rounded-2xl p-6 border border-[#C9A84C]/20 shadow-sm hover:shadow-md transition-shadow duration-300 text-center"
+                  className="bg-white rounded-2xl p-6 border border-[#C7CCD1]/20 shadow-sm hover:shadow-md transition-shadow duration-300 text-center"
                 >
-                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#1E6B5A]/8 flex items-center justify-center">
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#0A1F44]/8 flex items-center justify-center">
                     {MISSION_VALUE_ICONS[i]}
                   </div>
-                  <h3 className="font-semibold text-[#3D1515] text-base mb-2">{v.title}</h3>
+                  <h3 className="font-semibold text-[#0A1F44] text-base mb-2">{v.title}</h3>
                   <p className="text-sm text-[#7a5f4e] leading-relaxed">{v.desc}</p>
                 </motion.div>
               ))}
@@ -258,7 +283,7 @@ export default function About() {
               viewport={{ once: true }}
               variants={fadeUp}
             >
-              <div className="relative rounded-2xl overflow-hidden shadow-xl border border-[#C9A84C]/20 aspect-[4/3]">
+              <div className="relative rounded-2xl overflow-hidden shadow-xl border border-[#C7CCD1]/20 aspect-[4/3]">
                 <img
                   src="/images/artisan-1.png"
                   alt="Weaver artisan at work"
@@ -273,8 +298,8 @@ export default function About() {
               variants={fadeUp}
               custom={1}
             >
-              <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-3">Our Weavers</p>
-              <h2 className="font-serif text-3xl md:text-4xl text-[#1E6B5A] font-bold mb-5">
+              <p className="text-[#C7CCD1] uppercase tracking-[0.3em] text-xs font-bold mb-3">Our Weavers</p>
+              <h2 className="font-serif text-3xl md:text-4xl text-[#0A1F44] font-bold mb-5">
                 {content.weaversHeadline}
               </h2>
               <p className="text-[#7a5f4e] text-sm md:text-base leading-relaxed mb-4">
@@ -286,15 +311,9 @@ export default function About() {
               <div className="flex flex-wrap items-center gap-4">
                 <Link
                   href="/weavers"
-                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E6B5A] hover:text-[#C9A84C] transition-colors border-b border-[#1E6B5A]/30 hover:border-[#C9A84C] pb-0.5"
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#0A1F44] hover:text-[#C7CCD1] transition-colors border-b border-[#0A1F44]/30 hover:border-[#C7CCD1] pb-0.5"
                 >
                   Meet Our Weavers <ArrowRight size={13} />
-                </Link>
-                <Link
-                  href="/seller/register"
-                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#7a5f4e] hover:text-[#C9A84C] transition-colors border-b border-[#7a5f4e]/30 hover:border-[#C9A84C] pb-0.5"
-                >
-                  Join as a Weaver Partner <ArrowRight size={13} />
                 </Link>
               </div>
             </motion.div>
@@ -303,7 +322,7 @@ export default function About() {
 
         {/* ── Team ─────────────────────────────────────────────── */}
         <section className="container mx-auto px-4 py-16 md:py-24">
-          <SectionTitle subtitle="The people behind TwirlDrape's mission">
+          <SectionTitle subtitle="The people behind VASTRAA's mission">
             Meet the Team
           </SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-4xl mx-auto">
@@ -315,15 +334,15 @@ export default function About() {
                 whileInView="visible"
                 viewport={{ once: true }}
                 variants={fadeUp}
-                className="bg-white rounded-2xl border border-[#C9A84C]/20 shadow-sm hover:shadow-md transition-shadow duration-300 p-6 text-center"
+                className="bg-white rounded-2xl border border-[#C7CCD1]/20 shadow-sm hover:shadow-md transition-shadow duration-300 p-6 text-center"
               >
                 <img
                   src={member.avatar}
                   alt={member.name}
-                  className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-2 border-[#C9A84C]/30"
+                  className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-2 border-[#C7CCD1]/30"
                 />
-                <h3 className="font-semibold text-[#3D1515] text-base">{member.name}</h3>
-                <p className="text-xs font-bold uppercase tracking-wider text-[#C9A84C] mb-3">{member.role}</p>
+                <h3 className="font-semibold text-[#0A1F44] text-base">{member.name}</h3>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#C7CCD1] mb-3">{member.role}</p>
                 <p className="text-sm text-[#7a5f4e] leading-relaxed">{member.bio}</p>
               </motion.div>
             ))}
@@ -331,7 +350,7 @@ export default function About() {
         </section>
 
         {/* ── CTA ──────────────────────────────────────────────── */}
-        <section className="bg-[#E6F0EA] py-16 md:py-20">
+        <section className="bg-[#E5E8EC] py-16 md:py-20">
           <div className="container mx-auto px-4 text-center">
             <motion.div
               initial="hidden"
@@ -339,7 +358,7 @@ export default function About() {
               viewport={{ once: true }}
               variants={fadeUp}
             >
-              <h2 className="font-serif text-2xl md:text-3xl text-[#1E6B5A] font-bold mb-4">
+              <h2 className="font-serif text-2xl md:text-3xl text-[#0A1F44] font-bold mb-4">
                 {content.ctaHeadline}
               </h2>
               <p className="text-[#7a5f4e] mb-8 max-w-lg mx-auto text-sm md:text-base">
@@ -347,29 +366,29 @@ export default function About() {
               </p>
               <Link
                 href="/collections"
-                className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+                className="inline-flex items-center gap-2 bg-[#0A1F44] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#2C3E6B] transition-colors"
               >
                 Explore Collections <ArrowRight size={16} />
               </Link>
 
-              <div className="mt-12 pt-8 border-t border-[#C9A84C]/30">
-                <p className="text-xs uppercase tracking-[0.25em] font-bold text-[#C9A84C] mb-5">Follow Our Journey</p>
+              <div className="mt-12 pt-8 border-t border-[#C7CCD1]/30">
+                <p className="text-xs uppercase tracking-[0.25em] font-bold text-[#C7CCD1] mb-5">Follow Our Journey</p>
                 <div className="flex items-center justify-center gap-5">
                   {[
-                    { icon: <Instagram size={20} />, label: "Instagram", href: "https://www.instagram.com/twirldrape/", hover: "hover:text-[#E1306C]" },
-                    { icon: <Facebook size={20} />, label: "Facebook", href: "https://www.facebook.com/twirldrape", hover: "hover:text-[#1877F2]" },
-                    { icon: <Youtube size={20} />, label: "YouTube", href: "https://www.youtube.com/@twirldrape", hover: "hover:text-[#FF0000]" },
-                    { icon: <Twitter size={20} />, label: "X (Twitter)", href: "https://twitter.com/twirldrape", hover: "hover:text-[#1DA1F2]" },
-                    { icon: <Linkedin size={20} />, label: "LinkedIn", href: "https://www.linkedin.com/company/twirldrape", hover: "hover:text-[#0A66C2]" },
+                    { icon: <Instagram size={20} />, label: "Instagram", href: "https://www.instagram.com/vastraa/", hover: "hover:text-[#E1306C]" },
+                    { icon: <Facebook size={20} />, label: "Facebook", href: "https://www.facebook.com/vastraa", hover: "hover:text-[#1877F2]" },
+                    { icon: <Youtube size={20} />, label: "YouTube", href: "https://www.youtube.com/@vastraa", hover: "hover:text-[#FF0000]" },
+                    { icon: <Twitter size={20} />, label: "X (Twitter)", href: "https://twitter.com/vastraa", hover: "hover:text-[#1DA1F2]" },
+                    { icon: <Linkedin size={20} />, label: "LinkedIn", href: "https://www.linkedin.com/company/vastraa", hover: "hover:text-[#0A66C2]" },
                   ].map((s) => (
                     <a
                       key={s.label}
                       href={s.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={`TwirlDrape on ${s.label}`}
+                      aria-label={`VASTRAA on ${s.label}`}
                       title={s.label}
-                      className={`w-11 h-11 rounded-full border border-[#C9A84C]/30 bg-white flex items-center justify-center text-[#7a5f4e] ${s.hover} hover:border-[#C9A84C] hover:shadow-md transition-all duration-300`}
+                      className={`w-11 h-11 rounded-full border border-[#C7CCD1]/30 bg-white flex items-center justify-center text-[#7a5f4e] ${s.hover} hover:border-[#C7CCD1] hover:shadow-md transition-all duration-300`}
                     >
                       {s.icon}
                     </a>

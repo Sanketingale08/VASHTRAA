@@ -5,7 +5,7 @@ import AdminLayout, { AdminGuard } from "./AdminLayout";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 import { adminHeaders } from '@/lib/adminApi';
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 interface Stat {
   label: string;
@@ -42,15 +42,15 @@ const DEFAULT: AboutContent = {
   ],
   heroHeadline: "Handwoven in India.\nDelivered to Your Door.",
   heroSubtext:
-    "TwirlDrape started with a single question: why is it so hard to find a genuinely handwoven saree without travelling to the source? We set out to fix that — building a marketplace where India's weavers sell directly, and every saree arrives with its full story intact.",
+    "VASTRAA started with a single question: why is it so hard to find a genuinely handwoven saree without travelling to the source? We set out to fix that — building a marketplace where India's weavers sell directly, and every saree arrives with its full story intact.",
   storyHeadline: "Born in Paithan. Built for Every Indian Wardrobe.",
   storyParagraph1:
     "In 2022, our founder Anjali Deshmukh visited a Paithani weaver co-operative in Paithan, Maharashtra, and found master weavers selling centuries-old work through local middlemen for a fraction of what buyers paid. She came back with twelve sarees and a resolve: give these artisans a direct channel to the people who would truly value their craft.",
   storyParagraph2:
-    "TwirlDrape launched with those twelve pieces and has grown steadily — never chasing volume, always vetting every seller personally. Today, every listing carries the weaver's name, their region, and the technique behind the cloth. That transparency is the product.",
+    "VASTRAA launched with those twelve pieces and has grown steadily — never chasing volume, always vetting every seller personally. Today, every listing carries the weaver's name, their region, and the technique behind the cloth. That transparency is the product.",
   weaversHeadline: "Forty Families. Dozens of Traditions.",
   weaversParagraph1:
-    "Every seller on TwirlDrape is admitted by hand — Anjali or Rohan visits the workshop, speaks with the weavers, and photographs the process before a single listing goes live. Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.",
+    "Every seller on VASTRAA is admitted by hand — Anjali or Rohan visits the workshop, speaks with the weavers, and photographs the process before a single listing goes live. Our current partners span Paithani silk from Paithan and Yeola, Kanjivaram from Kanchipuram, Chanderi from Madhya Pradesh, and Tant from West Bengal.",
   weaversParagraph2:
     "We pay within 48 hours of delivery confirmation — no net-30 terms, no opaque fee structures. If a weaver raises a concern, it goes directly to Rohan's phone. That accountability is what lets us promise you a saree made with genuine care.",
   ctaHeadline: "Discover the Craft. Wear the Story.",
@@ -63,7 +63,7 @@ const DEFAULT: AboutContent = {
   ],
   trustBadges: [
     { title: "100% Authentic Products", desc: "Every saree is verified and sourced directly from trusted weavers and artisans." },
-    { title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on TwirlDrape." },
+    { title: "Verified Vendors & Quality Assured", desc: "All vendors go through a rigorous quality check before listing on VASTRAA." },
     { title: "Secure Payments & Data Protection", desc: "Bank-grade encryption keeps your payment and personal data completely safe." },
     { title: "Easy Returns & Refunds", desc: "Hassle-free returns within 7 days — no questions asked, full refund guaranteed." },
     { title: "Fast & Reliable Pan India Delivery", desc: "Swift shipping across all states with real-time tracking on every order." },
@@ -96,11 +96,6 @@ const inputCls =
 const textareaCls = inputCls + " resize-none";
 
 export default function AdminAboutContent() {
-  const adminKey =
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("td_admin_key") ?? ""
-      : "";
-
   const [form, setForm] = useState<AboutContent>(DEFAULT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -108,9 +103,13 @@ export default function AdminAboutContent() {
   const inFlight = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch(`/api/about-content`, { credentials: "include" })
+    fetch(`/api/about-content?_t=${Date.now()}`, { cache: "no-store", credentials: "include" })
       .then((r) => r.json())
-      .then((data: AboutContent) => setForm(data))
+      .then((data: AboutContent) => {
+        if (data && typeof data === "object") {
+          setForm((prev) => ({ ...prev, ...data }));
+        }
+      })
       .catch(() => setForm(DEFAULT))
       .finally(() => setLoading(false));
   }, []);
@@ -151,24 +150,22 @@ export default function AdminAboutContent() {
     if (inFlight.current.has("handleSave")) return;
     inFlight.current.add("handleSave");
     setSaving(true);
+    setToast(null);
     try {
       const r = await fetch(`/api/admin/about-content`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-key": adminKey,
-        },
+        headers: adminHeaders(),
         credentials: "include",
         body: JSON.stringify(form),
       });
       if (r.ok) {
         showToast("About page content saved successfully.", true);
       } else {
-        const err = await r.json().catch(() => ({ error: "Unknown error" }));
-        showToast(err.error || "Failed to save.", false);
+        const err = await r.json().catch(() => ({ error: "Failed to save changes" }));
+        showToast(err.error || "Failed to save changes.", false);
       }
     } catch {
-      showToast("Network error — could not save.", false);
+      showToast("Network error — could not save changes.", false);
     } finally {
       inFlight.current.delete("handleSave");
       setSaving(false);
@@ -391,7 +388,7 @@ export default function AdminAboutContent() {
               Trust Badges
             </h2>
             <p className="text-xs text-gray-400 -mt-3">
-              The six trust indicators shown in the "Why Shop With TwirlDrape?" section.
+              The six trust indicators shown in the "Why Shop With VASTRAA?" section.
             </p>
             <div className="space-y-4">
               {form.trustBadges.map((badge, i) => (

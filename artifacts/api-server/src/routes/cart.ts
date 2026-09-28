@@ -1,14 +1,41 @@
 import { Router } from "express";
 import { isCustomer } from "../middlewares/isCustomer";
-import { db } from "@workspace/db";
-import { cartItemsTable, productsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, cartItemsTable, productsTable, mongoCart, mongoProducts } from "@workspace/db";
+import { eq, and } from "@workspace/db";
 
 const router = Router();
 
-
 router.get("/cart", isCustomer, async (req: any, res) => {
   try {
+    try {
+      const cartItems = await mongoCart.findByUserId(req.userId);
+      if (cartItems.length > 0) {
+        const productIds = cartItems.map(c => c.productId);
+        const products = await mongoProducts.findMany({ id: { $in: productIds } });
+        const prodMap = new Map(products.map(p => [p.id, p]));
+        const items = cartItems.map(c => {
+          const p = prodMap.get(c.productId);
+          return {
+            id: c.productId,
+            productId: c.productId,
+            quantity: c.quantity,
+            name: p?.name ?? "Product",
+            price: p?.price ?? 0,
+            originalPrice: p?.originalPrice ?? null,
+            images: p?.images ?? [],
+            vendorName: p?.vendorName ?? "",
+            stock: p?.stock ?? 10,
+            category: p?.category ?? "paithani",
+            isBestSeller: p?.isBestSeller ?? false,
+            isNewArrival: p?.isNewArrival ?? false,
+            rating: p?.rating ?? 4.5,
+            reviewCount: p?.reviewCount ?? 0,
+          };
+        });
+        return res.json({ items });
+      }
+    } catch {}
+
     const rows = await db
       .select({
         productId: cartItemsTable.productId,
@@ -40,37 +67,37 @@ router.post("/cart/:productId", isCustomer, async (req: any, res: any): Promise<
   const { productId } = req.params;
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
-    const product = await db
-      .select({ stock: productsTable.stock })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId))
-      .limit(1);
+    let product: any = await mongoProducts.findById(productId);
+    if (!product) {
+      const rows = await db.select().from(productsTable).where(eq(productsTable.id, productId)).limit(1);
+      product = rows[0];
+    }
 
-    if (product.length === 0) {
+    if (!product) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    if (product[0].stock === 0) {
+    if (product.stock === 0) {
       res.status(400).json({ error: "Product is out of stock" });
       return;
     }
 
-    const existing = await db
-      .select({ quantity: cartItemsTable.quantity })
-      .from(cartItemsTable)
-      .where(and(eq(cartItemsTable.userId, req.userId), eq(cartItemsTable.productId, productId)))
-      .limit(1);
+    const existingCart = await mongoCart.findByUserId(req.userId);
+    const existingItem = existingCart.find(i => i.productId === productId);
+    const newQty = existingItem ? existingItem.quantity + quantity : quantity;
+    const cappedQty = Math.max(1, Math.min(newQty, product.stock));
 
-    const newQty = existing.length > 0 ? existing[0].quantity + quantity : quantity;
-    const cappedQty = Math.max(1, Math.min(newQty, product[0].stock));
+    await mongoCart.upsert(req.userId, productId, cappedQty);
 
-    await db
-      .insert(cartItemsTable)
-      .values({ userId: req.userId, productId, quantity: cappedQty })
-      .onConflictDoUpdate({
-        target: [cartItemsTable.userId, cartItemsTable.productId],
-        set: { quantity: cappedQty, updatedAt: new Date() },
-      });
+    try {
+      await db
+        .insert(cartItemsTable)
+        .values({ userId: req.userId, productId, quantity: cappedQty })
+        .onConflictDoUpdate({
+          target: [cartItemsTable.userId, cartItemsTable.productId],
+          set: { quantity: cappedQty, updatedAt: new Date() },
+        });
+    } catch {}
 
     res.json({ success: true, quantity: cappedQty });
   } catch (err) {
@@ -83,30 +110,33 @@ router.put("/cart/:productId", isCustomer, async (req: any, res: any): Promise<v
   const { productId } = req.params;
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
-    const product = await db
-      .select({ stock: productsTable.stock })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId))
-      .limit(1);
+    let product: any = await mongoProducts.findById(productId);
+    if (!product) {
+      const rows = await db.select().from(productsTable).where(eq(productsTable.id, productId)).limit(1);
+      product = rows[0];
+    }
 
-    if (product.length === 0) {
+    if (!product) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    if (product[0].stock === 0) {
+    if (product.stock === 0) {
       res.status(400).json({ error: "Product is out of stock" });
       return;
     }
 
-    const cappedQty = Math.max(1, Math.min(quantity, product[0].stock));
+    const cappedQty = Math.max(1, Math.min(quantity, product.stock));
+    await mongoCart.upsert(req.userId, productId, cappedQty);
 
-    await db
-      .insert(cartItemsTable)
-      .values({ userId: req.userId, productId, quantity: cappedQty })
-      .onConflictDoUpdate({
-        target: [cartItemsTable.userId, cartItemsTable.productId],
-        set: { quantity: cappedQty, updatedAt: new Date() },
-      });
+    try {
+      await db
+        .insert(cartItemsTable)
+        .values({ userId: req.userId, productId, quantity: cappedQty })
+        .onConflictDoUpdate({
+          target: [cartItemsTable.userId, cartItemsTable.productId],
+          set: { quantity: cappedQty, updatedAt: new Date() },
+        });
+    } catch {}
 
     res.json({ success: true, quantity: cappedQty });
   } catch (err) {
@@ -118,9 +148,12 @@ router.put("/cart/:productId", isCustomer, async (req: any, res: any): Promise<v
 router.delete("/cart/:productId", isCustomer, async (req: any, res) => {
   const { productId } = req.params;
   try {
-    await db
-      .delete(cartItemsTable)
-      .where(and(eq(cartItemsTable.userId, req.userId), eq(cartItemsTable.productId, productId)));
+    await mongoCart.removeItem(req.userId, productId);
+    try {
+      await db
+        .delete(cartItemsTable)
+        .where(and(eq(cartItemsTable.userId, req.userId), eq(cartItemsTable.productId, productId)));
+    } catch {}
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to remove from cart");
@@ -130,7 +163,10 @@ router.delete("/cart/:productId", isCustomer, async (req: any, res) => {
 
 router.delete("/cart", isCustomer, async (req: any, res) => {
   try {
-    await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
+    await mongoCart.clearCart(req.userId);
+    try {
+      await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
+    } catch {}
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to clear cart");

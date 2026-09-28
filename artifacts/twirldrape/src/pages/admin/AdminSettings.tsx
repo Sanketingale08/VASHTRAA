@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const NAVY = "#0D1B36";
-const GOLD = "#C9A84C";
+const GOLD = "#C7CCD1";
 
 function adminKey() {
   return typeof window !== "undefined" ? sessionStorage.getItem("td_admin_key") ?? "" : "";
@@ -449,7 +449,7 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
 
   function handleDownloadSetupCodes() {
     const text = [
-      "TwirlDrape Admin — Recovery Codes",
+      "VASTRAA Admin — Recovery Codes",
       `Generated: ${new Date().toLocaleString("en-IN")}`,
       "",
       ...recoveryCodes,
@@ -461,7 +461,7 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "twirldrape-admin-recovery-codes.txt";
+    a.download = "vastraa-admin-recovery-codes.txt";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -797,7 +797,7 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
 
   function handleDownloadCodes() {
     const text = [
-      "TwirlDrape Admin — Recovery Codes",
+      "VASTRAA Admin — Recovery Codes",
       `Generated: ${new Date().toLocaleString("en-IN")}`,
       "",
       ...newCodes,
@@ -809,7 +809,7 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "twirldrape-admin-recovery-codes.txt";
+    a.download = "vastraa-admin-recovery-codes.txt";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -851,7 +851,7 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
               {/* Regenerate recovery codes */}
               <button onClick={() => { reset(); setView("regen"); }}
                 className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-100 hover:border-amber-200 hover:bg-amber-50 transition-colors text-left">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "rgba(201,168,76,0.12)" }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "rgba(199,204,209,0.12)" }}>
                   <RefreshCw size={15} style={{ color: GOLD }} />
                 </div>
                 <div>
@@ -877,7 +877,7 @@ function TwoFAManageModal({ onClose, onSuccess }: { onClose: () => void; onSucce
           {/* Regenerate flow */}
           {view === "regen" && (
             <form onSubmit={handleRegen} className="space-y-4">
-              <div className="p-3 rounded-lg border flex gap-2.5" style={{ background: "rgba(201,168,76,0.08)", borderColor: "rgba(201,168,76,0.3)" }}>
+              <div className="p-3 rounded-lg border flex gap-2.5" style={{ background: "rgba(199,204,209,0.08)", borderColor: "rgba(199,204,209,0.3)" }}>
                 <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: "#7a5700" }} />
                 <p className="text-xs" style={{ color: "#7a5700" }}>
                   Generating new recovery codes will <strong>permanently invalidate</strong> your existing ones. Store the new codes somewhere safe immediately.
@@ -1031,7 +1031,7 @@ function SecuritySection() {
               {twoFaLoading ? (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-400">Checking…</span>
               ) : twoFaEnabled ? (
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(201,168,76,0.15)", color: "#7a5700" }}>Enabled</span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(199,204,209,0.15)", color: "#7a5700" }}>Enabled</span>
               ) : (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">Disabled</span>
               )}
@@ -1758,8 +1758,8 @@ type PlatformFields = {
 };
 
 const PLATFORM_DEFAULTS: PlatformFields = {
-  platform_name: "TwirlDrape",
-  platform_logo_url: "",
+  platform_name: "VASTRAA",
+  platform_logo_url: "/logo.svg",
   country: "India",
   currency: "INR",
   timezone: "Asia/Kolkata",
@@ -1822,7 +1822,7 @@ function PlatformSettingsSection() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Platform Name */}
               <Field label="Platform Name">
-                <Input value={form.platform_name} onChange={e => set("platform_name", e.target.value)} disabled={!editing} placeholder="TwirlDrape" />
+                <Input value={form.platform_name} onChange={e => set("platform_name", e.target.value)} disabled={!editing} placeholder="VASTRAA" />
               </Field>
 
               {/* Country */}
@@ -1863,7 +1863,7 @@ function PlatformSettingsSection() {
 
               {/* Support Email */}
               <Field label="Support Email">
-                <Input type="email" value={form.support_email} onChange={e => set("support_email", e.target.value)} disabled={!editing} placeholder="support@twirldrape.com" />
+                <Input type="email" value={form.support_email} onChange={e => set("support_email", e.target.value)} disabled={!editing} placeholder="support@vastraa.com" />
               </Field>
 
               {/* Support Mobile */}

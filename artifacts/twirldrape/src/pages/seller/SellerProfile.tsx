@@ -5,10 +5,10 @@ import { useSellerContext } from "@/components/SellerGuard";
 import { SellerLayout } from "./SellerDashboard";
 import { getApiUrl } from "@/lib/api";
 
-const MAROON = "#1E6B5A";
-const IVORY = "#F3F8F5";
-const CREAM = "#E6F0EA";
-const GOLD = "#C9A84C";
+const MAROON = "#0A1F44";
+const IVORY = "#F4F5F7";
+const CREAM = "#E5E8EC";
+const GOLD = "#C7CCD1";
 
 interface AddressFields {
   addressLine1: string; // maps to shopStreet (backward compat)
@@ -254,8 +254,8 @@ interface AddressInputGroupProps {
 }
 
 function AddressInputGroup({ prefix, label, values, onChange, disabled, requireLine1, requireCity, requireState, requirePincode }: AddressInputGroupProps) {
-  const inputClass = "w-full px-4 py-2.5 rounded-lg border text-sm outline-none transition focus:ring-2 focus:ring-[#1E6B5A]/20";
-  const inputStyle = { background: CREAM, borderColor: "#C9A84C44", color: "#3D1515" };
+  const inputClass = "w-full px-4 py-2.5 rounded-lg border text-sm outline-none transition focus:ring-2 focus:ring-[#0A1F44]/20";
+  const inputStyle = { background: CREAM, borderColor: "#C7CCD144", color: "#0A1F44" };
   const labelClass = "block text-xs font-bold uppercase tracking-wider mb-1.5";
   const labelStyle = { color: "#5a3e3e" };
   const opacity = { opacity: disabled ? 0.6 : 1 };
@@ -614,8 +614,8 @@ export default function SellerProfile() {
     }
   }
 
-  const inputClass = "w-full px-4 py-2.5 rounded-lg border text-sm outline-none transition focus:ring-2 focus:ring-[#1E6B5A]/20";
-  const inputStyle = { background: CREAM, borderColor: "#C9A84C44", color: "#3D1515" };
+  const inputClass = "w-full px-4 py-2.5 rounded-lg border text-sm outline-none transition focus:ring-2 focus:ring-[#0A1F44]/20";
+  const inputStyle = { background: CREAM, borderColor: "#C7CCD144", color: "#0A1F44" };
   const labelClass = "block text-xs font-bold uppercase tracking-wider mb-1.5";
   const labelStyle = { color: "#5a3e3e" };
 
@@ -652,7 +652,7 @@ export default function SellerProfile() {
               className="space-y-5"
             >
               {/* Profile header card */}
-              <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+              <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6">
                 <div className="flex items-start gap-5">
                   {/* Avatar */}
                   <div className="w-20 h-20 rounded-full border-2 overflow-hidden shrink-0" style={{ borderColor: `${GOLD}60`, background: CREAM }}>
@@ -680,7 +680,7 @@ export default function SellerProfile() {
                   </div>
                   <button
                     onClick={startEdit}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold transition-all hover:border-[#1E6B5A] hover:text-[#1E6B5A]"
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold transition-all hover:border-[#0A1F44] hover:text-[#0A1F44]"
                     style={{ borderColor: "#D6C9BA", color: "#7a5f4e" }}
                   >
                     <Pencil size={12} /> Edit Profile
@@ -696,7 +696,7 @@ export default function SellerProfile() {
 
               {/* Vendor ID — read-only, always shown */}
               {vendor && (
-                <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+                <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6">
                   <h3 className="font-serif font-bold text-sm mb-3" style={{ color: MAROON }}>Account</h3>
                   <div className="flex items-start gap-3 py-3" style={{ borderColor: `${GOLD}20` }}>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${MAROON}12` }}>
@@ -717,7 +717,7 @@ export default function SellerProfile() {
               )}
 
               {/* Contact & Business details */}
-              <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+              <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6">
                 <h3 className="font-serif font-bold text-sm mb-3" style={{ color: MAROON }}>Contact & Business</h3>
                 <InfoRow icon={Mail} label="Email" value={form.contactEmail} />
                 <InfoRow icon={Phone} label="Mobile Number" value={form.mobile} />
@@ -730,7 +730,7 @@ export default function SellerProfile() {
 
               {/* Shop & Pickup address cards */}
               {(shopAddressLines.length > 0 || pickupAddressLines.length > 0) && (
-                <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+                <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6">
                   <h3 className="font-serif font-bold text-sm mb-4" style={{ color: MAROON }}>Addresses</h3>
                   <div className="space-y-3">
                     {shopAddressLines.length > 0 && (
@@ -767,7 +767,7 @@ export default function SellerProfile() {
               className="space-y-5"
             >
               {/* Profile photo */}
-              <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6">
+              <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6">
                 <h3 className="font-serif font-bold text-sm mb-4" style={{ color: MAROON }}>Profile Photo</h3>
                 <SingleAvatarUploader
                   currentAvatar={form.avatar}
@@ -778,7 +778,7 @@ export default function SellerProfile() {
               </div>
 
               {/* Basic info */}
-              <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+              <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 space-y-4">
                 <h3 className="font-serif font-bold text-sm" style={{ color: MAROON }}>Profile Details</h3>
 
                 <div>
@@ -812,7 +812,7 @@ export default function SellerProfile() {
               </div>
 
               {/* Business & contact */}
-              <div className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+              <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 space-y-4">
                 <h3 className="font-serif font-bold text-sm" style={{ color: MAROON }}>Business & Contact</h3>
 
                 <div>
@@ -841,7 +841,7 @@ export default function SellerProfile() {
               </div>
 
               {/* Shop Address */}
-              <div data-testid="shop-address-section" className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+              <div data-testid="shop-address-section" className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 space-y-4">
                 <div>
                   <h3 className="font-serif font-bold text-sm" style={{ color: MAROON }}>Shop Address</h3>
                   <p className="text-xs text-gray-400 mt-0.5">The registered address of your shop (used for invoices and correspondence)</p>
@@ -851,7 +851,7 @@ export default function SellerProfile() {
                   <label className={labelClass} style={labelStyle}>Shop Name</label>
                   <div
                     className="w-full px-4 py-2.5 rounded-lg border text-sm"
-                    style={{ background: `${CREAM}80`, borderColor: "#C9A84C44", color: "#3D1515", opacity: 0.8 }}
+                    style={{ background: `${CREAM}80`, borderColor: "#C7CCD144", color: "#0A1F44", opacity: 0.8 }}
                   >
                     {form.name || <span className="text-gray-400">—</span>}
                   </div>
@@ -867,7 +867,7 @@ export default function SellerProfile() {
               </div>
 
               {/* Pickup Address */}
-              <div data-testid="pickup-address-section" className="bg-white rounded-2xl border border-[#C9A84C]/20 p-6 space-y-4">
+              <div data-testid="pickup-address-section" className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6 space-y-4">
                 <div>
                   <h3 className="font-serif font-bold text-sm" style={{ color: MAROON }}>Pickup Address</h3>
                   <p className="text-xs text-gray-400 mt-0.5">Where orders are picked up by the courier</p>

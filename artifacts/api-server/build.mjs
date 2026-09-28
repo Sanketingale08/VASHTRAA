@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, mkdir } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -13,14 +13,14 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
+  await mkdir(distDir, { recursive: true });
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
     platform: "node",
     bundle: true,
     format: "esm",
-    outdir: distDir,
-    outExtension: { ".js": ".mjs" },
+    outfile: path.resolve(distDir, "index.mjs"),
     logLevel: "info",
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
@@ -60,11 +60,8 @@ async function buildAll() {
       "@mikro-orm/*",
       "@grpc/*",
       "@swc/*",
-      "@aws-sdk/*",
       "@azure/*",
       "@opentelemetry/*",
-      "@google-cloud/*",
-      "@google/*",
       "googleapis",
       "firebase-admin",
       "@parcel/watcher",
@@ -106,15 +103,32 @@ async function buildAll() {
       "fontkit",
     ],
     sourcemap: "linked",
-    plugins: [
-      // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
-      esbuildPluginPino({ transports: ["pino-pretty"] })
-    ],
+    plugins: [],
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';
 import __bannerUrl from 'node:url';
+import __bannerFs from 'node:fs';
+
+(function() {
+  function patch(obj, name) {
+    const orig = obj[name];
+    if (!orig) return;
+    obj[name] = function(...args) {
+      try { return orig.apply(this, args); } catch (e) {
+        if (e && (e.code === 'EPERM' || e.code === 'EACCES')) {
+          if (name.includes('lstat')) { try { return __bannerFs.statSync(...args); } catch(_) {} }
+          return args[0];
+        }
+        throw e;
+      }
+    };
+  }
+  patch(__bannerFs, 'realpathSync');
+  patch(__bannerFs, 'lstatSync');
+  if (__bannerFs.promises) { patch(__bannerFs.promises, 'realpath'); patch(__bannerFs.promises, 'lstat'); }
+})();
 
 globalThis.require = __bannerCrReq(import.meta.url);
 globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
@@ -124,7 +138,6 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   });
 }
 
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export { buildAll };
+await buildAll();
+

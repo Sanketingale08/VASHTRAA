@@ -3,7 +3,7 @@ import PDFDocument from "pdfkit";
 import { registerFonts, FONT_REGULAR, FONT_BOLD } from "../lib/pdfFonts.js";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { isCustomer } from "../middlewares/isCustomer";
-import { db } from "@workspace/db";
+import { db, mongoOrders, mongoProducts } from "@workspace/db";
 import {
   ordersTable, cartItemsTable, productsTable, couponsTable,
   couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
@@ -11,7 +11,7 @@ import {
   supportTicketsTable, vendorsTable, vendorSettlementsTable,
   savedPaymentMethodsTable,
 } from "@workspace/db";
-import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "@workspace/db";
 import { loadActiveCommissionRules, effectiveRateFromRules } from "../lib/commission";
 import { isValidPaymentMethod } from "@workspace/api-zod";
 import { insertOrderStatusNotification } from "../lib/orderNotifications";
@@ -74,8 +74,8 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
       res.status(400).json({ error: "No items in order" });
       return;
     }
-    if (!address || !address.name || !address.line1 || !address.city || !address.state || !address.pincode) {
-      res.status(400).json({ error: "Invalid address" });
+    if (!address || !address.name || !address.line1 || !address.city || !address.state || !address.pincode || !/^\d{6}$/.test(String(address.pincode).trim())) {
+      res.status(400).json({ error: "Invalid delivery address or pincode (PIN code must be 6 digits)" });
       return;
     }
     if (!["standard", "express"].includes(deliveryMethod)) {
@@ -175,6 +175,7 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
             quantity: requestedQty,
             images: p.images,
             vendorName: p.vendorName,
+            vendorId: p.vendorId ?? null,
           });
         }
 
@@ -279,6 +280,26 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
             statusHistory: [{ status: "confirmed", timestamp: nowIso, note: "Order placed" }],
           })
           .returning({ id: ordersTable.id });
+
+        try {
+          await mongoOrders.insert({
+            id: newOrderId,
+            displayId: newOrderId,
+            userId: req.userId,
+            items: resolvedItems,
+            address,
+            deliveryMethod,
+            paymentMethod,
+            couponCode: coupon ? normalizedCoupon : null,
+            subtotal,
+            discount,
+            shipping,
+            tax: taxAmt,
+            total,
+            status: "confirmed",
+            statusHistory: [{ status: "confirmed", timestamp: nowIso, note: "Order placed" }],
+          } as any);
+        } catch {}
 
         const vendorOrderGroups = new Map<string, { itemNames: string[]; vendorTotal: number }>();
         for (const item of resolvedItems) {
@@ -479,39 +500,80 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
     }
 
     res.json({ orderId });
-  } catch (err) {
-    req.log.error({ err }, "Failed to create order");
+  } catch (err: any) {
+    req.log.warn({ err }, "Postgres order creation failed, trying Mongo/in-memory fallback");
     try {
-      const failedPaymentMethod = req.body?.paymentMethod;
-      if (failedPaymentMethod && failedPaymentMethod !== "cod") {
-        await insertAdminNotification({
-          type: "payment_gateway_issue",
-          title: "Payment gateway issue",
-          body: `A payment could not be processed while placing an order (method: ${failedPaymentMethod}).`,
-          metadata: { userId: req.userId },
+      const clientItems = req.body?.items || [];
+      const resolvedItems: any[] = [];
+      for (const i of clientItems) {
+        const p = await mongoProducts.findById(i.productId);
+        if (!p) {
+          res.status(400).json({ error: "One or more products not found" });
+          return;
+        }
+        const qty = parseInt(i.quantity, 10);
+        if (p.stock < qty) {
+          res.status(400).json({ error: `Only ${p.stock} unit(s) of "${p.name}" available` });
+          return;
+        }
+        resolvedItems.push({
+          productId: p.id,
+          name: p.name,
+          price: p.price,
+          quantity: qty,
+          images: p.images,
+          vendorName: p.vendorName,
+          vendorId: p.vendorId ?? null,
         });
-      } else {
-        await insertAdminNotification({
-          type: "system_error_alert",
-          title: "System error: order creation failed",
-          body: `Order creation failed unexpectedly for a customer request.`,
-          metadata: { userId: req.userId },
-        });
+        // Decrement stock in Mongo / in-memory repository
+        await mongoProducts.update(p.id, { stock: Math.max(0, p.stock - qty) });
       }
-    } catch (notifyErr) {
-      req.log.error({ notifyErr }, "Failed to record system error alert");
+
+      const subtotal = resolvedItems.reduce((s: number, item: any) => s + item.price * item.quantity, 0);
+      const deliveryMethod = req.body?.deliveryMethod || "standard";
+      const paymentMethod = req.body?.paymentMethod || "cod";
+      const shipping = computeShipping(deliveryMethod, subtotal);
+      const tax = Math.round(shipping * 0.18);
+      const total = subtotal + shipping + tax;
+
+      const fallbackOrder = await mongoOrders.insert({
+        userId: req.userId,
+        items: resolvedItems,
+        address: req.body?.address,
+        deliveryMethod,
+        paymentMethod,
+        subtotal,
+        discount: 0,
+        shipping,
+        tax,
+        total,
+        status: "confirmed",
+      });
+
+      res.json({ orderId: fallbackOrder.id || fallbackOrder.displayId });
+      return;
+    } catch (fallbackErr) {
+      req.log.error({ fallbackErr }, "Fallback order creation also failed");
     }
+
     res.status(500).json({ error: "Failed to create order" });
   }
 });
 
 router.get("/orders", requireAuth, async (req: any, res: any): Promise<void> => {
   try {
-    const rows = await db
-      .select()
-      .from(ordersTable)
-      .where(eq(ordersTable.userId, req.userId))
-      .orderBy(desc(ordersTable.createdAt));
+    let rows: any[] = [];
+    try {
+      rows = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.userId, req.userId))
+        .orderBy(desc(ordersTable.createdAt));
+    } catch {}
+
+    if (rows.length === 0) {
+      rows = await mongoOrders.findMany({ userId: req.userId }, { sort: { createdAt: -1 } });
+    }
 
     res.json({ orders: rows });
   } catch (err) {
@@ -523,18 +585,29 @@ router.get("/orders", requireAuth, async (req: any, res: any): Promise<void> => 
 router.get("/orders/:orderId", requireAuth, async (req: any, res: any): Promise<void> => {
   const { orderId } = req.params;
   try {
-    const rows = await db
-      .select()
-      .from(ordersTable)
-      .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
-      .limit(1);
+    let order: any = null;
+    try {
+      const rows = await db
+        .select()
+        .from(ordersTable)
+        .where(and(eq(ordersTable.id, orderId), eq(ordersTable.userId, req.userId)))
+        .limit(1);
+      if (rows.length > 0) order = rows[0];
+    } catch {}
 
-    if (rows.length === 0) {
+    if (!order) {
+      order = await mongoOrders.findById(orderId);
+      if (order && order.userId !== req.userId) {
+        order = null;
+      }
+    }
+
+    if (!order) {
       res.status(404).json({ error: "Order not found" });
       return;
     }
 
-    res.json({ order: rows[0] });
+    res.json({ order });
   } catch (err) {
     req.log.error({ err }, "Failed to fetch order");
     res.status(500).json({ error: "Failed to fetch order" });
@@ -1347,8 +1420,8 @@ router.get("/admin/orders/export.pdf", requireAdminKey, async (req: any, res: an
 
       // Title + subtitle
       doc.fillColor(NAVY).font(FONT_BOLD).fontSize(18)
-         .text("TwirlDrape", ml, y, { lineBreak: false });
-      const titleEnd = ml + doc.widthOfString("TwirlDrape");
+         .text("VASTRAA", ml, y, { lineBreak: false });
+      const titleEnd = ml + doc.widthOfString("VASTRAA");
       doc.fillColor(GOLD).font(FONT_REGULAR).fontSize(11)
          .text("  |  Order Report", titleEnd, y + 4, { lineBreak: false });
 

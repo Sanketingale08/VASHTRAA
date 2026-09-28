@@ -3,8 +3,8 @@ import { Link } from "wouter";
 import { Ruler, Info, MessageCircle } from "lucide-react";
 import { Layout } from "@/components/Layout";
 
-const GOLD = "#C9A84C";
-const GREEN = "#1E6B5A";
+const GOLD = "#C7CCD1";
+const GREEN = "#0A1F44";
 
 const SAREE_LENGTHS = [
   { type: "Standard Saree", length: "5.5 metres", note: "Suits most heights; blouse piece not included." },
@@ -41,16 +41,16 @@ const TIPS = [
 export default function SizeGuide() {
   return (
     <Layout>
-      <div className="bg-[#F3F8F5] min-h-screen">
+      <div className="bg-[#F4F5F7] min-h-screen">
 
         {/* Hero */}
-        <section className="bg-[#1E6B5A] py-16 md:py-24">
+        <section className="bg-[#0A1F44] py-16 md:py-24">
           <div className="container mx-auto px-4 text-center">
-            <p className="text-[#C9A84C] uppercase tracking-[0.3em] text-xs font-bold mb-4">Fit Guide</p>
-            <h1 className="font-serif text-4xl md:text-5xl text-[#F3F8F5] font-bold mb-4">
+            <p className="text-[#C7CCD1] uppercase tracking-[0.3em] text-xs font-bold mb-4">Fit Guide</p>
+            <h1 className="font-serif text-4xl md:text-5xl text-[#F4F5F7] font-bold mb-4">
               Size Guide
             </h1>
-            <p className="text-[#E6F0EA] max-w-xl mx-auto text-base leading-relaxed">
+            <p className="text-[#E5E8EC] max-w-xl mx-auto text-base leading-relaxed">
               Everything you need to choose the right saree length, blouse size, and draping style for your measurements and occasion.
             </p>
           </div>
@@ -62,12 +62,12 @@ export default function SizeGuide() {
           <section>
             <div className="flex items-center gap-3 mb-6">
               <Ruler className="w-6 h-6 shrink-0" style={{ color: GREEN }} />
-              <h2 className="font-serif text-xl md:text-2xl text-[#1E6B5A] font-bold">Saree Lengths</h2>
+              <h2 className="font-serif text-xl md:text-2xl text-[#0A1F44] font-bold">Saree Lengths</h2>
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-[#C9A84C]/20">
+            <div className="overflow-x-auto rounded-2xl border border-[#C7CCD1]/20">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-[#1E6B5A] text-[#F3F8F5]">
+                  <tr className="bg-[#0A1F44] text-[#F4F5F7]">
                     <th className="text-left px-5 py-3 font-semibold">Saree Type</th>
                     <th className="text-left px-5 py-3 font-semibold">Length</th>
                     <th className="text-left px-5 py-3 font-semibold">Notes</th>
@@ -75,9 +75,9 @@ export default function SizeGuide() {
                 </thead>
                 <tbody>
                   {SAREE_LENGTHS.map((row, i) => (
-                    <tr key={row.type} className={i % 2 === 0 ? "bg-white" : "bg-[#F3F8F5]"}>
-                      <td className="px-5 py-3 font-medium text-[#3D1515]">{row.type}</td>
-                      <td className="px-5 py-3 text-[#1E6B5A] font-semibold">{row.length}</td>
+                    <tr key={row.type} className={i % 2 === 0 ? "bg-white" : "bg-[#F4F5F7]"}>
+                      <td className="px-5 py-3 font-medium text-[#0A1F44]">{row.type}</td>
+                      <td className="px-5 py-3 text-[#0A1F44] font-semibold">{row.length}</td>
                       <td className="px-5 py-3 text-[#7a5f4e]">{row.note}</td>
                     </tr>
                   ))}
@@ -88,11 +88,11 @@ export default function SizeGuide() {
 
           {/* Blouse Sizes */}
           <section>
-            <h2 className="font-serif text-xl md:text-2xl text-[#1E6B5A] font-bold mb-6">Blouse Size Chart</h2>
-            <div className="overflow-x-auto rounded-2xl border border-[#C9A84C]/20 mb-4">
+            <h2 className="font-serif text-xl md:text-2xl text-[#0A1F44] font-bold mb-6">Blouse Size Chart</h2>
+            <div className="overflow-x-auto rounded-2xl border border-[#C7CCD1]/20 mb-4">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-[#1E6B5A] text-[#F3F8F5]">
+                  <tr className="bg-[#0A1F44] text-[#F4F5F7]">
                     <th className="text-left px-5 py-3 font-semibold">Size</th>
                     <th className="text-left px-5 py-3 font-semibold">Bust (chest)</th>
                     <th className="text-left px-5 py-3 font-semibold">Back Width</th>
@@ -100,16 +100,16 @@ export default function SizeGuide() {
                 </thead>
                 <tbody>
                   {BLOUSE_SIZES.map((row, i) => (
-                    <tr key={row.size} className={i % 2 === 0 ? "bg-white" : "bg-[#F3F8F5]"}>
-                      <td className="px-5 py-3 font-bold text-[#1E6B5A]">{row.size}</td>
-                      <td className="px-5 py-3 text-[#3D1515]">{row.bust}</td>
-                      <td className="px-5 py-3 text-[#3D1515]">{row.back}</td>
+                    <tr key={row.size} className={i % 2 === 0 ? "bg-white" : "bg-[#F4F5F7]"}>
+                      <td className="px-5 py-3 font-bold text-[#0A1F44]">{row.size}</td>
+                      <td className="px-5 py-3 text-[#0A1F44]">{row.bust}</td>
+                      <td className="px-5 py-3 text-[#0A1F44]">{row.back}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="flex items-start gap-3 bg-[#C9A84C]/10 rounded-xl p-4 border border-[#C9A84C]/30">
+            <div className="flex items-start gap-3 bg-[#C7CCD1]/10 rounded-xl p-4 border border-[#C7CCD1]/30">
               <Info size={16} className="shrink-0 mt-0.5" style={{ color: GOLD }} />
               <p className="text-xs text-[#7a5f4e]">
                 Blouse piece is unstitched — measurements above are for stitching guidance only. We recommend
@@ -120,11 +120,11 @@ export default function SizeGuide() {
 
           {/* Draping Styles */}
           <section>
-            <h2 className="font-serif text-xl md:text-2xl text-[#1E6B5A] font-bold mb-6">Draping Styles by Region</h2>
-            <div className="overflow-x-auto rounded-2xl border border-[#C9A84C]/20">
+            <h2 className="font-serif text-xl md:text-2xl text-[#0A1F44] font-bold mb-6">Draping Styles by Region</h2>
+            <div className="overflow-x-auto rounded-2xl border border-[#C7CCD1]/20">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-[#1E6B5A] text-[#F3F8F5]">
+                  <tr className="bg-[#0A1F44] text-[#F4F5F7]">
                     <th className="text-left px-5 py-3 font-semibold">Style</th>
                     <th className="text-left px-5 py-3 font-semibold">Region</th>
                     <th className="text-left px-5 py-3 font-semibold">Length Needed</th>
@@ -132,10 +132,10 @@ export default function SizeGuide() {
                 </thead>
                 <tbody>
                   {DRAPING_STYLES.map((row, i) => (
-                    <tr key={row.style} className={i % 2 === 0 ? "bg-white" : "bg-[#F3F8F5]"}>
-                      <td className="px-5 py-3 font-medium text-[#3D1515]">{row.style}</td>
+                    <tr key={row.style} className={i % 2 === 0 ? "bg-white" : "bg-[#F4F5F7]"}>
+                      <td className="px-5 py-3 font-medium text-[#0A1F44]">{row.style}</td>
                       <td className="px-5 py-3 text-[#7a5f4e]">{row.region}</td>
-                      <td className="px-5 py-3 text-[#1E6B5A]">{row.extra}</td>
+                      <td className="px-5 py-3 text-[#0A1F44]">{row.extra}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -145,11 +145,11 @@ export default function SizeGuide() {
 
           {/* Tips */}
           <section>
-            <h2 className="font-serif text-xl md:text-2xl text-[#1E6B5A] font-bold mb-6">Measurement Tips</h2>
+            <h2 className="font-serif text-xl md:text-2xl text-[#0A1F44] font-bold mb-6">Measurement Tips</h2>
             <ul className="space-y-3">
               {TIPS.map((tip, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#1E6B5A] text-white text-xs flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                  <span className="w-6 h-6 rounded-full bg-[#0A1F44] text-white text-xs flex items-center justify-center shrink-0 mt-0.5 font-bold">
                     {i + 1}
                   </span>
                   <p className="text-sm text-[#7a5f4e] leading-relaxed">{tip}</p>
@@ -160,14 +160,14 @@ export default function SizeGuide() {
         </div>
 
         {/* CTA */}
-        <section className="bg-[#E6F0EA] py-12">
+        <section className="bg-[#E5E8EC] py-12">
           <div className="container mx-auto px-4 text-center">
             <MessageCircle className="w-8 h-8 mx-auto mb-4" style={{ color: GOLD }} />
-            <h2 className="font-serif text-xl text-[#1E6B5A] font-bold mb-3">Need help with sizing?</h2>
+            <h2 className="font-serif text-xl text-[#0A1F44] font-bold mb-3">Need help with sizing?</h2>
             <p className="text-[#7a5f4e] mb-6 text-sm">Our team can advise on the best saree length and style for your height and occasion.</p>
             <Link
               href="/contact"
-              className="inline-flex items-center gap-2 bg-[#1E6B5A] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#5e1421] transition-colors"
+              className="inline-flex items-center gap-2 bg-[#0A1F44] text-white px-8 py-4 rounded-sm text-sm font-bold uppercase tracking-wider hover:bg-[#2C3E6B] transition-colors"
             >
               Ask Us
             </Link>

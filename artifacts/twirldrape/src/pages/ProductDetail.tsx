@@ -78,7 +78,7 @@ const SAMPLE_REVIEWS = [
     initials: "DN",
     rating: 5,
     date: "December 20, 2024",
-    text: "I've been collecting Paithani sarees for years and this one stands out even in my collection. The border work is flawless and the weight of the silk feels genuine. Highly recommend TwirlDrape.",
+    text: "I've been collecting Paithani sarees for years and this one stands out even in my collection. The border work is flawless and the weight of the silk feels genuine. Highly recommend VASTRAA.",
     verified: false,
     location: "Pune",
   },
@@ -260,7 +260,7 @@ function ZoomLightbox({
               key={i}
               className={cn(
                 "w-2 h-2 rounded-full transition-all",
-                i === activeIndex ? "bg-[#C9A84C] scale-125" : "bg-white/40"
+                i === activeIndex ? "bg-[#C7CCD1] scale-125" : "bg-white/40"
               )}
             />
           ))}
@@ -287,28 +287,28 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
       content: (
         <div className="space-y-3 text-sm leading-relaxed">
           <div className="flex gap-3">
-            <Truck size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
+            <Truck size={14} className="text-[#C7CCD1] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Standard Delivery (5–7 Business Days)</p>
               <p className="opacity-70">Orders are dispatched within 2 business days of confirmation. Delivery in 5–7 business days nationwide. Free shipping on all orders above ₹3,000; a flat ₹149 fee applies below that.</p>
             </div>
           </div>
           <div className="flex gap-3">
-            <Package size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
+            <Package size={14} className="text-[#C7CCD1] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Express Delivery (2–3 Business Days)</p>
               <p className="opacity-70">Available at ₹299 additional charge. Dispatched same day if ordered before 2 PM. Select at checkout. Not available for remote PIN codes.</p>
             </div>
           </div>
           <div className="flex gap-3">
-            <Shield size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
+            <Shield size={14} className="text-[#C7CCD1] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Secure Packaging</p>
               <p className="opacity-70">Each saree is wrapped in acid-free tissue paper and a branded dust bag before dispatch.</p>
             </div>
           </div>
           <div className="pt-1 text-right">
-            <Link href="/faqs#shipping-delivery" className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors">
+            <Link href="/faqs#shipping-delivery" className="text-xs font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors">
               More shipping FAQs →
             </Link>
           </div>
@@ -329,21 +329,21 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
             </div>
           </div>
           <div className="flex gap-3">
-            <RotateCcw size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
+            <RotateCcw size={14} className="text-[#C7CCD1] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Easy Exchange</p>
               <p className="opacity-70">Exchange for a different colour or size within 14 days. Shipping for exchanges is free of charge.</p>
             </div>
           </div>
           <div className="flex gap-3">
-            <Shield size={14} className="text-[#C9A84C] mt-0.5 shrink-0" />
+            <Shield size={14} className="text-[#C7CCD1] mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold mb-1">Quality Guarantee</p>
               <p className="opacity-70">All products undergo a quality check before dispatch. If you receive a defective item, we'll replace it or issue a full refund.</p>
             </div>
           </div>
           <div className="pt-1 text-right">
-            <Link href="/faqs#returns-exchanges" className="text-xs font-semibold text-[#1E6B5A] hover:text-[#C9A84C] transition-colors">
+            <Link href="/faqs#returns-exchanges" className="text-xs font-semibold text-[#0A1F44] hover:text-[#C7CCD1] transition-colors">
               Read our full return policy →
             </Link>
           </div>
@@ -352,7 +352,7 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
     },
   ];
 
-  const borderColor = "border-[#C9A84C]/20";
+  const borderColor = "border-[#C7CCD1]/20";
   const bg = isDesigner ? "bg-[#2A2E35]" : "bg-white";
 
   return (
@@ -364,7 +364,7 @@ function DeliveryAccordion({ isDesigner }: { isDesigner: boolean }) {
             onClick={() => setOpenPanel(openPanel === panel.id ? null : panel.id)}
           >
             <div className="flex items-center gap-2 font-semibold text-sm">
-              <span className="text-[#C9A84C]">{panel.icon}</span>
+              <span className="text-[#C7CCD1]">{panel.icon}</span>
               {panel.title}
             </div>
             <ChevronDown
@@ -412,14 +412,14 @@ function StarBar({
       <div
         className={cn(
           "flex-1 h-2 rounded-full overflow-hidden",
-          isDesigner ? "bg-[#3A3E45]" : "bg-[#C8D8D0]"
+          isDesigner ? "bg-[#3A3E45]" : "bg-[#C7CCD1]"
         )}
       >
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.6, delay: 0.1 * (5 - stars) }}
-          className="h-full bg-[#C9A84C] rounded-full"
+          className="h-full bg-[#C7CCD1] rounded-full"
         />
       </div>
       <span className="w-6 opacity-50">{count}</span>
@@ -448,19 +448,19 @@ function ReviewsSection({
   });
 
   const sectionBg = isDesigner ? "bg-[#2A2E35]" : "bg-white";
-  const borderColor = "border-[#C9A84C]/20";
-  const cardBg = isDesigner ? "bg-[#1E2329]" : "bg-[#F3F8F5]";
+  const borderColor = "border-[#C7CCD1]/20";
+  const cardBg = isDesigner ? "bg-[#1E2329]" : "bg-[#F4F5F7]";
 
   return (
     <section className="mb-16">
       <div className="mb-8">
-        <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-1">
+        <p className="text-xs uppercase tracking-[0.25em] text-[#C7CCD1] font-bold mb-1">
           Customer Experiences
         </p>
         <h2
           className={cn(
             "font-serif text-2xl md:text-3xl font-bold",
-            isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
+            isDesigner ? "text-[#E5E8EC]" : "text-[#0A1F44]"
           )}
         >
           Ratings & Reviews
@@ -479,7 +479,7 @@ function ReviewsSection({
             <p
               className={cn(
                 "text-6xl font-bold font-serif mb-2",
-                isDesigner ? "text-[#C9A84C]" : "text-[#1E6B5A]"
+                isDesigner ? "text-[#C7CCD1]" : "text-[#0A1F44]"
               )}
             >
               {roundedRating}
@@ -491,7 +491,7 @@ function ReviewsSection({
                   size={18}
                   className={cn(
                     s <= Math.round(rating)
-                      ? "fill-[#C9A84C] text-[#C9A84C]"
+                      ? "fill-[#C7CCD1] text-[#C7CCD1]"
                       : "text-gray-300"
                   )}
                 />
@@ -529,7 +529,7 @@ function ReviewsSection({
             )}
           >
             <div className="flex items-start gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-[#1E6B5A] text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-10 h-10 rounded-full bg-[#0A1F44] text-white flex items-center justify-center font-bold text-sm shrink-0">
                 {review.initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -550,7 +550,7 @@ function ReviewsSection({
                         size={11}
                         className={cn(
                           s <= review.rating
-                            ? "fill-[#C9A84C] text-[#C9A84C]"
+                            ? "fill-[#C7CCD1] text-[#C7CCD1]"
                             : "text-gray-300"
                         )}
                       />
@@ -616,8 +616,8 @@ export default function ProductDetail() {
   const similar = similarData?.products.filter((p) => p.id !== id).slice(0, 4) ?? [];
 
   const themeClasses = isDesigner
-    ? "bg-[#1E2329] text-[#E6F0EA]"
-    : "bg-[#F3F8F5] text-[#3D1A1A]";
+    ? "bg-[#1E2329] text-[#E5E8EC]"
+    : "bg-[#F4F5F7] text-[#3D1A1A]";
 
   const handleLightboxNav = useCallback(
     (dir: 1 | -1) => {
@@ -643,7 +643,7 @@ export default function ProductDetail() {
           )}
         >
           <div className="text-center">
-            <div className="animate-spin w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full mx-auto mb-4" />
+            <div className="animate-spin w-10 h-10 border-2 border-[#C7CCD1] border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-sm opacity-60">Loading product…</p>
           </div>
         </div>
@@ -667,7 +667,7 @@ export default function ProductDetail() {
             </p>
             <Link
               href="/"
-              className="bg-[#C9A84C] text-[#1E6B5A] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
+              className="bg-[#C7CCD1] text-[#0A1F44] px-8 py-3 font-bold uppercase tracking-wider text-sm rounded-sm"
             >
               Back to Home
             </Link>
@@ -709,7 +709,7 @@ export default function ProductDetail() {
     { label: "Color", value: product.color.charAt(0).toUpperCase() + product.color.slice(1) },
     { label: "Pattern", value: pattern },
     { label: "Brand Name", value: product.vendorName },
-    { label: "Shop Name", value: `${product.vendorName} – TwirlDrape` },
+    { label: "Shop Name", value: `${product.vendorName} – VASTRAA` },
     { label: "In Stock", value: product.stock > 0 ? `${product.stock} units available` : "Out of stock" },
   ];
   const isDeactivated = (product as any).active === false;
@@ -759,9 +759,9 @@ export default function ProductDetail() {
 
             {/* Breadcrumbs */}
             <nav className="flex items-center gap-2 text-xs uppercase tracking-wider opacity-60 mb-8 flex-wrap">
-              <Link href="/" className="hover:text-[#C9A84C] transition-colors">Home</Link>
+              <Link href="/" className="hover:text-[#C7CCD1] transition-colors">Home</Link>
               <ChevronRight size={12} />
-              <Link href={categoryPath} className="hover:text-[#C9A84C] transition-colors">{categoryLabel}</Link>
+              <Link href={categoryPath} className="hover:text-[#C7CCD1] transition-colors">{categoryLabel}</Link>
               <ChevronRight size={12} />
               <span className="line-clamp-1">{product.name}</span>
             </nav>
@@ -781,7 +781,7 @@ export default function ProductDetail() {
                     className={cn(
                       "px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-all",
                       galleryTab === "photos"
-                        ? "bg-[#C9A84C] text-[#1E6B5A]"
+                        ? "bg-[#C7CCD1] text-[#0A1F44]"
                         : "opacity-50 hover:opacity-80"
                     )}
                   >
@@ -793,7 +793,7 @@ export default function ProductDetail() {
                       className={cn(
                         "flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-all",
                         galleryTab === "video"
-                          ? "bg-[#C9A84C] text-[#1E6B5A]"
+                          ? "bg-[#C7CCD1] text-[#0A1F44]"
                           : "opacity-50 hover:opacity-80"
                       )}
                     >
@@ -807,7 +807,7 @@ export default function ProductDetail() {
                   <>
                     {/* Main Image */}
                     <div
-                      className="relative aspect-square overflow-hidden rounded-lg border border-[#C9A84C]/20 mb-3 bg-gray-100 group cursor-zoom-in"
+                      className="relative aspect-square overflow-hidden rounded-lg border border-[#C7CCD1]/20 mb-3 bg-gray-100 group cursor-zoom-in"
                       onClick={() => setLightboxOpen(true)}
                     >
                       <img
@@ -817,12 +817,12 @@ export default function ProductDetail() {
                         onError={replaceProductImageWithFallback}
                       />
                       {product.isBestSeller && (
-                        <span className="absolute top-4 left-4 bg-[#C9A84C] text-[#1E6B5A] text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
+                        <span className="absolute top-4 left-4 bg-[#C7CCD1] text-[#0A1F44] text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
                           Best Seller
                         </span>
                       )}
                       {!product.isBestSeller && product.isNewArrival && (
-                        <span className="absolute top-4 left-4 bg-[#1E6B5A] text-white text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
+                        <span className="absolute top-4 left-4 bg-[#0A1F44] text-white text-xs font-bold uppercase tracking-wider px-3 py-1 rounded">
                           New Arrival
                         </span>
                       )}
@@ -848,7 +848,7 @@ export default function ProductDetail() {
                           className={cn(
                             "w-16 h-16 shrink-0 rounded-md overflow-hidden border-2 transition-all",
                             activeImage === i
-                              ? "border-[#C9A84C] shadow-md"
+                              ? "border-[#C7CCD1] shadow-md"
                               : "border-transparent opacity-50 hover:opacity-100"
                           )}
                         >
@@ -858,7 +858,7 @@ export default function ProductDetail() {
                     </div>
                   </>
                 ) : videoUrl ? (
-                  <div className="aspect-video rounded-lg overflow-hidden border border-[#C9A84C]/20 bg-black">
+                  <div className="aspect-video rounded-lg overflow-hidden border border-[#C7CCD1]/20 bg-black">
                     <iframe
                       src={videoUrl}
                       title="Saree video showcase"
@@ -880,7 +880,7 @@ export default function ProductDetail() {
                 <h1
                   className={cn(
                     "font-serif text-3xl md:text-4xl font-bold leading-tight mb-3",
-                    isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
+                    isDesigner ? "text-[#E5E8EC]" : "text-[#0A1F44]"
                   )}
                 >
                   {product.name}
@@ -889,10 +889,10 @@ export default function ProductDetail() {
                 {/* Brand & Shop callout — below product title */}
                 <div className={cn(
                   "flex items-center gap-4 rounded-lg border p-3 mb-4",
-                  isDesigner ? "bg-[#2A2E35] border-[#C9A84C]/20" : "bg-white border-[#C9A84C]/15"
+                  isDesigner ? "bg-[#2A2E35] border-[#C7CCD1]/20" : "bg-white border-[#C7CCD1]/15"
                 )}>
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Store size={14} className="text-[#C9A84C] shrink-0" />
+                    <Store size={14} className="text-[#C7CCD1] shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-wider opacity-50">Brand / Weaver</p>
                       <p className="font-bold text-sm truncate">{product.vendorName}</p>
@@ -902,14 +902,14 @@ export default function ProductDetail() {
                     {product.vendorId && (
                       <Link
                         href={`/weavers/${product.vendorId}`}
-                        className="flex items-center gap-1 text-xs font-bold text-[#1E6B5A] hover:opacity-80 transition-opacity whitespace-nowrap"
+                        className="flex items-center gap-1 text-xs font-bold text-[#0A1F44] hover:opacity-80 transition-opacity whitespace-nowrap"
                       >
                         Weaver Profile <ExternalLink size={11} />
                       </Link>
                     )}
                     <Link
                       href={shopPath}
-                      className="flex items-center gap-1 text-xs font-bold text-[#C9A84C] hover:opacity-80 transition-opacity whitespace-nowrap"
+                      className="flex items-center gap-1 text-xs font-bold text-[#C7CCD1] hover:opacity-80 transition-opacity whitespace-nowrap"
                     >
                       Visit Shop <ExternalLink size={11} />
                     </Link>
@@ -926,7 +926,7 @@ export default function ProductDetail() {
                         className={cn(
                           "transition-colors",
                           star <= Math.round(product.rating)
-                            ? "fill-[#C9A84C] text-[#C9A84C]"
+                            ? "fill-[#C7CCD1] text-[#C7CCD1]"
                             : "text-gray-300"
                         )}
                       />
@@ -941,7 +941,7 @@ export default function ProductDetail() {
                   <span
                     className={cn(
                       "text-4xl font-bold",
-                      isDesigner ? "text-[#C9A84C]" : "text-[#1E6B5A]"
+                      isDesigner ? "text-[#C7CCD1]" : "text-[#0A1F44]"
                     )}
                   >
                     ₹{product.price.toLocaleString("en-IN")}
@@ -959,11 +959,11 @@ export default function ProductDetail() {
                 {/* Full Spec Table */}
                 <div className={cn(
                   "rounded-lg border mb-6 overflow-hidden",
-                  isDesigner ? "border-[#C9A84C]/20" : "border-[#C9A84C]/15"
+                  isDesigner ? "border-[#C7CCD1]/20" : "border-[#C7CCD1]/15"
                 )}>
                   <div className={cn(
-                    "px-4 py-2 border-b text-[10px] uppercase tracking-widest font-bold text-[#C9A84C]",
-                    isDesigner ? "bg-[#2A2E35] border-[#C9A84C]/20" : "bg-[#C9A84C]/5 border-[#C9A84C]/15"
+                    "px-4 py-2 border-b text-[10px] uppercase tracking-widest font-bold text-[#C7CCD1]",
+                    isDesigner ? "bg-[#2A2E35] border-[#C7CCD1]/20" : "bg-[#C7CCD1]/5 border-[#C7CCD1]/15"
                   )}>
                     Product Specifications
                   </div>
@@ -976,8 +976,8 @@ export default function ProductDetail() {
                             className={cn(
                               "border-b last:border-0",
                               isDesigner
-                                ? i % 2 === 0 ? "bg-[#1E2329] border-[#C9A84C]/10" : "bg-[#2A2E35] border-[#C9A84C]/10"
-                                : i % 2 === 0 ? "bg-white border-[#C9A84C]/10" : "bg-[#F3F8F5] border-[#C9A84C]/10"
+                                ? i % 2 === 0 ? "bg-[#1E2329] border-[#C7CCD1]/10" : "bg-[#2A2E35] border-[#C7CCD1]/10"
+                                : i % 2 === 0 ? "bg-white border-[#C7CCD1]/10" : "bg-[#F4F5F7] border-[#C7CCD1]/10"
                             )}
                           >
                             <td className="px-4 py-2.5 opacity-50 font-medium w-40 whitespace-nowrap">{row.label}</td>
@@ -1001,7 +1001,7 @@ export default function ProductDetail() {
                       <div key={group.name}>
                         <p className={cn(
                           "text-xs font-bold uppercase tracking-widest mb-2",
-                          isDesigner ? "text-[#C9A84C]/70" : "opacity-50"
+                          isDesigner ? "text-[#C7CCD1]/70" : "opacity-50"
                         )}>
                           {group.name}
                         </p>
@@ -1033,10 +1033,10 @@ export default function ProductDetail() {
                                 className={cn(
                                   "px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all relative",
                                   isSelected
-                                    ? "bg-[#1E6B5A] text-white border-[#1E6B5A] shadow-sm"
+                                    ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-sm"
                                     : isDesigner
-                                    ? "border-[#C9A84C]/30 hover:border-[#C9A84C] text-[#E6F0EA]"
-                                    : "border-[#C9A84C]/30 hover:border-[#1E6B5A]"
+                                    ? "border-[#C7CCD1]/30 hover:border-[#C7CCD1] text-[#E5E8EC]"
+                                    : "border-[#C7CCD1]/30 hover:border-[#0A1F44]"
                                 )}
                               >
                                 {val}
@@ -1062,7 +1062,7 @@ export default function ProductDetail() {
                           </span>
                         )}
                         {selectedVariant.price != null && selectedVariant.price !== product.price && (
-                          <span className="font-bold text-[#1E6B5A]">
+                          <span className="font-bold text-[#0A1F44]">
                             ₹{Number(selectedVariant.price).toLocaleString("en-IN")}
                           </span>
                         )}
@@ -1115,7 +1115,7 @@ export default function ProductDetail() {
                         ? "bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                         : addedToCart
                         ? "bg-green-600 text-white"
-                        : "bg-[#C9A84C] text-[#1E6B5A] hover:bg-[#b59539]"
+                        : "bg-[#C7CCD1] text-[#0A1F44] hover:bg-[#b59539]"
                     )}
                   >
                     <ShoppingBag size={18} />
@@ -1132,8 +1132,8 @@ export default function ProductDetail() {
                     className={cn(
                       "flex items-center justify-center gap-2 px-6 py-4 border font-bold uppercase tracking-wider text-sm rounded-sm transition-all",
                       isWishlisted
-                        ? "bg-[#1E6B5A] border-[#1E6B5A] text-white"
-                        : "border-[#C9A84C]/40 hover:border-[#C9A84C] hover:text-[#C9A84C]"
+                        ? "bg-[#0A1F44] border-[#0A1F44] text-white"
+                        : "border-[#C7CCD1]/40 hover:border-[#C7CCD1] hover:text-[#C7CCD1]"
                     )}
                   >
                     <Heart size={18} className={isWishlisted ? "fill-current" : ""} />
@@ -1169,8 +1169,8 @@ export default function ProductDetail() {
                   className={cn(
                     "w-full flex items-center justify-center gap-2 py-4 border-2 font-bold uppercase tracking-wider text-sm rounded-sm transition-all mb-6 disabled:opacity-50 disabled:cursor-not-allowed",
                     isDesigner
-                      ? "border-[#C9A84C] text-[#C9A84C] hover:bg-[#C9A84C]/10"
-                      : "border-[#1E6B5A] text-[#1E6B5A] hover:bg-[#1E6B5A]/5"
+                      ? "border-[#C7CCD1] text-[#C7CCD1] hover:bg-[#C7CCD1]/10"
+                      : "border-[#0A1F44] text-[#0A1F44] hover:bg-[#0A1F44]/5"
                   )}
                 >
                   <Package size={18} />
@@ -1194,13 +1194,13 @@ export default function ProductDetail() {
               <section className="mb-16">
                 <div className="flex items-center justify-between mb-8">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-1">
+                    <p className="text-xs uppercase tracking-[0.25em] text-[#C7CCD1] font-bold mb-1">
                       Curated For You
                     </p>
                     <h2
                       className={cn(
                         "font-serif text-2xl md:text-3xl font-bold",
-                        isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
+                        isDesigner ? "text-[#E5E8EC]" : "text-[#0A1F44]"
                       )}
                     >
                       Similar Products
@@ -1220,13 +1220,13 @@ export default function ProductDetail() {
               <section className="mb-12">
                 <div className="flex items-center justify-between mb-8">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-[#C9A84C] font-bold mb-1">
+                    <p className="text-xs uppercase tracking-[0.25em] text-[#C7CCD1] font-bold mb-1">
                       From the same collection
                     </p>
                     <h2
                       className={cn(
                         "font-serif text-2xl md:text-3xl font-bold",
-                        isDesigner ? "text-[#E6F0EA]" : "text-[#1E6B5A]"
+                        isDesigner ? "text-[#E5E8EC]" : "text-[#0A1F44]"
                       )}
                     >
                       You May Also Like
@@ -1234,7 +1234,7 @@ export default function ProductDetail() {
                   </div>
                   <Link
                     href={categoryPath}
-                    className="hidden md:flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#C9A84C] hover:opacity-80 transition-opacity"
+                    className="hidden md:flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#C7CCD1] hover:opacity-80 transition-opacity"
                   >
                     View All <ArrowLeft size={16} className="rotate-180" />
                   </Link>

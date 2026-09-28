@@ -4,8 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Star,
   CheckCircle,
-  ChevronLeft,
-  ChevronRight,
   ShieldCheck,
   Award,
   Crown,
@@ -101,23 +99,21 @@ const testimonials = [
 
 function FeaturedShopsSkeleton() {
   return (
-    <section className="py-16 md:py-20 bg-white">
+    <section className="py-12 md:py-16 bg-[#F4F5F7]">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between mb-8 md:mb-10">
-          <div>
-            <div className="flex items-center gap-4 mb-2">
-              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
-              <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#0A1F44]">
-                Featured Shops
-              </h2>
-              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
-            </div>
-            <p className="text-center text-sm text-gray-500">Discover our most trusted weaver collectives and artisan studios</p>
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+            <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#0A1F44]">
+              Featured Shops
+            </h2>
+            <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
           </div>
+          <p className="text-center text-sm text-gray-500">Discover our authentic weaver collectives and artisan studios</p>
         </div>
-        <div className="flex gap-4 overflow-hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex-none w-[200px] h-[220px] rounded-2xl bg-gray-100 animate-pulse" />
+            <div key={i} className="h-64 rounded-2xl bg-gray-200/70 animate-pulse" />
           ))}
         </div>
       </div>
@@ -126,7 +122,6 @@ function FeaturedShopsSkeleton() {
 }
 
 function FeaturedShopsSection() {
-  const [scrollIdx, setScrollIdx] = useState(0);
   const { data: vendors, isLoading, isError } = useListVendors();
 
   if (isLoading || isError) return <FeaturedShopsSkeleton />;
@@ -135,7 +130,7 @@ function FeaturedShopsSection() {
 
   if (vendorList.length === 0) {
     return (
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-12 md:py-16 bg-[#F4F5F7]">
         <div className="container mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-4 mb-2">
             <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
@@ -144,63 +139,32 @@ function FeaturedShopsSection() {
             </h2>
             <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
           </div>
-          <p className="text-sm text-gray-400 mt-4">More shops coming soon — check back shortly!</p>
+          <p className="text-sm text-gray-400 mt-4">More active shops coming soon — check back shortly!</p>
         </div>
       </section>
     );
   }
 
-  const visibleCount = 4;
-  const canPrev = scrollIdx > 0;
-  const canNext = scrollIdx + visibleCount < vendorList.length;
-
   return (
-    <section className="py-16 md:py-20 bg-white">
+    <section className="py-12 md:py-16 bg-[#F4F5F7]">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between mb-8 md:mb-10">
-          <div>
-            <div className="flex items-center gap-4 mb-2">
-              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
-              <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#0A1F44]">
-                Featured Shops
-              </h2>
-              <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
-            </div>
-            <p className="text-center text-sm text-gray-500">Discover our most trusted weaver collectives and artisan studios</p>
+        <div className="text-center mb-8 md:mb-12">
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD})` }} />
+            <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold tracking-wide text-[#0A1F44]">
+              Featured Shops
+            </h2>
+            <span className="flex-1 max-w-[60px] h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD})` }} />
           </div>
+          <p className="text-center text-sm text-gray-500">Discover our authentic weaver collectives, artisan studios, and verified seller shops</p>
         </div>
 
-        <div className="relative">
-          {canPrev && (
-            <button
-              onClick={() => setScrollIdx(i => Math.max(0, i - 1))}
-              className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border"
-              style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}
-            >
-              <ChevronLeft size={20} />
-            </button>
-          )}
-          {canNext && (
-            <button
-              onClick={() => setScrollIdx(i => Math.min(vendorList.length - visibleCount, i + 1))}
-              className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg border"
-              style={{ background: IVORY, borderColor: GOLD + "55", color: MAROON }}
-            >
-              <ChevronRight size={20} />
-            </button>
-          )}
-          <div className="overflow-hidden">
-            <div
-              className="flex gap-4 transition-transform duration-500"
-              style={{ transform: `translateX(calc(-${scrollIdx} * (220px + 16px)))` }}
-            >
-              {vendorList.map(v => (
-                <div key={v.id} className="flex-none">
-                  <VendorCard vendor={v} />
-                </div>
-              ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {vendorList.map((v) => (
+            <div key={v.id} className="h-full">
+              <VendorCard vendor={v} />
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>

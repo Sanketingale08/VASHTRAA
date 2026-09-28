@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { vendorsTable, productsTable, ordersTable } from "@workspace/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and, or } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { requireAuth } from "../middlewares/isAuthenticated";
 import { requireAdminKey } from "../middlewares/isAdmin";
@@ -24,19 +24,32 @@ const router = Router();
 router.get("/vendors", async (req, res) => {
   try {
     // Return only approved vendors, featured ones first, then sorted by rating desc.
-    // If no featured vendors exist, all approved vendors are returned (sorted by rating).
     const vendors = await db
       .select()
       .from(vendorsTable)
       .where(eq(vendorsTable.status, "approved"))
       .orderBy(desc(vendorsTable.featured), desc(vendorsTable.rating), desc(vendorsTable.sareesCount));
 
+    const activeCounts = await db
+      .select({
+        vendorId: productsTable.vendorId,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(productsTable)
+      .where(and(eq(productsTable.active, true), eq(productsTable.status, "approved")))
+      .groupBy(productsTable.vendorId);
+
+    const countMap = new Map<string, number>();
+    for (const c of activeCounts) {
+      if (c.vendorId) countMap.set(c.vendorId, c.count);
+    }
+
     res.json(vendors.map((v) => ({
       id: v.id,
       name: v.name,
       location: v.location,
       rating: v.rating,
-      sareesCount: v.sareesCount,
+      sareesCount: countMap.get(v.id) ?? v.sareesCount ?? 0,
       avatar: v.avatar,
       bio: v.bio ?? null,
       tagline: v.tagline ?? null,
@@ -108,7 +121,7 @@ router.get("/vendors/:id", async (req: any, res: any) => {
     const rows = await db
       .select()
       .from(vendorsTable)
-      .where(eq(vendorsTable.id, id))
+      .where(or(eq(vendorsTable.id, id), eq(vendorsTable.vendorId, id)))
       .limit(1);
 
     if (rows.length === 0) {
@@ -116,12 +129,26 @@ router.get("/vendors/:id", async (req: any, res: any) => {
     }
 
     const v = rows[0];
+
+    const prodCountRes = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(productsTable)
+      .where(
+        and(
+          eq(productsTable.vendorId, v.id),
+          eq(productsTable.active, true),
+          eq(productsTable.status, "approved")
+        )
+      );
+
+    const activeCount = prodCountRes[0]?.count ?? v.sareesCount ?? 0;
+
     res.json({
       id: v.id,
       name: v.name,
       location: v.location,
       rating: v.rating,
-      sareesCount: v.sareesCount,
+      sareesCount: activeCount,
       avatar: v.avatar,
       bio: v.bio ?? null,
       tagline: v.tagline ?? null,

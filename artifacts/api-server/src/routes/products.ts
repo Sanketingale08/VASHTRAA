@@ -85,7 +85,19 @@ router.get("/products", async (req, res) => {
     if (fabric) conditions.push(eq(productsTable.fabric, fabric as any));
     if (color) conditions.push(eq(productsTable.color, color as any));
     if (occasion) conditions.push(eq(productsTable.occasion, occasion as any));
-    if (vendorId) conditions.push(eq(productsTable.vendorId, vendorId));
+    if (vendorId) {
+      const foundVendor = await db
+        .select({ id: vendorsTable.id })
+        .from(vendorsTable)
+        .where(or(eq(vendorsTable.id, vendorId), eq(vendorsTable.vendorId, vendorId)))
+        .limit(1);
+
+      if (foundVendor.length > 0) {
+        conditions.push(eq(productsTable.vendorId, foundVendor[0].id));
+      } else {
+        conditions.push(eq(productsTable.vendorId, vendorId));
+      }
+    }
     if (minPrice) conditions.push(gte(productsTable.price, parseInt(minPrice)));
     if (maxPrice) conditions.push(lte(productsTable.price, parseInt(maxPrice)));
     if (bestSeller === "true") conditions.push(eq(productsTable.isBestSeller, true));

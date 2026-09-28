@@ -103,7 +103,7 @@ async function buildAll() {
       "fontkit",
     ],
     sourcemap: "linked",
-    plugins: [],
+    plugins: [esbuildPluginPino({ transports: ["pino-pretty"] })],
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';

@@ -33,6 +33,7 @@ export function effectiveRateFromRules(
   vendorId: string | null | undefined,
   category: string | null | undefined,
   at: Date = new Date(),
+  fallbackRate: number = DEFAULT_COMMISSION_RATE,
 ): number {
   const eligible = rules.filter((r) => isRuleEffective(r, at));
   const vendorRule = vendorId ? eligible.find((r) => r.scope === "vendor" && r.vendorId === vendorId) : undefined;
@@ -41,7 +42,7 @@ export function effectiveRateFromRules(
   if (categoryRule) return categoryRule.rate;
   const globalRule = eligible.find((r) => r.scope === "global");
   if (globalRule) return globalRule.rate;
-  return DEFAULT_COMMISSION_RATE;
+  return fallbackRate;
 }
 
 export async function getEffectiveCommissionRate(vendorId: string, category: string): Promise<number> {

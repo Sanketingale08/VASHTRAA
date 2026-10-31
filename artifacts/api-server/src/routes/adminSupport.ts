@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, mongoSupport } from "@workspace/db";
 import {
   supportTicketsTable,
   ticketMessagesTable,
@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, sql, ilike } from "drizzle-orm";
 import { notifyTicketEvent, isPastSla } from "../lib/ticketSupport";
+import { emitSupportEvent } from "../lib/socket";
 
 const router = Router();
 
@@ -48,11 +49,18 @@ async function autoEscalateOverdue() {
 
 router.get("/admin/support/tickets/unread-count", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
-    const [row] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.assignedTo, "admin"), sql`${supportTicketsTable.status} IN ('Open', 'In Progress')`));
-    res.json({ count: row?.count ?? 0 });
+    let count = 0;
+    try {
+      count = await mongoSupport.countTickets({ status: { $in: ["Open", "In Progress"] } });
+    } catch {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(supportTicketsTable)
+        .where(sql`${supportTicketsTable.status} IN ('Open', 'In Progress')`)
+        .catch(() => []);
+      count = row?.count ?? 0;
+    }
+    res.json({ count });
   } catch (err: any) {
     req.log?.error({ err }, "admin/support/tickets/unread-count failed");
     res.status(500).json({ error: "Failed to fetch count" });
@@ -61,7 +69,7 @@ router.get("/admin/support/tickets/unread-count", requireAdminKey, async (req: a
 
 router.get("/admin/support/tickets", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
-    await autoEscalateOverdue();
+    await autoEscalateOverdue().catch(() => {});
 
     const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
@@ -70,50 +78,91 @@ router.get("/admin/support/tickets", requireAdminKey, async (req: any, res: any)
     const search = (req.query.search as string | undefined)?.trim();
     const scope = (req.query.scope as string | undefined) ?? "customer"; // "customer" | "seller"
 
-    const conditions: any[] = [eq(supportTicketsTable.assignedTo, "admin")];
-    if (scope === "seller") {
-      conditions.push(sql`(${supportTicketsTable.userType} = 'seller' OR ${supportTicketsTable.escalated} = true)`);
-    } else {
-      conditions.push(eq(supportTicketsTable.userType, "customer"));
-      conditions.push(eq(supportTicketsTable.escalated, false));
+    let tickets: any[] = [];
+    let total = 0;
+    try {
+      const filter: any = {};
+      if (scope === "seller") {
+        filter.$or = [{ userType: "seller" }, { escalated: true }, { assignedTo: "seller" }];
+      } else if (scope === "customer") {
+        filter.$or = [
+          { userType: "customer" },
+          { userType: "guest" },
+          { userType: { $ne: "seller" } },
+          { assignedTo: "admin" },
+        ];
+      }
+      if (status) filter.status = status;
+      if (search) filter.subject = { $regex: search, $options: "i" };
+
+      tickets = await mongoSupport.findTickets(filter, { limit, skip: offset, sort: { updatedAt: -1 } });
+      total = await mongoSupport.countTickets(filter);
+    } catch {
+      const conditions: any[] = [];
+      if (scope === "seller") {
+        conditions.push(sql`(${supportTicketsTable.userType} = 'seller' OR ${supportTicketsTable.escalated} = true OR ${supportTicketsTable.assignedTo} = 'seller')`);
+      } else if (scope === "customer") {
+        conditions.push(sql`(${supportTicketsTable.userType} != 'seller' OR ${supportTicketsTable.userType} IS NULL OR ${supportTicketsTable.assignedTo} = 'admin')`);
+      }
+      if (status) conditions.push(eq(supportTicketsTable.status, status as any));
+      if (search) conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      tickets = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(whereClause)
+        .orderBy(desc(supportTicketsTable.updatedAt))
+        .limit(limit)
+        .offset(offset)
+        .catch(() => []);
+
+      const countRows = await db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(supportTicketsTable)
+        .where(whereClause)
+        .catch(() => []);
+      total = countRows[0]?.total ?? 0;
     }
-    if (status) conditions.push(eq(supportTicketsTable.status, status as any));
-    if (search) conditions.push(ilike(supportTicketsTable.subject, `%${search}%`));
-    const whereClause = and(...conditions);
-
-    const tickets = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(whereClause)
-      .orderBy(desc(supportTicketsTable.updatedAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [{ total }] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(supportTicketsTable)
-      .where(whereClause);
 
     res.json({ tickets, total, page, limit });
   } catch (err: any) {
-    req.log?.error({ err }, "admin/support/tickets failed");
-    res.status(500).json({ error: "Failed to fetch tickets" });
+    req.log?.error?.({ err }, "admin/support/tickets failed");
+    res.json({ tickets: [], total: 0, page, limit });
   }
 });
 
 router.get("/admin/support/tickets/:id", requireAdminKey, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   try {
-    const [ticket] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id));
+    let ticket: any = null;
+    let messages: any[] = [];
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+      if (ticket) {
+        messages = await mongoSupport.findTicketMessages(id);
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (!ticket) {
+      const [t] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id)).catch(() => []);
+      ticket = t;
+      if (ticket) {
+        messages = await db
+          .select()
+          .from(ticketMessagesTable)
+          .where(eq(ticketMessagesTable.ticketId, id))
+          .orderBy(ticketMessagesTable.createdAt)
+          .catch(() => []);
+      }
+    }
+
     if (!ticket) {
       res.status(404).json({ error: "Ticket not found" });
       return;
     }
-    const messages = await db
-      .select()
-      .from(ticketMessagesTable)
-      .where(eq(ticketMessagesTable.ticketId, id))
-      .orderBy(ticketMessagesTable.createdAt);
 
     res.json({ ...ticket, messages });
   } catch (err: any) {
@@ -131,36 +180,72 @@ router.post("/admin/support/tickets/:id/messages", requireAdminKey, async (req: 
   }
   const cleanAttachments = Array.isArray(attachments) ? attachments.filter((a: unknown) => typeof a === "string") : [];
   try {
-    const [ticket] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id));
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {
+      const [t] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id)).catch(() => []);
+      ticket = t;
+    }
+
     if (!ticket) {
       res.status(404).json({ error: "Ticket not found" });
       return;
     }
 
-    const [msg] = await db
-      .insert(ticketMessagesTable)
-      .values({
+    let msg: any = null;
+    try {
+      msg = await mongoSupport.insertTicketMessage({
         ticketId: id,
         userId: ADMIN_NOTIFICATION_USER_ID,
         body: body.trim(),
         attachments: cleanAttachments,
         isStaff: true,
         internal: !!internal,
-      })
-      .returning();
+      });
+    } catch {
+      const [m] = await db
+        .insert(ticketMessagesTable)
+        .values({
+          ticketId: id,
+          userId: ADMIN_NOTIFICATION_USER_ID,
+          body: body.trim(),
+          attachments: cleanAttachments,
+          isStaff: true,
+          internal: !!internal,
+        })
+        .returning();
+      msg = m;
+    }
 
     if (!internal) {
-      const [updated] = await db
-        .update(supportTicketsTable)
-        .set({ updatedAt: new Date(), status: "Waiting for Customer" })
-        .where(eq(supportTicketsTable.id, id))
-        .returning();
+      let updated: any = null;
+      try {
+        updated = await mongoSupport.updateTicket(id, { updatedAt: new Date(), status: "Waiting for Customer" });
+      } catch {
+        const [u] = await db
+          .update(supportTicketsTable)
+          .set({ updatedAt: new Date(), status: "Waiting for Customer" })
+          .where(eq(supportTicketsTable.id, id))
+          .returning()
+          .catch(() => []);
+        updated = u;
+      }
 
-      await notifyTicketEvent(updated, "ticket_replied", "Support replied to your ticket", `${ticket.subject}: ${body.trim().slice(0, 120)}`, {
-        notifyCustomer: ticket.userType === "customer",
-        notifySeller: ticket.userType === "seller",
-      });
+      if (updated) {
+        await notifyTicketEvent(updated, "ticket_replied", "Support replied to your ticket", `${ticket.subject}: ${body.trim().slice(0, 120)}`, {
+          notifyCustomer: ticket.userType === "customer",
+          notifySeller: ticket.userType === "seller",
+        }).catch(() => {});
+      }
     }
+
+    emitSupportEvent("support:message_added", {
+      ticketId: id,
+      userId: ticket.userId,
+      vendorId: ticket.vendorId,
+      message: msg,
+    });
 
     res.status(201).json(msg);
   } catch (err: any) {
@@ -178,32 +263,63 @@ router.patch("/admin/support/tickets/:id/status", requireAdminKey, async (req: a
     return;
   }
   try {
-    const [ticket] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id));
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {
+      const [t] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id)).catch(() => []);
+      ticket = t;
+    }
     if (!ticket) {
       res.status(404).json({ error: "Ticket not found" });
       return;
     }
 
-    const [updated] = await db
-      .update(supportTicketsTable)
-      .set({ status, updatedAt: new Date(), resolvedAt: status === "Resolved" || status === "Closed" ? new Date() : null })
-      .where(eq(supportTicketsTable.id, id))
-      .returning();
+    let updated: any = null;
+    try {
+      updated = await mongoSupport.updateTicket(id, { status, updatedAt: new Date(), resolvedAt: status === "Resolved" || status === "Closed" ? new Date() : null });
+    } catch {
+      const [u] = await db
+        .update(supportTicketsTable)
+        .set({ status, updatedAt: new Date(), resolvedAt: status === "Resolved" || status === "Closed" ? new Date() : null })
+        .where(eq(supportTicketsTable.id, id))
+        .returning()
+        .catch(() => []);
+      updated = u;
+    }
 
-    await db.insert(ticketMessagesTable).values({
+    try {
+      await mongoSupport.insertTicketMessage({
+        ticketId: id,
+        userId: "system",
+        body: `Ticket status changed to "${status}" by Super Admin.`,
+        isStaff: true,
+      });
+    } catch {
+      await db.insert(ticketMessagesTable).values({
+        ticketId: id,
+        userId: "system",
+        body: `Ticket status changed to "${status}" by Super Admin.`,
+        isStaff: true,
+      }).catch(() => {});
+    }
+
+    if (updated) {
+      await notifyTicketEvent(
+        updated,
+        status === "Resolved" ? "ticket_resolved" : "ticket_status_changed",
+        status === "Resolved" ? "Ticket resolved" : "Ticket status updated",
+        `"${updated.subject}" is now ${status}.`,
+        { notifyCustomer: ticket.userType === "customer", notifySeller: ticket.userType === "seller" }
+      ).catch(() => {});
+    }
+
+    emitSupportEvent("support:status_changed", {
       ticketId: id,
-      userId: "system",
-      body: `Ticket status changed to "${status}" by Super Admin.`,
-      isStaff: true,
+      userId: ticket.userId,
+      vendorId: ticket.vendorId,
+      status,
     });
-
-    await notifyTicketEvent(
-      updated,
-      status === "Resolved" ? "ticket_resolved" : "ticket_status_changed",
-      status === "Resolved" ? "Ticket resolved" : "Ticket status updated",
-      `"${updated.subject}" is now ${status}.`,
-      { notifyCustomer: ticket.userType === "customer", notifySeller: ticket.userType === "seller" }
-    );
 
     res.json(updated);
   } catch (err: any) {
@@ -216,34 +332,57 @@ router.patch("/admin/support/tickets/:id/assign", requireAdminKey, async (req: a
   const { id } = req.params;
   const { assignedAdmin } = req.body;
   try {
-    const [ticket] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id));
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {
+      const [t] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id)).catch(() => []);
+      ticket = t;
+    }
     if (!ticket) {
       res.status(404).json({ error: "Ticket not found" });
       return;
     }
 
-    const [updated] = await db
-      .update(supportTicketsTable)
-      .set({ assignedAdmin: assignedAdmin || null, updatedAt: new Date() })
-      .where(eq(supportTicketsTable.id, id))
-      .returning();
+    let updated: any = null;
+    try {
+      updated = await mongoSupport.updateTicket(id, { assignedAdmin: assignedAdmin || null, updatedAt: new Date() });
+    } catch {
+      const [u] = await db
+        .update(supportTicketsTable)
+        .set({ assignedAdmin: assignedAdmin || null, updatedAt: new Date() })
+        .where(eq(supportTicketsTable.id, id))
+        .returning()
+        .catch(() => []);
+      updated = u;
+    }
 
-    await db.insert(ticketMessagesTable).values({
-      ticketId: id,
-      userId: "system",
-      body: assignedAdmin ? `Ticket assigned to ${assignedAdmin}.` : "Ticket unassigned.",
-      isStaff: true,
-      internal: true,
-    });
+    try {
+      await mongoSupport.insertTicketMessage({
+        ticketId: id,
+        userId: "system",
+        body: assignedAdmin ? `Ticket assigned to ${assignedAdmin}.` : "Ticket unassigned.",
+        isStaff: true,
+        internal: true,
+      });
+    } catch {
+      await db.insert(ticketMessagesTable).values({
+        ticketId: id,
+        userId: "system",
+        body: assignedAdmin ? `Ticket assigned to ${assignedAdmin}.` : "Ticket unassigned.",
+        isStaff: true,
+        internal: true,
+      }).catch(() => {});
+    }
 
-    if (assignedAdmin) {
+    if (assignedAdmin && updated) {
       await notifyTicketEvent(
         updated,
         "ticket_assigned",
         "Ticket assigned",
         `"${updated.subject}" was assigned to ${assignedAdmin}.`,
         { notifyAdmin: true }
-      );
+      ).catch(() => {});
     }
 
     res.json(updated);
@@ -255,23 +394,34 @@ router.patch("/admin/support/tickets/:id/assign", requireAdminKey, async (req: a
 
 router.get("/admin/support/stats", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
-    const [row] = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        open: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'Open')::int`,
-        inProgress: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'In Progress')::int`,
-        resolved: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'Resolved')::int`,
-        closed: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'Closed')::int`,
-        escalated: sql<number>`count(*) filter (where ${supportTicketsTable.escalated} = true)::int`,
-        customerRouted: sql<number>`count(*) filter (where ${supportTicketsTable.assignedTo} = 'admin' and ${supportTicketsTable.userType} = 'customer' and ${supportTicketsTable.escalated} = false)::int`,
-        sellerRouted: sql<number>`count(*) filter (where ${supportTicketsTable.assignedTo} = 'seller')::int`,
-      })
-      .from(supportTicketsTable);
+    let stats: any = null;
+    try {
+      stats = await mongoSupport.getStats();
+    } catch {
+      // Fallback
+    }
 
-    res.json(row);
+    if (!stats) {
+      const [row] = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          open: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'Open')::int`,
+          inProgress: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'In Progress')::int`,
+          resolved: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'Resolved')::int`,
+          closed: sql<number>`count(*) filter (where ${supportTicketsTable.status} = 'Closed')::int`,
+          escalated: sql<number>`count(*) filter (where ${supportTicketsTable.escalated} = true)::int`,
+          customerRouted: sql<number>`count(*) filter (where ${supportTicketsTable.assignedTo} = 'admin' and ${supportTicketsTable.userType} = 'customer' and ${supportTicketsTable.escalated} = false)::int`,
+          sellerRouted: sql<number>`count(*) filter (where ${supportTicketsTable.assignedTo} = 'seller')::int`,
+        })
+        .from(supportTicketsTable)
+        .catch(() => []);
+      stats = row ?? { total: 0, open: 0, inProgress: 0, resolved: 0, closed: 0, escalated: 0, customerRouted: 0, sellerRouted: 0 };
+    }
+
+    res.json(stats);
   } catch (err: any) {
-    req.log?.error({ err }, "admin/support/stats failed");
-    res.status(500).json({ error: "Failed to fetch stats" });
+    req.log?.error?.({ err }, "admin/support/stats failed");
+    res.json({ total: 0, open: 0, inProgress: 0, resolved: 0, closed: 0, escalated: 0, customerRouted: 0, sellerRouted: 0 });
   }
 });
 

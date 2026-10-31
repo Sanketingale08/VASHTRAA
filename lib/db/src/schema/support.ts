@@ -71,6 +71,8 @@ export const supportTicketsTable = pgTable("support_tickets", {
   assignedAdmin: text("assigned_admin"),
   vendorId: uuid("vendor_id"),
   orderId: text("order_id"),
+  productId: text("product_id"),
+  orderItemId: text("order_item_id"),
   isDispute: boolean("is_dispute").notNull().default(false),
   disputeStatus: text("dispute_status")
     .$type<"none" | "open" | "needs_admin" | "resolved">()

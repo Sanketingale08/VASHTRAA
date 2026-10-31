@@ -22,6 +22,14 @@ const IMAGE_DELIVERY_HOSTS = [
   "res.cloudinary.com",
   "images.ctfassets.net",
   "cdn.sanity.io",
+  "r2.dev",
+  "r2.cloudflarestorage.com",
+  "cloudfront.net",
+  "amazonaws.com",
+  "storage.googleapis.com",
+  "googleusercontent.com",
+  "shopify.com",
+  "cdn.shopify.com",
 ];
 const PRODUCT_IMAGE_CONTENT_TYPES: Record<string, "jpg" | "png" | "webp" | "gif"> = {
   "image/jpeg": "jpg",
@@ -75,8 +83,9 @@ function isClearlyAPageOrShareLink(url: URL): boolean {
 }
 
 function isKnownImageDeliveryHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
   return IMAGE_DELIVERY_HOSTS.some(
-    (host) => hostname === host || hostname.endsWith(`.${host}`),
+    (host) => lower === host || lower.endsWith(`.${host}`),
   );
 }
 
@@ -89,16 +98,24 @@ function hasPathTraversal(value: string): boolean {
  * browsers. This deliberately validates only the input contract; it never fetches
  * remote URLs during an import.
  */
-function normalizeBulkProductImage(value: string): string | null {
+export function normalizeBulkProductImage(value: string): string | null {
   if (hasPathTraversal(value)) return null;
 
-  if (value.startsWith(PUBLIC_PRODUCT_IMAGE_PATH)) return value;
+  if (value.includes(PUBLIC_PRODUCT_IMAGE_PATH)) {
+    return value.slice(value.indexOf(PUBLIC_PRODUCT_IMAGE_PATH));
+  }
   if (value.startsWith(PUBLIC_PRODUCT_IMAGE_PATH.slice(1))) return `/${value}`;
 
   // A seller may paste the object-storage relative name returned by an existing
   // upload/export instead of the API path. Keep it compatible with image uploads.
   if (value.startsWith("product-images/")) return `${PUBLIC_PRODUCT_IMAGE_PATH}${value}`;
   if (value.startsWith("/product-images/")) return `${PUBLIC_PRODUCT_IMAGE_PATH}${value.slice(1)}`;
+
+  // Public products / Cloudflare R2 object keys
+  if (value.startsWith("public/products/")) return `${PUBLIC_PRODUCT_IMAGE_PATH}${value}`;
+  if (value.startsWith("/public/products/")) return `${PUBLIC_PRODUCT_IMAGE_PATH}${value.slice(1)}`;
+  if (value.startsWith("public/")) return `${PUBLIC_PRODUCT_IMAGE_PATH}${value}`;
+  if (value.startsWith("/public/")) return `${PUBLIC_PRODUCT_IMAGE_PATH}${value.slice(1)}`;
 
   // Existing static images are valid browser paths as well.
   if (value.startsWith("/images/")) return value;
@@ -113,25 +130,42 @@ function normalizeBulkProductImage(value: string): string | null {
 
   if (url.protocol !== "https:" && url.protocol !== "http:") return null;
   if (isClearlyAPageOrShareLink(url)) return null;
-  if (!DIRECT_IMAGE_EXTENSION.test(url.pathname) && !isKnownImageDeliveryHost(url.hostname.toLowerCase())) {
+
+  const hasImageExt = DIRECT_IMAGE_EXTENSION.test(url.pathname) || DIRECT_IMAGE_EXTENSION.test(url.search);
+  const hasImageParam = /(?:format|ext|type|file)=(?:jpe?g|png|webp|gif|avif)/i.test(url.search);
+  if (!hasImageExt && !hasImageParam && !isKnownImageDeliveryHost(url.hostname.toLowerCase())) {
     return null;
   }
   return url.toString();
 }
 
 /**
- * Normalizes a pipe-separated Images cell for either bulk-import endpoint.
+ * Normalizes an Images cell (pipe, comma, or newline-separated) for bulk-import.
  *
- * An omitted image cell remains valid because product images are optional. Once a
- * value is supplied, every pipe-separated entry must be a direct browser-loadable
- * image URL or a supported public image path; partial lists are not persisted.
+ * An omitted image cell remains valid because product images are optional.
+ * Trailing whitespace or separators are filtered out cleanly.
  */
 export function normalizeBulkProductImages(rawValue: unknown): BulkImageNormalizationResult {
   if (rawValue == null || String(rawValue).trim() === "") {
     return { ok: true, images: [] };
   }
 
-  const values = String(rawValue).split("|");
+  const rawStr = String(rawValue).trim();
+  let values: string[];
+  if (Array.isArray(rawValue)) {
+    values = rawValue.map(v => String(v ?? ""));
+  } else if (rawStr.includes("|")) {
+    values = rawStr.split("|");
+  } else if (rawStr.includes("\n")) {
+    values = rawStr.split("\n");
+  } else if (rawStr.includes(",") && (rawStr.match(/https?:\/\//gi) || []).length > 1) {
+    values = rawStr.split(/,\s*(?=https?:\/\/)/i);
+  } else if (rawStr.includes(",") && !rawStr.includes("://")) {
+    values = rawStr.split(",");
+  } else {
+    values = [rawStr];
+  }
+
   if (values.some((value) => value.trim() === "")) {
     return { ok: false, error: "Images cannot contain blank entries" };
   }

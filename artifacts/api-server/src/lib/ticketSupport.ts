@@ -1,4 +1,4 @@
-import { db } from "@workspace/db";
+import { db, mongoNotifications, mongoSellers } from "@workspace/db";
 import { notificationsTable, vendorsTable, ADMIN_NOTIFICATION_USER_ID } from "@workspace/db";
 import type { SupportTicket, TicketNotificationType, AdminNotificationType, SellerNotificationType } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -31,6 +31,15 @@ async function insertNotification(opts: {
   body: string;
   metadata?: Record<string, unknown>;
 }) {
+  await mongoNotifications.insert({
+    userId: opts.userId,
+    vendorId: opts.vendorId ?? null,
+    type: opts.type,
+    title: opts.title,
+    body: opts.body,
+    metadata: opts.metadata ?? {},
+  }).catch(() => {});
+
   await db.insert(notificationsTable).values({
     userId: opts.userId,
     vendorId: opts.vendorId ?? null,
@@ -38,7 +47,18 @@ async function insertNotification(opts: {
     title: opts.title,
     body: opts.body,
     metadata: opts.metadata ?? {},
-  });
+  }).catch(() => {});
+
+  try {
+    const { emitNotificationEvent } = await import("./socket");
+    emitNotificationEvent({
+      recipientRole: opts.userId === ADMIN_NOTIFICATION_USER_ID ? "admin" : (opts.vendorId ? "vendor" : "user"),
+      recipientId: opts.userId,
+      title: opts.title,
+      message: opts.body,
+      data: { type: opts.type, metadata: opts.metadata },
+    });
+  } catch {}
 }
 
 /**
@@ -57,16 +77,55 @@ export async function notifyTicketEvent(
 
   if (notifyCustomer && ticket.userType === "customer") {
     await insertNotification({ userId: ticket.userId, type, title, body, metadata });
+    try {
+      const emailType =
+        type === "ticket_replied"
+          ? ("support_ticket_reply" as const)
+          : type === "ticket_status_changed" || type === "ticket_resolved" || type === "ticket_closed"
+          ? ("support_ticket_status" as const)
+          : type === "ticket_created"
+          ? ("support_ticket_created" as const)
+          : null;
+
+      if (emailType) {
+        const { sendSupportTicketEmail } = await import("./transactionalEmail");
+        void sendSupportTicketEmail({
+          userId: ticket.userId,
+          type: emailType,
+          ticketId: ticket.id,
+          ticketSubject: ticket.subject,
+          status: type.replace("ticket_", ""),
+          messagePreview: body,
+        });
+      }
+    } catch {}
   }
 
   if (notifySeller && ticket.vendorId) {
-    const [vendor] = await db
-      .select({ ownerId: vendorsTable.ownerId })
-      .from(vendorsTable)
-      .where(eq(vendorsTable.id, ticket.vendorId))
-      .limit(1);
-    if (vendor?.ownerId) {
-      await insertNotification({ userId: vendor.ownerId, vendorId: ticket.vendorId, type, title, body, metadata });
+    let ownerId: string | null = null;
+    try {
+      const seller =
+        (await mongoSellers.findById?.(ticket.vendorId)) ||
+        (await mongoSellers.findByVendorId?.(ticket.vendorId)) ||
+        (await mongoSellers.findBySellerId?.(ticket.vendorId)) ||
+        (await mongoSellers.findByOwnerId?.(ticket.vendorId));
+      ownerId = seller?.ownerId || seller?.userId || seller?.id || null;
+    } catch {
+      // Fallback
+    }
+    if (!ownerId) {
+      const [vendor] = await db
+        .select({ ownerId: vendorsTable.ownerId })
+        .from(vendorsTable)
+        .where(eq(vendorsTable.id, ticket.vendorId))
+        .limit(1)
+        .catch(() => []);
+      ownerId = vendor?.ownerId || null;
+    }
+    const targetUserId = ownerId || ticket.vendorId;
+    await insertNotification({ userId: targetUserId, vendorId: ticket.vendorId, type, title, body, metadata });
+    if (ownerId && ownerId !== ticket.vendorId) {
+      await insertNotification({ userId: ticket.vendorId, vendorId: ticket.vendorId, type, title, body, metadata }).catch(() => {});
     }
   }
 

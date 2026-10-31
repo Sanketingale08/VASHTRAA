@@ -96,6 +96,7 @@ export interface VendorSummary {
 export type ListProductsParams = {
 search?: string;
 category?: ListProductsCategory;
+subcategory?: string;
 fabric?: string;
 color?: string;
 occasion?: string;

@@ -113,6 +113,19 @@ router.get("/about-content", async (_req, res) => {
   }
 });
 
+router.get("/admin/about-content", requireAdminKey, async (_req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    const data = await getStoredAboutContent();
+    return res.json(data);
+  } catch (err) {
+    console.error("GET /admin/about-content error:", err);
+    return res.json(DEFAULT_CONTENT);
+  }
+});
+
 router.put("/admin/about-content", requireAdminKey, async (req, res) => {
   try {
     const content = req.body;

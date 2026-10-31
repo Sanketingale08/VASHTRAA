@@ -265,6 +265,13 @@ vi.mock("@workspace/db", () => {
     commissionRulesTable: tag("commissionRules", [
       "id", "scope", "vendorId", "category", "rate", "active", "effectiveFrom", "effectiveTo",
     ]),
+    eq: (a: any, b: any) => ({ [a]: b }),
+    and: (...args: any[]) => args,
+    inArray: (a: any, b: any) => ({ [a]: { $in: b } }),
+    desc: (col: any) => col,
+    sql: ((...args: any[]) => args) as any,
+    gte: (a: any, b: any) => ({ [a]: { $gte: b } }),
+    isMongoDbConnected: vi.fn(() => false),
   };
 });
 

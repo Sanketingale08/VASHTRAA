@@ -1,10 +1,11 @@
-import { db } from "@workspace/db";
+import { db, mongoSellers, mongoProducts, mongoOrders, mongoGeneric } from "@workspace/db";
 import {
   vendorsTable, productsTable, ordersTable, productReviewsTable,
   searchQueriesTable, wishlistsTable,
 } from "@workspace/db";
 import { computeAllVendorAggregates, computeResponseScores, computePerformanceScore, type OrderItem } from "./vendorAnalytics";
 import { loadActiveCommissionRules, effectiveRateFromRules } from "./commission";
+import { validateDatabaseRecords } from "./dataValidation";
 
 export type Period = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -47,10 +48,12 @@ function previousRange(range: DateRange): DateRange {
 }
 
 function inRange(date: Date, range: DateRange): boolean {
+  if (isNaN(date.getTime())) return false;
   return date >= range.from && date <= range.to;
 }
 
 function bucketKey(date: Date, period: Period): string {
+  if (isNaN(date.getTime())) return "Unknown";
   if (period === "yearly") return String(date.getFullYear());
   if (period === "monthly") return date.toISOString().slice(0, 7);
   if (period === "weekly") {
@@ -72,14 +75,35 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const range = resolveRange(period, from, to);
   const prevRange = previousRange(range);
 
-  const [vendors, products, orders, reviews, searches, commissionRules] = await Promise.all([
-    db.select().from(vendorsTable),
-    db.select().from(productsTable),
-    db.select().from(ordersTable),
-    db.select().from(productReviewsTable),
-    db.select().from(searchQueriesTable),
-    loadActiveCommissionRules(),
-  ]);
+  let rawVendors: any[] = [];
+  let rawProducts: any[] = [];
+  let rawOrders: any[] = [];
+  let reviews: any[] = [];
+  let searches: any[] = [];
+
+  try {
+    rawVendors = await mongoSellers.findMany({});
+    rawProducts = await mongoProducts.findMany({});
+    rawOrders = await mongoOrders.findMany({});
+    try { reviews = await mongoGeneric.getCollection("reviews").find({}).toArray(); } catch {}
+    try { searches = await mongoGeneric.getCollection("search_queries").find({}).toArray(); } catch {}
+  } catch {}
+
+  if (rawVendors.length === 0 && rawProducts.length === 0 && rawOrders.length === 0) {
+    try {
+      [rawVendors, rawProducts, rawOrders, reviews, searches] = await Promise.all([
+        db.select().from(vendorsTable),
+        db.select().from(productsTable),
+        db.select().from(ordersTable),
+        db.select().from(productReviewsTable),
+        db.select().from(searchQueriesTable),
+      ]);
+    } catch {}
+  }
+  const commissionRules = await loadActiveCommissionRules();
+
+  const { validOrders: orders, validProducts: products, validVendors: vendors, summary: dataValidation } =
+    validateDatabaseRecords(rawOrders, rawProducts, rawVendors);
 
   const productById = new Map(products.map(p => [p.id, p]));
   const vendorAggMap = await computeAllVendorAggregates();
@@ -89,7 +113,8 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const ordersInPrevRange = orders.filter(o => inRange(new Date(o.createdAt), prevRange));
 
   function orderRevenue(o: typeof orders[number]): number {
-    return o.total;
+    const val = typeof o.total === "number" ? o.total : parseFloat(o.total as any);
+    return typeof val === "number" && !isNaN(val) && val >= 0 ? val : 0;
   }
 
   const nonCancelled = (o: typeof orders[number]) => !["cancelled", "returned"].includes(o.status);
@@ -104,11 +129,16 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
 
   function orderCommission(o: typeof orders[number]): number {
     const items = (o.items as OrderItem[]) ?? [];
+    if (!Array.isArray(items)) return 0;
     let commission = 0;
     for (const item of items) {
+      if (!item) continue;
+      const price = typeof item.price === "number" ? item.price : parseFloat(item.price as any);
+      if (isNaN(price) || price < 0) continue;
+      const qty = typeof item.quantity === "number" && item.quantity > 0 ? item.quantity : 1;
       const p = productById.get(item.productId);
       const rate = effectiveRateFromRules(commissionRules, p?.vendorId, p?.category);
-      commission += Math.round(item.price * (item.quantity ?? 1) * rate);
+      commission += Math.round(price * qty * rate);
     }
     return commission;
   }
@@ -116,8 +146,8 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const commissionRevenue = ordersInRange.filter(nonCancelled).reduce((s, o) => s + orderCommission(o), 0);
   const totalProfit = commissionRevenue - totalRefundAmount * 0.02;
 
-  const customerIdsInRange = new Set(ordersInRange.map(o => o.userId));
-  const allCustomerIds = new Set(orders.map(o => o.userId));
+  const customerIdsInRange = new Set(ordersInRange.map(o => o.userId).filter(Boolean));
+  const allCustomerIds = new Set(orders.map(o => o.userId).filter(Boolean));
 
   const overview = {
     totalRevenue,
@@ -136,12 +166,12 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     const perf = computePerformanceScore(agg, responseScores.get(id) ?? 100);
     return {
       id,
-      name: agg.vendor.name,
-      shopCity: agg.vendor.shopCity ?? agg.vendor.location,
-      totalRevenue: agg.grossRevenue,
-      totalOrders: agg.ordersReceived,
-      productsSold: agg.ordersDelivered,
-      rating: agg.avgRating,
+      name: agg.vendor?.name || "Unknown Vendor",
+      shopCity: agg.vendor?.shopCity ?? agg.vendor?.location ?? "India",
+      totalRevenue: agg.grossRevenue || 0,
+      totalOrders: agg.ordersReceived || 0,
+      productsSold: agg.ordersDelivered || 0,
+      rating: agg.avgRating || 5.0,
       performanceScore: perf.score,
       performanceBadge: perf.badge,
       fulfillmentRate: perf.fulfillmentRate,
@@ -151,10 +181,15 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const productSalesMap = new Map<string, { unitsSold: number; revenue: number }>();
   for (const o of ordersInRange.filter(nonCancelled)) {
     const items = (o.items as OrderItem[]) ?? [];
+    if (!Array.isArray(items)) continue;
     for (const item of items) {
+      if (!item || !item.productId) continue;
+      const price = typeof item.price === "number" ? item.price : parseFloat(item.price as any);
+      if (isNaN(price) || price < 0) continue;
+      const qty = typeof item.quantity === "number" && item.quantity > 0 ? item.quantity : 1;
       const cur = productSalesMap.get(item.productId) ?? { unitsSold: 0, revenue: 0 };
-      cur.unitsSold += item.quantity ?? 1;
-      cur.revenue += item.price * (item.quantity ?? 1);
+      cur.unitsSold += qty;
+      cur.revenue += price * qty;
       productSalesMap.set(item.productId, cur);
     }
   }
@@ -164,49 +199,54 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     if (!p) return null;
     return {
       id: productId,
-      name: p.name,
-      vendorName: p.vendorName,
-      category: p.category,
+      name: p.name || "Product",
+      vendorName: p.vendorName || "Vendor",
+      category: p.category || "General",
       unitsSold: d.unitsSold,
       revenue: d.revenue,
-      rating: p.rating,
-      stock: p.stock,
+      rating: p.rating || 5.0,
+      stock: p.stock || 0,
     };
   }).filter(Boolean).sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 20);
 
   const mostViewedProducts = [...products]
-    .sort((a, b) => b.viewCount - a.viewCount)
+    .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0))
     .slice(0, 20)
     .map(p => {
       const sales = productSalesMap.get(p.id);
       const orderCount = sales?.unitsSold ?? 0;
       return {
         id: p.id,
-        name: p.name,
-        totalViews: p.viewCount,
-        vendorName: p.vendorName,
-        category: p.category,
-        conversionRate: p.viewCount > 0 ? Math.round((orderCount / p.viewCount) * 1000) / 10 : 0,
+        name: p.name || "Product",
+        totalViews: p.viewCount || 0,
+        vendorName: p.vendorName || "Vendor",
+        category: p.category || "General",
+        conversionRate: (p.viewCount || 0) > 0 ? Math.round((orderCount / p.viewCount) * 1000) / 10 : 0,
       };
     });
 
-  const wishlistCounts = await db.select().from(wishlistsTable);
+  let wishlistCounts: any[] = [];
+  try {
+    wishlistCounts = await db.select().from(wishlistsTable);
+  } catch {}
   const wishlistByProduct = new Map<string, number>();
   for (const w of wishlistCounts) {
-    wishlistByProduct.set(w.productId, (wishlistByProduct.get(w.productId) ?? 0) + 1);
+    if (w && w.productId) {
+      wishlistByProduct.set(w.productId, (wishlistByProduct.get(w.productId) ?? 0) + 1);
+    }
   }
   for (const item of mostViewedProducts as any[]) {
     item.wishlistCount = wishlistByProduct.get(item.id) ?? 0;
   }
 
-  const searchesInRange = searches.filter(s => inRange(new Date(s.createdAt), range));
+  const searchesInRange = searches.filter(s => s && s.createdAt && inRange(new Date(s.createdAt), range));
 
   function categoryForTerm(term: string): string {
     const t = term.toLowerCase();
     const catCounts = new Map<string, number>();
     for (const p of products) {
-      if (p.name.toLowerCase().includes(t) || p.category.toLowerCase() === t || p.subcategory?.toLowerCase() === t) {
-        catCounts.set(p.category, (catCounts.get(p.category) ?? 0) + 1);
+      if ((p.name && p.name.toLowerCase().includes(t)) || (p.category && p.category.toLowerCase() === t) || (p.subcategory && p.subcategory.toLowerCase() === t)) {
+        catCounts.set(p.category || "General", (catCounts.get(p.category || "General") ?? 0) + 1);
       }
     }
     let best: string | null = null;
@@ -219,9 +259,10 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
 
   const searchByTerm = new Map<string, { count: number; resultCount: number; latest: Date; userIds: Set<string> }>();
   for (const s of searchesInRange) {
+    if (!s.term) continue;
     const cur = searchByTerm.get(s.term) ?? { count: 0, resultCount: 0, latest: new Date(0), userIds: new Set<string>() };
     cur.count++;
-    cur.resultCount = s.resultCount;
+    cur.resultCount = s.resultCount || 0;
     if (s.userId) cur.userIds.add(s.userId);
     const createdAt = new Date(s.createdAt);
     if (createdAt > cur.latest) cur.latest = createdAt;
@@ -236,7 +277,7 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
       const searchingUsers = [...d.userIds];
       const convertedUsers = searchingUsers.filter(uid =>
         orders.some(o => o.userId === uid && !["cancelled", "returned"].includes(o.status) &&
-          ((o.items as OrderItem[]) ?? []).some(i => productById.get(i.productId)?.category === category))
+          ((o.items as OrderItem[]) ?? []).some(i => i && productById.get(i.productId)?.category === category))
       );
       const conversionRate = searchingUsers.length > 0
         ? Math.round((convertedUsers.length / searchingUsers.length) * 1000) / 10
@@ -273,25 +314,28 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     const perf = computePerformanceScore(agg, responseScores.get(id) ?? 100);
     return {
       id,
-      shopName: agg.vendor.name,
-      vendorName: agg.vendor.name,
-      totalRevenue: agg.grossRevenue,
-      totalOrders: agg.ordersReceived,
+      shopName: agg.vendor?.name || "Unknown Shop",
+      vendorName: agg.vendor?.name || "Unknown Vendor",
+      totalRevenue: agg.grossRevenue || 0,
+      totalOrders: agg.ordersReceived || 0,
       averageOrderValue: agg.ordersReceived > 0 ? Math.round(agg.grossRevenue / agg.ordersReceived) : 0,
-      rating: agg.avgRating,
+      rating: agg.avgRating || 5.0,
       performanceScore: perf.score,
     };
   }).sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 15);
 
   const customerFirstOrderDate = new Map<string, Date>();
   for (const o of orders) {
+    if (!o.userId) continue;
     const createdAt = new Date(o.createdAt);
+    if (isNaN(createdAt.getTime())) continue;
     if (!customerFirstOrderDate.has(o.userId) || createdAt < customerFirstOrderDate.get(o.userId)!) {
       customerFirstOrderDate.set(o.userId, createdAt);
     }
   }
   const customerOrderCounts = new Map<string, number>();
   for (const o of orders) {
+    if (!o.userId) continue;
     customerOrderCounts.set(o.userId, (customerOrderCounts.get(o.userId) ?? 0) + 1);
   }
   const newCustomersInRange = [...customerFirstOrderDate.entries()].filter(([, d]) => inRange(d, range));
@@ -343,15 +387,20 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const vendorSalesBuckets = new Map<string, { orders: number; revenue: number }>();
   for (const o of ordersInRange.filter(nonCancelled)) {
     const items = (o.items as OrderItem[]) ?? [];
+    if (!Array.isArray(items)) continue;
     const touchedVendors = new Set<string>();
     const vendorItemRevenue = new Map<string, number>();
     for (const item of items) {
+      if (!item || !item.productId) continue;
       const p = productById.get(item.productId);
       if (!p) continue;
-      const lineTotal = item.price * (item.quantity ?? 1);
-      const catKey = p.category;
+      const price = typeof item.price === "number" ? item.price : parseFloat(item.price as any);
+      if (isNaN(price) || price < 0) continue;
+      const qty = typeof item.quantity === "number" && item.quantity > 0 ? item.quantity : 1;
+      const lineTotal = price * qty;
+      const catKey = p.category || "General";
       const cur = categoryBuckets.get(catKey) ?? { orders: 0, unitsSold: 0, revenue: 0 };
-      cur.unitsSold += item.quantity ?? 1;
+      cur.unitsSold += qty;
       cur.revenue += lineTotal;
       categoryBuckets.set(catKey, cur);
       if (p.vendorId) {
@@ -368,7 +417,7 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   }
   for (const [catKey, cur] of categoryBuckets) {
     cur.orders = ordersInRange.filter(nonCancelled).filter(o =>
-      ((o.items as OrderItem[]) ?? []).some(i => productById.get(i.productId)?.category === catKey)
+      ((o.items as OrderItem[]) ?? []).some(i => i && productById.get(i.productId)?.category === catKey)
     ).length;
   }
 
@@ -379,7 +428,7 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     salesByCategory: [...categoryBuckets.entries()].map(([category, d]) => ({ category, ...d })),
     salesByVendor: [...vendorSalesBuckets.entries()].map(([vendorId, d]) => ({
       vendorId,
-      vendorName: vendorAggMap.get(vendorId)?.vendor.name ?? "Unknown",
+      vendorName: vendorAggMap.get(vendorId)?.vendor?.name ?? "Unknown Vendor",
       ...d,
     })).sort((a, b) => b.revenue - a.revenue).slice(0, 15),
   };
@@ -394,7 +443,9 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
   const returnsByVendor = new Map<string, number>();
   for (const o of returnedOrders) {
     const items = (o.items as OrderItem[]) ?? [];
+    if (!Array.isArray(items)) continue;
     for (const item of items) {
+      if (!item || !item.productId) continue;
       returnsByProduct.set(item.productId, (returnsByProduct.get(item.productId) ?? 0) + 1);
       const p = productById.get(item.productId);
       if (p?.vendorId) returnsByVendor.set(p.vendorId, (returnsByVendor.get(p.vendorId) ?? 0) + 1);
@@ -413,10 +464,10 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     refundAmount: totalRefundAmount,
     topReturnedProducts: [...returnsByProduct.entries()]
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([productId, count]) => ({ productId, name: productById.get(productId)?.name ?? "Unknown", count })),
+      .map(([productId, count]) => ({ productId, name: productById.get(productId)?.name ?? "Unknown Product", count })),
     topReturnVendors: [...returnsByVendor.entries()]
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([vendorId, count]) => ({ vendorId, name: vendorAggMap.get(vendorId)?.vendor.name ?? "Unknown", count })),
+      .map(([vendorId, count]) => ({ vendorId, name: vendorAggMap.get(vendorId)?.vendor?.name ?? "Unknown Vendor", count })),
     trend: [...returnTrendBuckets.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-24).map(([p, count]) => ({ period: p, count })),
   };
 
@@ -436,5 +487,6 @@ export async function computeBusinessIntelligence(period: Period, from?: string,
     revenueGrowth,
     salesTrends,
     returnTrends,
+    dataValidation,
   };
 }

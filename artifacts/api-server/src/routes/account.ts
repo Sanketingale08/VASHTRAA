@@ -4,6 +4,8 @@ import { requireAuth } from "../middlewares/isAuthenticated";
 import { mongoUsers } from "@workspace/db";
 import { Resend } from "resend";
 import crypto from "crypto";
+import { emitUserEvent } from "../lib/socket";
+import { sendTransactionalEmail, sendAccountSecurityAlertEmail } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -38,35 +40,32 @@ async function getUserEmail(userId: string): Promise<string | null> {
   return mongoUser?.email ?? null;
 }
 
-async function sendOtpEmail(toEmail: string, otp: string, phone: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("RESEND_API_KEY is not set; cannot send OTP in production");
+// ─── In-memory email change OTP store ─────────────────────────────────────
+interface EmailOtpEntry {
+  otp: string;
+  newEmail: string;
+  expiresAt: Date;
+  requests: Date[];
+  attempts: number;
+}
+const emailOtpStore = new Map<string, EmailOtpEntry>();
+
+async function sendEmailChangeOtpEmail(toEmail: string, otp: string): Promise<void> {
+  try {
+    await sendTransactionalEmail({
+      userId: toEmail,
+      toEmail,
+      type: "email_change_otp",
+      reference: otp,
+      note: "Use this verification code to confirm your new email address.",
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[email-change-otp] DEV: Verification OTP for ${toEmail} → ${otp}`);
+    } else {
+      throw err;
     }
-    console.info(`[phone-otp] DEV: OTP for +91${phone} → ${otp} (email: ${toEmail})`);
-    return;
   }
-  const resend = new Resend(apiKey);
-  await resend.emails.send({
-    from: "noreply@vastraa.com",
-    to: toEmail,
-    subject: "Your VASTRAA mobile number verification code",
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-        <h2 style="color:#1E6B5A;font-size:20px;margin:0 0 8px">Mobile Number Change</h2>
-        <p style="color:#555;font-size:14px;margin:0 0 24px">
-          You requested to change your registered mobile number to <strong>+91 ${phone}</strong>.
-          Use the code below to confirm this change.
-        </p>
-        <div style="background:#F3F8F5;border:1px solid #C9A84C33;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
-          <p style="font-size:32px;font-weight:700;letter-spacing:0.3em;color:#1E6B5A;margin:0">${otp}</p>
-          <p style="color:#888;font-size:12px;margin:8px 0 0">Valid for 10 minutes</p>
-        </div>
-        <p style="color:#888;font-size:12px">If you did not request this change, please ignore this email. Your mobile number will not be updated.</p>
-      </div>
-    `,
-  });
 }
 
 // ─── Profile GET ─────────────────────────────────────────────────────────────
@@ -75,7 +74,7 @@ router.get("/account/profile", requireAuth, async (req: any, res: any): Promise<
     const userId = req.userId;
     let mongoUser = await mongoUsers.findById(userId);
     if (!mongoUser && req.user?.email) {
-      mongoUser = await mongoUsers.findByEmail(req.user.email);
+      mongoUser = await mongoUsers.findByEmail(req.user.email, req.userRole || "customer");
     }
 
     let firstName = "";
@@ -138,6 +137,7 @@ router.get("/account/profile", requireAuth, async (req: any, res: any): Promise<
         firstName,
         lastName,
         email,
+        role: mongoUser?.role || req.userRole || "customer",
         phone,
         alternateMobile,
         dateOfBirth,
@@ -257,10 +257,163 @@ router.post("/account/phone-otp/verify", requireAuth, async (req: any, res: any)
       });
     } catch { /* ignore Clerk errors for custom auth users */ }
 
+    emitUserEvent(userId, "profile:updated", { user: updatedUser, phone });
     res.json({ success: true, phone, user: updatedUser });
   } catch (err) {
     req.log?.error({ err }, "[phone-otp] Failed to update phone number");
     res.status(500).json({ error: "Failed to update phone number. Please try again." });
+  }
+});
+
+// ─── Email OTP: request ──────────────────────────────────────────────────────
+router.post("/account/email-otp/request", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { newEmail } = req.body || {};
+  if (!newEmail || typeof newEmail !== "string" || !newEmail.trim()) {
+    res.status(400).json({ error: "Please enter a valid new email address." });
+    return;
+  }
+
+  const cleanNewEmail = newEmail.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanNewEmail)) {
+    res.status(400).json({ error: "Please enter a valid email address." });
+    return;
+  }
+
+  const userId: string = req.userId;
+  const currentUser = await mongoUsers.findById(userId);
+  if (currentUser && (currentUser.email || "").toLowerCase() === cleanNewEmail) {
+    res.status(400).json({ error: "New email address must be different from your current email address." });
+    return;
+  }
+
+  // Check if new email is registered by another Customer account
+  const existingCustomer = await mongoUsers.findByEmail(cleanNewEmail, "customer");
+  if (existingCustomer && existingCustomer.id !== userId && (existingCustomer as any)._id !== userId) {
+    res.status(400).json({ error: "This email address is already registered with another Customer account." });
+    return;
+  }
+
+  const now = new Date();
+  const entry = emailOtpStore.get(userId);
+  const recentRequests = (entry?.requests ?? []).filter(
+    (d) => now.getTime() - d.getTime() < RATE_WINDOW
+  );
+  if (recentRequests.length >= RATE_LIMIT) {
+    res.status(429).json({ error: "Too many verification requests. Please try again later." });
+    return;
+  }
+
+  const otp = generateOtp();
+  emailOtpStore.set(userId, {
+    otp,
+    newEmail: cleanNewEmail,
+    expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+    requests: [...recentRequests, now],
+    attempts: 0,
+  });
+
+  try {
+    await sendEmailChangeOtpEmail(cleanNewEmail, otp);
+  } catch (err) {
+    req.log?.error({ err }, "[email-otp] Failed to send verification email");
+    emailOtpStore.delete(userId);
+    res.status(500).json({ error: "Failed to send verification email. Please try again." });
+    return;
+  }
+
+  res.json({
+    success: true,
+    message: `Verification code sent successfully to ${cleanNewEmail}.`,
+    devCode: process.env.NODE_ENV !== "production" ? otp : undefined,
+  });
+});
+
+// ─── Email OTP: verify ───────────────────────────────────────────────────────
+router.post("/account/email-otp/verify", requireAuth, async (req: any, res: any): Promise<void> => {
+  const { newEmail, code } = req.body || {};
+  if (!newEmail || !code) {
+    res.status(400).json({ error: "Email address and 6-digit verification code are required." });
+    return;
+  }
+
+  const userId: string = req.userId;
+  const cleanNewEmail = String(newEmail).trim().toLowerCase();
+  const cleanCode = String(code).trim();
+
+  const entry = emailOtpStore.get(userId);
+
+  if (!entry) {
+    res.status(400).json({ error: "No pending verification found. Please request a new verification code." });
+    return;
+  }
+
+  if (new Date() > entry.expiresAt) {
+    emailOtpStore.delete(userId);
+    res.status(400).json({ error: "Verification code has expired. Please request a new code." });
+    return;
+  }
+
+  if (entry.newEmail !== cleanNewEmail) {
+    res.status(400).json({ error: "Email address does not match the pending verification." });
+    return;
+  }
+
+  if (entry.attempts >= MAX_VERIFY_TRIES) {
+    emailOtpStore.delete(userId);
+    res.status(429).json({ error: "Too many incorrect attempts. Please request a new verification code." });
+    return;
+  }
+
+  if (entry.otp !== cleanCode) {
+    entry.attempts += 1;
+    const remaining = MAX_VERIFY_TRIES - entry.attempts;
+    if (remaining <= 0) {
+      emailOtpStore.delete(userId);
+      res.status(429).json({ error: "Too many incorrect attempts. Please request a new verification code." });
+    } else {
+      res.status(400).json({
+        error: `Incorrect code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`,
+      });
+    }
+    return;
+  }
+
+  // Double check email uniqueness before updating
+  const existingCustomer = await mongoUsers.findByEmail(cleanNewEmail, "customer");
+  if (existingCustomer && existingCustomer.id !== userId && (existingCustomer as any)._id !== userId) {
+    emailOtpStore.delete(userId);
+    res.status(400).json({ error: "This email address is already registered with another Customer account." });
+    return;
+  }
+
+  // Verification valid — update user email in database
+  emailOtpStore.delete(userId);
+  try {
+    const updatedUser = await mongoUsers.update(userId, { email: cleanNewEmail, updatedAt: new Date() });
+
+    try {
+      await clerkClient.users.updateUser(userId, {
+        emailAddress: [cleanNewEmail],
+      }).catch(() => {});
+    } catch { /* ignore Clerk errors for custom auth users */ }
+
+    emitUserEvent(userId, "profile:updated", { user: updatedUser, email: cleanNewEmail });
+    void sendAccountSecurityAlertEmail({
+      userId,
+      email: cleanNewEmail,
+      alertType: "Email Address Updated",
+      details: `Your VASTRAA account email address was successfully updated to ${cleanNewEmail}. If you did not make this change, please contact support immediately.`,
+    }).catch(() => {});
+    res.json({
+      success: true,
+      email: cleanNewEmail,
+      user: updatedUser,
+      message: "Email address updated successfully!",
+    });
+  } catch (err: any) {
+    req.log?.error({ err }, "[email-otp] Failed to update user email");
+    res.status(500).json({ error: err?.message || "Failed to update email address. Please try again." });
   }
 });
 
@@ -421,24 +574,28 @@ router.patch("/account/profile", requireAuth, async (req: any, res: any): Promis
     const fName = nameParts[0] || "";
     const lName = nameParts.slice(1).join(" ") || "";
 
+    const responseUser = {
+      id: updatedUser?.id || req.userId,
+      name: updatedUser?.name || computedName,
+      firstName: fName,
+      lastName: lName,
+      email: updatedUser?.email || (typeof email === "string" ? email.trim() : ""),
+      phone: updatedUser?.phone || (typeof phone === "string" ? phone : ""),
+      alternateMobile: updatedUser?.alternateMobile || "",
+      dateOfBirth: updatedUser?.dateOfBirth || "",
+      gender: updatedUser?.gender || "",
+      location: updatedUser?.location || "",
+      language: updatedUser?.language || "English",
+      profilePicture: (updatedUser as any)?.profilePicture || updateFields.profilePicture || "",
+      avatar: (updatedUser as any)?.avatar || updateFields.avatar || "",
+      address: (updatedUser as any)?.address || updateFields.address || "",
+    };
+
+    emitUserEvent(req.userId, "profile:updated", { user: responseUser });
+
     res.json({
       success: true,
-      user: {
-        id: updatedUser?.id || req.userId,
-        name: updatedUser?.name || computedName,
-        firstName: fName,
-        lastName: lName,
-        email: updatedUser?.email || (typeof email === "string" ? email.trim() : ""),
-        phone: updatedUser?.phone || (typeof phone === "string" ? phone : ""),
-        alternateMobile: updatedUser?.alternateMobile || "",
-        dateOfBirth: updatedUser?.dateOfBirth || "",
-        gender: updatedUser?.gender || "",
-        location: updatedUser?.location || "",
-        language: updatedUser?.language || "English",
-        profilePicture: (updatedUser as any)?.profilePicture || updateFields.profilePicture || "",
-        avatar: (updatedUser as any)?.avatar || updateFields.avatar || "",
-        address: (updatedUser as any)?.address || updateFields.address || "",
-      },
+      user: responseUser,
     });
   } catch (err: any) {
     req.log?.error({ err }, "Failed to update profile metadata");

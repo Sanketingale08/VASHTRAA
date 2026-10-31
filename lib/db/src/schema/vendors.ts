@@ -2,7 +2,7 @@ import { pgTable, text, integer, real, uuid, boolean, timestamp } from "drizzle-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const VENDOR_STATUSES = ["pending", "approved", "suspended"] as const;
+export const VENDOR_STATUSES = ["pending", "approved", "suspended", "rejected"] as const;
 
 export const vendorsTable = pgTable("vendors", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -13,7 +13,7 @@ export const vendorsTable = pgTable("vendors", {
   avatar: text("avatar").notNull().default("/images/artisan-1.png"),
   bio: text("bio"),
   ownerId: text("owner_id"),
-  status: text("status").$type<typeof VENDOR_STATUSES[number]>().notNull().default("approved"),
+  status: text("status").$type<typeof VENDOR_STATUSES[number]>().notNull().default("pending"),
   gstin: text("gstin"),
   contactEmail: text("contact_email"),
   tagline: text("tagline"),
@@ -30,6 +30,13 @@ export const vendorsTable = pgTable("vendors", {
   bankName: text("bank_name"),
   bankAccount: text("bank_account"),
   bankIfsc: text("bank_ifsc"),
+  cashfreeBeneficiaryId: text("cashfree_beneficiary_id"),
+  bankVerificationStatus: text("bank_verification_status").notNull().default("unverified"),
+  bankVerificationDetails: text("bank_verification_details"),
+  bankVerifiedAt: timestamp("bank_verified_at"),
+  beneficiaryStatus: text("beneficiary_status").notNull().default("unregistered"),
+  beneficiaryRegisteredAt: timestamp("beneficiary_registered_at"),
+  beneficiaryError: text("beneficiary_error"),
   shopStreet: text("shop_street"),
   shopCity: text("shop_city"),
   shopState: text("shop_state"),
@@ -56,10 +63,18 @@ export const vendorsTable = pgTable("vendors", {
   rtoCountry: text("rto_country"),
   rtoSameAsPickup: boolean("rto_same_as_pickup").notNull().default(true),
   termsAcceptedAt: timestamp("terms_accepted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
   featured: boolean("featured").notNull().default(false),
   vendorId: text("vendor_id"),
   reactivationWelcomePending: boolean("reactivation_welcome_pending").notNull().default(false),
   statusReason: text("status_reason"),
+  // Shiprocket automated pickup location mapping
+  shiprocketPickupLocationName: text("shiprocket_pickup_location_name"),
+  shiprocketPickupId: integer("shiprocket_pickup_id"),
+  shiprocketPickupStatus: text("shiprocket_pickup_status").default("unregistered"),
+  shiprocketPickupError: text("shiprocket_pickup_error"),
+  shiprocketAddressHash: text("shiprocket_address_hash"),
+  shippingActivated: boolean("shipping_activated").notNull().default(true),
 });
 
 export const insertVendorSchema = createInsertSchema(vendorsTable).omit({ id: true });

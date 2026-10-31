@@ -1,12 +1,15 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, mongoSellers, mongoProducts, mongoOrders } from "@workspace/db";
 import { vendorsTable, ordersTable, vendorSettlementsTable, productsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { insertSellerNotification } from "../lib/sellerNotifications";
+import { emitVendorEvent, emitFinancialsEvent, emitAnalyticsEvent } from "../lib/socket";
 import {
   computeAllVendorAggregates, computeResponseScores, computePerformanceScore,
-  type VendorAggregate,
+  getItemBasePrice, type VendorAggregate,
 } from "../lib/vendorAnalytics";
+import { filterRealtimeOrders, buildRealtimeOrderMongoFilter } from "../lib/orderFilter";
+import { syncEligibleOrderSettlements } from "../lib/settlementAutomation";
 
 const router = Router();
 
@@ -14,23 +17,27 @@ import { requireAdminKey } from "../middlewares/isAdmin";
 
 function summarize(agg: VendorAggregate, responseScore: number) {
   const perf = computePerformanceScore(agg, responseScore);
+  const v = agg.vendor as any;
   return {
-    id: agg.vendor.id,
-    name: agg.vendor.name,
-    ownerId: agg.vendor.ownerId ?? null,
-    location: agg.vendor.location,
-    contactEmail: agg.vendor.contactEmail ?? null,
-    mobile: agg.vendor.mobile ?? null,
-    category: agg.vendor.gstin ? "GST Registered" : "Unregistered",
-    status: agg.vendor.status,
+    id: String(v.id || (v as any)._id),
+    vendorId: String(v.vendorId || v.sellerId || v.id || (v as any)._id),
+    name: v.shopName || v.name || v.storeName || v.brandName || "Vendor",
+    shopName: v.shopName || v.name || v.storeName || v.brandName || "Vendor",
+    ownerId: v.ownerId ?? null,
+    location: v.location || v.shopCity || "India",
+    contactEmail: v.contactEmail ?? v.email ?? v.ownerEmail ?? null,
+    mobile: v.mobile ?? v.phone ?? null,
+    category: v.gstin ? "GST Registered" : "Unregistered",
+    status: v.status || "approved",
     registeredAt: agg.registeredAt,
-    kycVerified: agg.vendor.kycVerified,
-    kycResubmissionRequested: agg.vendor.kycResubmissionRequested,
-    panVerified: agg.vendor.panVerified,
-    gstVerified: agg.vendor.gstVerified,
-    bankVerified: agg.vendor.bankVerified,
+    kycVerified: Boolean(v.kycVerified),
+    kycResubmissionRequested: Boolean(v.kycResubmissionRequested),
+    panVerified: Boolean(v.panVerified),
+    gstVerified: Boolean(v.gstVerified),
+    bankVerified: Boolean(v.bankVerified),
     totalProducts: agg.totalProducts,
     activeProducts: agg.activeProducts,
+    totalOrders: agg.ordersReceived,
     ordersReceived: agg.ordersReceived,
     ordersDelivered: agg.ordersDelivered,
     ordersDispatched: agg.ordersDispatched,
@@ -38,7 +45,9 @@ function summarize(agg: VendorAggregate, responseScore: number) {
     ordersReturned: agg.ordersReturned,
     grossRevenue: agg.grossRevenue,
     netRevenue: agg.netRevenue,
+    sellerEarnings: agg.netRevenue,
     commissionEarned: agg.commissionEarned,
+    refundedAmount: agg.refundedAmount,
     rating: agg.avgRating,
     reviewCount: agg.reviewCount,
     performanceScore: perf.score,
@@ -52,20 +61,80 @@ router.get("/admin/vendor-analytics", requireAdminKey, async (req: any, res: any
       search, status, verification, category, orderStatus,
       dateFrom, dateTo, revenueMin, revenueMax,
       sortBy = "grossRevenue", sortDir = "desc",
-      page = "1", pageSize = "20",
+      page = "1", pageSize = "15",
     } = req.query as Record<string, string>;
 
-    const aggMap = await computeAllVendorAggregates();
-    const responseScores = await computeResponseScores();
+    let aggMap = new Map<string, VendorAggregate>();
+    let responseScores = new Map<string, number>();
+    try {
+      await syncEligibleOrderSettlements().catch(() => {});
+      aggMap = await computeAllVendorAggregates();
+      responseScores = await computeResponseScores();
+    } catch (e) {
+      req.log?.error?.({ err: e }, "Failed to compute vendor aggregates");
+    }
 
-    let rows = [...aggMap.values()].map(agg => summarize(agg, responseScores.get(agg.vendor.id) ?? 100));
+    const allAggs = [...aggMap.values()];
+    const globalCustomers = new Set<string>();
+    allAggs.forEach((a) => {
+      if (a.customerIds) {
+        a.customerIds.forEach((cId) => globalCustomers.add(cId));
+      }
+    });
+
+    const totalGrossRevenue = Math.round(allAggs.reduce((sum, a) => sum + (a.grossRevenue || 0), 0) * 100) / 100;
+    const totalPlatformCommission = Math.round(allAggs.reduce((sum, a) => sum + (a.commissionEarned || 0), 0) * 100) / 100;
+    const totalSellerEarnings = Math.round(allAggs.reduce((sum, a) => sum + (a.netRevenue || 0), 0) * 100) / 100;
+    const totalSellers = allAggs.length;
+    const activeSellers = allAggs.filter(a => {
+      const s = String(a.vendor.status || "").toLowerCase();
+      return s === "approved" || s === "active";
+    }).length;
+    const inactiveSellers = totalSellers - activeSellers;
+    const totalOrders = allAggs.reduce((sum, a) => sum + (a.ordersReceived || 0), 0);
+
+    const summary = {
+      totalGrossRevenue,
+      totalPlatformCommission,
+      totalSellerEarnings,
+      sellerEarnings: totalSellerEarnings,
+      totalSellers,
+      activeSellers,
+      inactiveSellers,
+      totalOrders,
+      // Backward-compatible keys:
+      grossRevenue: totalGrossRevenue,
+      platformCommission: totalPlatformCommission,
+      totalVendors: totalSellers,
+      activeVendors: activeSellers,
+      inactiveVendors: inactiveSellers,
+      totalProducts: allAggs.reduce((sum, a) => sum + (a.totalProducts || 0), 0),
+      totalCustomers: globalCustomers.size > 0 
+        ? globalCustomers.size 
+        : allAggs.reduce((sum, a) => sum + (a.totalCustomers || 0), 0),
+      orderStatusBreakdown: {
+        received: totalOrders,
+        confirmed: allAggs.reduce((sum, a) => sum + (a.ordersConfirmed || 0), 0),
+        dispatched: allAggs.reduce((sum, a) => sum + (a.ordersDispatched || 0), 0),
+        delivered: allAggs.reduce((sum, a) => sum + (a.ordersDelivered || 0), 0),
+        cancelled: allAggs.reduce((sum, a) => sum + (a.ordersCancelled || 0), 0),
+        returned: allAggs.reduce((sum, a) => sum + (a.ordersReturned || 0), 0),
+      },
+      settlements: {
+        pending: Math.round(allAggs.reduce((sum, a) => sum + (a.pendingSettlement || 0), 0) * 100) / 100,
+        completed: Math.round(allAggs.reduce((sum, a) => sum + (a.completedSettlement || 0), 0) * 100) / 100,
+      },
+    };
+
+    let rows = allAggs.map(agg => summarize(agg, responseScores.get(String(agg.vendor.id || (agg.vendor as any)._id)) ?? 100));
 
     if (search) {
       const q = search.toLowerCase();
       rows = rows.filter(r =>
         r.name.toLowerCase().includes(q) ||
         (r.contactEmail ?? "").toLowerCase().includes(q) ||
-        r.id.toLowerCase().includes(q)
+        r.id.toLowerCase().includes(q) ||
+        r.vendorId.toLowerCase().includes(q)
       );
     }
     if (status && status !== "all") rows = rows.filter(r => r.status === status);
@@ -81,24 +150,60 @@ router.get("/admin/vendor-analytics", requireAdminKey, async (req: any, res: any
     if (revenueMax) rows = rows.filter(r => r.grossRevenue <= Number(revenueMax));
 
     rows.sort((a: any, b: any) => {
-      const av = a[sortBy] ?? 0;
-      const bv = b[sortBy] ?? 0;
+      let av = a[sortBy] ?? 0;
+      let bv = b[sortBy] ?? 0;
+      if (sortBy === "performance" || sortBy === "performanceScore") {
+        av = a.performanceScore ?? 0;
+        bv = b.performanceScore ?? 0;
+      } else if (sortBy === "orders" || sortBy === "totalOrders") {
+        av = a.totalOrders ?? a.ordersReceived ?? 0;
+        bv = b.totalOrders ?? b.ordersReceived ?? 0;
+      } else if (sortBy === "revenue" || sortBy === "grossRevenue") {
+        av = a.grossRevenue ?? 0;
+        bv = b.grossRevenue ?? 0;
+      } else if (sortBy === "commission" || sortBy === "commissionEarned") {
+        av = a.commissionEarned ?? 0;
+        bv = b.commissionEarned ?? 0;
+      } else if (sortBy === "netRevenue" || sortBy === "sellerEarnings") {
+        av = a.sellerEarnings ?? a.netRevenue ?? 0;
+        bv = b.sellerEarnings ?? b.netRevenue ?? 0;
+      } else if (sortBy === "rating") {
+        av = a.rating ?? 0;
+        bv = b.rating ?? 0;
+      } else if (sortBy === "name" || sortBy === "shopName") {
+        av = a.name || a.shopName || "";
+        bv = b.name || b.shopName || "";
+      }
       if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       return sortDir === "asc" ? av - bv : bv - av;
     });
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const size = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 20));
+    const size = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 15));
     const total = rows.length;
     const paged = rows.slice((pageNum - 1) * size, pageNum * size);
 
     res.json({
+      summary,
       vendors: paged,
       pagination: { page: pageNum, pageSize: size, total, totalPages: Math.ceil(total / size) },
     });
   } catch (err) {
-    req.log.error({ err }, "Failed to fetch vendor analytics list");
-    res.status(500).json({ error: "Failed to fetch vendor analytics" });
+    req.log?.error?.({ err }, "Failed to fetch vendor analytics list");
+    res.json({
+      summary: {
+        totalGrossRevenue: 0, grossRevenue: 0,
+        totalPlatformCommission: 0, platformCommission: 0,
+        totalSellerEarnings: 0, sellerEarnings: 0,
+        totalSellers: 0, totalVendors: 0, activeSellers: 0, inactiveSellers: 0,
+        totalOrders: 0,
+        totalProducts: 0, totalCustomers: 0,
+        orderStatusBreakdown: { received: 0, confirmed: 0, dispatched: 0, delivered: 0, cancelled: 0, returned: 0 },
+        settlements: { pending: 0, completed: 0 }
+      },
+      vendors: [],
+      pagination: { page: 1, pageSize: 15, total: 0, totalPages: 0 },
+    });
   }
 });
 
@@ -118,39 +223,96 @@ router.get("/admin/vendor-analytics/:id", requireAdminKey, async (req: any, res:
   const granularity = (req.query.granularity as string) || "monthly";
 
   try {
-    const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
+    let vendor: any = null;
+    try { vendor = await mongoSellers.findById(id); } catch {}
+    if (!vendor) {
+      try {
+        const rows = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
+        if (rows.length > 0) vendor = rows[0];
+      } catch {}
+    }
     if (!vendor) return res.status(404).json({ error: "Vendor not found" });
 
     const aggMap = await computeAllVendorAggregates();
-    const agg = aggMap.get(id);
+    const agg = aggMap.get(id) || aggMap.get(vendor.vendorId) || aggMap.get(vendor.sellerId);
     if (!agg) return res.status(404).json({ error: "Vendor analytics not found" });
 
     const responseScores = await computeResponseScores();
     const perf = computePerformanceScore(agg, responseScores.get(id) ?? 100);
 
-    const vendorProducts = await db
-      .select({ id: productsTable.id, active: productsTable.active, stock: productsTable.stock, lowStockThreshold: productsTable.lowStockThreshold, isFeatured: productsTable.isFeatured })
-      .from(productsTable)
-      .where(eq(productsTable.vendorId, id));
-    const productIdSet = new Set(vendorProducts.map(p => p.id));
+    let vendorProducts: any[] = [];
+    let allOrders: any[] = [];
+    try {
+      const prods = await mongoProducts.findMany({});
+      vendorProducts = prods.filter((p: any) => p.vendorId === id || p.vendorId === vendor.vendorId || p.sellerId === id);
+      allOrders = filterRealtimeOrders(await mongoOrders.findMany(buildRealtimeOrderMongoFilter()));
+    } catch {}
 
-    const allOrders = await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt));
+    if (vendorProducts.length === 0) {
+      try {
+        vendorProducts = await db
+          .select({ id: productsTable.id, active: productsTable.active, stock: productsTable.stock, lowStockThreshold: productsTable.lowStockThreshold, isFeatured: productsTable.isFeatured })
+          .from(productsTable)
+          .where(eq(productsTable.vendorId, id));
+        allOrders = filterRealtimeOrders(await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt)));
+      } catch {}
+    }
+    const productIdSet = new Set(vendorProducts.map(p => String(p.id)));
     const revenueBuckets = new Map<string, { revenue: number; orders: number }>();
     const statusFunnel: Record<string, number> = {};
-    const dailyProductTrend = new Map<string, { active: number; outOfStock: number }>();
+    const seenDetailOrderIds = new Set<string>();
 
     for (const order of allOrders) {
+      const orderKeys = [order.id, order._id, order.orderId, order.displayId]
+        .filter(Boolean)
+        .map(k => String(k).trim())
+        .filter(k => k.length > 0);
+
+      if (orderKeys.length > 0 && orderKeys.some(k => seenDetailOrderIds.has(k))) {
+        continue;
+      }
+      orderKeys.forEach(k => seenDetailOrderIds.add(k));
+
       const items = (order.items as any[]) ?? [];
-      const vendorItems = items.filter(i => productIdSet.has(i.productId));
+      const vendorItems = items.filter(i => 
+        productIdSet.has(String(i.productId)) ||
+        (i as any).vendorId === id ||
+        (i as any).vendorId === vendor.vendorId ||
+        (i as any).sellerId === id
+      );
       if (vendorItems.length === 0) continue;
 
       statusFunnel[order.status] = (statusFunnel[order.status] ?? 0) + 1;
 
-      if (!["cancelled", "returned"].includes(order.status)) {
-        const vendorTotal = vendorItems.reduce((s: number, i: any) => s + (i.price ?? 0) * (i.quantity ?? 1), 0);
+      const status = String(order.status || "").toLowerCase();
+      const paymentStatus = String(order.paymentStatus || order.payment?.status || "").toLowerCase();
+      const refundStatus = String(order.refundStatus || "").toLowerCase();
+      const isCancelledOrReturned = ["cancelled", "returned", "failed"].includes(status);
+      const isPaymentFailed = paymentStatus === "failed" || status === "payment_failed";
+      const isPartialRefund = refundStatus === "partial" || refundStatus === "partially_refunded" ||
+        (order.refundAmount != null && Number(order.refundAmount) > 0 && Number(order.refundAmount) < (Number(order.totalAmount || order.total) || Infinity));
+      const isFullRefund = ["processed", "approved", "completed"].includes(refundStatus) && !isPartialRefund;
+
+      if (!isCancelledOrReturned && !isPaymentFailed && !isFullRefund) {
+        let vendorTotal = vendorItems.reduce((s: number, i: any) => {
+          const itemStatus = String(i.status || "").toLowerCase();
+          if (itemStatus === "cancelled" || itemStatus === "returned" || itemStatus === "refunded") return s;
+          const returnedQty = Math.max(0, Number(i.returnedQuantity || i.refundedQuantity) || 0);
+          const fullQty = Math.max(1, Number(i.quantity) || 1);
+          const eligibleQty = Math.max(0, fullQty - returnedQty);
+          if (eligibleQty <= 0) return s;
+          const bp = getItemBasePrice(i);
+          return Math.round((s + bp * eligibleQty) * 100) / 100;
+        }, 0);
+        if (isPartialRefund) {
+          const partialShare = order.refundAmount != null && Number(order.refundAmount) > 0
+            ? Math.min(vendorTotal, Number(order.refundAmount))
+            : vendorTotal * 0.5;
+          vendorTotal = Math.max(0, Math.round((vendorTotal - partialShare) * 100) / 100);
+        }
         const key = bucketKey(new Date(order.createdAt), granularity);
         const prev = revenueBuckets.get(key) ?? { revenue: 0, orders: 0 };
-        revenueBuckets.set(key, { revenue: prev.revenue + vendorTotal, orders: prev.orders + 1 });
+        revenueBuckets.set(key, { revenue: Math.round((prev.revenue + vendorTotal) * 100) / 100, orders: prev.orders + 1 });
       }
     }
 
@@ -159,40 +321,43 @@ router.get("/admin/vendor-analytics/:id", requireAdminKey, async (req: any, res:
       .slice(-24)
       .map(([period, d]) => ({ period, revenue: d.revenue, orders: d.orders }));
 
-    const settlements = await db
-      .select()
-      .from(vendorSettlementsTable)
-      .where(eq(vendorSettlementsTable.vendorId, id))
-      .orderBy(desc(vendorSettlementsTable.createdAt))
-      .limit(20);
+    let settlements: any[] = [];
+    try {
+      settlements = await db
+        .select()
+        .from(vendorSettlementsTable)
+        .where(eq(vendorSettlementsTable.vendorId, id))
+        .orderBy(desc(vendorSettlementsTable.createdAt))
+        .limit(20);
+    } catch {}
 
     res.json({
       shop: {
         id: vendor.id,
-        name: vendor.name,
-        location: vendor.location,
+        name: vendor.shopName || vendor.name || "Vendor",
+        location: vendor.location || vendor.shopCity || "India",
         bio: vendor.bio ?? null,
         tagline: vendor.tagline ?? null,
         avatar: vendor.avatar,
-        contactEmail: vendor.contactEmail ?? null,
-        mobile: vendor.mobile ?? null,
+        contactEmail: vendor.contactEmail ?? vendor.email ?? null,
+        mobile: vendor.mobile ?? vendor.phone ?? null,
         gstin: vendor.gstin ?? null,
-        status: vendor.status,
-        registeredAt: vendor.termsAcceptedAt ?? null,
+        status: vendor.status || "approved",
+        registeredAt: vendor.termsAcceptedAt ?? vendor.createdAt ?? null,
         shopStreet: vendor.shopStreet ?? null,
         shopCity: vendor.shopCity ?? null,
         shopState: vendor.shopState ?? null,
         shopPincode: vendor.shopPincode ?? null,
       },
       verification: {
-        kycVerified: vendor.kycVerified,
-        kycResubmissionRequested: vendor.kycResubmissionRequested,
-        panVerified: vendor.panVerified,
+        kycVerified: Boolean(vendor.kycVerified),
+        kycResubmissionRequested: Boolean(vendor.kycResubmissionRequested),
+        panVerified: Boolean(vendor.panVerified),
         panNumber: vendor.panNumber ?? null,
         panCardUrl: vendor.panCardUrl ?? null,
-        gstVerified: vendor.gstVerified,
+        gstVerified: Boolean(vendor.gstVerified),
         gstCertUrl: vendor.gstCertUrl ?? null,
-        bankVerified: vendor.bankVerified,
+        bankVerified: Boolean(vendor.bankVerified),
         bankHolder: vendor.bankHolder ?? null,
         bankName: vendor.bankName ?? null,
         bankAccount: vendor.bankAccount ?? null,
@@ -218,6 +383,7 @@ router.get("/admin/vendor-analytics/:id", requireAdminKey, async (req: any, res:
       revenue: {
         gross: agg.grossRevenue,
         net: agg.netRevenue,
+        sellerEarnings: agg.netRevenue,
         commission: agg.commissionEarned,
         refunded: agg.refundedAmount,
         pendingSettlement: agg.pendingSettlement,
@@ -294,6 +460,8 @@ router.post("/admin/vendor-analytics/:id/verification", requireAdminKey, async (
       });
     }
 
+    emitVendorEvent("vendor:updated", { id, field, action, vendor: updated });
+    emitAnalyticsEvent({ vendorId: id, reason: `verification_${field}_${action}` });
     res.json({ vendor: updated });
   } catch (err) {
     req.log.error({ err }, "Failed to update verification status");
@@ -332,6 +500,10 @@ router.post("/admin/vendor-analytics/:id/settlements", requireAdminKey, async (r
       body: `₹${amt.toLocaleString("en-IN")} has been ${type === "payout" ? "paid out to your linked bank account" : "released to your settlement balance"}.`,
       metadata: { vendorId: id, amount: amt, settlementId: settlement.id },
     });
+
+    emitFinancialsEvent("settlement:processed", { id: settlement.id, vendorId: id, amount: amt, type, settlement });
+    emitFinancialsEvent("financials:updated", { vendorId: id, amount: amt });
+    emitAnalyticsEvent({ vendorId: id, reason: "settlement_processed" });
 
     res.json({ settlement });
   } catch (err) {

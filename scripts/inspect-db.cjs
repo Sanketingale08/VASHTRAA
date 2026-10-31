@@ -63,6 +63,12 @@ async function main() {
     console.log(JSON.stringify(v, null, 2));
   });
 
+  const users = await db.collection("users").find({}).toArray();
+  console.log(`\n--- USERS (${users.length}) ---`);
+  users.forEach(u => {
+    console.log(JSON.stringify(u, null, 2));
+  });
+
   const products = await db.collection("products").find({}).toArray();
   console.log(`\n--- PRODUCTS (${products.length}) ---`);
   products.forEach(p => {

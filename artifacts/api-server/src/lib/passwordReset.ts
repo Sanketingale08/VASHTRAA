@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { mongoUsers, mongoVendors, mongoSellers, getCollection, isMongoDbConnected, setMongoConnected } from "@workspace/db";
 import { hashPassword, verifyPassword } from "./passwords";
-import { sendPasswordResetEmail } from "./transactionalEmail";
+import { sendPasswordResetEmail, sendPasswordChangedEmail } from "./transactionalEmail";
 import { logger } from "./logger";
 
 export interface PasswordResetToken {
@@ -315,11 +315,8 @@ export async function performPasswordReset(
         passwordHash: newPasswordHash,
         updatedAt: new Date(),
       });
-      if (seller.ownerId) {
-        await mongoUsers.update(seller.ownerId, { passwordHash: newPasswordHash, updatedAt: new Date() }).catch(() => {});
-      }
     } else {
-      let u = await mongoUsers.findByEmail(record.email);
+      let u = await mongoUsers.findByEmail(record.email, "seller");
       if (u) {
         await mongoUsers.update(u.id, { passwordHash: newPasswordHash, updatedAt: new Date() });
       } else {
@@ -327,7 +324,7 @@ export async function performPasswordReset(
       }
     }
   } else {
-    let user = await mongoUsers.findById(record.userId) || await mongoUsers.findByEmail(record.email);
+    let user = await mongoUsers.findById(record.userId) || await mongoUsers.findByEmail(record.email, "customer");
     if (!user) {
       return { success: false, error: "Account associated with this reset link no longer exists." };
     }
@@ -350,6 +347,12 @@ export async function performPasswordReset(
     const { revokeAllUserSessions } = await import("./sessions");
     await revokeAllUserSessions(record.userId, expectedRole, "password_reset");
   } catch {}
+
+  // Send password change confirmation email
+  void sendPasswordChangedEmail({
+    userId: record.userId,
+    email: record.email,
+  });
 
   logger.info({ email: record.email, targetRole: expectedRole }, "[PasswordReset] Successfully updated password");
 

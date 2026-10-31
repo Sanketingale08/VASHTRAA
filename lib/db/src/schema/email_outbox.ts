@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, integer, timestamp, index } from "drizzle-orm/pg-core";
 
-export type EmailOutboxStatus = "pending" | "sent" | "failed" | "dead";
+export type EmailOutboxStatus = "pending" | "sent" | "failed" | "dead" | "skipped";
 
 export const emailOutboxTable = pgTable(
   "email_outbox",

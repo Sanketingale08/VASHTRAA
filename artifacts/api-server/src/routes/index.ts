@@ -33,13 +33,20 @@ import adminReportsRouter from "./adminReports";
 import adminSettingsRouter from "./adminSettings";
 import admin2faRouter from "./admin2fa";
 import paymentMethodsRouter from "./paymentMethods";
+import pricingRouter from "./pricing";
 import authRouter from "./auth";
 import googleAuthRouter from "./googleAuth";
+import adminShippingRouter from "./adminShipping";
+import paymentsRouter from "./payments";
+import advertisementsRouter from "./advertisements";
 
 const router: IRouter = Router();
 
+router.use(paymentsRouter);
+
 router.use(authRouter);
 router.use(googleAuthRouter);
+router.use(pricingRouter);
 router.use(healthRouter);
 router.use(storageRouter);
 router.use(productsRouter);
@@ -74,5 +81,7 @@ router.use(adminReportsRouter);
 router.use(adminSettingsRouter);
 router.use(admin2faRouter);
 router.use(paymentMethodsRouter);
+router.use(adminShippingRouter);
+router.use(advertisementsRouter);
 
 export default router;

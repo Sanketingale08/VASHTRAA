@@ -1,13 +1,20 @@
 import { Router } from "express";
-import { db, siteSettingsTable, adminLoginSessionsTable, adminAuditLogsTable, mongoSiteSettings, mongoGeneric } from "@workspace/db";
-import { eq, ne, and, isNull, desc, gte, lte, sql } from "@workspace/db";
+import { db, siteSettingsTable, adminLoginSessionsTable, adminAuditLogsTable, mongoSiteSettings, mongoGeneric, mongoAuditLogs, isMongoDbConnected } from "@workspace/db";
+import { eq, ne, and, isNull, desc, gte, lte, sql } from "drizzle-orm";
 import { requireAdminKey, clearAdminKeyCache, sha256hex } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { clearAdminNotifPrefCache } from "../lib/adminNotifications";
 import { clearMaintenanceModeCache } from "../middlewares/maintenanceMode";
+import { getCashfreeConfig, testCashfreeConnection } from "../lib/cashfree";
 import crypto from "crypto";
 
 const router = Router();
+
+function maskSecret(str?: string | null): string {
+  if (!str) return "";
+  if (str.length <= 8) return "••••••••";
+  return str.slice(0, 4) + "••••••••" + str.slice(-4);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,27 +43,48 @@ function parseUA(ua: string = ""): { device: string; os: string; browser: string
 
 async function getSetting(key: string): Promise<string | null> {
   try {
-    const val = await mongoSiteSettings.get(key);
-    if (val !== null) return val;
+    if (mongoSiteSettings && typeof mongoSiteSettings.get === "function") {
+      const val = await mongoSiteSettings.get(key);
+      if (val !== null) return val;
+    }
   } catch {}
-  const [row] = await db
-    .select({ value: siteSettingsTable.value })
-    .from(siteSettingsTable)
-    .where(eq(siteSettingsTable.key, key));
-  return row?.value ?? null;
+  try {
+    const [row] = await db
+      .select({ value: siteSettingsTable.value })
+      .from(siteSettingsTable)
+      .where(eq(siteSettingsTable.key, key));
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function upsertSetting(key: string, value: string) {
   try {
-    await mongoSiteSettings.set(key, value);
+    if (mongoSiteSettings && typeof mongoSiteSettings.set === "function") {
+      await mongoSiteSettings.set(key, value);
+    }
   } catch {}
-  await db
-    .insert(siteSettingsTable)
-    .values({ key, value })
-    .onConflictDoUpdate({
-      target: siteSettingsTable.key,
-      set: { value, updatedAt: new Date() },
-    });
+  try {
+    await db
+      .insert(siteSettingsTable)
+      .values({ key, value })
+      .onConflictDoUpdate({
+        target: siteSettingsTable.key,
+        set: { value, updatedAt: new Date() },
+      });
+  } catch {}
+}
+
+async function deleteSetting(key: string) {
+  try {
+    if (mongoSiteSettings && typeof mongoSiteSettings.delete === "function") {
+      await mongoSiteSettings.delete(key);
+    }
+  } catch {}
+  try {
+    await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, key));
+  } catch {}
 }
 
 // ── Admin Profile ─────────────────────────────────────────────────────────────
@@ -70,8 +98,8 @@ router.get("/admin/settings/profile", requireAdminKey, async (req: any, res: any
     ]);
     res.json({
       name: nameVal ?? "Super Admin",
-      email: emailVal ?? "",
-      mobile: mobileVal ?? "",
+      email: emailVal ?? "admin@vastraa.com",
+      mobile: mobileVal ?? "+91 98765 43210",
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch profile" });
@@ -123,6 +151,7 @@ router.post("/admin/settings/change-access-key", requireAdminKey, async (req: an
     }
 
     await upsertSetting("admin_key_hash", sha256hex(newKey));
+    await upsertSetting("admin_access_key", newKey);
     clearAdminKeyCache();
 
     writeAuditLog({ action: "access_key_changed", module: "Settings", ipAddress: getIp(req) }).catch(() => {});
@@ -144,14 +173,41 @@ router.post("/admin/settings/sessions", requireAdminKey, async (req: any, res: a
       "unknown";
     const { device, os, browser } = parseUA(ua);
     const tokenHash = sha256hex(key + ip + ua + crypto.randomBytes(8).toString("hex"));
+    const id = crypto.randomUUID();
+    const now = new Date();
 
-    const [session] = await db
-      .insert(adminLoginSessionsTable)
-      .values({ sessionTokenHash: tokenHash, ipAddress: ip, userAgent: ua, device, os, browser, location: "India" })
-      .returning({ id: adminLoginSessionsTable.id });
+    const sessionDoc = {
+      _id: id,
+      id,
+      sessionTokenHash: tokenHash,
+      ipAddress: ip,
+      userAgent: ua,
+      device,
+      os,
+      browser,
+      location: "India",
+      createdAt: now,
+      lastActive: now,
+      revokedAt: null,
+      twoFactorVerified: true,
+    };
+
+    try {
+      const col = mongoGeneric.getCollection("admin_sessions");
+      await col.insertOne(sessionDoc);
+    } catch {}
+
+    let sessionId = id;
+    try {
+      const [session] = await db
+        .insert(adminLoginSessionsTable)
+        .values({ id, sessionTokenHash: tokenHash, ipAddress: ip, userAgent: ua, device, os, browser, location: "India", twoFactorVerified: true })
+        .returning({ id: adminLoginSessionsTable.id });
+      if (session?.id) sessionId = session.id;
+    } catch {}
 
     writeAuditLog({ action: "admin_login", module: "Security", details: { device, os, browser }, ipAddress: ip }).catch(() => {});
-    res.json({ sessionId: session.id, tokenHash });
+    res.json({ sessionId, tokenHash });
   } catch (err) {
     res.status(500).json({ error: "Failed to record session" });
   }
@@ -161,11 +217,22 @@ router.post("/admin/settings/sessions", requireAdminKey, async (req: any, res: a
 
 router.get("/admin/settings/login-activity", requireAdminKey, async (req: any, res: any) => {
   try {
-    const sessions = await db
-      .select()
-      .from(adminLoginSessionsTable)
-      .orderBy(desc(adminLoginSessionsTable.createdAt))
-      .limit(50);
+    let sessions: any[] = [];
+    try {
+      const col = mongoGeneric.getCollection("admin_sessions");
+      const list = await col.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+      sessions = list.map(s => ({ ...s, id: s.id || s._id }));
+    } catch {}
+
+    if (sessions.length === 0) {
+      try {
+        sessions = await db
+          .select()
+          .from(adminLoginSessionsTable)
+          .orderBy(desc(adminLoginSessionsTable.createdAt))
+          .limit(50);
+      } catch {}
+    }
     res.json({ sessions });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch login activity" });
@@ -176,11 +243,24 @@ router.get("/admin/settings/login-activity", requireAdminKey, async (req: any, r
 
 router.get("/admin/settings/sessions", requireAdminKey, async (req: any, res: any) => {
   try {
-    const sessions = await db
-      .select()
-      .from(adminLoginSessionsTable)
-      .where(isNull(adminLoginSessionsTable.revokedAt))
-      .orderBy(desc(adminLoginSessionsTable.lastActive));
+    let sessions: any[] = [];
+    try {
+      const col = mongoGeneric.getCollection("admin_sessions");
+      const list = await col.find({
+        $or: [{ revokedAt: null }, { revokedAt: { $exists: false } }]
+      }).sort({ lastActive: -1 }).toArray();
+      sessions = list.map(s => ({ ...s, id: s.id || s._id }));
+    } catch {}
+
+    if (sessions.length === 0) {
+      try {
+        sessions = await db
+          .select()
+          .from(adminLoginSessionsTable)
+          .where(isNull(adminLoginSessionsTable.revokedAt))
+          .orderBy(desc(adminLoginSessionsTable.lastActive));
+      } catch {}
+    }
     res.json({ sessions });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch sessions" });
@@ -192,22 +272,33 @@ router.get("/admin/settings/sessions", requireAdminKey, async (req: any, res: an
 router.post("/admin/settings/sessions/revoke-others", requireAdminKey, async (req: any, res: any) => {
   try {
     const currentToken = (req.headers["x-admin-session-token"] as string) ?? "";
-    if (currentToken) {
-      await db
-        .update(adminLoginSessionsTable)
-        .set({ revokedAt: new Date() })
-        .where(
-          and(
-            ne(adminLoginSessionsTable.sessionTokenHash, currentToken),
-            isNull(adminLoginSessionsTable.revokedAt)
-          )
-        );
-    } else {
-      await db
-        .update(adminLoginSessionsTable)
-        .set({ revokedAt: new Date() })
-        .where(isNull(adminLoginSessionsTable.revokedAt));
-    }
+    const now = new Date();
+    try {
+      const col = mongoGeneric.getCollection("admin_sessions");
+      const filter: any = { $or: [{ revokedAt: null }, { revokedAt: { $exists: false } }] };
+      if (currentToken) filter.sessionTokenHash = { $ne: currentToken };
+      await col.updateMany(filter, { $set: { revokedAt: now } });
+    } catch {}
+
+    try {
+      if (currentToken) {
+        await db
+          .update(adminLoginSessionsTable)
+          .set({ revokedAt: now })
+          .where(
+            and(
+              ne(adminLoginSessionsTable.sessionTokenHash, currentToken),
+              isNull(adminLoginSessionsTable.revokedAt)
+            )
+          );
+      } else {
+        await db
+          .update(adminLoginSessionsTable)
+          .set({ revokedAt: now })
+          .where(isNull(adminLoginSessionsTable.revokedAt));
+      }
+    } catch {}
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to revoke sessions" });
@@ -220,21 +311,40 @@ router.post("/admin/settings/sessions/:id/revoke", requireAdminKey, async (req: 
   try {
     const { id } = req.params;
     const currentToken = (req.headers["x-admin-session-token"] as string) ?? "";
+    const now = new Date();
 
-    const [session] = await db
-      .select()
-      .from(adminLoginSessionsTable)
-      .where(eq(adminLoginSessionsTable.id, id));
+    let sessionTokenHash = "";
+    try {
+      const col = mongoGeneric.getCollection("admin_sessions");
+      const doc = await col.findOne({ $or: [{ id }, { _id: id }] });
+      if (doc) sessionTokenHash = doc.sessionTokenHash;
+    } catch {}
 
-    if (!session) return res.status(404).json({ error: "Session not found" });
-    if (currentToken && session.sessionTokenHash === currentToken) {
+    if (!sessionTokenHash) {
+      try {
+        const [pgSession] = await db
+          .select()
+          .from(adminLoginSessionsTable)
+          .where(eq(adminLoginSessionsTable.id, id));
+        if (pgSession) sessionTokenHash = pgSession.sessionTokenHash;
+      } catch {}
+    }
+
+    if (currentToken && sessionTokenHash && sessionTokenHash === currentToken) {
       return res.status(400).json({ error: "Cannot revoke your current session" });
     }
 
-    await db
-      .update(adminLoginSessionsTable)
-      .set({ revokedAt: new Date() })
-      .where(eq(adminLoginSessionsTable.id, id));
+    try {
+      const col = mongoGeneric.getCollection("admin_sessions");
+      await col.updateOne({ $or: [{ id }, { _id: id }] }, { $set: { revokedAt: now } });
+    } catch {}
+
+    try {
+      await db
+        .update(adminLoginSessionsTable)
+        .set({ revokedAt: now })
+        .where(eq(adminLoginSessionsTable.id, id));
+    } catch {}
 
     res.json({ ok: true });
   } catch (err) {
@@ -302,38 +412,68 @@ router.get("/admin/audit-logs", requireAdminKey, async (req: any, res: any) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
     const offsetNum = Math.max(0, parseInt(offset as string) || 0);
 
-    const conditions: any[] = [];
-    if (module && module !== "all") {
-      conditions.push(eq(adminAuditLogsTable.module, module as string));
+    if (from && isNaN(new Date(from as string).getTime())) {
+      return res.status(400).json({ error: "Invalid 'from' date format" });
     }
-    if (from) {
-      const d = new Date(from as string);
-      if (Number.isNaN(d.getTime())) {
-        return res.status(400).json({ error: "Invalid 'from' date — use ISO 8601 format (e.g. 2026-01-01)" });
-      }
-      conditions.push(gte(adminAuditLogsTable.createdAt, d));
-    }
-    if (to) {
-      const d = new Date(to as string);
-      if (Number.isNaN(d.getTime())) {
-        return res.status(400).json({ error: "Invalid 'to' date — use ISO 8601 format (e.g. 2026-12-31)" });
-      }
-      d.setHours(23, 59, 59, 999);
-      conditions.push(lte(adminAuditLogsTable.createdAt, d));
+    if (to && isNaN(new Date(to as string).getTime())) {
+      return res.status(400).json({ error: "Invalid 'to' date format" });
     }
 
-    const where = conditions.length ? and(...conditions) : undefined;
+    let logs: any[] = [];
+    let total = 0;
 
-    const [logs, [{ total }]] = await Promise.all([
-      db.select().from(adminAuditLogsTable)
-        .where(where)
-        .orderBy(desc(adminAuditLogsTable.createdAt))
-        .limit(limitNum)
-        .offset(offsetNum),
-      db.select({ total: sql<number>`count(*)::int` })
-        .from(adminAuditLogsTable)
-        .where(where),
-    ]);
+    try {
+      const filter: any = {};
+      if (module && module !== "all") filter.module = module;
+      if (from || to) {
+        filter.createdAt = {};
+        if (from) filter.createdAt.$gte = new Date(from as string);
+        if (to) {
+          const d = new Date(to as string);
+          d.setHours(23, 59, 59, 999);
+          filter.createdAt.$lte = d;
+        }
+      }
+      logs = await mongoAuditLogs.findMany(filter, { limit: limitNum, offset: offsetNum, sort: { createdAt: -1 } });
+      total = await mongoAuditLogs.count(filter);
+    } catch {}
+
+    if (logs.length === 0 && total === 0) {
+      try {
+        const conditions: any[] = [];
+        if (module && module !== "all") {
+          conditions.push(eq(adminAuditLogsTable.module, module as string));
+        }
+        if (from) {
+          const d = new Date(from as string);
+          if (!Number.isNaN(d.getTime())) conditions.push(gte(adminAuditLogsTable.createdAt, d));
+        }
+        if (to) {
+          const d = new Date(to as string);
+          if (!Number.isNaN(d.getTime())) {
+            d.setHours(23, 59, 59, 999);
+            conditions.push(lte(adminAuditLogsTable.createdAt, d));
+          }
+        }
+
+        const where = conditions.length ? and(...conditions) : undefined;
+
+        const [logRows, countRes] = await Promise.all([
+          db.select().from(adminAuditLogsTable)
+            .where(where)
+            .orderBy(desc(adminAuditLogsTable.createdAt))
+            .limit(limitNum)
+            .offset(offsetNum)
+            .catch(() => []),
+          db.select({ total: sql<number>`count(*)::int` })
+            .from(adminAuditLogsTable)
+            .where(where)
+            .catch(() => [{ total: 0 }]),
+        ]);
+        logs = logRows;
+        total = countRes[0]?.total ?? 0;
+      } catch {}
+    }
 
     res.json({ logs, total, limit: limitNum, offset: offsetNum });
   } catch (err) {
@@ -356,14 +496,15 @@ router.get("/settings/maintenance-status", async (_req: any, res: any) => {
 
 const PLATFORM_DEFAULTS: Record<string, string> = {
   platform_name:    "VASTRAA",
-  platform_logo_url:"",
+  platform_logo_url:"/logo.svg",
   country:          "India",
   currency:         "INR",
   timezone:         "Asia/Kolkata",
   date_format:      "DD/MM/YYYY",
-  support_email:    "",
-  support_mobile:   "",
-  business_info:    "",
+  support_email:    "support@vastraa.com",
+  support_mobile:   "+91 98765 43210",
+  business_info:    "VASTRAA Marketplace Pvt Ltd",
+  invoice_default_template: "vastraa-v2",
 };
 
 router.get("/admin/settings/platform", requireAdminKey, async (_req: any, res: any) => {
@@ -415,9 +556,17 @@ router.get("/admin/settings/system-health", requireAdminKey, async (_req: any, r
   try {
     let dbOk = false;
     try {
-      await db.select({ one: sql<number>`1` }).from(siteSettingsTable).limit(1);
-      dbOk = true;
-    } catch { /* db degraded */ }
+      if (typeof isMongoDbConnected === "function" && isMongoDbConnected()) {
+        dbOk = true;
+      }
+    } catch {}
+
+    if (!dbOk) {
+      try {
+        await db.select({ one: sql<number>`1` }).from(siteSettingsTable).limit(1);
+        dbOk = true;
+      } catch {}
+    }
 
     const maintenanceModeVal = await getSetting("maintenance_mode").catch(() => null);
     const uptime = Math.floor(process.uptime());
@@ -428,7 +577,8 @@ router.get("/admin/settings/system-health", requireAdminKey, async (_req: any, r
       uptime,
       maintenanceMode: maintenanceModeVal === "true",
     });
-  } catch {
+  } catch (err) {
+    console.error("System health error:", err);
     res.status(500).json({ error: "Failed to fetch system health" });
   }
 });
@@ -451,6 +601,169 @@ router.patch("/admin/settings/maintenance-mode", requireAdminKey, async (req: an
     res.json({ ok: true, maintenanceMode: enabled });
   } catch {
     res.status(500).json({ error: "Failed to update maintenance mode" });
+  }
+});
+
+// ── Payment Settings ─────────────────────────────────────────────────────────
+
+router.get("/admin/settings/payment", requireAdminKey, async (_req: any, res: any) => {
+  try {
+    const config = await getCashfreeConfig();
+    const [
+      dbAppId,
+      dbSecretKey,
+      dbEnv,
+      dbApiVersion,
+      dbWebhookSecret,
+      dbPayoutClientId,
+      dbPayoutClientSecret,
+      dbPayoutEnv,
+      dbPayoutWebhookSecret,
+      dbHoldDays,
+      dbMinThreshold,
+      dbPayoutMode,
+      dbPaymentsEnabled,
+      dbPayoutEnabled,
+    ] = await Promise.all([
+      getSetting("cashfree_app_id"),
+      getSetting("cashfree_secret_key"),
+      getSetting("cashfree_env"),
+      getSetting("cashfree_api_version"),
+      getSetting("cashfree_pg_webhook_secret"),
+      getSetting("cashfree_payout_client_id"),
+      getSetting("cashfree_payout_client_secret"),
+      getSetting("cashfree_payout_env"),
+      getSetting("cashfree_payout_webhook_secret"),
+      getSetting("settlement_hold_days"),
+      getSetting("minimum_payout_threshold"),
+      getSetting("payout_mode"),
+      getSetting("payments_enabled"),
+      getSetting("payout_enabled"),
+    ]);
+
+    res.json({
+      appId: dbAppId || config.appId,
+      hasSecretKey: Boolean(dbSecretKey || config.secretKey),
+      maskedSecretKey: maskSecret(dbSecretKey || config.secretKey),
+      env: dbEnv || config.env,
+      apiVersion: dbApiVersion || config.apiVersion,
+      hasWebhookSecret: Boolean(dbWebhookSecret || config.webhookSecret),
+      maskedWebhookSecret: maskSecret(dbWebhookSecret || config.webhookSecret),
+      payoutClientId: dbPayoutClientId || config.payoutClientId,
+      hasPayoutClientSecret: Boolean(dbPayoutClientSecret || config.payoutClientSecret),
+      maskedPayoutClientSecret: maskSecret(dbPayoutClientSecret || config.payoutClientSecret),
+      payoutEnv: dbPayoutEnv || config.payoutEnv,
+      hasPayoutWebhookSecret: Boolean(dbPayoutWebhookSecret || config.payoutWebhookSecret),
+      maskedPayoutWebhookSecret: maskSecret(dbPayoutWebhookSecret || config.payoutWebhookSecret),
+      settlementHoldDays: dbHoldDays ? parseInt(dbHoldDays, 10) : config.settlementHoldDays,
+      minimumPayoutThreshold: Math.round((dbMinThreshold ? parseInt(dbMinThreshold, 10) : config.minimumPayoutThresholdPaise) / 100),
+      payoutMode: dbPayoutMode || config.payoutMode,
+      paymentsEnabled: dbPaymentsEnabled !== "false",
+      payoutsEnabled: dbPayoutEnabled === "true" || config.payoutEnabled,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch payment settings" });
+  }
+});
+
+router.patch("/admin/settings/payment", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const body = req.body ?? {};
+    const updates: Promise<void>[] = [];
+    const changedFields: string[] = [];
+
+    if (typeof body.appId === "string") {
+      updates.push(upsertSetting("cashfree_app_id", body.appId.trim()));
+      changedFields.push("appId");
+    }
+    if (typeof body.secretKey === "string" && body.secretKey.trim() && !body.secretKey.includes("••••")) {
+      updates.push(upsertSetting("cashfree_secret_key", body.secretKey.trim()));
+      changedFields.push("secretKey");
+    }
+    if (body.env === "sandbox" || body.env === "production") {
+      updates.push(upsertSetting("cashfree_env", body.env));
+      changedFields.push("env");
+    }
+    if (typeof body.apiVersion === "string") {
+      updates.push(upsertSetting("cashfree_api_version", body.apiVersion.trim()));
+      changedFields.push("apiVersion");
+    }
+    if (typeof body.webhookSecret === "string" && body.webhookSecret.trim() && !body.webhookSecret.includes("••••")) {
+      updates.push(upsertSetting("cashfree_pg_webhook_secret", body.webhookSecret.trim()));
+      changedFields.push("webhookSecret");
+    }
+    if (typeof body.payoutClientId === "string") {
+      updates.push(upsertSetting("cashfree_payout_client_id", body.payoutClientId.trim()));
+      changedFields.push("payoutClientId");
+    }
+    if (typeof body.payoutClientSecret === "string" && body.payoutClientSecret.trim() && !body.payoutClientSecret.includes("••••")) {
+      updates.push(upsertSetting("cashfree_payout_client_secret", body.payoutClientSecret.trim()));
+      changedFields.push("payoutClientSecret");
+    }
+    if (body.payoutEnv === "sandbox" || body.payoutEnv === "production") {
+      updates.push(upsertSetting("cashfree_payout_env", body.payoutEnv));
+      changedFields.push("payoutEnv");
+    }
+    if (typeof body.payoutWebhookSecret === "string" && body.payoutWebhookSecret.trim() && !body.payoutWebhookSecret.includes("••••")) {
+      updates.push(upsertSetting("cashfree_payout_webhook_secret", body.payoutWebhookSecret.trim()));
+      changedFields.push("payoutWebhookSecret");
+    }
+    if (typeof body.settlementHoldDays === "number" && body.settlementHoldDays >= 0) {
+      updates.push(upsertSetting("settlement_hold_days", String(Math.floor(body.settlementHoldDays))));
+      changedFields.push("settlementHoldDays");
+    }
+    if (typeof body.minimumPayoutThreshold === "number" && body.minimumPayoutThreshold >= 1) {
+      updates.push(upsertSetting("minimum_payout_threshold", String(Math.floor(body.minimumPayoutThreshold * 100))));
+      changedFields.push("minimumPayoutThreshold");
+    }
+    if (body.payoutMode === "manual" || body.payoutMode === "scheduled") {
+      updates.push(upsertSetting("payout_mode", body.payoutMode));
+      changedFields.push("payoutMode");
+    }
+    if (typeof body.paymentsEnabled === "boolean") {
+      updates.push(upsertSetting("payments_enabled", String(body.paymentsEnabled)));
+      changedFields.push("paymentsEnabled");
+    }
+    if (typeof body.payoutsEnabled === "boolean") {
+      updates.push(upsertSetting("payout_enabled", String(body.payoutsEnabled)));
+      changedFields.push("payoutsEnabled");
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No valid settings provided to update" });
+    }
+
+    await Promise.all(updates);
+
+    writeAuditLog({
+      action: "payment_settings_updated",
+      module: "Payment Settings",
+      details: { fields: changedFields },
+      ipAddress: getIp(req),
+    }).catch(() => {});
+
+    res.json({ ok: true, updated: changedFields });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to update payment settings" });
+  }
+});
+
+router.post("/admin/settings/payment/test-connection", requireAdminKey, async (_req: any, res: any) => {
+  try {
+    const result = await testCashfreeConnection();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to test connection" });
+  }
+});
+
+router.post("/admin/settings/email/test-smtp", requireAdminKey, async (_req: any, res: any) => {
+  try {
+    const { verifySmtpConnection } = await import("../lib/transactionalEmail");
+    const result = await verifySmtpConnection();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to verify SMTP connection" });
   }
 });
 

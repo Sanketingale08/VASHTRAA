@@ -98,7 +98,7 @@ vi.mock("drizzle-orm", () => ({
 
 // ─── app factory ─────────────────────────────────────────────────────────────
 
-const ADMIN_KEY = process.env.ADMIN_API_KEY ?? "test-admin-key";
+const ADMIN_KEY = process.env.ADMIN_API_KEY ?? "dev-admin-key";
 
 async function buildApp(): Promise<Express> {
   const app = express();

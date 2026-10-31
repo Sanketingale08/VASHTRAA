@@ -17,6 +17,35 @@ tags:
   - name: Storage
     description: Object storage upload and serving endpoints.
 paths:
+  /pricing/quote:
+    post:
+      operationId: getPricingQuote
+      tags: [vendors]
+      summary: Get financial pricing quote
+      description: Generates financial breakdown under v2 model where customer taxable base = seller base + shipping (commission is deducted only from seller)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                basePrice:
+                  type: number
+                shipping:
+                  type: number
+                gstRate:
+                  type: number
+                intraState:
+                  type: boolean
+              required: [basePrice]
+      responses:
+        "200":
+          description: Financial quote generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingQuoteResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -242,6 +271,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /pricing/quote:
+    post:
+      operationId: getPricingQuote
+      tags: [pricing]
+      summary: Get pricing quote
+      description: Returns full itemized financial breakdown in integer paise and rupees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [basePrice]
+              properties:
+                basePrice:
+                  type: number
+                shipping:
+                  type: number
+                gstRate:
+                  type: number
+                intraState:
+                  type: boolean
+      responses:
+        '200':
+          description: Pricing quote breakdown
+        '401':
+          description: Unauthorized
+
+  /seller/settlements:
+    get:
+      operationId: getSellerSettlements
+      tags: [vendors]
+      summary: List seller settlements
+      description: Returns settlement records for the authenticated seller with status and date filtering
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of seller settlements
+        '401':
+          description: Unauthorized
+
+  /admin/financials/summary:
+    get:
+      operationId: getAdminFinancialsSummary
+      tags: [vendors]
+      summary: Admin financial summary
+      description: Returns aggregated GMV, commission, GST, TCS, and settlement stats
+      responses:
+        '200':
+          description: Financial summary
+        '401':
+          description: Unauthorized
+
+  /admin/financials/ledger:
+    get:
+      operationId: getAdminFinancialsLedger
+      tags: [vendors]
+      summary: Admin financial ledger
+      description: Returns paginated audit ledger of all vendor settlements
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: number
+        - name: limit
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Paginated financial ledger
+        '401':
+          description: Unauthorized
+
 components:
   schemas:
     UploadUrlRequest:
@@ -421,3 +536,73 @@ components:
         - rating
         - sareesCount
         - avatar
+
+    PricingQuoteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        paise:
+          type: object
+          properties:
+            pricingVersion:
+              type: string
+              enum: [v1, v2]
+            sellerBasePrice:
+              type: integer
+            platformCommission:
+              type: integer
+            shippingFee:
+              type: integer
+            taxableAmount:
+              type: integer
+            gstAmount:
+              type: integer
+            cgst:
+              type: integer
+            sgst:
+              type: integer
+            igst:
+              type: integer
+            customerPays:
+              type: integer
+            gstOnCommission:
+              type: integer
+            tcsDeduction:
+              type: integer
+            sellerSettlement:
+              type: integer
+            platformKeeps:
+              type: integer
+        rupees:
+          type: object
+          properties:
+            pricingVersion:
+              type: string
+              enum: [v1, v2]
+            sellerBasePrice:
+              type: number
+            platformCommission:
+              type: number
+            shippingFee:
+              type: number
+            taxableAmount:
+              type: number
+            gstAmount:
+              type: number
+            cgst:
+              type: number
+            sgst:
+              type: number
+            igst:
+              type: number
+            customerPays:
+              type: number
+            gstOnCommission:
+              type: number
+            tcsDeduction:
+              type: number
+            sellerSettlement:
+              type: number
+            platformKeeps:
+              type: number

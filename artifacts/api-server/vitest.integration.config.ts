@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   test: {
@@ -6,8 +7,9 @@ export default defineConfig({
     environment: "node",
     include: ["src/__integration__/**/*.integration.ts"],
     alias: {
-      "@workspace/db": new URL("../../lib/db/src/index.ts", import.meta.url)
-        .pathname,
+      "@workspace/db": fileURLToPath(
+        new URL("../../lib/db/src/index.ts", import.meta.url)
+      ),
     },
   },
 });

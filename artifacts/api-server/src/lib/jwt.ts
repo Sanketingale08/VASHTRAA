@@ -18,7 +18,7 @@ export interface JwtPayload {
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "vastraa-production-jwt-secret-2026-key-v1";
 const JWT_ISSUER = "vastraa-auth";
 const JWT_AUDIENCE = "vastraa-portal";
-const ACCESS_TOKEN_EXPIRY_SECONDS = 15 * 60; // 15 minutes
+const ACCESS_TOKEN_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
 
 function base64UrlEncode(str: string | Buffer): string {
   const buf = typeof str === "string" ? Buffer.from(str) : str;
@@ -44,7 +44,7 @@ export function signAccessToken(payload: {
   sub: string;
   role: UserRole;
   email: string;
-  sid: string;
+  sid?: string;
 }): string {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "HS256", typ: "JWT" };
@@ -53,7 +53,7 @@ export function signAccessToken(payload: {
     sub: payload.sub,
     role: payload.role,
     email: payload.email,
-    sid: payload.sid,
+    sid: payload.sid || crypto.randomUUID(),
     jti: crypto.randomUUID(),
     iss: JWT_ISSUER,
     aud: JWT_AUDIENCE,

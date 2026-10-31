@@ -93,6 +93,19 @@ vi.mock("@workspace/db", () => {
     COLORS:     ["red", "blue", "green", "yellow", "pink", "black", "white"],
     OCCASIONS:  ["festival", "wedding", "casual", "party", "office"],
     CATEGORY_PREFIX: { saree: "SA", lehenga: "LE", salwar: "SL", kurti: "KU", fabric: "FA" },
+    mongoProducts: {
+      insert: vi.fn(async (doc: any) => doc),
+      findMany: vi.fn(async () => []),
+      findById: vi.fn(async () => null),
+    },
+    isMongoDbConnected: vi.fn(() => false),
+    getNextSequenceValue: vi.fn(async () => state.seqCounter++),
+    getCollection: vi.fn(() => ({
+      findOne: vi.fn(async () => null),
+      insertOne: vi.fn(async () => ({ insertedId: "mock-id" })),
+      updateOne: vi.fn(async () => ({})),
+      deleteOne: vi.fn(async () => ({})),
+    })),
   };
 });
 

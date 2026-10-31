@@ -33,6 +33,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express, { type Express } from "express";
+import { eq as drizzleEq, and as drizzleAnd, desc as drizzleDesc, inArray as drizzleInArray, sql as drizzleSql, gte as drizzleGte } from "drizzle-orm";
 
 // ─── Mutable test state ───────────────────────────────────────────────────────
 
@@ -48,25 +49,35 @@ const state = vi.hoisted(() => ({
 // We walk the tree recursively to find the string that follows " = ".
 
 function extractStatusFromCondition(cond: unknown): string | null {
-  if (!cond || typeof cond !== "object") return null;
-  const chunks = (cond as any).queryChunks;
-  if (!Array.isArray(chunks)) return null;
-  for (let i = 0; i < chunks.length; i++) {
-    const c = chunks[i];
-    // " = " operator chunk
-    if (
-      c &&
-      typeof c === "object" &&
-      Array.isArray((c as any).value) &&
-      (c as any).value[0] === " = "
-    ) {
-      const next = chunks[i + 1];
-      if (typeof next === "string") return next;
+  if (!cond) return null;
+  if (Array.isArray(cond)) {
+    for (const item of cond) {
+      const s = extractStatusFromCondition(item);
+      if (s) return s;
     }
-    // Recurse into nested SQL nodes (e.g. the inner node wrapped by and())
-    if (c && typeof c === "object" && (c as any).queryChunks) {
-      const nested = extractStatusFromCondition(c);
-      if (nested) return nested;
+  }
+  if (typeof cond === "object") {
+    if ((cond as any).status && typeof (cond as any).status === "string") {
+      return (cond as any).status;
+    }
+    const chunks = (cond as any).queryChunks;
+    if (Array.isArray(chunks)) {
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i];
+        if (
+          c &&
+          typeof c === "object" &&
+          Array.isArray((c as any).value) &&
+          (c as any).value[0] === " = "
+        ) {
+          const next = chunks[i + 1];
+          if (typeof next === "string") return next;
+        }
+        if (c && typeof c === "object") {
+          const nested = extractStatusFromCondition(c);
+          if (nested) return nested;
+        }
+      }
     }
   }
   return null;
@@ -115,8 +126,12 @@ vi.mock("@workspace/db", () => {
           : [...state.orders];
         return Promise.resolve(rows).then(resolve, reject);
       },
-      catch: (fn: any) =>
-        Promise.resolve([...state.orders]).catch(fn),
+      catch: (fn: any) => {
+        const rows = statusFilter
+          ? state.orders.filter((o) => o.status === statusFilter)
+          : [...state.orders];
+        return Promise.resolve(rows).catch(fn);
+      },
     };
     return obj;
   }
@@ -149,6 +164,16 @@ vi.mock("@workspace/db", () => {
     savedPaymentMethodsTable:    tag("savedPaymentMethods",    ["id", "userId"]),
     siteSettingsTable:           tag("siteSettings",           ["key", "value"]),
     adminLoginSessionsTable:     tag("adminLoginSessions",     ["token", "twoFactorVerified"]),
+    desc:    drizzleDesc,
+    eq:      (a: any, b: any) => ({ [a]: b, status: String(b) }),
+    and:     (...args: any[]) => args,
+    inArray: drizzleInArray,
+    sql:     drizzleSql,
+    gte:     drizzleGte,
+    mongoOrders: {
+      findMany: vi.fn(async () => { throw new Error("mongo unavailable in test mock"); }),
+      findById: vi.fn(async () => null),
+    },
   };
 });
 

@@ -2,6 +2,17 @@
 
 VASTRAA is a modern, full-stack, multi-vendor fashion and apparel e-commerce ecosystem. Built with TypeScript across a pnpm monorepo architecture, VASTRAA provides an end-to-end shopping experience for customers, a dedicated seller portal for vendor management and product onboarding, an administrative control center for super admins, a cross-platform mobile application, and a high-performance Express backend.
 
+### 💰 Pricing & Seller Settlement Engine (v2 Model)
+- **Customer Side**: Customer pays `taxable = base + shipping` and `gst = round(taxable * productGstRate)` (5%). Commission is NEVER shown or charged to the customer.
+- **Seller Side**: Platform commission (18%) is deducted ONLY from the seller base price.
+  - `commission = round(base * 18%)` (1800 BPS)
+  - `gstOnCommission = round(commission * 5%)` (500 BPS configurable)
+  - `tcs = round(base * 1%)` (100 BPS)
+  - `sellerSettlement = base - commission - gstOnCommission - tcs`
+  - `platformKeeps = commission + gstOnCommission`
+- **Integer Paise Math**: All calculations in exact integer paise, rounded half-up once per line.
+- **Versioning (`pricingVersion`)**: Existing stored orders remain untouched as `v1`. New orders receive `v2`. UI and financial reports branch on `pricingVersion`.
+
 ---
 
 ## 🚀 Key Features
@@ -86,7 +97,7 @@ Create a `.env` file in the root directory (or copy from `.env` template):
 # Example .env configuration
 NODE_ENV=development
 PORT=5000
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/twirldrape
+DATABASE_URL=
 CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_...

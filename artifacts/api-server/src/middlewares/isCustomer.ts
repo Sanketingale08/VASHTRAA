@@ -1,8 +1,9 @@
 import { isAuthenticated } from "./isAuthenticated";
 
 /**
- * Requires the caller to be an authenticated shopper (Customer role).
- * Rejects seller/vendor tokens or admin key access on customer-only endpoints.
+ * Requires the caller to be an authenticated shopper.
+ * Rejects admin key access on customer-only endpoints.
+ * Sellers/vendors are also shoppers on the multi-vendor marketplace.
  */
 export async function isCustomer(req: any, res: any, next: any) {
   return isAuthenticated(req, res, () => {
@@ -13,13 +14,6 @@ export async function isCustomer(req: any, res: any, next: any) {
       return res
         .status(403)
         .json({ error: "Forbidden: admin accounts cannot access customer endpoints", code: "ROLE_MISMATCH" });
-    }
-
-    // Role guard: reject vendor/seller tokens attempting customer access
-    if (req.userRole && req.userRole === "seller") {
-      return res
-        .status(403)
-        .json({ error: "Forbidden: seller tokens cannot access customer endpoints", code: "ROLE_MISMATCH" });
     }
 
     next();

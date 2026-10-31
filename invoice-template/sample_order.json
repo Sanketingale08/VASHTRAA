@@ -1,0 +1,86 @@
+{
+  "company": {
+    "name": "VASTRAA",
+    "legal_name": "Vastraa",
+    "logo": "",
+    "website": "www.vastraa.com",
+    "email": "support@vastraa.com",
+    "phone": "",
+    "gstin": "27AACCT1234A1Z5",
+    "pan": "",
+    "address": "Add Vastraa registered address here"
+  },
+  "order": {
+    "id": "V225",
+    "date": "19-10-2026",
+    "payment_method": "UPI",
+    "vehicle_no": null,
+    "tracking_id": null
+  },
+  "invoice": {
+    "number": "INV-V225",
+    "date": "19-10-2026"
+  },
+  "bos": {
+    "number": "BOS-V225",
+    "date": "19-10-2026"
+  },
+  "seller": {
+    "name": "Kange Collection",
+    "address": "India",
+    "state_code": "27",
+    "gstin": null,
+    "pan": null,
+    "regd_office": null
+  },
+  "customer": {
+    "name": "Sanket Ingale",
+    "phone": "9561573308",
+    "gstin": "URP (Unregistered)"
+  },
+  "billing": {
+    "line1": "Tisgaon",
+    "line2": "Tisgaon",
+    "state": "Maharashtra",
+    "pin": "400001",
+    "iso": "IN-MH"
+  },
+  "shipping": {
+    "line1": "Tisgaon",
+    "line2": "Tisgaon",
+    "state": "Maharashtra",
+    "pin": "400001"
+  },
+  "items": [
+    {
+      "category": "Saree",
+      "hsn": "5007",
+      "name": "Peacock Paithani",
+      "vendor": "Kange Collection",
+      "qty": 1,
+      "mrp": 1155.00,
+      "unit_price": 1155.00,
+      "gst_rate": 5.0,
+      "sku": null,
+      "weight": null
+    }
+  ],
+  "charges": [
+    {
+      "name": "Platform Fee",
+      "sac": "998599",
+      "amount": 20.00,
+      "gst_rate": 0.0
+    },
+    {
+      "name": "Shipping Fee",
+      "sac": "996511",
+      "amount": 0.0,
+      "gst_rate": 0.0,
+      "free_label": "FREE"
+    }
+  ],
+  "policy": {
+    "returns": "At Vastraa we try to deliver perfectly each and every time. But in the off-chance that you need to return the item, please do so with the original packing, tags and invoice, without which it will be really difficult for us to act on your request. Terms and conditions apply."
+  }
+}

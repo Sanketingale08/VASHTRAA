@@ -25,4 +25,5 @@ export * from "./saved_payment_methods";
 export * from "./bulk_import_batches";
 export * from "./users";
 export * from "./sellers";
+export * from "./shipments";
 

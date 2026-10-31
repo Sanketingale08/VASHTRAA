@@ -19,10 +19,11 @@ import { generateSecret, verifySync, generateURI } from "otplib";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
 import { Resend } from "resend";
-import { db, siteSettingsTable, adminLoginSessionsTable, adminRecoveryCodesTable, adminOtpChallengesTable } from "@workspace/db";
+import { db, siteSettingsTable, adminLoginSessionsTable, adminRecoveryCodesTable, adminOtpChallengesTable, mongoSiteSettings } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAdminKey, sha256hex, clearAdmin2faCache } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
+import { checkAccountLockout, recordFailedAttempt, recordSuccessfulLogin } from "../lib/authSecurity";
 import { logger } from "../lib/logger";
 import { sendSms } from "../lib/sms";
 
@@ -31,25 +32,43 @@ const router = Router();
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function getSetting(key: string): Promise<string | null> {
-  const [row] = await db
-    .select({ value: siteSettingsTable.value })
-    .from(siteSettingsTable)
-    .where(eq(siteSettingsTable.key, key));
-  return row?.value ?? null;
+  try {
+    const mongoVal = await mongoSiteSettings.get(key);
+    if (mongoVal !== null) return mongoVal;
+  } catch {}
+  try {
+    const [row] = await db
+      .select({ value: siteSettingsTable.value })
+      .from(siteSettingsTable)
+      .where(eq(siteSettingsTable.key, key));
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function upsertSetting(key: string, value: string): Promise<void> {
-  await db
-    .insert(siteSettingsTable)
-    .values({ key, value })
-    .onConflictDoUpdate({
-      target: siteSettingsTable.key,
-      set: { value, updatedAt: new Date() },
-    });
+  try {
+    await mongoSiteSettings.set(key, value);
+  } catch {}
+  try {
+    await db
+      .insert(siteSettingsTable)
+      .values({ key, value })
+      .onConflictDoUpdate({
+        target: siteSettingsTable.key,
+        set: { value, updatedAt: new Date() },
+      });
+  } catch {}
 }
 
 async function deleteSetting(key: string): Promise<void> {
-  await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, key));
+  try {
+    await mongoSiteSettings.delete(key);
+  } catch {}
+  try {
+    await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, key));
+  } catch {}
 }
 
 function parseUA(ua: string = ""): { device: string; os: string; browser: string } {
@@ -163,12 +182,33 @@ router.post("/admin/2fa/login/verify", loginLimiter, requireAdminKey, async (req
     return res.status(400).json({ error: "Verification code is required" });
   }
   const ip = getIp(req);
+
+  const lockout = await checkAccountLockout("admin", "admin");
+  if (lockout.isLocked) {
+    writeAuditLog({ action: "2fa_login_lockout_blocked", module: "Security", ipAddress: ip, status: "failure" }).catch(() => {});
+    return res.status(429).json({
+      error: lockout.retryMessage || "Too many failed attempts. Admin login temporarily locked.",
+      code: "ACCOUNT_TEMPORARILY_LOCKED",
+      retryAfterSeconds: lockout.remainingSeconds,
+    });
+  }
+
   try {
     const valid = await validateTOTP(code);
     if (!valid) {
-      writeAuditLog({ action: "2fa_login_failed", module: "Security", ipAddress: ip, status: "failure" }).catch(() => {});
+      const failState = await recordFailedAttempt("admin", "admin");
+      writeAuditLog({ action: "2fa_login_failed", module: "Security", ipAddress: ip, status: "failure", metadata: { attempts: failState.attempts } }).catch(() => {});
+      if (failState.isLocked) {
+        return res.status(429).json({
+          error: `Too many failed 2FA attempts. Admin login is temporarily locked for ${failState.lockMinutes} minutes.`,
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          retryAfterSeconds: failState.remainingSeconds,
+        });
+      }
       return res.status(403).json({ error: "Invalid verification code. Please try again.", code: "2FA_INVALID" });
     }
+
+    await recordSuccessfulLogin("admin", "admin");
     const { tokenHash, sessionId } = await createVerifiedSession(req);
     writeAuditLog({ action: "2fa_login_success", module: "Security", ipAddress: ip }).catch(() => {});
     res.json({ sessionId, tokenHash });
@@ -187,6 +227,17 @@ router.post("/admin/2fa/login/recovery", loginLimiter, requireAdminKey, async (r
     return res.status(400).json({ error: "Recovery code is required" });
   }
   const ip = getIp(req);
+
+  const lockout = await checkAccountLockout("admin", "admin");
+  if (lockout.isLocked) {
+    writeAuditLog({ action: "2fa_recovery_login_lockout_blocked", module: "Security", ipAddress: ip, status: "failure" }).catch(() => {});
+    return res.status(429).json({
+      error: lockout.retryMessage || "Too many failed attempts. Admin login temporarily locked.",
+      code: "ACCOUNT_TEMPORARILY_LOCKED",
+      retryAfterSeconds: lockout.remainingSeconds,
+    });
+  }
+
   try {
     const codeHash = sha256hex(code.trim().toUpperCase());
     const [row] = await db
@@ -195,9 +246,19 @@ router.post("/admin/2fa/login/recovery", loginLimiter, requireAdminKey, async (r
       .where(eq(adminRecoveryCodesTable.codeHash, codeHash));
 
     if (!row || row.used) {
-      writeAuditLog({ action: "2fa_recovery_login_failed", module: "Security", ipAddress: ip, status: "failure" }).catch(() => {});
+      const failState = await recordFailedAttempt("admin", "admin");
+      writeAuditLog({ action: "2fa_recovery_login_failed", module: "Security", ipAddress: ip, status: "failure", metadata: { attempts: failState.attempts } }).catch(() => {});
+      if (failState.isLocked) {
+        return res.status(429).json({
+          error: `Too many failed recovery attempts. Admin login is temporarily locked for ${failState.lockMinutes} minutes.`,
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          retryAfterSeconds: failState.remainingSeconds,
+        });
+      }
       return res.status(403).json({ error: "Invalid or already-used recovery code.", code: "2FA_INVALID" });
     }
+
+    await recordSuccessfulLogin("admin", "admin");
 
     // Mark the code as used (one-time only).
     await db

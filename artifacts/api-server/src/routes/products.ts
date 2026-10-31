@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getAuth } from "@clerk/express";
 import { requireAuth } from "../middlewares/isAuthenticated";
-import { db, mongoProducts, mongoGeneric, getNextSequenceValue } from "@workspace/db";
+import { db, mongoProducts, mongoGeneric, mongoWishlists, mongoNotifications, mongoNotificationPreferences, mongoSellers, mongoVendors, mongoUsers, getNextSequenceValue, validateCategoryAndSubcategory, resolveCategoryData, findCategoryDefinition } from "@workspace/db";
 import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable, CATEGORY_PREFIX } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, isNull, inArray, lt } from "@workspace/db";
@@ -9,7 +9,11 @@ import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import { recordStockChange } from "../lib/stockHistory";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import { insertAdminNotification } from "../lib/adminNotifications";
-import { sendWishlistRestockEmail } from "../lib/transactionalEmail";
+import { emitProductEvent } from "../lib/socket";
+import { globalCache, safeClearCache, safeInvalidatePattern } from "../lib/cacheEngine";
+import { calculateVastraaFinancials, toPaise, toRupees } from "../lib/pricingEngine";
+import { getApprovedVendorData, isProductVendorValid } from "../lib/vendorValidation";
+import { verifyAccessToken } from "../lib/jwt";
 
 async function notifySellerStockLevel(
   vendorId: string | null,
@@ -38,400 +42,498 @@ async function notifySellerStockLevel(
   }
 }
 
+import { searchProducts, getSearchSuggestions, getProductFacets } from "../lib/searchEngine";
+
 const router = Router();
 
-router.get("/products", async (req, res) => {
+router.get("/products/search-suggestions", async (req, res) => {
   try {
-    const {
-      search,
-      category,
-      fabric,
-      color,
-      occasion,
-      vendorId,
-      minPrice,
-      maxPrice,
-      sort,
-      page = "1",
-      limit = "24",
-      bestSeller,
-      newArrival,
-      hasDiscount,
-      minRating,
-      ids,
-      isFeatured,
-    } = req.query as Record<string, string>;
+    const q = (req.query.q as string || req.query.search as string || "").trim();
+    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 5));
+    const suggestions = await getSearchSuggestions(q, limit);
+    res.json(suggestions);
+  } catch (err) {
+    req.log?.error({ err }, "Failed to get search suggestions");
+    res.status(500).json({ error: "Failed to get search suggestions" });
+  }
+});
 
-    const pageNum = Math.max(1, parseInt(page) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 24));
-    const offset = (pageNum - 1) * limitNum;
+router.get("/products", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=30");
+  const query = req.query as Record<string, any>;
+  const pageNum = Math.max(1, parseInt(query.page as string) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(query.limit as string) || 24));
+  const cacheKey = globalCache.generateKey("products:catalog", query);
 
-    const conditions = [];
+  try {
+    const data = await globalCache.getOrFetch(cacheKey, async () => {
+      const searchOptions: SearchOptions = {
+        search: query.search ? String(query.search).trim() : undefined,
+        category: query.category ? String(query.category) : undefined,
+        subcategory: query.subcategory ? String(query.subcategory) : undefined,
+        childCategory: query.childCategory ? String(query.childCategory) : undefined,
+        collection: query.collection ? String(query.collection) : undefined,
+        fabric: query.fabric ? (Array.isArray(query.fabric) ? query.fabric.map(String) : String(query.fabric)) : undefined,
+        color: query.color ? (Array.isArray(query.color) ? query.color.map(String) : String(query.color)) : undefined,
+        brand: query.brand ? (Array.isArray(query.brand) ? query.brand.map(String) : String(query.brand)) : undefined,
+        pattern: query.pattern ? (Array.isArray(query.pattern) ? query.pattern.map(String) : String(query.pattern)) : undefined,
+        occasion: query.occasion ? (Array.isArray(query.occasion) ? query.occasion.map(String) : String(query.occasion)) : undefined,
+        gender: query.gender ? (Array.isArray(query.gender) ? query.gender.map(String) : String(query.gender)) : undefined,
+        sareeType: query.sareeType ? (Array.isArray(query.sareeType) ? query.sareeType.map(String) : String(query.sareeType)) : undefined,
+        sareeStyle: query.sareeStyle ? (Array.isArray(query.sareeStyle) ? query.sareeStyle.map(String) : String(query.sareeStyle)) : undefined,
+        packOf: query.packOf ? (Array.isArray(query.packOf) ? query.packOf.map(String) : String(query.packOf)) : undefined,
+        countryOfOrigin: query.countryOfOrigin ? (Array.isArray(query.countryOfOrigin) ? query.countryOfOrigin.map(String) : String(query.countryOfOrigin)) : undefined,
+        vendorId: query.vendorId ? String(query.vendorId) : undefined,
+        minPrice: query.minPrice !== undefined && query.minPrice !== "" && !isNaN(Number(query.minPrice)) ? Number(query.minPrice) : undefined,
+        maxPrice: query.maxPrice !== undefined && query.maxPrice !== "" && !isNaN(Number(query.maxPrice)) ? Number(query.maxPrice) : undefined,
+        minRating: query.minRating ? parseFloat(query.minRating as string) : undefined,
+        minDiscount: query.minDiscount ? parseInt(query.minDiscount as string) : undefined,
+        bestSeller: query.bestSeller === "true" || query.bestSeller === true,
+        newArrival: query.newArrival === "true" || query.newArrival === true || query.isNewArrival === "true" || query.isNewArrival === true,
+        isFeatured: query.isFeatured === "true" || query.isFeatured === true,
+        hasDiscount: query.hasDiscount === "true",
+        hasOffer: query.hasOffer === "true" || query.offers === "true",
+        blouseIncluded: query.blouseIncluded === "true" ? true : query.blouseIncluded === "false" ? false : undefined,
+        availability: query.availability ? String(query.availability) : undefined,
+        ids: query.ids ? String(query.ids).split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+        sort: query.sort ? String(query.sort) : undefined,
+        page: pageNum,
+        limit: limitNum,
+      };
 
-    // Customer-facing: only show active products
-    conditions.push(eq(productsTable.active, true));
+      const searchResult = await searchProducts(searchOptions);
+      return {
+        products: searchResult.products.map(normalizeProduct as any),
+        total: searchResult.total,
+        page: searchResult.page,
+        limit: searchResult.limit,
+        totalPages: searchResult.totalPages,
+      };
+    }, 60_000);
 
-    if (search && search.trim()) {
-      const term = `%${search.trim()}%`;
-      conditions.push(
-        or(
-          ilike(productsTable.name, term),
-          ilike(productsTable.description, term),
-          ilike(productsTable.vendorName, term),
-        )
-      );
-    }
-    if (category) conditions.push(eq(productsTable.category, category as any));
-    if (fabric) conditions.push(eq(productsTable.fabric, fabric as any));
-    if (color) conditions.push(eq(productsTable.color, color as any));
-    if (occasion) conditions.push(eq(productsTable.occasion, occasion as any));
-    if (vendorId) {
-      const foundVendor = await db
-        .select({ id: vendorsTable.id })
-        .from(vendorsTable)
-        .where(or(eq(vendorsTable.id, vendorId), eq(vendorsTable.vendorId, vendorId)))
-        .limit(1);
-
-      if (foundVendor.length > 0) {
-        conditions.push(eq(productsTable.vendorId, foundVendor[0].id));
-      } else {
-        conditions.push(eq(productsTable.vendorId, vendorId));
-      }
-    }
-    if (minPrice) conditions.push(gte(productsTable.price, parseInt(minPrice)));
-    if (maxPrice) conditions.push(lte(productsTable.price, parseInt(maxPrice)));
-    if (bestSeller === "true") conditions.push(eq(productsTable.isBestSeller, true));
-    if (newArrival === "true") conditions.push(eq(productsTable.isNewArrival, true));
-    if (hasDiscount === "true") conditions.push(isNotNull(productsTable.originalPrice));
-    if (minRating) conditions.push(gte(productsTable.rating, parseFloat(minRating)));
-    if (ids) {
-      const idList = ids.split(",").map((s) => s.trim()).filter(Boolean);
-      if (idList.length > 0) conditions.push(inArray(productsTable.id, idList));
-    }
-    if (isFeatured === "true") {
-      conditions.push(eq(productsTable.isFeatured, true));
-      // Exclude products whose featured window has expired
-      conditions.push(
-        or(
-          isNull(productsTable.featuredUntil),
-          gte(productsTable.featuredUntil, sql`NOW()`)
-        )!
-      );
-    }
-
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-    let orderBy;
-    if (isFeatured === "true") {
-      // Featured products: admin-defined order (nulls last), then by rating as tiebreaker
-      orderBy = [sql`${productsTable.featuredOrder} asc NULLS LAST`, desc(productsTable.rating)];
-    } else {
-      switch (sort) {
-        case "price_asc":
-          orderBy = [asc(productsTable.price)];
-          break;
-        case "price_desc":
-          orderBy = [desc(productsTable.price)];
-          break;
-        case "rating_desc":
-          orderBy = [desc(productsTable.rating)];
-          break;
-        case "newest":
-          orderBy = [desc(productsTable.isNewArrival)];
-          break;
-        default:
-          orderBy = [desc(productsTable.isBestSeller)];
-      }
-    }
-
-    const [products, countResult] = await Promise.all([
-      db
-        .select()
-        .from(productsTable)
-        .where(where)
-        .orderBy(...orderBy)
-        .limit(limitNum)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(productsTable)
-        .where(where),
-    ]);
-
-    const total = countResult[0]?.count ?? 0;
-
-    if (search && search.trim()) {
+    if (query.search && String(query.search).trim()) {
       const auth = getAuth(req);
       const userId: string | null = (auth?.sessionClaims?.userId as string) || auth?.userId || null;
       db.insert(searchQueriesTable)
-        .values({ term: search.trim().toLowerCase(), resultCount: total, userId })
-        .catch((err: unknown) => req.log.warn({ err }, "Failed to log search query"));
+        .values({ term: String(query.search).trim().toLowerCase(), resultCount: data.total, userId })
+        .catch((err: unknown) => req.log?.warn({ err }, "Failed to log search query"));
     }
 
-    res.json({
-      products: products.map(normalizeProduct),
-      total,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
-    });
+    res.json(data);
   } catch (err) {
-    req.log.warn({ err }, "Postgres products list query failed, falling back to MongoDB/in-memory");
-    try {
-      const mongoFilter: any = { active: true };
-      if (category) mongoFilter.category = category;
-      if (fabric) mongoFilter.fabric = fabric;
-      if (color) mongoFilter.color = color;
-      if (occasion) mongoFilter.occasion = occasion;
-      if (vendorId) mongoFilter.vendorId = vendorId;
-      if (bestSeller === "true") mongoFilter.isBestSeller = true;
-      if (newArrival === "true") mongoFilter.isNewArrival = true;
-      if (isFeatured === "true") mongoFilter.isFeatured = true;
-      if (search && search.trim()) {
-        mongoFilter.$or = [
-          { name: { $regex: search.trim(), $options: "i" } },
-          { description: { $regex: search.trim(), $options: "i" } },
-          { vendorName: { $regex: search.trim(), $options: "i" } },
-        ];
-      }
-
-      let mongoList = await mongoProducts.findMany(mongoFilter);
-      if (minPrice) mongoList = mongoList.filter(p => p.price >= parseInt(minPrice));
-      if (maxPrice) mongoList = mongoList.filter(p => p.price <= parseInt(maxPrice));
-      if (minRating) mongoList = mongoList.filter(p => p.rating >= parseFloat(minRating));
-      if (ids) {
-        const idList = ids.split(",").map(s => s.trim()).filter(Boolean);
-        if (idList.length > 0) mongoList = mongoList.filter(p => idList.includes(p.id));
-      }
-
-      const total = mongoList.length;
-      const paginated = mongoList.slice(offset, offset + limitNum);
-
-      res.json({
-        products: paginated.map(normalizeProduct),
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum) || 1,
-      });
-    } catch (mongoErr) {
-      req.log.error({ err: mongoErr }, "Failed to list products from both DBs");
-      res.status(500).json({ error: "Failed to fetch products" });
-    }
+    req.log?.error({ err }, "Products search query failed");
+    res.status(500).json({ error: "Failed to fetch products" });
   }
 });
 
 router.get("/products/facets", async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   try {
-    const {
-      search,
-      category,
-      fabric,
-      color,
-      occasion,
-      vendorId,
-      minPrice,
-      maxPrice,
-      bestSeller,
-      newArrival,
-      hasDiscount,
-      minRating,
-    } = req.query as Record<string, string>;
-
-    function buildConditions(overrides: {
-      fabric?: string | null;
-      color?: string | null;
-      occasion?: string | null;
-      vendorId?: string | null;
-      minRating?: string | null;
-      ratingThreshold?: number;
-    } = {}) {
-      const conds = [];
-      const { ratingThreshold, ...rest } = overrides;
-      const eff = { fabric, color, occasion, vendorId, minRating, ...rest };
-
-      if (search && search.trim()) {
-        const term = `%${search.trim()}%`;
-        conds.push(or(
-          ilike(productsTable.name, term),
-          ilike(productsTable.description, term),
-          ilike(productsTable.vendorName, term),
-        ));
-      }
-      if (category) conds.push(eq(productsTable.category, category as any));
-      if (eff.fabric !== null && eff.fabric) conds.push(eq(productsTable.fabric, eff.fabric as any));
-      if (eff.color !== null && eff.color) conds.push(eq(productsTable.color, eff.color as any));
-      if (eff.occasion !== null && eff.occasion) conds.push(eq(productsTable.occasion, eff.occasion as any));
-      if (eff.vendorId !== null && eff.vendorId) conds.push(eq(productsTable.vendorId, eff.vendorId));
-      if (minPrice) conds.push(gte(productsTable.price, parseInt(minPrice)));
-      if (maxPrice) conds.push(lte(productsTable.price, parseInt(maxPrice)));
-      if (bestSeller === "true") conds.push(eq(productsTable.isBestSeller, true));
-      if (newArrival === "true") conds.push(eq(productsTable.isNewArrival, true));
-      if (hasDiscount === "true") conds.push(isNotNull(productsTable.originalPrice));
-      if (eff.minRating !== null && eff.minRating) conds.push(gte(productsTable.rating, parseFloat(eff.minRating)));
-      if (ratingThreshold !== undefined) conds.push(gte(productsTable.rating, ratingThreshold));
-
-      return conds.length > 0 ? and(...conds) : undefined;
-    }
-
-    const [fabricRows, occasionRows, colorRows, vendorRows, ratingRows] = await Promise.all([
-      db
-        .select({ value: productsTable.fabric, count: sql<number>`count(*)::int` })
-        .from(productsTable)
-        .where(buildConditions({ fabric: null }))
-        .groupBy(productsTable.fabric),
-      db
-        .select({ value: productsTable.occasion, count: sql<number>`count(*)::int` })
-        .from(productsTable)
-        .where(buildConditions({ occasion: null }))
-        .groupBy(productsTable.occasion),
-      db
-        .select({ value: productsTable.color, count: sql<number>`count(*)::int` })
-        .from(productsTable)
-        .where(buildConditions({ color: null }))
-        .groupBy(productsTable.color),
-      db
-        .select({ value: productsTable.vendorId, count: sql<number>`count(*)::int` })
-        .from(productsTable)
-        .where(buildConditions({ vendorId: null }))
-        .groupBy(productsTable.vendorId),
-      Promise.all(
-        [3, 4, 4.5].map((threshold) =>
-          db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(productsTable)
-            .where(buildConditions({ minRating: null, ratingThreshold: threshold }))
-            .then((rows) => ({ threshold, count: rows[0]?.count ?? 0 }))
-        )
-      ),
-    ]);
-
-    const toMap = (rows: { value: string | null; count: number }[]) => {
-      const m: Record<string, number> = {};
-      for (const r of rows) if (r.value) m[r.value] = r.count;
-      return m;
+    const query = req.query as Record<string, any>;
+    const searchOptions: SearchOptions = {
+      search: query.search ? String(query.search).trim() : undefined,
+      category: query.category ? String(query.category) : undefined,
+      subcategory: query.subcategory ? String(query.subcategory) : undefined,
+      childCategory: query.childCategory ? String(query.childCategory) : undefined,
+      collection: query.collection ? String(query.collection) : undefined,
+      fabric: query.fabric ? (Array.isArray(query.fabric) ? query.fabric.map(String) : String(query.fabric)) : undefined,
+      color: query.color ? (Array.isArray(query.color) ? query.color.map(String) : String(query.color)) : undefined,
+      brand: query.brand ? (Array.isArray(query.brand) ? query.brand.map(String) : String(query.brand)) : undefined,
+      pattern: query.pattern ? (Array.isArray(query.pattern) ? query.pattern.map(String) : String(query.pattern)) : undefined,
+      occasion: query.occasion ? (Array.isArray(query.occasion) ? query.occasion.map(String) : String(query.occasion)) : undefined,
+      gender: query.gender ? (Array.isArray(query.gender) ? query.gender.map(String) : String(query.gender)) : undefined,
+      sareeType: query.sareeType ? (Array.isArray(query.sareeType) ? query.sareeType.map(String) : String(query.sareeType)) : undefined,
+      sareeStyle: query.sareeStyle ? (Array.isArray(query.sareeStyle) ? query.sareeStyle.map(String) : String(query.sareeStyle)) : undefined,
+      packOf: query.packOf ? (Array.isArray(query.packOf) ? query.packOf.map(String) : String(query.packOf)) : undefined,
+      countryOfOrigin: query.countryOfOrigin ? (Array.isArray(query.countryOfOrigin) ? query.countryOfOrigin.map(String) : String(query.countryOfOrigin)) : undefined,
+      vendorId: query.vendorId ? String(query.vendorId) : undefined,
+      minPrice: query.minPrice !== undefined && query.minPrice !== "" && !isNaN(Number(query.minPrice)) ? Number(query.minPrice) : undefined,
+      maxPrice: query.maxPrice !== undefined && query.maxPrice !== "" && !isNaN(Number(query.maxPrice)) ? Number(query.maxPrice) : undefined,
+      minRating: query.minRating ? parseFloat(query.minRating as string) : undefined,
+      minDiscount: query.minDiscount ? parseInt(query.minDiscount as string) : undefined,
+      bestSeller: query.bestSeller === "true" || query.bestSeller === true,
+      newArrival: query.newArrival === "true" || query.newArrival === true || query.isNewArrival === "true" || query.isNewArrival === true,
+      isFeatured: query.isFeatured === "true" || query.isFeatured === true,
+      hasDiscount: query.hasDiscount === "true",
+      hasOffer: query.hasOffer === "true" || query.offers === "true",
+      blouseIncluded: query.blouseIncluded === "true" ? true : query.blouseIncluded === "false" ? false : undefined,
+      availability: query.availability ? String(query.availability) : undefined,
     };
 
-    res.json({
-      fabric: toMap(fabricRows),
-      occasion: toMap(occasionRows),
-      color: toMap(colorRows),
-      vendor: toMap(vendorRows as any),
-      rating: Object.fromEntries(ratingRows.map((r) => [String(r.threshold), r.count])),
-    });
+    const cacheKey = globalCache.generateKey("products:facets", searchOptions as any);
+    const facets = await globalCache.getOrFetch(cacheKey, () => getProductFacets(searchOptions), 60_000);
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+    res.json(facets);
   } catch (err) {
-    req.log.error({ err }, "Failed to compute facets");
+    req.log?.error({ err }, "Failed to compute facets");
     res.status(500).json({ error: "Failed to compute facets" });
   }
 });
 
+export async function findProductById(id: string): Promise<any | null> {
+  if (!id) return null;
+  const strId = String(id).trim();
+  if (!strId) return null;
+
+  let pgProduct: any = null;
+  let mongoProduct: any = null;
+
+  // 1. Try finding in MongoDB first (supports ObjectId, string _id, id, and productId)
+  try {
+    mongoProduct = await mongoProducts.findById(strId).catch(() => null);
+  } catch {}
+
+  // 2. Try finding in PostgreSQL by id (or by mongoProduct.id if strId was mongo _id)
+  const pgSearchId = (mongoProduct && mongoProduct.id) ? mongoProduct.id : strId;
+  try {
+    const rows = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, pgSearchId))
+      .limit(1);
+    if (rows.length > 0) pgProduct = rows[0];
+  } catch {}
+
+  // 3. If pgProduct was found but not mongoProduct, try mongoProducts with pgProduct.id
+  if (pgProduct && !mongoProduct && pgProduct.id && pgProduct.id !== strId) {
+    try {
+      mongoProduct = await mongoProducts.findById(pgProduct.id).catch(() => null);
+    } catch {}
+  }
+
+  if (!pgProduct && !mongoProduct) return null;
+  if (pgProduct && mongoProduct) {
+    const mongoUpdatedAt = mongoProduct.updatedAt ? new Date(mongoProduct.updatedAt).getTime() : 0;
+    const pgUpdatedAt = (pgProduct as any).updatedAt ? new Date((pgProduct as any).updatedAt).getTime() : 0;
+    const preferMongo = mongoUpdatedAt >= pgUpdatedAt;
+
+    const base = preferMongo ? pgProduct : mongoProduct;
+    const primary = preferMongo ? mongoProduct : pgProduct;
+
+    const canonicalId = primary.id || base.id || strId;
+    const mongoId = (primary as any)._id ? String((primary as any)._id) : ((base as any)._id ? String((base as any)._id) : canonicalId);
+
+    return {
+      ...base,
+      ...primary,
+      id: canonicalId,
+      _id: mongoId,
+      name: primary.name ?? base.name,
+      description: primary.description !== undefined ? primary.description : (base.description ?? ""),
+      price: primary.price !== undefined ? primary.price : base.price,
+      basePrice: primary.basePrice !== undefined ? primary.basePrice : (base.basePrice !== undefined ? base.basePrice : (primary.price ?? base.price)),
+      originalPrice: primary.originalPrice !== undefined ? primary.originalPrice : base.originalPrice,
+      stock: primary.stock !== undefined ? primary.stock : base.stock,
+      lowStockThreshold: primary.lowStockThreshold !== undefined ? primary.lowStockThreshold : base.lowStockThreshold,
+      images: Array.isArray(primary.images) ? primary.images : (Array.isArray(base.images) ? base.images : []),
+      videos: Array.isArray(primary.videos) ? primary.videos : (Array.isArray(base.videos) ? base.videos : []),
+      variants: Array.isArray(primary.variants) ? primary.variants : (Array.isArray(base.variants) ? base.variants : []),
+      specifications: Array.isArray(primary.specifications) ? primary.specifications : (Array.isArray(base.specifications) ? base.specifications : []),
+      deliveryInfo: primary.deliveryInfo !== undefined ? primary.deliveryInfo : (base.deliveryInfo ?? ""),
+      returnPolicy: primary.returnPolicy !== undefined ? primary.returnPolicy : (base.returnPolicy ?? ""),
+      vendorId: primary.vendorId || base.vendorId,
+      sellerId: primary.sellerId || base.sellerId || primary.vendorId || base.vendorId,
+      vendorName: primary.vendorName || base.vendorName || "VASTRAA",
+      status: primary.status || base.status || "approved",
+      active: primary.active !== undefined ? primary.active : (base.active !== undefined ? base.active : true),
+    };
+  }
+
+  const single = pgProduct || mongoProduct;
+  const canonicalId = single.id || strId;
+  const mongoId = (single as any)._id ? String((single as any)._id) : canonicalId;
+  return {
+    ...single,
+    id: canonicalId,
+    _id: mongoId,
+  };
+}
+
+interface CallerSellerContext {
+  isAuthenticated: boolean;
+  userId: string | null;
+  role: string | null;
+  vendor: any | null;
+  sellerIdentifiers: Set<string>;
+  isAdmin: boolean;
+}
+
+export async function resolveCallerSellerContext(req: any): Promise<CallerSellerContext> {
+  const result: CallerSellerContext = {
+    isAuthenticated: false,
+    userId: null,
+    role: null,
+    vendor: null,
+    sellerIdentifiers: new Set(),
+    isAdmin: false,
+  };
+
+  let userId: string | null = null;
+  let role: string | null = null;
+  let email: string | null = null;
+
+  // 1. Check Bearer token / cookies
+  const authHeader = req.headers?.authorization || req.headers?.Authorization;
+  let token = "";
+  if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7).trim();
+  } else if (req.cookies?.vastraa_auth_token || req.cookies?.seller_token || req.cookies?.token) {
+    token = String(req.cookies.vastraa_auth_token || req.cookies.seller_token || req.cookies.token).trim();
+  }
+
+  if (token) {
+    const jwtPayload = verifyAccessToken(token);
+    if (jwtPayload) {
+      userId = jwtPayload.sub;
+      role = jwtPayload.role || null;
+      if (jwtPayload.email) email = String(jwtPayload.email).trim().toLowerCase();
+    }
+  }
+
+  // 2. Fallback to Clerk Auth
+  if (!userId) {
+    try {
+      const auth = getAuth(req);
+      const clerkId = auth?.sessionClaims?.userId || auth?.userId;
+      if (clerkId && typeof clerkId === "string" && clerkId.trim()) {
+        userId = clerkId.trim();
+        if (auth?.sessionClaims?.email) email = String(auth.sessionClaims.email).trim().toLowerCase();
+      }
+    } catch {}
+  }
+
+  // Check admin key in headers
+  const adminKey = process.env.ADMIN_API_KEY || "Admin@123";
+  const providedAdminKey = req.headers?.["x-admin-key"] || req.query?.adminKey;
+  if (providedAdminKey && providedAdminKey === adminKey) {
+    result.isAdmin = true;
+  }
+
+  if (role === "admin" || role === "superadmin") {
+    result.isAdmin = true;
+  }
+
+  if (!userId && !result.isAdmin) {
+    return result;
+  }
+
+  result.isAuthenticated = true;
+  result.userId = userId;
+  result.role = role;
+  if (userId) result.sellerIdentifiers.add(userId);
+
+  // 3. Resolve vendor record from MongoDB / PostgreSQL
+  try {
+    let vendor: any = null;
+
+    if (userId) {
+      if (mongoSellers) {
+        vendor = (await mongoSellers.findByOwnerId?.(userId)) ||
+                 (await mongoSellers.findById?.(userId)) ||
+                 (await mongoSellers.findBySellerId?.(userId)) ||
+                 (await mongoSellers.findByVendorId?.(userId));
+      }
+      if (!vendor && mongoVendors && mongoVendors !== mongoSellers) {
+        vendor = (await mongoVendors.findByOwnerId?.(userId)) ||
+                 (await mongoVendors.findById?.(userId)) ||
+                 (await mongoVendors.findBySellerId?.(userId)) ||
+                 (await mongoVendors.findByVendorId?.(userId));
+      }
+    }
+
+    if (!vendor && userId && mongoUsers?.findById) {
+      const userRecord = await mongoUsers.findById(userId).catch(() => null);
+      if (userRecord) {
+        if (!email && userRecord.email) email = String(userRecord.email).trim().toLowerCase();
+        if (userRecord.vendorId && mongoSellers) {
+          vendor = (await mongoSellers.findById?.(userRecord.vendorId)) ||
+                   (await mongoSellers.findByVendorId?.(userRecord.vendorId));
+        }
+        if (!vendor && userRecord.sellerId && mongoSellers) {
+          vendor = (await mongoSellers.findById?.(userRecord.sellerId)) ||
+                   (await mongoSellers.findBySellerId?.(userRecord.sellerId));
+        }
+      }
+    }
+
+    if (!vendor && email) {
+      if (mongoSellers?.findByEmail) {
+        vendor = await mongoSellers.findByEmail(email).catch(() => null);
+      }
+      if (!vendor && mongoVendors?.findByEmail && mongoVendors !== mongoSellers) {
+        vendor = await mongoVendors.findByEmail(email).catch(() => null);
+      }
+    }
+
+    if (!vendor && db && vendorsTable) {
+      try {
+        const isUuid = Boolean(userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId));
+        const conds: any[] = [];
+        if (userId) {
+          conds.push(eq(vendorsTable.ownerId, userId));
+          if (isUuid) conds.push(eq(vendorsTable.id, userId));
+        }
+        if (email && vendorsTable.contactEmail) {
+          conds.push(eq(vendorsTable.contactEmail, email));
+        }
+        if (conds.length > 0) {
+          const rows = await db.select().from(vendorsTable).where(or(...conds)).limit(1);
+          if (rows && rows.length > 0) vendor = rows[0];
+        }
+      } catch {}
+    }
+
+    if (vendor) {
+      result.vendor = vendor;
+      [
+        vendor.id,
+        vendor.vendorId,
+        vendor.sellerId,
+        vendor.ownerId,
+        (vendor as any)._id ? String((vendor as any)._id) : null,
+      ].filter(Boolean).forEach((idVal) => result.sellerIdentifiers.add(String(idVal)));
+    }
+  } catch {}
+
+  return result;
+}
+
 router.get("/products/:id", async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   try {
     const { id } = req.params;
-    let product: any = null;
-
-    try {
-      const rows = await db
-        .select()
-        .from(productsTable)
-        .where(eq(productsTable.id, id))
-        .limit(1);
-
-      if (rows.length > 0) {
-        product = rows[0];
-        db.update(productsTable)
-          .set({ viewCount: sql`${productsTable.viewCount} + 1` })
-          .where(eq(productsTable.id, id))
-          .catch((err: unknown) => req.log.warn({ err }, "Failed to increment product view count"));
-      }
-    } catch {
-      // Fallback to MongoDB
+    if (!id || !String(id).trim()) {
+      res.status(400).json({ error: "Invalid product ID" });
+      return;
     }
 
-    if (!product) {
-      product = await mongoProducts.findById(id).catch(() => null);
-    }
-
+    const product = await findProductById(id);
     if (!product) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
 
-    res.json(normalizeProduct(product));
+    const normalized = normalizeProduct(product);
+    const approvedVendorData = await getApprovedVendorData();
+    const isPubliclyAvailable = isProductVendorValid(normalized, approvedVendorData);
+
+    if (!isPubliclyAvailable) {
+      // Unapproved, inactive, draft, or pending product:
+      // Caller MUST be the verified owner seller or an admin.
+      const sellerCtx = await resolveCallerSellerContext(req);
+
+      if (sellerCtx.isAdmin) {
+        res.json(normalized);
+        return;
+      }
+
+      const productVendorIdentifiers = new Set([
+        product.vendorId,
+        product.sellerId,
+        (product as any).ownerId,
+        normalized?.vendorId,
+        normalized?.sellerId,
+      ].filter(Boolean).map(String));
+
+      const isOwner = Array.from(productVendorIdentifiers).some((vId) => sellerCtx.sellerIdentifiers.has(vId));
+
+      if (!isOwner) {
+        if (!sellerCtx.isAuthenticated) {
+          // Unauthenticated customer/guest cannot see unapproved product
+          res.status(404).json({ error: "Product not found or unavailable" });
+          return;
+        }
+        // Authenticated as another seller: forbid cross-seller access
+        res.status(403).json({ error: "Forbidden: you do not own this product" });
+        return;
+      }
+    }
+
+    try {
+      const updateRes = db.update(productsTable)
+        .set({ viewCount: sql`${productsTable.viewCount} + 1` })
+        .where(eq(productsTable.id, normalized.id));
+      if (updateRes && typeof updateRes.catch === "function") {
+        updateRes.catch(() => {});
+      }
+    } catch {}
+
+    res.json(normalized);
   } catch (err) {
-    req.log.error({ err }, "Failed to get product");
+    req.log?.error?.({ err }, "Failed to get product");
     res.status(500).json({ error: "Failed to fetch product" });
   }
 });
 
 
-async function notifyWishlistRestock(productId: string, productName: string, previousStock: number, newStock: number) {
-  if (!(previousStock === 0 && newStock > 0)) return;
-
-  const wishlistRows = await db
-    .select({ userId: wishlistsTable.userId })
-    .from(wishlistsTable)
-    .where(eq(wishlistsTable.productId, productId));
-
-  for (const { userId } of wishlistRows) {
-    const prefRows = await db
-      .select({
-        stockAlerts: notificationPreferencesTable.stockAlerts,
-        emailStockAlerts: notificationPreferencesTable.emailStockAlerts,
-      })
-      .from(notificationPreferencesTable)
-      .where(eq(notificationPreferencesTable.userId, userId))
-      .limit(1);
-    const wantsStock = prefRows.length === 0 || prefRows[0].stockAlerts;
-    const wantsEmailStock = prefRows.length === 0 || prefRows[0].emailStockAlerts;
-
-    // In-app notification — gated by stockAlerts preference
-    if (wantsStock) {
-      await db.insert(notificationsTable).values({
-        userId,
-        type: "wishlist_restock",
-        title: "Back in stock!",
-        body: `"${productName}" is back in stock. Don't miss out!`,
-        metadata: { productId },
-      });
-    }
-
-    // Email — gated by emailStockAlerts preference
-    if (wantsEmailStock) {
-      sendWishlistRestockEmail({ userId, productName, productId }).catch(() => {});
-    }
-  }
-}
-
 async function notifyWishlistPriceDrop(productId: string, productName: string, previousPrice: number, newPrice: number) {
   if (!(newPrice < previousPrice)) return;
 
-  const wishlistRows = await db
-    .select({ userId: wishlistsTable.userId })
-    .from(wishlistsTable)
-    .where(eq(wishlistsTable.productId, productId));
-
-  const pctOff = Math.round(((previousPrice - newPrice) / previousPrice) * 100);
-  for (const { userId } of wishlistRows) {
-    const prefRows = await db
-      .select({ offerAlerts: notificationPreferencesTable.offerAlerts })
-      .from(notificationPreferencesTable)
-      .where(eq(notificationPreferencesTable.userId, userId))
-      .limit(1);
-    const wantsOffers = prefRows.length === 0 || prefRows[0].offerAlerts;
-    if (wantsOffers) {
-      await db.insert(notificationsTable).values({
-        userId,
-        type: "price_drop",
-        title: "Price drop alert",
-        body: `"${productName}" is now ${pctOff}% off — grab it before the price goes back up!`,
-        metadata: { productId, previousPrice, newPrice },
-      });
+  let wishlistUserIds: string[] = [];
+  try {
+    if (typeof mongoWishlists !== "undefined" && mongoWishlists?.findMany) {
+      const docs = await mongoWishlists.findMany({ productId });
+      wishlistUserIds = docs.map((w: any) => w.userId).filter(Boolean);
     }
+  } catch {}
+
+  if (wishlistUserIds.length === 0) {
+    try {
+      const wishlistRows = await db
+        .select({ userId: wishlistsTable.userId })
+        .from(wishlistsTable)
+        .where(eq(wishlistsTable.productId, productId))
+        .catch(() => []);
+      wishlistUserIds = wishlistRows.map((r: any) => r.userId).filter(Boolean);
+    } catch {}
+  }
+
+  const uniqueUserIds = Array.from(new Set(wishlistUserIds));
+  const pctOff = Math.round(((previousPrice - newPrice) / previousPrice) * 100);
+
+  for (const userId of uniqueUserIds) {
+    try {
+      const prefs = await mongoNotificationPreferences.findByUserId(userId);
+      // Suppress if user turned off Offers & Coupons notifications
+      if (!prefs.offerAlerts) continue;
+
+      const title = "Price drop alert";
+      const body = `"${productName}" is now ${pctOff}% off — grab it before the price goes back up!`;
+      const metadata = { productId, previousPrice, newPrice };
+
+      try {
+        if (typeof mongoNotifications !== "undefined" && mongoNotifications?.create) {
+          await mongoNotifications.create({
+            userId,
+            type: "price_drop",
+            title,
+            body,
+            read: false,
+            isRead: false,
+            metadata,
+            createdAt: new Date(),
+          });
+        }
+      } catch {}
+
+      try {
+        await db.insert(notificationsTable).values({
+          userId,
+          type: "price_drop",
+          title,
+          body,
+          metadata,
+        }).catch(() => {});
+      } catch {}
+    } catch {}
   }
 }
 
-router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Promise<void> => {
+router.patch("/products/:id/stock", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   const { stock } = req.body;
 
@@ -441,35 +543,14 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
   }
 
   try {
-    let before: any = null;
-    try {
-      const rows = await db
-        .select({
-          stock: productsTable.stock,
-          name: productsTable.name,
-          vendorId: productsTable.vendorId,
-          lowStockThreshold: productsTable.lowStockThreshold,
-        })
-        .from(productsTable)
-        .where(eq(productsTable.id, id))
-        .limit(1);
-      if (rows.length > 0) before = rows[0];
-    } catch {}
-
-    if (!before) {
-      const mp = await mongoProducts.findById(id);
-      if (mp) {
-        before = {
-          stock: mp.stock,
-          name: mp.name,
-          vendorId: mp.vendorId,
-          lowStockThreshold: mp.lowStockThreshold ?? 5,
-        };
-      }
-    }
-
+    const before = await findProductById(id);
     if (!before) {
       res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
+    if (before.vendorId && before.vendorId !== req.vendorId && before.sellerId !== req.vendorId) {
+      res.status(403).json({ error: "Forbidden: you do not own this product" });
       return;
     }
 
@@ -488,19 +569,23 @@ router.patch("/products/:id/stock", requireAuth, async (req: any, res: any): Pro
     await recordStockChange({
       productId: id,
       vendorId: before.vendorId,
-      previousStock: before.stock,
+      previousStock: before.stock ?? 0,
       newStock: stock,
       source: "manual",
       reason: "Manual stock update",
       actorId: req.userId,
     }).catch(() => {});
 
-    await notifyWishlistRestock(id, before.name, before.stock, stock).catch(() => {});
     await notifySellerStockLevel(before.vendorId, id, before.name, stock, before.lowStockThreshold ?? 5).catch(() => {});
+
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("inventory:updated", { id, stock: updatedStock, vendorId: before.vendorId });
+    emitProductEvent("product:updated", { id, stock: updatedStock, vendorId: before.vendorId });
 
     res.json({ stock: updatedStock });
   } catch (err: any) {
-    req.log.error({ err }, "Failed to update product stock");
+    req.log?.error?.({ err }, "Failed to update product stock");
     res.status(500).json({ error: "Failed to update product stock" });
   }
 });
@@ -551,20 +636,71 @@ function sanitizeSpecifications(specs: any): any[] {
     .map((s) => ({ key: String(s.key).trim(), value: s.value ? String(s.value).trim() : "" }));
 }
 
+const PG_PRODUCT_COLUMNS = new Set([
+  "id", "name", "description", "price", "originalPrice", "basePrice",
+  "shippingFee", "gstRateBps", "category", "subcategory", "childCategory",
+  "brand", "designPattern", "fabric", "color", "occasion", "vendorId",
+  "vendorName", "images", "videos", "variants", "specifications",
+  "deliveryInfo", "returnPolicy", "isBestSeller", "isNewArrival",
+  "isFeatured", "rating", "reviewCount", "stock", "lowStockThreshold",
+  "active", "viewCount", "status", "collection", "gender", "sareeType",
+  "sareeStyle", "packOf", "countryOfOrigin", "blouseIncluded",
+  "rejectionReason", "approvalRemark", "featuredOrder", "featuredUntil"
+]);
+
+function toPostgresProductData(data: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (PG_PRODUCT_COLUMNS.has(key) && value !== undefined) {
+      if (key === "vendorId") {
+        const isUuid = typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+        result[key] = isUuid ? value : null;
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
 router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const {
-    name, description, category, subcategory, brand, designPattern,
-    fabric, color, occasion, price, originalPrice, stock, lowStockThreshold,
+    name, description, category, subcategory, childCategory, brand, designPattern,
+    fabric, color, occasion, price, basePrice, shippingFee, originalPrice, stock, lowStockThreshold,
     images, videos, variants, specifications, deliveryInfo, returnPolicy,
-    isBestSeller, isNewArrival,
+    isBestSeller, isNewArrival, collection, gender, sareeType, sareeStyle, packOf, countryOfOrigin, blouseIncluded,
   } = req.body;
 
   if (!name || !String(name).trim()) { res.status(400).json({ error: "Product name is required" }); return; }
-  if (!price || isNaN(Number(price)) || Number(price) <= 0) { res.status(400).json({ error: "Valid price is required" }); return; }
+  const rawPrice = basePrice != null ? Number(basePrice) : Number(price);
+  if (isNaN(rawPrice) || rawPrice <= 0) { res.status(400).json({ error: "Valid price is required" }); return; }
   if (!category) { res.status(400).json({ error: "Category is required" }); return; }
 
+  let parsedNewArrival = false;
+  if (isNewArrival !== undefined && isNewArrival !== null) {
+    if (typeof isNewArrival === "boolean") {
+      parsedNewArrival = isNewArrival;
+    } else if (isNewArrival === "true" || isNewArrival === "1" || isNewArrival === 1) {
+      parsedNewArrival = true;
+    } else if (isNewArrival === "false" || isNewArrival === "0" || isNewArrival === 0) {
+      parsedNewArrival = false;
+    } else {
+      res.status(400).json({ error: "isNewArrival must be a boolean" });
+      return;
+    }
+  }
+
+  // Authoritative category and subcategory validation
+  const catValidation = validateCategoryAndSubcategory(category, subcategory);
+  if (!catValidation.valid) {
+    res.status(400).json({ error: catValidation.error });
+    return;
+  }
+  const resolvedCategory = resolveCategoryData(category, subcategory);
+
   try {
-    let categoryPrefix: string = CATEGORY_PREFIX[category as keyof typeof CATEGORY_PREFIX] || "XX";
+    const catDef = catValidation.categoryDef;
+    let categoryPrefix: string = catDef?.prefix || CATEGORY_PREFIX[resolvedCategory.category as keyof typeof CATEGORY_PREFIX] || "PRD";
     let newProductId: string;
 
     try {
@@ -576,18 +712,47 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
       newProductId = `${categoryPrefix}${seqVal}`;
     }
 
+    const inputBasePrice = rawPrice;
+    const inputShipping = shippingFee != null && !isNaN(Number(shippingFee)) ? Number(shippingFee) : 100;
+    const financials = calculateVastraaFinancials({
+      basePricePaise: toPaise(inputBasePrice),
+      shippingPaise: toPaise(inputShipping),
+    });
+    const calculatedCustomerPrice = Math.round(toRupees(financials.customerPays));
+
+    const resolvedVendorId = req.vendorId || req.vendor?.vendorId || req.vendor?.id || req.vendor?.sellerId;
+    if (!resolvedVendorId) {
+      res.status(403).json({ error: "Forbidden: genuine registered seller required" });
+      return;
+    }
+    const resolvedVendorName = req.vendor?.shopName || req.vendor?.name || req.vendor?.sellerName || "Seller Store";
+
+    const targetStatus = req.body.status === "draft" ? "draft" : "pending";
+    const isActive = false;
+    const now = new Date();
+
     const newProductData = {
       id: newProductId,
       name: String(name).trim(),
       description: description ? String(description).trim() : "",
-      category: category as any,
-      subcategory: subcategory ? String(subcategory).trim() : null,
+      category: resolvedCategory.category as any,
+      categoryName: resolvedCategory.categoryName,
+      categoryId: resolvedCategory.categoryId,
+      parentCategoryId: resolvedCategory.parentCategoryId,
+      parentCategoryName: resolvedCategory.parentCategoryName,
+      subcategory: resolvedCategory.subcategory,
+      subcategoryName: resolvedCategory.subcategoryName,
+      subcategoryId: resolvedCategory.subcategoryId,
+      childCategory: childCategory ? String(childCategory).trim() : null,
       brand: brand ? String(brand).trim() : null,
       designPattern: designPattern ? String(designPattern).trim() : null,
       fabric: (fabric ?? "silk") as any,
       color: (color ?? "red") as any,
       occasion: (occasion ?? "festival") as any,
-      price: parseInt(price),
+      basePrice: inputBasePrice,
+      shippingFee: inputShipping,
+      gstRateBps: 500,
+      price: calculatedCustomerPrice,
       originalPrice: originalPrice ? parseInt(originalPrice) : null,
       stock: stock != null ? parseInt(stock) : 10,
       lowStockThreshold: lowStockThreshold != null ? parseInt(lowStockThreshold) : 5,
@@ -598,18 +763,29 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
       deliveryInfo: deliveryInfo ? String(deliveryInfo).trim() : "",
       returnPolicy: returnPolicy ? String(returnPolicy).trim() : "",
       isBestSeller: Boolean(isBestSeller),
-      isNewArrival: Boolean(isNewArrival),
-      vendorId: req.vendorId,
-      vendorName: req.vendor?.name || "Yeola Weavers",
-      status: "pending" as const,
-      active: false,
+      isNewArrival: parsedNewArrival,
+      collection: collection ? String(collection).trim() : null,
+      gender: gender ? String(gender).trim() : "Women",
+      sareeType: sareeType ? String(sareeType).trim() : null,
+      sareeStyle: sareeStyle ? String(sareeStyle).trim() : null,
+      packOf: packOf ? String(packOf).trim() : "Pack of 1",
+      countryOfOrigin: countryOfOrigin ? String(countryOfOrigin).trim() : "India",
+      blouseIncluded: blouseIncluded !== undefined ? Boolean(blouseIncluded) : true,
+      vendorId: resolvedVendorId,
+      sellerId: req.vendor?.sellerId || req.vendor?.vendorId || resolvedVendorId,
+      vendorName: resolvedVendorName,
+      status: targetStatus,
+      active: isActive,
+      createdAt: now,
+      updatedAt: now,
     };
 
     let product: any = null;
     try {
+      const pgProductData = toPostgresProductData(newProductData);
       const [created] = await db
         .insert(productsTable)
-        .values(newProductData as any)
+        .values(pgProductData as any)
         .returning();
       product = created;
     } catch (dbErr: any) {
@@ -622,62 +798,157 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
         ...newProductData,
         id: newProductId,
       });
-      if (!product) product = mongoSaved;
+      if (!product) {
+        product = mongoSaved;
+      }
     } catch (mongoErr: any) {
       req.log?.warn({ mongoErr }, "MongoDB product sync failed");
     }
 
     if (!product) {
       product = newProductData;
+    } else {
+      if (!product.vendorId && resolvedVendorId) {
+        product.vendorId = resolvedVendorId;
+      }
+      if (!product.sellerId) {
+        product.sellerId = req.vendor?.sellerId || req.vendor?.vendorId || resolvedVendorId;
+      }
+      if (!product.vendorName && resolvedVendorName) {
+        product.vendorName = resolvedVendorName;
+      }
     }
 
-    insertSellerNotification({
-      vendorId: req.vendorId,
-      type: "product_pending_approval",
-      title: "Product submitted for review",
-      body: `"${product.name}" has been submitted and is pending approval.`,
-      metadata: { productId: product.id },
-    }).catch(() => {});
+    if (targetStatus === "pending") {
+      insertSellerNotification({
+        vendorId: resolvedVendorId,
+        type: "product_pending_approval",
+        title: "Product submitted for approval",
+        body: `"${product.name}" has been submitted for Super Admin approval.`,
+        metadata: { productId: product.id },
+      }).catch(() => {});
 
-    insertAdminNotification({
-      type: "product_pending_approval",
-      title: "New product pending approval",
-      body: `"${product.name}" from ${req.vendor?.name || "Vendor"} is awaiting approval.`,
-      metadata: { productId: product.id, vendorId: req.vendorId },
-    }).catch(() => {});
+      insertAdminNotification({
+        type: "product_pending_approval",
+        title: "New product pending approval",
+        body: `"${product.name}" from seller "${resolvedVendorName}" requires approval.`,
+        metadata: { productId: product.id, vendorId: resolvedVendorId },
+      }).catch(() => {});
+    } else if (targetStatus === "draft") {
+      insertSellerNotification({
+        vendorId: resolvedVendorId,
+        type: "product_pending_approval",
+        title: "Product draft saved",
+        body: `"${product.name}" has been saved as a draft.`,
+        metadata: { productId: product.id },
+      }).catch(() => {});
+    } else {
+      insertSellerNotification({
+        vendorId: resolvedVendorId,
+        type: "product_pending_approval",
+        title: "Product published",
+        body: `"${product.name}" has been published to your store.`,
+        metadata: { productId: product.id },
+      }).catch(() => {});
+    }
 
-    res.status(201).json(normalizeProduct(product));
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    const normalizedNewProduct = normalizeProduct(product);
+    emitProductEvent("product:created", {
+      id: product.id,
+      productId: product.id,
+      vendorId: resolvedVendorId,
+      sellerId: product.sellerId || resolvedVendorId,
+      product: normalizedNewProduct,
+    });
+    res.status(201).json(normalizedNewProduct);
   } catch (err: any) {
     req.log?.error({ err }, "Failed to create product");
     res.status(500).json({ error: err?.message || "Failed to create product" });
   }
 });
 
-router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promise<void> => {
+const updateProductHandler = async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   const {
-    name, description, category, subcategory, brand, designPattern,
-    fabric, color, occasion, price, originalPrice, stock, lowStockThreshold,
+    name, description, category, subcategory, childCategory, brand, designPattern,
+    fabric, color, occasion, price, basePrice, shippingFee, originalPrice, stock, lowStockThreshold,
     images, videos, variants, specifications, deliveryInfo, returnPolicy,
-    isBestSeller, isNewArrival,
+    isBestSeller, isNewArrival, collection, gender, sareeType, sareeStyle, packOf, countryOfOrigin, blouseIncluded,
   } = req.body;
 
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId, stock: productsTable.stock, name: productsTable.name, lowStockThreshold: productsTable.lowStockThreshold, price: productsTable.price }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
-    if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
-    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
+    const existing = await findProductById(id);
+
+    if (!existing) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    const sellerIdentifiers = new Set([
+      req.vendorId,
+      req.sellerId,
+      req.vendor?.id,
+      req.vendor?.vendorId,
+      req.vendor?.sellerId,
+      req.vendor?.ownerId,
+      req.userId,
+    ].filter(Boolean).map(String));
+
+    const productVendorIdentifiers = new Set([
+      existing.vendorId,
+      existing.sellerId,
+      (existing as any).ownerId,
+    ].filter(Boolean).map(String));
+
+    const isOwner = Array.from(productVendorIdentifiers).some((vId) => sellerIdentifiers.has(vId));
+    if (!isOwner) {
+      res.status(403).json({ error: "Forbidden: you do not own this product" });
+      return;
+    }
 
     const updates: Record<string, any> = {};
     if (name !== undefined) updates.name = String(name).trim();
     if (description !== undefined) updates.description = String(description).trim();
-    if (category !== undefined) updates.category = category;
-    if (subcategory !== undefined) updates.subcategory = subcategory ? String(subcategory).trim() : null;
+    if (category !== undefined || subcategory !== undefined) {
+      const effCategory = category !== undefined ? category : existing.category;
+      const effSubcategory = subcategory !== undefined ? subcategory : existing.subcategory;
+      const val = validateCategoryAndSubcategory(effCategory, effSubcategory);
+      if (!val.valid) {
+        res.status(400).json({ error: val.error });
+        return;
+      }
+      const resCat = resolveCategoryData(effCategory, effSubcategory);
+      updates.category = resCat.category;
+      updates.categoryName = resCat.categoryName;
+      updates.categoryId = resCat.categoryId;
+      updates.parentCategoryId = resCat.parentCategoryId;
+      updates.parentCategoryName = resCat.parentCategoryName;
+      updates.subcategory = resCat.subcategory;
+      updates.subcategoryName = resCat.subcategoryName;
+      updates.subcategoryId = resCat.subcategoryId;
+    }
+    updates.updatedAt = new Date();
+    if (childCategory !== undefined) updates.childCategory = childCategory ? String(childCategory).trim() : null;
     if (brand !== undefined) updates.brand = brand ? String(brand).trim() : null;
     if (designPattern !== undefined) updates.designPattern = designPattern ? String(designPattern).trim() : null;
     if (fabric !== undefined) updates.fabric = fabric;
     if (color !== undefined) updates.color = color;
     if (occasion !== undefined) updates.occasion = occasion;
-    if (price !== undefined) updates.price = parseInt(price);
+    if (basePrice !== undefined || price !== undefined || shippingFee !== undefined) {
+      const currentBase = basePrice !== undefined
+        ? Number(basePrice)
+        : (existing.basePrice != null ? Number(existing.basePrice) : Number(price ?? existing.price));
+      const currentShipping = shippingFee !== undefined ? Number(shippingFee) : (existing.shippingFee ?? 100);
+      const financials = calculateVastraaFinancials({
+        basePricePaise: toPaise(currentBase),
+        shippingPaise: toPaise(currentShipping),
+      });
+      updates.basePrice = currentBase;
+      updates.shippingFee = currentShipping;
+      updates.gstRateBps = 500;
+      updates.price = Math.round(toRupees(financials.customerPays));
+    }
     if (originalPrice !== undefined) updates.originalPrice = originalPrice ? parseInt(originalPrice) : null;
     if (stock !== undefined) updates.stock = parseInt(stock);
     if (lowStockThreshold !== undefined) updates.lowStockThreshold = parseInt(lowStockThreshold);
@@ -688,45 +959,139 @@ router.put("/products/:id", requireVendorAuth, async (req: any, res: any): Promi
     if (deliveryInfo !== undefined) updates.deliveryInfo = String(deliveryInfo).trim();
     if (returnPolicy !== undefined) updates.returnPolicy = String(returnPolicy).trim();
     if (isBestSeller !== undefined) updates.isBestSeller = Boolean(isBestSeller);
-    if (isNewArrival !== undefined) updates.isNewArrival = Boolean(isNewArrival);
+    if (isNewArrival !== undefined && isNewArrival !== null) {
+      if (typeof isNewArrival === "boolean") {
+        updates.isNewArrival = isNewArrival;
+      } else if (isNewArrival === "true" || isNewArrival === "1" || isNewArrival === 1) {
+        updates.isNewArrival = true;
+      } else if (isNewArrival === "false" || isNewArrival === "0" || isNewArrival === 0) {
+        updates.isNewArrival = false;
+      } else {
+        res.status(400).json({ error: "isNewArrival must be a boolean" });
+        return;
+      }
+    }
+    if (collection !== undefined) updates.collection = collection ? String(collection).trim() : null;
+    if (gender !== undefined) updates.gender = String(gender).trim();
+    if (sareeType !== undefined) updates.sareeType = sareeType ? String(sareeType).trim() : null;
+    if (sareeStyle !== undefined) updates.sareeStyle = sareeStyle ? String(sareeStyle).trim() : null;
+    if (packOf !== undefined) updates.packOf = String(packOf).trim();
+    if (countryOfOrigin !== undefined) updates.countryOfOrigin = String(countryOfOrigin).trim();
+    if (blouseIncluded !== undefined) updates.blouseIncluded = Boolean(blouseIncluded);
 
-    const [updated] = await db.update(productsTable).set(updates).where(eq(productsTable.id, id)).returning();
+    // Preserve existing approval status and active state so unapproved products cannot bypass admin approval
+    const currentStatus = existing.status || "pending";
+    updates.status = currentStatus;
+    // Active visibility is preserved for approved items, but unapproved items can never be active
+    updates.active = currentStatus === "approved" ? (existing.active ?? true) : false;
+
+    let updated: any = null;
+    const pgUpdates = toPostgresProductData(updates);
+    const canonicalId = existing.id || id;
+    try {
+      if (Object.keys(pgUpdates).length > 0) {
+        const [pgUpdated] = await db
+          .update(productsTable)
+          .set(pgUpdates)
+          .where(eq(productsTable.id, canonicalId))
+          .returning();
+        updated = pgUpdated;
+      }
+    } catch (pgErr) {
+      req.log?.warn({ pgErr }, "Postgres product update failed, updating MongoDB");
+    }
+
+    try {
+      const mongoUpdated = await mongoProducts.update(id, updates);
+      if (mongoUpdated) {
+        updated = { ...(updated || {}), ...mongoUpdated };
+      }
+    } catch (mongoErr) {
+      req.log?.warn({ mongoErr }, "MongoDB product update failed");
+    }
+
+    const mongoId = (existing as any)._id ? String((existing as any)._id) : ((updated as any)?._id ? String((updated as any)._id) : canonicalId);
+
+    if (!updated) {
+      updated = { ...existing, ...updates, id: canonicalId, _id: mongoId };
+    } else {
+      updated = { ...existing, ...updates, ...updated, id: canonicalId, _id: mongoId };
+    }
 
     if (updates.stock !== undefined) {
+      const newStockVal = updated.stock ?? parseInt(updates.stock);
       await recordStockChange({
-        productId: id,
+        productId: canonicalId,
         vendorId: existing.vendorId,
-        previousStock: existing.stock,
-        newStock: updated.stock,
+        previousStock: existing.stock ?? 0,
+        newStock: newStockVal,
         source: "manual",
         reason: "Manual stock update via product edit",
         actorId: req.userId,
-      });
-      await notifyWishlistRestock(id, updated.name ?? existing.name, existing.stock, updated.stock);
-      await notifySellerStockLevel(existing.vendorId, id, updated.name ?? existing.name, updated.stock, updated.lowStockThreshold ?? existing.lowStockThreshold ?? 5);
+      }).catch(() => {});
+
+      await notifySellerStockLevel(
+        existing.vendorId,
+        canonicalId,
+        updated.name ?? existing.name,
+        newStockVal,
+        updated.lowStockThreshold ?? existing.lowStockThreshold ?? 5
+      ).catch(() => {});
+      emitProductEvent("inventory:updated", { id: canonicalId, stock: newStockVal, vendorId: existing.vendorId });
     }
 
     if (updates.price !== undefined && updates.price < existing.price) {
-      await notifyWishlistPriceDrop(id, updated.name ?? existing.name, existing.price, updated.price);
+      await notifyWishlistPriceDrop(canonicalId, updated.name ?? existing.name, existing.price, updates.price).catch(() => {});
     }
 
-    res.json(normalizeProduct(updated));
-  } catch (err) {
-    req.log.error({ err }, "Failed to update product");
-    res.status(500).json({ error: "Failed to update product" });
+    globalCache.del(`product:${id}`);
+    globalCache.del(`product:${canonicalId}`);
+    if (mongoId) globalCache.del(`product:${mongoId}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", {
+      id: canonicalId,
+      productId: canonicalId,
+      vendorId: existing.vendorId,
+      sellerId: existing.sellerId || existing.vendorId,
+      ...updates,
+    });
+
+    const normalizedResult = normalizeProduct(updated);
+    res.json({ ...normalizedResult, product: normalizedResult });
+  } catch (err: any) {
+    req.log?.error({ err }, "Failed to update product");
+    res.status(500).json({ error: err?.message || "Failed to update product" });
   }
-});
+};
+
+router.put("/products/:id", requireVendorAuth, updateProductHandler);
+router.patch("/products/:id", requireVendorAuth, updateProductHandler);
 
 router.delete("/products/:id", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const existing = await findProductById(id);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
-    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
-    await db.update(productsTable).set({ active: false }).where(eq(productsTable.id, id));
+    const sellerIdentifiers = new Set([
+      req.vendorId, req.sellerId, req.vendor?.id, req.vendor?.vendorId, req.vendor?.sellerId, req.vendor?.ownerId, req.userId
+    ].filter(Boolean).map(String));
+    const productVendorIdentifiers = new Set([existing.vendorId, existing.sellerId, (existing as any).ownerId].filter(Boolean).map(String));
+    if (!Array.from(productVendorIdentifiers).some((vId) => sellerIdentifiers.has(vId))) {
+      res.status(403).json({ error: "Forbidden: you do not own this product" });
+      return;
+    }
+    try {
+      await db.update(productsTable).set({ active: false }).where(eq(productsTable.id, id));
+    } catch {}
+    await mongoProducts.update(id, { active: false }).catch(() => {});
+    globalCache.del(`product:${id}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", { id, productId: id, active: false, vendorId: existing.vendorId });
     res.json({ success: true });
   } catch (err) {
-    req.log.error({ err }, "Failed to deactivate product");
+    req.log?.error?.({ err }, "Failed to deactivate product");
     res.status(500).json({ error: "Failed to deactivate product" });
   }
 });
@@ -734,17 +1099,34 @@ router.delete("/products/:id", requireVendorAuth, async (req: any, res: any): Pr
 router.patch("/products/:id/activate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId, status: productsTable.status }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const existing = await findProductById(id);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
-    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
-    if (existing.status !== "approved") {
+    const sellerIdentifiers = new Set([
+      req.vendorId, req.sellerId, req.vendor?.id, req.vendor?.vendorId, req.vendor?.sellerId, req.vendor?.ownerId, req.userId
+    ].filter(Boolean).map(String));
+    const productVendorIdentifiers = new Set([existing.vendorId, existing.sellerId, (existing as any).ownerId].filter(Boolean).map(String));
+    if (!Array.from(productVendorIdentifiers).some((vId) => sellerIdentifiers.has(vId))) {
+      res.status(403).json({ error: "Forbidden: you do not own this product" });
+      return;
+    }
+    if (existing.status && existing.status !== "approved") {
       res.status(403).json({ error: "Product must be approved before it can be made available" });
       return;
     }
-    const [updated] = await db.update(productsTable).set({ active: true }).where(eq(productsTable.id, id)).returning();
+    let updated: any = null;
+    try {
+      const [pgUpdated] = await db.update(productsTable).set({ active: true }).where(eq(productsTable.id, id)).returning();
+      updated = pgUpdated;
+    } catch {}
+    const mongoUpdated = await mongoProducts.update(id, { active: true }).catch(() => null);
+    if (!updated) updated = mongoUpdated || { ...existing, active: true };
+    globalCache.del(`product:${id}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", { id, productId: id, active: true, vendorId: existing.vendorId });
     res.json(normalizeProduct(updated));
   } catch (err) {
-    req.log.error({ err }, "Failed to activate product");
+    req.log?.error?.({ err }, "Failed to activate product");
     res.status(500).json({ error: "Failed to activate product" });
   }
 });
@@ -752,13 +1134,30 @@ router.patch("/products/:id/activate", requireVendorAuth, async (req: any, res: 
 router.patch("/products/:id/deactivate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   try {
-    const [existing] = await db.select({ vendorId: productsTable.vendorId }).from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const existing = await findProductById(id);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
-    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
-    const [updated] = await db.update(productsTable).set({ active: false }).where(eq(productsTable.id, id)).returning();
+    const sellerIdentifiers = new Set([
+      req.vendorId, req.sellerId, req.vendor?.id, req.vendor?.vendorId, req.vendor?.sellerId, req.vendor?.ownerId, req.userId
+    ].filter(Boolean).map(String));
+    const productVendorIdentifiers = new Set([existing.vendorId, existing.sellerId, (existing as any).ownerId].filter(Boolean).map(String));
+    if (!Array.from(productVendorIdentifiers).some((vId) => sellerIdentifiers.has(vId))) {
+      res.status(403).json({ error: "Forbidden: you do not own this product" });
+      return;
+    }
+    let updated: any = null;
+    try {
+      const [pgUpdated] = await db.update(productsTable).set({ active: false }).where(eq(productsTable.id, id)).returning();
+      updated = pgUpdated;
+    } catch {}
+    const mongoUpdated = await mongoProducts.update(id, { active: false }).catch(() => null);
+    if (!updated) updated = mongoUpdated || { ...existing, active: false };
+    globalCache.del(`product:${id}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", { id, productId: id, active: false, vendorId: existing.vendorId });
     res.json(normalizeProduct(updated));
   } catch (err) {
-    req.log.error({ err }, "Failed to deactivate product");
+    req.log?.error?.({ err }, "Failed to deactivate product");
     res.status(500).json({ error: "Failed to deactivate product" });
   }
 });
@@ -766,87 +1165,152 @@ router.patch("/products/:id/deactivate", requireVendorAuth, async (req: any, res
 router.post("/products/:id/duplicate", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
   try {
-    const [existing] = await db.select().from(productsTable).where(eq(productsTable.id, id)).limit(1);
+    const existing = await findProductById(id);
     if (!existing) { res.status(404).json({ error: "Product not found" }); return; }
-    if (existing.vendorId !== req.vendorId) { res.status(403).json({ error: "Forbidden: you do not own this product" }); return; }
-
-    const dupSeq = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
-    let dupPrefix: string = CATEGORY_PREFIX[existing.category as keyof typeof CATEGORY_PREFIX];
-    if (!dupPrefix) {
-      req.log.warn({ category: existing.category }, "Unknown product category on duplicate — falling back to 'XX' prefix");
-      dupPrefix = "XX";
+    if (existing.vendorId && existing.vendorId !== req.vendorId && existing.sellerId !== req.vendorId) {
+      res.status(403).json({ error: "Forbidden: you do not own this product" });
+      return;
     }
-    const dupId = `${dupPrefix}${(dupSeq as any).rows[0].seq}`;
 
-    const [copy] = await db
-      .insert(productsTable)
-      .values({
-        id: dupId,
-        name: `${existing.name} (Copy)`,
-        description: existing.description,
-        category: existing.category,
-        subcategory: existing.subcategory,
-        brand: existing.brand,
-        designPattern: existing.designPattern,
-        fabric: existing.fabric,
-        color: existing.color,
-        occasion: existing.occasion,
-        price: existing.price,
-        originalPrice: existing.originalPrice,
-        stock: 0,
-        lowStockThreshold: existing.lowStockThreshold,
-        images: existing.images,
-        videos: existing.videos,
-        variants: existing.variants,
-        specifications: existing.specifications,
-        deliveryInfo: existing.deliveryInfo,
-        returnPolicy: existing.returnPolicy,
-        isBestSeller: false,
-        isNewArrival: existing.isNewArrival,
-        vendorId: req.vendorId,
-        vendorName: req.vendor.name,
-        status: "pending",
-        active: false,
-      })
-      .returning();
+    let dupVal = Math.floor(Date.now() % 1000000);
+    try {
+      const dupSeq = await db.execute(sql`SELECT nextval('product_id_seq') AS seq`);
+      if ((dupSeq as any)?.rows?.[0]?.seq) dupVal = (dupSeq as any).rows[0].seq;
+    } catch {
+      dupVal = await getNextSequenceValue("product_id").catch(() => Math.floor(Date.now() % 1000000));
+    }
+
+    let dupPrefix: string = CATEGORY_PREFIX[existing.category as keyof typeof CATEGORY_PREFIX] || "XX";
+    const dupId = `${dupPrefix}${dupVal}`;
+
+    const dupData = {
+      id: dupId,
+      name: `${existing.name} (Copy)`,
+      description: existing.description ?? "",
+      category: existing.category ?? "paithani",
+      subcategory: existing.subcategory ?? null,
+      brand: existing.brand ?? null,
+      designPattern: existing.designPattern ?? null,
+      fabric: existing.fabric ?? "silk",
+      color: existing.color ?? "red",
+      occasion: existing.occasion ?? "festival",
+      price: existing.price ?? 0,
+      originalPrice: existing.originalPrice ?? null,
+      stock: 0,
+      lowStockThreshold: existing.lowStockThreshold ?? 5,
+      images: Array.isArray(existing.images) ? existing.images : [],
+      videos: Array.isArray(existing.videos) ? existing.videos : [],
+      variants: Array.isArray(existing.variants) ? existing.variants : [],
+      specifications: Array.isArray(existing.specifications) ? existing.specifications : [],
+      deliveryInfo: existing.deliveryInfo ?? "",
+      returnPolicy: existing.returnPolicy ?? "",
+      isBestSeller: false,
+      isNewArrival: Boolean(existing.isNewArrival),
+      vendorId: req.vendorId,
+      vendorName: req.vendor?.name || existing.vendorName || "VASTRAA",
+      status: "pending" as const,
+      active: false,
+    };
+
+    let copy: any = null;
+    try {
+      const [created] = await db
+        .insert(productsTable)
+        .values(dupData as any)
+        .returning();
+      copy = created;
+    } catch {}
+
+    const mongoCopy = await mongoProducts.insert({ ...dupData, id: dupId }).catch(() => null);
+    if (!copy) copy = mongoCopy || dupData;
+
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:created", { id: dupId, vendorId: req.vendorId });
 
     res.status(201).json(normalizeProduct(copy));
   } catch (err) {
-    req.log.error({ err }, "Failed to duplicate product");
+    req.log?.error?.({ err }, "Failed to duplicate product");
     res.status(500).json({ error: "Failed to duplicate product" });
   }
 });
 
-function normalizeProduct(p: typeof productsTable.$inferSelect) {
+function normalizeProduct(p: typeof productsTable.$inferSelect | any) {
+  if (!p) return null;
+  const id = p.id || (p._id ? String(p._id) : "");
+  const mongoId = (p as any)._id ? String((p as any)._id) : id;
+  let customerPrice = p.price != null ? Number(p.price) : 0;
+  const basePriceNum = p.basePrice != null ? Number(p.basePrice) : (customerPrice > 0 ? Math.round(customerPrice / 1.155) : 0);
+  const shippingNum = p.shippingFee != null ? Number(p.shippingFee) : 100;
+
+  if (!customerPrice && basePriceNum) {
+    const fin = calculateVastraaFinancials({
+      basePricePaise: toPaise(basePriceNum),
+      shippingPaise: toPaise(shippingNum),
+    });
+    customerPrice = Math.round(toRupees(fin.customerPays));
+  }
+
+  const fin = calculateVastraaFinancials({
+    basePricePaise: toPaise(basePriceNum),
+    shippingPaise: toPaise(shippingNum),
+  });
+
   return {
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    price: p.price,
-    originalPrice: p.originalPrice ?? null,
-    category: p.category,
+    id,
+    _id: mongoId,
+    name: p.name || "",
+    description: p.description ?? "",
+    price: customerPrice,
+    basePrice: basePriceNum,
+    shippingFee: shippingNum,
+    taxableAmount: toRupees(fin.taxableAmount),
+    gstAmount: toRupees(fin.gstAmount),
+    cgst: toRupees(fin.cgst),
+    sgst: toRupees(fin.sgst),
+    igst: toRupees(fin.igst),
+    originalPrice: p.originalPrice != null ? Number(p.originalPrice) : null,
+    category: p.category || "Indian Wear",
+    categoryId: p.categoryId ?? null,
+    categoryName: p.categoryName ?? p.category ?? null,
+    parentCategoryId: p.parentCategoryId ?? p.categoryId ?? null,
+    parentCategoryName: p.parentCategoryName ?? p.categoryName ?? null,
     subcategory: p.subcategory ?? null,
+    subcategoryId: p.subcategoryId ?? null,
+    subcategoryName: p.subcategoryName ?? p.subcategory ?? null,
+    childCategory: p.childCategory ?? null,
     brand: p.brand ?? null,
     designPattern: p.designPattern ?? null,
-    fabric: p.fabric,
-    color: p.color,
-    occasion: p.occasion,
+    fabric: p.fabric || "silk",
+    color: p.color || "red",
+    occasion: p.occasion || "festival",
     vendorId: p.vendorId ?? null,
-    vendorName: p.vendorName,
+    sellerId: p.sellerId ?? p.vendorId ?? null,
+    vendorName: p.vendorName || "VASTRAA",
     images: Array.isArray(p.images) ? p.images : [],
     videos: Array.isArray(p.videos) ? p.videos : [],
     variants: Array.isArray(p.variants) ? p.variants : [],
     specifications: Array.isArray(p.specifications) ? p.specifications : [],
     deliveryInfo: p.deliveryInfo ?? "",
     returnPolicy: p.returnPolicy ?? "",
-    isBestSeller: p.isBestSeller,
-    isNewArrival: p.isNewArrival,
-    rating: p.rating,
-    reviewCount: p.reviewCount,
-    stock: p.stock,
-    lowStockThreshold: p.lowStockThreshold,
-    active: p.active,
-    status: p.status,
+    isBestSeller: Boolean(p.isBestSeller),
+    isNewArrival: Boolean(p.isNewArrival),
+    isFeatured: Boolean(p.isFeatured),
+    rating: p.reviewCount > 0 && typeof p.rating === "number" ? p.rating : 0,
+    reviewCount: typeof p.reviewCount === "number" ? p.reviewCount : 0,
+    stock: typeof p.stock === "number" ? p.stock : 0,
+    lowStockThreshold: typeof p.lowStockThreshold === "number" ? p.lowStockThreshold : 5,
+    active: p.active !== false,
+    status: p.status || "approved",
+    collection: p.collection ?? null,
+    gender: p.gender ?? "Women",
+    sareeType: p.sareeType ?? null,
+    sareeStyle: p.sareeStyle ?? null,
+    packOf: p.packOf ?? "Pack of 1",
+    countryOfOrigin: p.countryOfOrigin ?? "India",
+    blouseIncluded: p.blouseIncluded !== undefined ? Boolean(p.blouseIncluded) : true,
+    createdAt: p.createdAt ?? null,
+    updatedAt: p.updatedAt ?? null,
   };
 }
 

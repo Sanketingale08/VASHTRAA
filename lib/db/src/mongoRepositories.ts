@@ -1,5 +1,6 @@
-import { getCollection, getNextSequenceValue, isMongoDbConnected, setMongoConnected } from "./mongo.ts";
-import type { Filter, Sort } from "mongodb";
+import crypto from "crypto";
+import { getCollection, getNextSequenceValue, isMongoDbConnected, setMongoConnected, formatVendorId } from "./mongo";
+import { ObjectId, type Filter, type Sort } from "mongodb";
 
 // Type definitions matching existing Drizzle schema models
 import type {
@@ -13,17 +14,49 @@ import type {
   User,
   UserSession,
   SavedPaymentMethod,
+  Shipment,
+  MongoShipmentDoc,
 } from "./schema";
 
 // ─── SELLERS / VENDORS ────────────────────────────────────────────────────────
 const inMemorySellersMap = new Map<string, Seller & Vendor>();
+
+function deduplicateSellers(sellers: (Seller & Vendor)[]): (Seller & Vendor)[] {
+  const map = new Map<string, Seller & Vendor>();
+  for (const s of sellers) {
+    const cleanEmail = (s.email || s.contactEmail || (s as any).ownerEmail || "").trim().toLowerCase();
+    const key = cleanEmail ? `email:${cleanEmail}` : s.ownerId ? `owner:${s.ownerId}` : `id:${s.id || s.vendorId || s.sellerId}`;
+    if (!key) continue;
+    if (!map.has(key)) {
+      map.set(key, { ...s });
+    } else {
+      const existing = map.get(key)!;
+      map.set(key, {
+        ...existing,
+        ...s,
+        id: existing.id || s.id,
+        vendorId: existing.vendorId || s.vendorId,
+        sellerId: existing.sellerId || s.sellerId,
+        ownerId: existing.ownerId || s.ownerId,
+        email: existing.email || s.email,
+        contactEmail: existing.contactEmail || s.contactEmail,
+        status: (existing.status === "approved" || s.status === "approved") ? "approved" : (s.status || existing.status),
+      });
+    }
+  }
+  return Array.from(map.values());
+}
 
 export const mongoSellers = {
   async findById(id: string): Promise<(Seller & Vendor) | null> {
     if (!id) return null;
     if (isMongoDbConnected()) {
       try {
-        const filter = { $or: [{ id }, { sellerId: id }, { vendorId: id }, { _id: id as any }] } as Filter<Seller & Vendor>;
+        const orList: any[] = [{ id }, { sellerId: id }, { vendorId: id }, { ownerId: id }, { userId: id }, { _id: id as any }];
+        if (typeof id === "string" && ObjectId.isValid(id)) {
+          orList.push({ _id: new ObjectId(id) as any });
+        }
+        const filter = { $or: orList } as Filter<Seller & Vendor>;
         const colSellers = getCollection<Seller & Vendor>("sellers");
         const foundSeller = await colSellers.findOne(filter);
         if (foundSeller) return foundSeller;
@@ -38,7 +71,7 @@ export const mongoSellers = {
     return (
       inMemorySellersMap.get(id) ||
       Array.from(inMemorySellersMap.values()).find(
-        (s) => s.id === id || s.sellerId === id || s.vendorId === id || (s as any)._id === id
+        (s) => s.id === id || s.sellerId === id || s.vendorId === id || s.ownerId === id || (s as any).userId === id || (s as any)._id === id
       ) ||
       null
     );
@@ -54,8 +87,10 @@ export const mongoSellers = {
           $or: [
             { email: cleanEmail },
             { contactEmail: cleanEmail },
+            { ownerEmail: cleanEmail },
             { email: { $regex: new RegExp(`^${escaped}$`, "i") } },
             { contactEmail: { $regex: new RegExp(`^${escaped}$`, "i") } },
+            { ownerEmail: { $regex: new RegExp(`^${escaped}$`, "i") } },
           ],
         } as Filter<Seller & Vendor>;
 
@@ -72,7 +107,10 @@ export const mongoSellers = {
     }
     return (
       Array.from(inMemorySellersMap.values()).find(
-        (s) => (s.email || s.contactEmail || "").toLowerCase() === cleanEmail
+        (s) =>
+          (s.email || "").toLowerCase() === cleanEmail ||
+          (s.contactEmail || "").toLowerCase() === cleanEmail ||
+          ((s as any).ownerEmail || "").toLowerCase() === cleanEmail
       ) || null
     );
   },
@@ -81,18 +119,19 @@ export const mongoSellers = {
     if (!ownerId) return null;
     if (isMongoDbConnected()) {
       try {
+        const orList: any[] = [{ ownerId }, { userId: ownerId }, { id: ownerId }, { sellerId: ownerId }, { vendorId: ownerId }];
         const colSellers = getCollection<Seller & Vendor>("sellers");
-        const foundSeller = await colSellers.findOne({ ownerId } as Filter<Seller & Vendor>);
+        const foundSeller = await colSellers.findOne({ $or: orList } as Filter<Seller & Vendor>);
         if (foundSeller) return foundSeller;
 
         const colVendors = getCollection<Seller & Vendor>("vendors");
-        const foundVendor = await colVendors.findOne({ ownerId } as Filter<Seller & Vendor>);
+        const foundVendor = await colVendors.findOne({ $or: orList } as Filter<Seller & Vendor>);
         if (foundVendor) return foundVendor;
       } catch {
         setMongoConnected(false);
       }
     }
-    return Array.from(inMemorySellersMap.values()).find((s) => s.ownerId === ownerId) || null;
+    return Array.from(inMemorySellersMap.values()).find((s) => s.ownerId === ownerId || (s as any).userId === ownerId || s.id === ownerId || s.sellerId === ownerId || s.vendorId === ownerId) || null;
   },
 
   async findBySellerId(sellerId: string): Promise<(Seller & Vendor) | null> {
@@ -107,55 +146,73 @@ export const mongoSellers = {
     filter: Filter<Seller & Vendor> = {},
     options: { sort?: Sort; limit?: number; skip?: number } = {}
   ): Promise<(Seller & Vendor)[]> {
+    const results: (Seller & Vendor)[] = [];
     if (isMongoDbConnected()) {
       try {
-        const colSellers = getCollection<Seller & Vendor>("sellers");
-        let cursor = colSellers.find(filter);
-        if (options.sort) cursor = cursor.sort(options.sort);
-        if (options.skip) cursor = cursor.skip(options.skip);
-        if (options.limit) cursor = cursor.limit(options.limit);
-        const sellers = await cursor.toArray();
-        if (sellers.length > 0) return sellers;
+        try {
+          const colSellers = getCollection<Seller & Vendor>("sellers");
+          let cursor = colSellers.find(filter);
+          if (options.sort) cursor = cursor.sort(options.sort);
+          if (options.skip) cursor = cursor.skip(options.skip);
+          if (options.limit) cursor = cursor.limit(options.limit);
+          const sellers = await cursor.toArray();
+          results.push(...sellers);
+        } catch {}
 
-        const colVendors = getCollection<Seller & Vendor>("vendors");
-        let vCursor = colVendors.find(filter);
-        if (options.sort) vCursor = vCursor.sort(options.sort);
-        if (options.skip) vCursor = vCursor.skip(options.skip);
-        if (options.limit) vCursor = vCursor.limit(options.limit);
-        return vCursor.toArray();
+        try {
+          const colVendors = getCollection<Seller & Vendor>("vendors");
+          let vCursor = colVendors.find(filter);
+          if (options.sort) vCursor = vCursor.sort(options.sort);
+          if (options.skip) vCursor = vCursor.skip(options.skip);
+          if (options.limit) vCursor = vCursor.limit(options.limit);
+          const vendors = await vCursor.toArray();
+          results.push(...vendors);
+        } catch {}
       } catch {
         setMongoConnected(false);
       }
     }
-    return Array.from(inMemorySellersMap.values());
+    results.push(...Array.from(inMemorySellersMap.values()));
+    return deduplicateSellers(results);
   },
 
   async count(filter: Filter<Seller & Vendor> = {}): Promise<number> {
-    if (isMongoDbConnected()) {
-      try {
-        const colSellers = getCollection<Seller & Vendor>("sellers");
-        const cnt = await colSellers.countDocuments(filter);
-        if (cnt > 0) return cnt;
-        return getCollection<Seller & Vendor>("vendors").countDocuments(filter);
-      } catch {
-        setMongoConnected(false);
-      }
-    }
-    return inMemorySellersMap.size;
+    const list = await this.findMany(filter);
+    return list.length;
   },
 
   async insert(data: Partial<Seller & Vendor>): Promise<Seller & Vendor> {
+    const cleanEmail = (data.email || data.contactEmail || "").trim().toLowerCase();
+    const targetOwnerId = data.ownerId;
+    const targetId = data.id;
+
+    // Check if seller already exists by email, ownerId, or ID to prevent duplicates
+    let existing: (Seller & Vendor) | null = null;
+    if (cleanEmail) {
+      existing = await this.findByEmail(cleanEmail);
+    }
+    if (!existing && targetOwnerId) {
+      existing = await this.findByOwnerId(targetOwnerId);
+    }
+    if (!existing && targetId) {
+      existing = await this.findById(targetId);
+    }
+
+    if (existing) {
+      const updated = await this.update(existing.id, data);
+      return updated || existing;
+    }
+
     const id = data.id || crypto.randomUUID();
     const status = data.status || "pending";
     let vendorId = data.vendorId || data.sellerId || null;
 
-    if (!vendorId && status === "approved") {
+    if (!vendorId) {
       const seq = await getNextSequenceValue("vendor_id");
       vendorId = formatVendorId(seq);
     }
 
     const sellerId = vendorId || data.sellerId || id;
-    const cleanEmail = (data.email || data.contactEmail || "").trim().toLowerCase();
     const now = new Date();
 
     const doc = {
@@ -214,13 +271,13 @@ export const mongoSellers = {
       try {
         const colSellers = getCollection<Seller & Vendor>("sellers");
         await colSellers.updateOne(
-          { $or: [{ id }, { sellerId }, { email: cleanEmail }] } as Filter<Seller & Vendor>,
+          { $or: [{ id }, { sellerId }, ...(cleanEmail ? [{ email: cleanEmail }, { contactEmail: cleanEmail }] : [])] } as Filter<Seller & Vendor>,
           { $set: doc },
           { upsert: true }
         );
         const colVendors = getCollection<Seller & Vendor>("vendors");
         await colVendors.updateOne(
-          { $or: [{ id }, { sellerId }, { email: cleanEmail }] } as Filter<Seller & Vendor>,
+          { $or: [{ id }, { sellerId }, ...(cleanEmail ? [{ email: cleanEmail }, { contactEmail: cleanEmail }] : [])] } as Filter<Seller & Vendor>,
           { $set: doc },
           { upsert: true }
         );
@@ -243,7 +300,11 @@ export const mongoSellers = {
     }
 
     const existing =
-      (await this.findById(id)) || (cleanEmail ? await this.findByEmail(cleanEmail) : null);
+      (await this.findById(id)) ||
+      (await this.findByOwnerId(id)) ||
+      (await this.findBySellerId(id)) ||
+      (await this.findByVendorId(id)) ||
+      (cleanEmail ? await this.findByEmail(cleanEmail) : null);
 
     if (existing) {
       const targetId = existing.id || id;
@@ -259,8 +320,8 @@ export const mongoSellers = {
         setObj.sellerId = newVendorId;
       }
 
-      // 3. Seller Reactivation: set reactivationWelcomePending = true if reactivating from suspended
-      if (existing.status === "suspended" && updateData.status === "approved") {
+      // 3. Seller Reactivation: set reactivationWelcomePending = true if reactivating from suspended or deactivated
+      if (((existing.status as any) === "suspended" || (existing.status as any) === "deactivated") && updateData.status === "approved") {
         if (updateData.reactivationWelcomePending === undefined) {
           setObj.reactivationWelcomePending = true;
         }
@@ -268,14 +329,24 @@ export const mongoSellers = {
 
       const updated = { ...existing, ...setObj };
       inMemorySellersMap.set(targetId, updated);
+      if (existing.id) inMemorySellersMap.set(existing.id, updated);
+      if (id) inMemorySellersMap.set(id, updated);
       if (updated.sellerId) inMemorySellersMap.set(updated.sellerId, updated);
       if (updated.vendorId) inMemorySellersMap.set(updated.vendorId, updated);
+      if (updated.ownerId) inMemorySellersMap.set(updated.ownerId, updated);
       if (updated.email) inMemorySellersMap.set(updated.email, updated);
 
       if (isMongoDbConnected()) {
         try {
           const filter = {
-            $or: [{ id: targetId }, { _id: targetId as any }, { sellerId: targetId }, { vendorId: targetId }, { email: updated.email }],
+            $or: [
+              { id: targetId },
+              { _id: targetId as any },
+              { sellerId: targetId },
+              { vendorId: targetId },
+              { ownerId: existing.ownerId || targetId },
+              { email: updated.email },
+            ],
           } as Filter<Seller & Vendor>;
 
           const colSellers = getCollection<Seller & Vendor>("sellers");
@@ -315,8 +386,32 @@ const inMemoryProductsMap = new Map<string, Product>();
 
 function filterInMemoryProducts(products: Product[], filter: Record<string, any>): Product[] {
   return products.filter(p => {
+    if (filter.id !== undefined) {
+      if (typeof filter.id === "object" && filter.id !== null) {
+        if (filter.id.$in && Array.isArray(filter.id.$in)) {
+          if (!filter.id.$in.includes(p.id) && !filter.id.$in.includes((p as any)._id)) return false;
+        }
+      } else if (p.id !== filter.id && (p as any)._id !== filter.id) {
+        return false;
+      }
+    }
+    if (filter._id !== undefined) {
+      if (typeof filter._id === "object" && filter._id !== null) {
+        if (filter._id.$in && Array.isArray(filter._id.$in)) {
+          if (!filter._id.$in.includes(p.id) && !filter._id.$in.includes((p as any)._id)) return false;
+        }
+      } else if (p.id !== filter._id && (p as any)._id !== filter._id) {
+        return false;
+      }
+    }
     if (filter.active !== undefined && p.active !== filter.active) return false;
-    if (filter.category !== undefined && p.category !== filter.category) return false;
+    if (filter.category !== undefined) {
+      const filterCat = String(filter.category).toLowerCase().trim();
+      const filterSlug = filterCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const prodCat = String(p.category || "").toLowerCase().trim();
+      const prodSlug = prodCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      if (filterCat !== prodCat && filterSlug !== prodSlug) return false;
+    }
     if (filter.fabric !== undefined && p.fabric !== filter.fabric) return false;
     if (filter.color !== undefined && p.color !== filter.color) return false;
     if (filter.occasion !== undefined && p.occasion !== filter.occasion) return false;
@@ -348,42 +443,73 @@ function filterInMemoryProducts(products: Product[], filter: Record<string, any>
 export const mongoProducts = {
   async findById(id: string): Promise<Product | null> {
     if (!id) return null;
+    const strId = String(id).trim();
+    if (!strId) return null;
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<Product>("products");
-        const found = await col.findOne({ $or: [{ id }, { _id: id as any }] } as Filter<Product>);
+        const orClause: any[] = [{ id: strId }, { productId: strId }, { _id: strId as any }];
+        if (ObjectId.isValid(strId)) {
+          try {
+            orClause.push({ _id: new ObjectId(strId) as any });
+          } catch {}
+        }
+        const found = await col.findOne({ $or: orClause } as Filter<Product>);
         if (found) {
-          inMemoryProductsMap.set(found.id || id, found);
+          const canonicalKey = found.id || strId;
+          inMemoryProductsMap.set(canonicalKey, found);
+          if ((found as any)._id) {
+            inMemoryProductsMap.set(String((found as any)._id), found);
+          }
           return found;
         }
       } catch {
         setMongoConnected(false);
       }
     }
-    return inMemoryProductsMap.get(id) || Array.from(inMemoryProductsMap.values()).find(p => p.id === id || (p as any)._id === id) || null;
+    const memMatch = inMemoryProductsMap.get(strId) ||
+      Array.from(inMemoryProductsMap.values()).find(p =>
+        p.id === strId ||
+        (p as any).productId === strId ||
+        (p as any)._id === strId ||
+        String((p as any)._id) === strId
+      ) || null;
+    return memMatch;
   },
 
-  async findMany(filter: Filter<Product> = {}, options: { sort?: Sort; limit?: number; skip?: number } = {}): Promise<Product[]> {
+  async findMany(filter: Filter<Product> = {}, options: { sort?: Sort; limit?: number; skip?: number; offset?: number; projection?: any } = {}): Promise<Product[]> {
+    const skip = options.skip ?? options.offset ?? 0;
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<Product>("products");
         let cursor = col.find(filter);
+        if (options.projection) cursor = cursor.project(options.projection);
         if (options.sort) cursor = cursor.sort(options.sort);
-        if (options.skip) cursor = cursor.skip(options.skip);
+        if (skip) cursor = cursor.skip(skip);
         if (options.limit) cursor = cursor.limit(options.limit);
         const list = await cursor.toArray();
         if (list.length > 0) {
-          list.forEach(p => inMemoryProductsMap.set(p.id || (p as any)._id, p));
-          return list;
+          list.forEach(p => {
+            if (p.id) inMemoryProductsMap.set(p.id, p);
+            if ((p as any)._id) inMemoryProductsMap.set(String((p as any)._id), p);
+          });
         }
+        return list;
       } catch {
         setMongoConnected(false);
       }
     }
-    const all = Array.from(inMemoryProductsMap.values());
-    let filtered = filterInMemoryProducts(all, filter as any);
-    if (options.skip) filtered = filtered.slice(options.skip);
-    if (options.limit) filtered = filtered.slice(0, options.limit);
+    const results: Product[] = [];
+    const memList = filterInMemoryProducts(Array.from(inMemoryProductsMap.values()), filter as any);
+    for (const p of memList) {
+      if (!results.some(r => r.id === p.id || (r as any)._id === p.id)) {
+        results.push(p);
+      }
+    }
+    let filtered = results;
+    if (skip && options.limit) filtered = filtered.slice(skip, skip + options.limit);
+    else if (skip) filtered = filtered.slice(skip);
+    else if (options.limit) filtered = filtered.slice(0, options.limit);
     return filtered;
   },
 
@@ -424,40 +550,153 @@ export const mongoProducts = {
       status: "approved",
       ...data,
       id,
-      _id: id,
+      _id: (data as any)._id || id,
     } as unknown as Product;
 
     inMemoryProductsMap.set(id, doc);
+    if ((doc as any)._id) {
+      inMemoryProductsMap.set(String((doc as any)._id), doc);
+    }
 
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<Product>("products");
+        const { _id: docMongoId, ...setDoc } = doc as any;
+        const orClause: any[] = [{ id }, { productId: id }, { _id: id as any }];
+        if (docMongoId && docMongoId !== id) {
+          orClause.push({ _id: docMongoId as any });
+        }
+        if (typeof id === "string" && ObjectId.isValid(id)) {
+          try {
+            orClause.push({ _id: new ObjectId(id) as any });
+          } catch {}
+        }
+        if (typeof docMongoId === "string" && ObjectId.isValid(docMongoId)) {
+          try {
+            orClause.push({ _id: new ObjectId(docMongoId) as any });
+          } catch {}
+        }
         await col.updateOne(
-          { $or: [{ id }, { _id: id as any }] } as Filter<Product>,
-          { $set: doc },
+          { $or: orClause } as Filter<Product>,
+          { $set: { ...setDoc, id, productId: id } },
           { upsert: true }
         );
-      } catch {
-        setMongoConnected(false);
+      } catch (err: any) {
+        console.error(`[MongoDB products.insert] Error inserting ${id}:`, err?.message || err);
+        throw new Error(`Database write failed: ${err?.message || "could not save to MongoDB"}`);
       }
     }
     return doc;
   },
 
   async update(id: string, updateData: Partial<Product>): Promise<Product | null> {
-    const existing = await this.findById(id);
-    const updated = { ...(existing || {}), ...updateData, id, _id: id } as Product;
-    inMemoryProductsMap.set(id, updated);
+    const strId = String(id).trim();
+    const existing = await this.findById(strId);
+    const now = new Date();
+    const canonicalId = existing?.id || strId;
+    const mongoId = (existing as any)?._id || (updateData as any)?._id || strId;
+
+    const updateWithTimestamp = { ...updateData, updatedAt: now };
+    const updated = { ...(existing || {}), ...updateWithTimestamp, id: canonicalId, _id: mongoId } as Product;
+
+    inMemoryProductsMap.set(canonicalId, updated);
+    inMemoryProductsMap.set(strId, updated);
+    if ((existing as any)?._id) {
+      inMemoryProductsMap.set(String((existing as any)._id), updated);
+    }
 
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<Product>("products");
-        await col.updateOne({ $or: [{ id }, { _id: id as any }] } as Filter<Product>, { $set: updateData });
+        const orClause: any[] = [
+          { id: strId },
+          { id: canonicalId },
+          { productId: strId },
+          { productId: canonicalId },
+          { _id: strId as any },
+        ];
+        if (existing && (existing as any)._id) {
+          orClause.push({ _id: (existing as any)._id as any });
+        }
+        if (ObjectId.isValid(strId)) {
+          try {
+            orClause.push({ _id: new ObjectId(strId) as any });
+          } catch {}
+        }
+        if (existing && (existing as any)._id && ObjectId.isValid(String((existing as any)._id))) {
+          try {
+            orClause.push({ _id: new ObjectId(String((existing as any)._id)) as any });
+          } catch {}
+        }
+        const { _id, id: _safeId, ...safeSet } = updateWithTimestamp as any;
+        await col.updateOne(
+          { $or: orClause } as Filter<Product>,
+          { $set: { ...safeSet, id: canonicalId, productId: canonicalId } },
+          { upsert: false } // Update existing document, never create a duplicate!
+        );
+      } catch (err: any) {
+        console.warn(`[mongoProducts.update] Warning updating ${id}:`, err?.message || err);
+      }
+    }
+    return updated;
+  },
+
+  async decrementStock(id: string, qty: number): Promise<{ success: boolean; stock: number }> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<Product>("products");
+        const res = await col.findOneAndUpdate(
+          { $or: [{ id }, { _id: id as any }], stock: { $gte: qty } } as Filter<Product>,
+          { $inc: { stock: -qty } },
+          { returnDocument: "after" }
+        );
+        const updatedDoc = (res as any)?.value ?? res;
+        if (updatedDoc && typeof updatedDoc.stock === "number") {
+          inMemoryProductsMap.set(id, updatedDoc as Product);
+          return { success: true, stock: updatedDoc.stock };
+        }
       } catch {
         setMongoConnected(false);
       }
     }
-    return updated;
+    const existing = await this.findById(id);
+    if (!existing || existing.stock < qty) {
+      return { success: false, stock: existing?.stock ?? 0 };
+    }
+    const newStock = existing.stock - qty;
+    const updated = { ...existing, stock: newStock };
+    inMemoryProductsMap.set(id, updated);
+    return { success: true, stock: newStock };
+  },
+
+  async incrementStock(id: string, qty: number): Promise<{ success: boolean; stock: number }> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<Product>("products");
+        const orClause: any[] = [{ id }, { productId: id }, { _id: id as any }];
+        if (typeof id === "string" && ObjectId.isValid(id)) {
+          orClause.push({ _id: new ObjectId(id) as any });
+        }
+        const res = await col.findOneAndUpdate(
+          { $or: orClause } as Filter<Product>,
+          { $inc: { stock: qty } },
+          { returnDocument: "after" }
+        );
+        const updatedDoc = (res as any)?.value ?? res;
+        if (updatedDoc && typeof updatedDoc.stock === "number") {
+          inMemoryProductsMap.set(id, updatedDoc as Product);
+          if (updatedDoc.id) inMemoryProductsMap.set(updatedDoc.id, updatedDoc as Product);
+          return { success: true, stock: updatedDoc.stock };
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const existing = await this.findById(id);
+    const newStock = (existing?.stock ?? 0) + qty;
+    const updated = { ...(existing || {}), stock: newStock } as Product;
+    inMemoryProductsMap.set(id, updated);
+    return { success: true, stock: newStock };
   },
 
   async delete(id: string): Promise<boolean> {
@@ -471,8 +710,53 @@ export const mongoProducts = {
       }
     }
     return true;
+  },
+
+  async getAdminStats(): Promise<{
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    featured: number;
+    activeCategories: number;
+    activeBrands: number;
+  }> {
+    const allProducts = await this.findMany({}, { limit: 100000 });
+    const total = allProducts.length;
+    const pending = allProducts.filter((p) => p.status === "pending").length;
+    const approved = allProducts.filter((p) => p.status === "approved" || (!p.status && p.active)).length;
+    const rejected = allProducts.filter((p) => p.status === "rejected").length;
+    const featured = allProducts.filter((p) => p.isFeatured && p.active && p.status !== "rejected").length;
+
+    let activeCategories = 0;
+    try {
+      const allCategories = await mongoProductCategories.listAll();
+      activeCategories = allCategories.filter((c) => c.active && (c.status === "approved" || !c.status)).length;
+    } catch {
+      activeCategories = 0;
+    }
+
+    let activeBrands = 0;
+    try {
+      if (isMongoDbConnected()) {
+        activeBrands = await getCollection("product_brands").countDocuments({ active: true });
+      }
+    } catch {
+      activeBrands = 0;
+    }
+
+    return {
+      total,
+      pending,
+      approved,
+      rejected,
+      featured,
+      activeCategories,
+      activeBrands,
+    };
   }
 };
+
 
 // ─── ORDERS ──────────────────────────────────────────────────────────────────
 const inMemoryOrdersMap = new Map<string, Order>();
@@ -495,19 +779,20 @@ export const mongoOrders = {
     return inMemoryOrdersMap.get(id) || Array.from(inMemoryOrdersMap.values()).find(o => o.id === id || o.displayId === id || (o as any)._id === id) || null;
   },
 
-  async findMany(filter: Filter<Order> = {}, options: { sort?: Sort; limit?: number; skip?: number } = {}): Promise<Order[]> {
+  async findMany(filter: Filter<Order> = {}, options: { sort?: Sort; limit?: number; skip?: number; projection?: any } = {}): Promise<Order[]> {
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<Order>("orders");
         let cursor = col.find(filter);
+        if (options.projection) cursor = cursor.project(options.projection);
         if (options.sort) cursor = cursor.sort(options.sort);
         if (options.skip) cursor = cursor.skip(options.skip);
         if (options.limit) cursor = cursor.limit(options.limit);
         const list = await cursor.toArray();
         if (list.length > 0) {
           list.forEach(o => inMemoryOrdersMap.set(o.id || (o as any)._id, o));
-          return list;
         }
+        return list;
       } catch {
         setMongoConnected(false);
       }
@@ -533,7 +818,7 @@ export const mongoOrders = {
 
   async insert(data: Partial<Order>): Promise<Order> {
     const seq = await getNextSequenceValue("order_id");
-    const displayId = data.displayId || `TD${seq}`;
+    const displayId = data.displayId || `V${seq}`;
     const id = data.id || displayId;
     const now = new Date();
     const doc = {
@@ -950,17 +1235,32 @@ export const mongoPaymentMethods = {
 // ─── SITE SETTINGS ───────────────────────────────────────────────────────────
 export const mongoSiteSettings = {
   async get(key: string): Promise<string | null> {
-    const col = getCollection<{ _id: string; key: string; value: string; updatedAt: Date }>("site_settings");
-    const doc = await col.findOne({ _id: key });
-    return doc ? doc.value : null;
+    if (!isMongoDbConnected()) return null;
+    try {
+      const col = getCollection<{ _id: string; key: string; value: string; updatedAt: Date }>("site_settings");
+      const doc = await col.findOne({ $or: [{ _id: key }, { key }] });
+      return doc ? doc.value : null;
+    } catch {
+      return null;
+    }
   },
   async set(key: string, value: string): Promise<void> {
-    const col = getCollection<{ _id: string; key: string; value: string; updatedAt: Date }>("site_settings");
-    await col.updateOne(
-      { _id: key },
-      { $set: { key, value, updatedAt: new Date() } },
-      { upsert: true }
-    );
+    if (!isMongoDbConnected()) return;
+    try {
+      const col = getCollection<{ _id: string; key: string; value: string; updatedAt: Date }>("site_settings");
+      await col.updateOne(
+        { $or: [{ _id: key }, { key }] },
+        { $set: { key, value, updatedAt: new Date() } },
+        { upsert: true }
+      );
+    } catch {}
+  },
+  async delete(key: string): Promise<void> {
+    if (!isMongoDbConnected()) return;
+    try {
+      const col = getCollection<{ _id: string; key: string; value: string; updatedAt: Date }>("site_settings");
+      await col.deleteOne({ $or: [{ _id: key }, { key }] });
+    } catch {}
   }
 };
 
@@ -969,36 +1269,65 @@ const inMemoryUsersMap = new Map<string, User>();
 
 export const mongoUsers = {
   async findById(id: string): Promise<User | null> {
+    if (!id || typeof id !== "string") return null;
+    const cleanId = id.trim();
+    if (!cleanId) return null;
+
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<User>("users");
-        const found = await col.findOne({ $or: [{ id }, { _id: id as any }] } as Filter<User>);
+        // Strict match on id first
+        let found = await col.findOne({ id: cleanId });
         if (found) return found;
+
+        // If not found by id, try _id if valid ObjectId
+        if (ObjectId.isValid(cleanId)) {
+          found = await col.findOne({ _id: new ObjectId(cleanId) as any });
+          if (found) return found;
+        }
+
+        // Only match string _id if the document's id matches or is unset
+        const byUnderId = await col.findOne({ _id: cleanId as any });
+        if (byUnderId && (!byUnderId.id || byUnderId.id === cleanId)) {
+          return byUnderId;
+        }
       } catch {
         setMongoConnected(false);
       }
     }
-    return inMemoryUsersMap.get(id) || Array.from(inMemoryUsersMap.values()).find(u => u.id === id || (u as any)._id === id) || null;
+    return inMemoryUsersMap.get(cleanId) || Array.from(inMemoryUsersMap.values()).find(u => u.id === cleanId || (!u.id && (u as any)._id === cleanId)) || null;
   },
-  async findByEmail(email: string): Promise<User | null> {
+  async findByEmail(email: string, role?: string): Promise<User | null> {
     const cleanEmail = (email || "").trim().toLowerCase();
     if (!cleanEmail) return null;
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<User>("users");
         const escaped = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const found = await col.findOne({
+        const filter: Filter<User> = {
           $or: [
             { email: cleanEmail },
             { email: { $regex: new RegExp(`^${escaped}$`, "i") } },
           ],
-        });
-        if (found) return found;
+        };
+        if (role) {
+          filter.role = role as any;
+        }
+        const found = await col.findOne(filter);
+        if (found) {
+          return found;
+        }
       } catch {
         setMongoConnected(false);
       }
     }
-    return Array.from(inMemoryUsersMap.values()).find(u => (u.email || "").toLowerCase() === cleanEmail) || null;
+
+    return Array.from(inMemoryUsersMap.values()).find(u => {
+      const uEmail = (u.email || "").toLowerCase();
+      const matchesEmail = uEmail === cleanEmail;
+      const matchesRole = !role || u.role === role;
+      return matchesEmail && matchesRole;
+    }) || null;
   },
   async findByGoogleId(googleId: string): Promise<User | null> {
     if (!googleId) return null;
@@ -1013,9 +1342,23 @@ export const mongoUsers = {
     }
     return Array.from(inMemoryUsersMap.values()).find(u => u.googleId === googleId) || null;
   },
+  async findMany(filter: any = {}): Promise<User[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<User>("users");
+        return await col.find(filter).toArray();
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return Array.from(inMemoryUsersMap.values());
+  },
   async insert(data: Partial<User>): Promise<User> {
-    const id = data.id || `USR${await getNextSequenceValue("user_id")}`;
+    const uniqueSuffix = crypto.randomBytes(8).toString("hex");
+    const id = data.id || `usr_${Date.now()}_${uniqueSuffix}`;
     const now = new Date();
+    const rawEmail = data.email || (data.id && data.id.includes("@") ? data.id : "");
+    const cleanEmail = (rawEmail || "").trim().toLowerCase();
     const doc = {
       name: "",
       passwordHash: "",
@@ -1023,7 +1366,7 @@ export const mongoUsers = {
       createdAt: now,
       updatedAt: now,
       ...data,
-      email: (data.email || "").trim().toLowerCase(),
+      email: cleanEmail,
       id,
       _id: id,
     } as unknown as User;
@@ -1050,7 +1393,11 @@ export const mongoUsers = {
   },
   async update(id: string, updateData: Partial<User>): Promise<User | null> {
     const setObj: Record<string, any> = { ...updateData, updatedAt: new Date() };
-    if (setObj.email) setObj.email = setObj.email.trim().toLowerCase();
+    if (setObj.email) {
+      setObj.email = setObj.email.trim().toLowerCase();
+    } else if (!setObj.email && id && id.includes("@")) {
+      setObj.email = id.trim().toLowerCase();
+    }
     
     let existing = await this.findById(id);
     if (!existing && setObj.email) {
@@ -1059,6 +1406,9 @@ export const mongoUsers = {
 
     if (existing) {
       const targetId = existing.id || id;
+      if (!setObj.email && (!existing.email || existing.email === "") && (targetId.includes("@") || id.includes("@"))) {
+        setObj.email = (targetId.includes("@") ? targetId : id).trim().toLowerCase();
+      }
       const updated = { ...existing, ...setObj };
       inMemoryUsersMap.set(targetId, updated);
       inMemoryUsersMap.set(id, updated);
@@ -1077,7 +1427,7 @@ export const mongoUsers = {
       const doc = await this.insert({
         id,
         name: setObj.name || "",
-        email: setObj.email || "",
+        email: setObj.email || (id && id.includes("@") ? id : ""),
         passwordHash: "",
         role: "customer",
         ...setObj,
@@ -1174,7 +1524,2539 @@ export const mongoSessions = {
   }
 };
 
-// ─── GENERAL GENERIC COLLECTION ACCESSSOR ─────────────────────────────────────
+// ─── COUPONS ───────────────────────────────────────────────────────────
+const inMemoryCouponsMap = new Map<string, any>();
+
+function formatCouponDoc(c: any) {
+  if (!c) return null;
+  const rawCats = c.eligibleCategories;
+  let eligibleCategories: string[] | null = null;
+  if (Array.isArray(rawCats)) {
+    eligibleCategories = rawCats.map((s: any) => String(s).trim()).filter(Boolean);
+    if (eligibleCategories.length === 0) eligibleCategories = null;
+  } else if (typeof rawCats === "string" && rawCats.trim()) {
+    eligibleCategories = rawCats.split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (eligibleCategories.length === 0) eligibleCategories = null;
+  }
+
+  return {
+    ...c,
+    id: c.id || c._id,
+    minimumOrderValue: typeof c.minimumOrderValue === "number" ? c.minimumOrderValue : Number(c.minimumOrderValue || 0),
+    maxDiscountAmount: c.maxDiscountAmount != null ? Number(c.maxDiscountAmount) : null,
+    eligibleCategories,
+    firstOrderOnly: Boolean(c.firstOrderOnly),
+    perCustomerLimit: c.perCustomerLimit != null ? Number(c.perCustomerLimit) : null,
+    startDate: c.startDate ? new Date(c.startDate) : null,
+    offerDisplayText: c.offerDisplayText ?? null,
+  };
+}
+
+export const mongoCoupons = {
+  async findMany(filter: any = {}, options: { sort?: Sort; limit?: number; skip?: number } = {}): Promise<any[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("coupons");
+        let cursor = col.find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        if (options.skip) cursor = cursor.skip(options.skip);
+        if (options.limit) cursor = cursor.limit(options.limit);
+        const list = await cursor.toArray();
+        if (list.length > 0) {
+          list.forEach(c => inMemoryCouponsMap.set(c.id || c._id, c));
+          return list.map(formatCouponDoc);
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    let all = Array.from(inMemoryCouponsMap.values());
+    if (filter) {
+      if (filter.active !== undefined) {
+        all = all.filter(c => c.active === filter.active);
+      }
+      if (filter.code) {
+        all = all.filter(c => (c.code || "").toUpperCase() === String(filter.code).toUpperCase());
+      }
+      if (filter.type) {
+        all = all.filter(c => c.type === filter.type);
+      }
+    }
+    all.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    if (options.skip) all = all.slice(options.skip);
+    if (options.limit) all = all.slice(0, options.limit);
+    return all.map(formatCouponDoc);
+  },
+
+  async findById(id: string): Promise<any | null> {
+    if (!id) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("coupons");
+        const found = await col.findOne({ $or: [{ id }, { _id: id as any }] });
+        if (found) {
+          const doc = formatCouponDoc(found);
+          inMemoryCouponsMap.set(id, doc);
+          return doc;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const mem = inMemoryCouponsMap.get(id) || Array.from(inMemoryCouponsMap.values()).find(c => c.id === id || c._id === id) || null;
+    return mem ? formatCouponDoc(mem) : null;
+  },
+
+  async findByCode(code: string): Promise<any | null> {
+    const cleanCode = (code || "").trim().toUpperCase();
+    if (!cleanCode) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("coupons");
+        const found = await col.findOne({ code: cleanCode });
+        if (found) {
+          const doc = formatCouponDoc(found);
+          inMemoryCouponsMap.set(doc.id, doc);
+          return doc;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const mem = Array.from(inMemoryCouponsMap.values()).find(c => (c.code || "").toUpperCase() === cleanCode) || null;
+    return mem ? formatCouponDoc(mem) : null;
+  },
+
+  async insert(data: any): Promise<any> {
+    const id = data.id || crypto.randomUUID();
+    const now = new Date();
+    const cleanOfferText =
+      data.offerDisplayText !== undefined && data.offerDisplayText !== null
+        ? String(data.offerDisplayText).trim()
+        : null;
+
+    let eligibleCategories: string[] | null = null;
+    if (Array.isArray(data.eligibleCategories)) {
+      const arr = data.eligibleCategories.map((s: any) => String(s).trim()).filter(Boolean);
+      eligibleCategories = arr.length > 0 ? arr : null;
+    } else if (typeof data.eligibleCategories === "string" && data.eligibleCategories.trim()) {
+      const arr = data.eligibleCategories.split(",").map((s: string) => s.trim()).filter(Boolean);
+      eligibleCategories = arr.length > 0 ? arr : null;
+    }
+
+    const doc = {
+      description: "",
+      offerDisplayText: cleanOfferText || null,
+      active: true,
+      usedCount: 0,
+      maxUses: null,
+      expiresAt: null,
+      minimumOrderValue: data.minimumOrderValue ? Math.max(0, Number(data.minimumOrderValue)) : 0,
+      maxDiscountAmount: data.maxDiscountAmount ? Math.max(0, Number(data.maxDiscountAmount)) : null,
+      eligibleCategories,
+      firstOrderOnly: Boolean(data.firstOrderOnly),
+      perCustomerLimit: data.perCustomerLimit ? Math.max(1, parseInt(data.perCustomerLimit, 10)) : null,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      createdAt: now,
+      updatedAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    if (cleanOfferText !== undefined) {
+      doc.offerDisplayText = cleanOfferText || null;
+    }
+    const formatted = formatCouponDoc(doc);
+    inMemoryCouponsMap.set(id, formatted);
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("coupons");
+        await col.insertOne(formatted);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return formatted;
+  },
+
+  async update(id: string, updateData: any): Promise<any | null> {
+    const existing = await this.findById(id);
+    const sanitizedUpdate = { ...updateData };
+    if (sanitizedUpdate.offerDisplayText !== undefined) {
+      sanitizedUpdate.offerDisplayText =
+        sanitizedUpdate.offerDisplayText !== null
+          ? String(sanitizedUpdate.offerDisplayText).trim() || null
+          : null;
+    }
+    if (sanitizedUpdate.minimumOrderValue !== undefined) {
+      sanitizedUpdate.minimumOrderValue = Math.max(0, Number(sanitizedUpdate.minimumOrderValue || 0));
+    }
+    if (sanitizedUpdate.maxDiscountAmount !== undefined) {
+      sanitizedUpdate.maxDiscountAmount = sanitizedUpdate.maxDiscountAmount != null ? Math.max(0, Number(sanitizedUpdate.maxDiscountAmount)) : null;
+    }
+    if (sanitizedUpdate.eligibleCategories !== undefined) {
+      if (Array.isArray(sanitizedUpdate.eligibleCategories)) {
+        const arr = sanitizedUpdate.eligibleCategories.map((s: any) => String(s).trim()).filter(Boolean);
+        sanitizedUpdate.eligibleCategories = arr.length > 0 ? arr : null;
+      } else if (typeof sanitizedUpdate.eligibleCategories === "string" && sanitizedUpdate.eligibleCategories.trim()) {
+        const arr = sanitizedUpdate.eligibleCategories.split(",").map((s: string) => s.trim()).filter(Boolean);
+        sanitizedUpdate.eligibleCategories = arr.length > 0 ? arr : null;
+      } else {
+        sanitizedUpdate.eligibleCategories = null;
+      }
+    }
+    if (sanitizedUpdate.firstOrderOnly !== undefined) {
+      sanitizedUpdate.firstOrderOnly = Boolean(sanitizedUpdate.firstOrderOnly);
+    }
+    if (sanitizedUpdate.perCustomerLimit !== undefined) {
+      sanitizedUpdate.perCustomerLimit = sanitizedUpdate.perCustomerLimit != null ? Math.max(1, parseInt(sanitizedUpdate.perCustomerLimit, 10)) : null;
+    }
+    if (sanitizedUpdate.startDate !== undefined) {
+      sanitizedUpdate.startDate = sanitizedUpdate.startDate ? new Date(sanitizedUpdate.startDate) : null;
+    }
+
+    const updated = formatCouponDoc({ ...(existing || {}), ...sanitizedUpdate, updatedAt: new Date(), id, _id: id });
+    inMemoryCouponsMap.set(id, updated);
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("coupons");
+        await col.updateOne({ $or: [{ id }, { _id: id as any }] }, { $set: { ...sanitizedUpdate, updatedAt: new Date() } });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return updated;
+  },
+
+  async atomicIncrementUsage(id: string, maxUses: number | null): Promise<boolean> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("coupons");
+        const query: any = { $or: [{ id }, { _id: id as any }] };
+        if (maxUses !== null && maxUses !== undefined) {
+          query.$or = [
+            { id, usedCount: { $lt: maxUses } },
+            { _id: id as any, usedCount: { $lt: maxUses } },
+          ];
+        }
+        const res = await col.findOneAndUpdate(
+          query,
+          { $inc: { usedCount: 1 }, $set: { updatedAt: new Date() } },
+          { returnDocument: "after" }
+        );
+        const doc = (res as any)?.value ?? res;
+        if (doc) {
+          const formatted = formatCouponDoc(doc);
+          inMemoryCouponsMap.set(id, formatted);
+          return true;
+        }
+        return false;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    const existing = await this.findById(id);
+    if (!existing) return false;
+    if (maxUses !== null && existing.usedCount >= maxUses) return false;
+    const newUsedCount = (existing.usedCount || 0) + 1;
+    const updated = { ...existing, usedCount: newUsedCount, updatedAt: new Date() };
+    inMemoryCouponsMap.set(id, updated);
+    return true;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    inMemoryCouponsMap.delete(id);
+    if (isMongoDbConnected()) {
+      try {
+        const res = await getCollection("coupons").deleteOne({ $or: [{ id }, { _id: id as any }] });
+        return res.deletedCount > 0;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return true;
+  }
+};
+
+
+// ─── SUPPORT TICKETS ───────────────────────────────────────────────────────────
+const inMemoryTicketsMap = new Map<string, any>();
+const inMemoryMessagesMap = new Map<string, any>();
+
+export const mongoSupport = {
+  async findTickets(filter: any = {}, options: { sort?: Sort; limit?: number; skip?: number } = {}): Promise<any[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("support_tickets");
+        let cursor = col.find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        if (options.skip) cursor = cursor.skip(options.skip);
+        if (options.limit) cursor = cursor.limit(options.limit);
+        const list = await cursor.toArray();
+        return list.map(t => ({ ...t, id: t.id || String(t._id) }));
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    let all = Array.from(inMemoryTicketsMap.values());
+    if (filter) {
+      if (filter.userId) {
+        if (typeof filter.userId === "string") all = all.filter(t => t.userId === filter.userId);
+        else if (filter.userId.$in && Array.isArray(filter.userId.$in)) all = all.filter(t => filter.userId.$in.includes(t.userId));
+      }
+      if (filter.vendorId) {
+        if (filter.vendorId.$ne !== undefined) all = all.filter(t => t.vendorId != null);
+        else if (filter.vendorId.$in && Array.isArray(filter.vendorId.$in)) all = all.filter(t => filter.vendorId.$in.includes(t.vendorId));
+        else all = all.filter(t => t.vendorId === filter.vendorId);
+      }
+      if (filter.userType) {
+        if (typeof filter.userType === "string") all = all.filter(t => t.userType === filter.userType);
+        else if (filter.userType.$ne !== undefined) all = all.filter(t => t.userType !== filter.userType.$ne);
+        else if (filter.userType.$in && Array.isArray(filter.userType.$in)) all = all.filter(t => filter.userType.$in.includes(t.userType));
+      }
+      if (filter.status) {
+        if (typeof filter.status === "string") all = all.filter(t => t.status === filter.status);
+        else if (filter.status.$in) all = all.filter(t => filter.status.$in.includes(t.status));
+      }
+      if (filter.priority) all = all.filter(t => t.priority === filter.priority);
+      if (filter.escalated !== undefined) all = all.filter(t => t.escalated === filter.escalated);
+      if (filter.assignedTo) all = all.filter(t => t.assignedTo === filter.assignedTo);
+      if (filter.subject && filter.subject.$regex) {
+        const re = new RegExp(filter.subject.$regex, filter.subject.$options || "i");
+        all = all.filter(t => re.test(t.subject || ""));
+      }
+      if (filter.$or && Array.isArray(filter.$or)) {
+        all = all.filter(t => {
+          return filter.$or.some((sub: any) => {
+            for (const [k, v] of Object.entries(sub)) {
+              if (k === "userType") {
+                if (typeof v === "string" && t.userType !== v) return false;
+                if (v && typeof v === "object" && (v as any).$ne && t.userType === (v as any).$ne) return false;
+              }
+              if (k === "escalated" && t.escalated !== v) return false;
+              if (k === "assignedTo" && t.assignedTo !== v) return false;
+              if (k === "vendorId") {
+                if (v && typeof v === "object" && (v as any).$in) {
+                  if (!(v as any).$in.includes(t.vendorId)) return false;
+                } else if (t.vendorId !== v) return false;
+              }
+            }
+            return true;
+          });
+        });
+      }
+    }
+    all.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+    if (options.skip) all = all.slice(options.skip);
+    if (options.limit) all = all.slice(0, options.limit);
+    return all;
+  },
+
+  async findTicketById(id: string): Promise<any | null> {
+    if (!id) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("support_tickets");
+        const orList: any[] = [{ id }, { _id: id as any }];
+        if (typeof id === "string" && ObjectId.isValid(id)) {
+          orList.push({ _id: new ObjectId(id) as any });
+        }
+        const found = await col.findOne({ $or: orList });
+        if (found) return { ...found, id: found.id || String(found._id) };
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return inMemoryTicketsMap.get(id) || null;
+  },
+
+  async countTickets(filter: any = {}): Promise<number> {
+    if (isMongoDbConnected()) {
+      try {
+        return await getCollection("support_tickets").countDocuments(filter);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const all = await this.findTickets(filter);
+    return all.length;
+  },
+
+  async insertTicket(data: any): Promise<any> {
+    const id = data.id || `TCK_${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const now = new Date();
+    const doc = {
+      category: "General",
+      status: "Open",
+      priority: "Normal",
+      assignedTo: "admin",
+      escalated: false,
+      isDispute: false,
+      disputeStatus: "none",
+      createdAt: now,
+      updatedAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    inMemoryTicketsMap.set(id, doc);
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("support_tickets").insertOne(doc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async updateTicket(id: string, updateData: any): Promise<any | null> {
+    if (!id) return null;
+    const existing = await this.findTicketById(id);
+    const updated = { ...(existing || {}), ...updateData, updatedAt: new Date(), id: existing?.id || id, _id: existing?._id || id };
+    inMemoryTicketsMap.set(id, updated);
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("support_tickets");
+        const orList: any[] = [{ id }, { _id: id as any }];
+        if (typeof id === "string" && ObjectId.isValid(id)) {
+          orList.push({ _id: new ObjectId(id) as any });
+        }
+        await col.updateOne({ $or: orList }, { $set: { ...updateData, updatedAt: new Date() } });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return updated;
+  },
+
+  async findMessages(ticketId: string): Promise<any[]> {
+    if (!ticketId) return [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("ticket_messages");
+        const orList: any[] = [{ ticketId }];
+        if (typeof ticketId === "string" && ObjectId.isValid(ticketId)) {
+          orList.push({ ticketId: new ObjectId(ticketId) as any });
+        }
+        const list = await col.find({ $or: orList }).sort({ createdAt: 1 }).toArray();
+        if (list.length > 0) {
+          return list.map(m => ({ ...m, id: m.id || String(m._id) }));
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const memList = Array.from(inMemoryMessagesMap.values()).filter(m => m.ticketId === ticketId);
+    return memList.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  },
+
+  async insertMessage(data: any): Promise<any> {
+    const id = data.id || `MSG_${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const now = new Date();
+    const doc = {
+      isStaff: false,
+      internal: false,
+      attachments: [],
+      createdAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    inMemoryMessagesMap.set(id, doc);
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("ticket_messages").insertOne(doc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async markMessagesRead(ticketId: string, msgIds?: string[]): Promise<void> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("ticket_messages");
+        const filter: any = { ticketId };
+        if (msgIds && msgIds.length > 0) {
+          filter.$or = [{ id: { $in: msgIds } }, { _id: { $in: msgIds as any } }];
+        }
+        await col.updateMany(filter, { $set: { readAt: new Date() } });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    for (const msg of inMemoryMessagesMap.values()) {
+      if (msg.ticketId === ticketId && (!msgIds || msgIds.includes(msg.id))) {
+        msg.readAt = new Date();
+      }
+    }
+  },
+
+  async findTicketMessages(ticketId: string): Promise<any[]> {
+    return this.findMessages(ticketId);
+  },
+
+  async insertTicketMessage(data: any): Promise<any> {
+    return this.insertMessage(data);
+  },
+
+  async getStats(): Promise<any | null> {
+    if (isMongoDbConnected()) {
+      try {
+        const total = await this.countTickets({});
+        const open = await this.countTickets({ status: "Open" });
+        const inProgress = await this.countTickets({ status: "In Progress" });
+        const resolved = await this.countTickets({ status: "Resolved" });
+        const closed = await this.countTickets({ status: "Closed" });
+        const escalated = await this.countTickets({ escalated: true });
+        const customerRouted = await this.countTickets({ userType: "customer", escalated: false });
+        const sellerRouted = await this.countTickets({ vendorId: { $ne: null } });
+        return { total, open, inProgress, resolved, closed, escalated, customerRouted, sellerRouted };
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const all = Array.from(inMemoryTicketsMap.values());
+    const total = all.length;
+    const open = all.filter(t => t.status === "Open").length;
+    const inProgress = all.filter(t => t.status === "In Progress").length;
+    const resolved = all.filter(t => t.status === "Resolved").length;
+    const closed = all.filter(t => t.status === "Closed").length;
+    const escalated = all.filter(t => t.escalated).length;
+    const customerRouted = all.filter(t => t.userType === "customer" && !t.escalated).length;
+    const sellerRouted = all.filter(t => t.vendorId != null).length;
+    return { total, open, inProgress, resolved, closed, escalated, customerRouted, sellerRouted };
+  }
+};
+
+// ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+export const inMemoryNotificationsMap = new Map<string, any>();
+
+function buildNotificationIdQuery(id: string) {
+  const orConditions: any[] = [{ id }, { _id: id as any }];
+  if (typeof id === "string" && ObjectId.isValid(id) && id.length === 24) {
+    try {
+      orConditions.push({ _id: new ObjectId(id) });
+    } catch {}
+  }
+  return { $or: orConditions };
+}
+
+export const mongoNotifications = {
+  inMemoryNotificationsMap,
+  clearInMemory() {
+    inMemoryNotificationsMap.clear();
+  },
+  async findMany(filter: any = {}, options: { sort?: Sort; limit?: number; skip?: number; offset?: number } = {}): Promise<any[]> {
+    const skip = options.skip ?? options.offset ?? 0;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("notifications");
+        let cursor = col.find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        if (skip > 0) cursor = cursor.skip(skip);
+        if (options.limit) cursor = cursor.limit(options.limit);
+        const list = await cursor.toArray();
+        return list.map(n => ({ ...n, id: n.id || String(n._id) }));
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    let all = Array.from(inMemoryNotificationsMap.values());
+    if (filter) {
+      if (filter.vendorId !== undefined) {
+        if (filter.vendorId === null) {
+          all = all.filter(n => n.vendorId == null);
+        } else {
+          all = all.filter(n => n.vendorId === filter.vendorId);
+        }
+      }
+      if (filter.userId) {
+        all = all.filter(n => n.userId === filter.userId);
+      }
+      if (filter.read !== undefined) {
+        all = all.filter(n => (n.read ?? n.isRead) === filter.read);
+      }
+      if (filter.isRead !== undefined) {
+        all = all.filter(n => (n.isRead ?? n.read) === filter.isRead);
+      }
+      if (filter.$or && Array.isArray(filter.$or)) {
+        all = all.filter(n => {
+          return filter.$or.some((sub: any) => {
+            if (sub.isRead !== undefined && (n.isRead ?? n.read) === sub.isRead) return true;
+            if (sub.read !== undefined && (n.read ?? n.isRead) === sub.read) return true;
+            if (sub.vendorId === null && n.vendorId == null) return true;
+            if (sub.title && sub.title.$regex && new RegExp(sub.title.$regex, sub.title.$options || "i").test(n.title || "")) return true;
+            if (sub.body && sub.body.$regex && new RegExp(sub.body.$regex, sub.body.$options || "i").test(n.body || "")) return true;
+            return false;
+          });
+        });
+      }
+      if (filter.type) {
+        if (typeof filter.type === "string") {
+          all = all.filter(n => n.type === filter.type);
+        } else if (filter.type.$in) {
+          all = all.filter(n => filter.type.$in.includes(n.type));
+        }
+      }
+      if (filter.createdAt) {
+        if (filter.createdAt.$gte) {
+          const gteTime = new Date(filter.createdAt.$gte).getTime();
+          all = all.filter(n => new Date(n.createdAt || 0).getTime() >= gteTime);
+        }
+        if (filter.createdAt.$lte) {
+          const lteTime = new Date(filter.createdAt.$lte).getTime();
+          all = all.filter(n => new Date(n.createdAt || 0).getTime() <= lteTime);
+        }
+      }
+    }
+    all.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    if (skip > 0) all = all.slice(skip);
+    if (options.limit) all = all.slice(0, options.limit);
+    return all;
+  },
+
+  async findById(id: string): Promise<any | null> {
+    if (!id) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("notifications");
+        const found = await col.findOne(buildNotificationIdQuery(id));
+        if (found) return { ...found, id: found.id || String(found._id) };
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return inMemoryNotificationsMap.get(id) || Array.from(inMemoryNotificationsMap.values()).find(n => n.id === id || String(n._id) === id) || null;
+  },
+
+  async count(filter: any = {}): Promise<number> {
+    if (isMongoDbConnected()) {
+      try {
+        return await getCollection("notifications").countDocuments(filter);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const all = await this.findMany(filter);
+    return all.length;
+  },
+
+  async insert(data: any): Promise<any> {
+    const id = data.id || crypto.randomUUID();
+    const now = new Date();
+    const doc = {
+      read: false,
+      isRead: false,
+      createdAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    inMemoryNotificationsMap.set(id, doc);
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("notifications").insertOne(doc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async update(id: string, updateData: any): Promise<any | null> {
+    const existing = inMemoryNotificationsMap.get(id) || Array.from(inMemoryNotificationsMap.values()).find(n => n.id === id || String(n._id) === id);
+    if (existing) {
+      Object.assign(existing, updateData);
+    }
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("notifications").updateOne(buildNotificationIdQuery(id), { $set: updateData });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return existing ? { ...existing, ...updateData } : { id, ...updateData };
+  },
+
+  async markAllRead(userId: string, filterOptions?: { vendorId?: string | null }): Promise<boolean> {
+    for (const n of inMemoryNotificationsMap.values()) {
+      const matchUser = n.userId === userId || n.vendorId === userId;
+      let matchVendor = true;
+      if (filterOptions?.vendorId === null) {
+        matchVendor = n.vendorId == null;
+      } else if (filterOptions?.vendorId) {
+        matchVendor = n.vendorId === filterOptions.vendorId;
+      }
+      if (matchUser && matchVendor) {
+        n.read = true;
+        n.isRead = true;
+      }
+    }
+    if (isMongoDbConnected()) {
+      try {
+        const mongoFilter: any = {
+          $or: [{ userId }, { vendorId: userId }],
+        };
+        if (filterOptions?.vendorId === null) {
+          mongoFilter.vendorId = null;
+        } else if (filterOptions?.vendorId) {
+          mongoFilter.vendorId = filterOptions.vendorId;
+        }
+        await getCollection("notifications").updateMany(
+          mongoFilter,
+          { $set: { read: true, isRead: true } }
+        );
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return true;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    inMemoryNotificationsMap.delete(id);
+    for (const [key, n] of Array.from(inMemoryNotificationsMap.entries())) {
+      if (n.id === id || String(n._id) === id) {
+        inMemoryNotificationsMap.delete(key);
+      }
+    }
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("notifications").deleteOne(buildNotificationIdQuery(id));
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return true;
+  },
+
+  async deleteMany(filter: any = {}): Promise<number> {
+    let deletedCount = 0;
+    for (const [key, n] of Array.from(inMemoryNotificationsMap.entries())) {
+      let matches = true;
+      if (filter.userId && n.userId !== filter.userId) matches = false;
+      if (filter.vendorId !== undefined) {
+        if (filter.vendorId === null && n.vendorId != null) matches = false;
+        else if (filter.vendorId !== null && n.vendorId !== filter.vendorId) matches = false;
+      }
+      if (matches) {
+        inMemoryNotificationsMap.delete(key);
+        deletedCount++;
+      }
+    }
+    if (isMongoDbConnected()) {
+      try {
+        const res = await getCollection("notifications").deleteMany(filter);
+        return res.deletedCount ?? deletedCount;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return deletedCount;
+  },
+
+  // Compatibility aliases
+  async findNotifications(filter: any = {}, options: any = {}): Promise<any[]> {
+    return this.findMany(filter, options);
+  },
+  async countNotifications(filter: any = {}): Promise<number> {
+    return this.count(filter);
+  },
+  async updateNotification(id: string, updateData: any): Promise<any | null> {
+    return this.update(id, updateData);
+  },
+  async deleteNotification(id: string): Promise<boolean> {
+    return this.delete(id);
+  },
+  async create(data: any): Promise<any> {
+    return this.insert(data);
+  },
+  async clearAll(filter: any = {}): Promise<number> {
+    return this.deleteMany(filter);
+  },
+};
+
+// ─── NOTIFICATION PREFERENCES ────────────────────────────────────────────────
+export interface MongoNotificationPreferencesDoc {
+  userId: string;
+  orderUpdates: boolean;
+  offerAlerts: boolean;
+  emailOrderUpdates: boolean;
+  emailMarketingUpdates: boolean;
+  emailOfferUpdates: boolean;
+  updatedAt?: Date;
+  createdAt?: Date;
+}
+
+export const inMemoryNotificationPreferencesMap = new Map<string, MongoNotificationPreferencesDoc>();
+
+export const DEFAULT_MONGO_NOTIFICATION_PREFERENCES = {
+  orderUpdates: true,
+  offerAlerts: true,
+  emailOrderUpdates: true,
+  emailMarketingUpdates: true,
+  emailOfferUpdates: true,
+};
+
+export const mongoNotificationPreferences = {
+  inMemoryNotificationPreferencesMap,
+  clearInMemory() {
+    inMemoryNotificationPreferencesMap.clear();
+  },
+  async findByUserId(userId: string): Promise<MongoNotificationPreferencesDoc> {
+    if (!userId) {
+      return { userId: "", ...DEFAULT_MONGO_NOTIFICATION_PREFERENCES };
+    }
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<any>("notification_preferences");
+        const doc = await col.findOne({ userId });
+        if (doc) {
+          return {
+            userId,
+            orderUpdates: typeof doc.orderUpdates === "boolean" ? doc.orderUpdates : true,
+            offerAlerts: typeof doc.offerAlerts === "boolean" ? doc.offerAlerts : true,
+            emailOrderUpdates: typeof doc.emailOrderUpdates === "boolean" ? doc.emailOrderUpdates : true,
+            emailMarketingUpdates: typeof doc.emailMarketingUpdates === "boolean" ? doc.emailMarketingUpdates : true,
+            emailOfferUpdates: typeof doc.emailOfferUpdates === "boolean" ? doc.emailOfferUpdates : true,
+            updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : undefined,
+            createdAt: doc.createdAt ? new Date(doc.createdAt) : undefined,
+          };
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    const mem = inMemoryNotificationPreferencesMap.get(userId);
+    if (mem) {
+      return {
+        userId,
+        orderUpdates: typeof mem.orderUpdates === "boolean" ? mem.orderUpdates : true,
+        offerAlerts: typeof mem.offerAlerts === "boolean" ? mem.offerAlerts : true,
+        emailOrderUpdates: typeof mem.emailOrderUpdates === "boolean" ? mem.emailOrderUpdates : true,
+        emailMarketingUpdates: typeof mem.emailMarketingUpdates === "boolean" ? mem.emailMarketingUpdates : true,
+        emailOfferUpdates: typeof mem.emailOfferUpdates === "boolean" ? mem.emailOfferUpdates : true,
+        updatedAt: mem.updatedAt,
+        createdAt: mem.createdAt,
+      };
+    }
+    return {
+      userId,
+      ...DEFAULT_MONGO_NOTIFICATION_PREFERENCES,
+    };
+  },
+
+  async upsert(userId: string, updates: Partial<Omit<MongoNotificationPreferencesDoc, "userId">>): Promise<MongoNotificationPreferencesDoc> {
+    const existing = await this.findByUserId(userId);
+    const validUpdates: Partial<MongoNotificationPreferencesDoc> = {};
+
+    if (typeof updates.orderUpdates === "boolean") validUpdates.orderUpdates = updates.orderUpdates;
+    if (typeof updates.offerAlerts === "boolean") validUpdates.offerAlerts = updates.offerAlerts;
+    if (typeof updates.emailOrderUpdates === "boolean") validUpdates.emailOrderUpdates = updates.emailOrderUpdates;
+    if (typeof updates.emailMarketingUpdates === "boolean") validUpdates.emailMarketingUpdates = updates.emailMarketingUpdates;
+    if (typeof updates.emailOfferUpdates === "boolean") validUpdates.emailOfferUpdates = updates.emailOfferUpdates;
+
+    const merged: MongoNotificationPreferencesDoc = {
+      ...existing,
+      ...validUpdates,
+      userId,
+      updatedAt: new Date(),
+      createdAt: existing.createdAt || new Date(),
+    };
+
+    inMemoryNotificationPreferencesMap.set(userId, merged);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<any>("notification_preferences");
+        await col.updateOne(
+          { userId },
+          {
+            $set: {
+              ...validUpdates,
+              updatedAt: merged.updatedAt,
+            },
+            $setOnInsert: {
+              userId,
+              orderUpdates: merged.orderUpdates,
+              offerAlerts: merged.offerAlerts,
+              emailOrderUpdates: merged.emailOrderUpdates,
+              emailMarketingUpdates: merged.emailMarketingUpdates,
+              emailOfferUpdates: merged.emailOfferUpdates,
+              createdAt: merged.createdAt,
+            },
+            $unset: {
+              stockAlerts: "",
+              emailStockAlerts: "",
+            },
+          },
+          { upsert: true }
+        );
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    return merged;
+  },
+};
+
+// ─── AUDIT LOGS ──────────────────────────────────────────────────────────────
+export const mongoAuditLogs = {
+  async findMany(filter: any = {}, options: { sort?: Sort; limit?: number; skip?: number; offset?: number } = {}): Promise<any[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("admin_audit_logs");
+        let cursor = col.find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        const skip = options.skip ?? options.offset ?? 0;
+        if (skip) cursor = cursor.skip(skip);
+        if (options.limit) cursor = cursor.limit(options.limit);
+        const list = await cursor.toArray();
+        return list.map(l => ({ ...l, id: l.id || l._id }));
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return [];
+  },
+
+  async count(filter: any = {}): Promise<number> {
+    if (isMongoDbConnected()) {
+      try {
+        return await getCollection("admin_audit_logs").countDocuments(filter);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return 0;
+  },
+
+  async insert(data: any): Promise<any> {
+    const id = data.id || crypto.randomUUID();
+    const now = new Date();
+    const doc = {
+      createdAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("admin_audit_logs").insertOne(doc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  }
+};
+
+// ─── COMMISSION RULES & SETTLEMENTS ──────────────────────────────────────────
+export const mongoCommission = {
+  async findRules(): Promise<any[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("commission_rules");
+        const list = await col.find({}).sort({ createdAt: -1 }).toArray();
+        return list.map(r => ({ ...r, id: r.id || r._id }));
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return [];
+  },
+
+  async insertRule(data: any): Promise<any> {
+    const id = data.id || crypto.randomUUID();
+    const now = new Date();
+    const doc = {
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("commission_rules").insertOne(doc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async updateRule(id: string, updateData: any): Promise<any> {
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("commission_rules").updateOne({ $or: [{ id }, { _id: id as any }] }, { $set: { ...updateData, updatedAt: new Date() } });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return { id, ...updateData };
+  }
+};
+
+export const mongoSettlements = {
+  async findMany(filter: any = {}, options: { sort?: Sort } = {}): Promise<any[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("vendor_settlements");
+        let cursor = col.find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        const list = await cursor.toArray();
+        return list.map(s => ({ ...s, id: s.id || s._id }));
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return [];
+  },
+
+  async findById(id: string): Promise<any | null> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection("vendor_settlements");
+        const found = await col.findOne({ $or: [{ id }, { _id: id as any }] });
+        return found ? { ...found, id: found.id || found._id } : null;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return null;
+  },
+
+  async insert(data: any): Promise<any> {
+    const id = data.id || crypto.randomUUID();
+    const now = new Date();
+    const doc = {
+      status: "pending",
+      createdAt: now,
+      ...data,
+      id,
+      _id: id,
+    };
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("vendor_settlements").insertOne(doc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async update(id: string, updateData: any): Promise<any | null> {
+    const existing = await this.findById(id);
+    const updated = { ...(existing || {}), ...updateData, id, _id: id };
+    if (isMongoDbConnected()) {
+      try {
+        await getCollection("vendor_settlements").updateOne({ $or: [{ id }, { _id: id as any }] }, { $set: updateData });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return updated;
+  }
+};
+
+// ─── CLOUDFLARE R2 ASSETS METADATA ──────────────────────────────────────────
+export interface R2AssetRecord {
+  id: string;
+  _id?: string;
+  objectKey: string;
+  bucket: string;
+  publicUrl: string;
+  sellerId: string;
+  productId?: string;
+  assetType: "product_image" | "kyc_pan" | "kyc_gst" | "kyc_bank" | "store_avatar" | "store_banner" | "store_logo" | string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  status: "presigned_generated" | "uploaded" | "verified" | "deleted";
+  bufferBase64?: string;
+  uploadedAt: Date | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+const inMemoryR2AssetsMap = new Map<string, R2AssetRecord>();
+
+export const mongoR2Assets = {
+  async saveAsset(data: Partial<R2AssetRecord> & { objectKey: string; sellerId: string }): Promise<R2AssetRecord> {
+    const id = data.id || (data as any)._id || crypto.randomUUID();
+    const now = new Date();
+    const doc: R2AssetRecord = {
+      id,
+      _id: id,
+      objectKey: data.objectKey,
+      bucket: data.bucket || "vashtraa-public",
+      publicUrl: data.publicUrl || "",
+      sellerId: data.sellerId,
+      productId: data.productId || undefined,
+      assetType: data.assetType || "product_image",
+      fileName: data.fileName || "",
+      contentType: data.contentType || "image/webp",
+      size: data.size || 0,
+      status: data.status || "presigned_generated",
+      bufferBase64: data.bufferBase64 || (data as any).bufferBase64 || undefined,
+      uploadedAt: data.uploadedAt || now,
+      createdAt: data.createdAt || now,
+      updatedAt: now,
+    };
+
+    inMemoryR2AssetsMap.set(doc.objectKey, doc);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<R2AssetRecord>("r2_assets");
+        await col.updateOne(
+          { objectKey: doc.objectKey },
+          { $set: doc },
+          { upsert: true }
+        );
+      } catch (err) {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async findByObjectKey(objectKey: string): Promise<R2AssetRecord | null> {
+    if (!objectKey) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<R2AssetRecord>("r2_assets");
+        const found = await col.findOne({ objectKey });
+        if (found) return found;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return inMemoryR2AssetsMap.get(objectKey) || null;
+  },
+
+  async findBySellerId(sellerId: string, assetType?: string): Promise<R2AssetRecord[]> {
+    if (!sellerId) return [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<R2AssetRecord>("r2_assets");
+        const filter: any = { sellerId };
+        if (assetType) filter.assetType = assetType;
+        return await col.find(filter).toArray();
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return Array.from(inMemoryR2AssetsMap.values()).filter(
+      (a) => a.sellerId === sellerId && (!assetType || a.assetType === assetType)
+    );
+  },
+
+  async findByProductId(productId: string): Promise<R2AssetRecord[]> {
+    if (!productId) return [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<R2AssetRecord>("r2_assets");
+        return await col.find({ productId }).toArray();
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return Array.from(inMemoryR2AssetsMap.values()).filter((a) => a.productId === productId);
+  },
+
+  async markDeleted(objectKey: string): Promise<boolean> {
+    if (!objectKey) return false;
+    const existing = await this.findByObjectKey(objectKey);
+    if (existing) {
+      existing.status = "deleted";
+      existing.updatedAt = new Date();
+      inMemoryR2AssetsMap.set(objectKey, existing);
+    }
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<R2AssetRecord>("r2_assets");
+        await col.updateOne({ objectKey }, { $set: { status: "deleted", updatedAt: new Date() } });
+        return true;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return true;
+  }
+};
+
+// ─── PRODUCT CATEGORIES ───────────────────────────────────────────────────────
+// ─── PRODUCT CATEGORIES ───────────────────────────────────────────────────────
+export interface ProductCategoryDoc {
+  id: string;
+  name: string;
+  slug: string;
+  parentId?: string | null;
+  type?: string;
+  createdBy?: string;
+  sellerId?: string | null;
+  sellerName?: string | null;
+  coverImage?: string | null;
+  status?: "pending" | "approved" | "rejected" | string;
+  active: boolean;
+  productCount?: number;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+const DEFAULT_CATEGORIES: ProductCategoryDoc[] = [
+  {
+    id: "cat-indian-wear",
+    name: "Indian Wear",
+    slug: "indian-wear",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-paithani-sarees",
+    name: "Paithani Sarees",
+    slug: "paithani-sarees",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-indian-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-festival-paithani",
+    name: "Festival Paithani",
+    slug: "festival-paithani",
+    type: "childCategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-sarees",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-wedding-paithani",
+    name: "Wedding Paithani",
+    slug: "wedding-paithani",
+    type: "childCategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-sarees",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-designer-sarees",
+    name: "Designer Sarees",
+    slug: "designer-sarees",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-indian-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-bollywood-sarees",
+    name: "Bollywood Sarees",
+    slug: "bollywood-sarees",
+    type: "childCategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-sarees",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-contemporary-silk",
+    name: "Contemporary Silk",
+    slug: "contemporary-silk",
+    type: "childCategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-sarees",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-fashion-wear",
+    name: "Fashion Wear",
+    slug: "fashion-wear",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#kurtas-suits]",
+    name: "Kurtas & Suits",
+    slug: "kurtas-suits",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#kurtis-tunics-tops]",
+    name: "Kurtis, Tunics & Tops",
+    slug: "kurtis-tunics-tops",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#ethnic-wear]",
+    name: "Ethnic Wear",
+    slug: "ethnic-wear",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#leggings-salwars-churidars]",
+    name: "Leggings, Salwars & Churidars",
+    slug: "leggings-salwars-churidars",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#skirts-palazzos]",
+    name: "Skirts & Palazzos",
+    slug: "skirts-palazzos",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#dress-materials]",
+    name: "Dress Materials",
+    slug: "dress-materials",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#lehenga-cholis]",
+    name: "Lehenga Cholis",
+    slug: "lehenga-cholis",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#dupattas-shawls]",
+    name: "Dupattas & Shawls",
+    slug: "dupattas-shawls",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#jackets]",
+    name: "Jackets",
+    slug: "jackets",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-fashion-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-western-wear",
+    name: "Western Wear",
+    slug: "western-wear",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#dresses]",
+    name: "Dresses",
+    slug: "dresses",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#tops]",
+    name: "Tops",
+    slug: "tops",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#t-shirts]",
+    name: "T-Shirts",
+    slug: "t-shirts",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#jeans]",
+    name: "Jeans",
+    slug: "jeans",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#trousers-capris]",
+    name: "Trousers & Capris",
+    slug: "trousers-capris",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#shorts-skirts]",
+    name: "Shorts & Skirts",
+    slug: "shorts-skirts",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#co-ords]",
+    name: "Co-ords",
+    slug: "co-ords",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#playsuits]",
+    name: "Playsuits",
+    slug: "playsuits",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#jumpsuits]",
+    name: "Jumpsuits",
+    slug: "jumpsuits",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#shrugs]",
+    name: "Shrugs",
+    slug: "shrugs",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#sweaters-sweatshirts]",
+    name: "Sweaters & Sweatshirts",
+    slug: "sweaters-sweatshirts",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#jackets-coats]",
+    name: "Jackets & Coats",
+    slug: "jackets-coats",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-[#blazers-waistcoats]",
+    name: "Blazers & Waistcoats",
+    slug: "blazers-waistcoats",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-western-wear",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  // Authoritative catalog categories and subcategories
+  {
+    id: "cat-paithani-default",
+    name: "Paithani",
+    slug: "paithani",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-designer-default",
+    name: "Designer",
+    slug: "designer",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-bollywood-default",
+    name: "Bollywood",
+    slug: "bollywood",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-bridal-default",
+    name: "Bridal",
+    slug: "bridal",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-contemporary-silk-main",
+    name: "Contemporary Silk",
+    slug: "contemporary-silk",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-wedding-paithani-main",
+    name: "Wedding Paithani",
+    slug: "wedding-paithani",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-western-paithani-main",
+    name: "Western Paithani",
+    slug: "western-paithani",
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  // Subcategories
+  {
+    id: "cat-bridal-paithani",
+    name: "Bridal Paithani",
+    slug: "bridal-paithani",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-contemporary-silk-paithani",
+    name: "Contemporary Silk",
+    slug: "contemporary-silk-paithani",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-wedding-designer-sarees",
+    name: "Wedding Designer Sarees",
+    slug: "wedding-designer-sarees",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-designer-bridal",
+    name: "Bridal",
+    slug: "designer-bridal",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+];
+
+const inMemoryCategoriesMap = new Map<string, ProductCategoryDoc>(
+  DEFAULT_CATEGORIES.map((c) => [c.slug, c])
+);
+
+export function slugifyCategoryName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+export const mongoProductCategories = {
+  async seedDefaults(): Promise<void> {
+    for (const cat of DEFAULT_CATEGORIES) {
+      if (!inMemoryCategoriesMap.has(cat.slug)) {
+        inMemoryCategoriesMap.set(cat.slug, cat);
+      }
+      if (isMongoDbConnected()) {
+        try {
+          const col = getCollection<ProductCategoryDoc>("product_categories");
+          const existing = await col.findOne({ $or: [{ id: cat.id }, { slug: cat.slug }] });
+          if (!existing) {
+            await col.insertOne(cat);
+          }
+        } catch {
+          setMongoConnected(false);
+        }
+      }
+    }
+  },
+
+  async listActive(sellerId?: string): Promise<ProductCategoryDoc[]> {
+    let categories: ProductCategoryDoc[] = [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        categories = await col.find({ active: true }).sort({ name: 1 }).toArray();
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    if (categories.length === 0) {
+      categories = Array.from(inMemoryCategoriesMap.values()).filter((c) => c.active);
+    } else {
+      categories.forEach((c) => {
+        inMemoryCategoriesMap.set(c.slug, c);
+      });
+    }
+
+    // Ensure default categories are present
+    for (const def of DEFAULT_CATEGORIES) {
+      if (!categories.some((c) => c.slug === def.slug || c.name.toLowerCase() === def.name.toLowerCase())) {
+        categories.unshift(def);
+      }
+    }
+
+    return categories.filter((c) => {
+      const status = c.status || "approved";
+      if (status === "approved") return true;
+      if (sellerId && c.sellerId === sellerId) return true;
+      return false;
+    });
+  },
+
+  async listAll(filters?: {
+    status?: string;
+    sellerId?: string;
+    type?: string;
+    search?: string;
+    sort?: string;
+  }): Promise<ProductCategoryDoc[]> {
+    let categories: ProductCategoryDoc[] = [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        categories = await col.find({}).sort({ name: 1 }).toArray();
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    if (categories.length === 0) {
+      categories = Array.from(inMemoryCategoriesMap.values());
+    } else {
+      categories.forEach((c) => {
+        inMemoryCategoriesMap.set(c.slug, c);
+      });
+    }
+
+    for (const def of DEFAULT_CATEGORIES) {
+      if (!categories.some((c) => c.slug === def.slug || c.name.toLowerCase() === def.name.toLowerCase())) {
+        categories.unshift(def);
+      }
+    }
+
+    const allProducts = await mongoProducts.findMany({}, { limit: 10000 });
+    const categoriesWithCount = categories.map((c) => {
+      const slug = c.slug.toLowerCase().trim();
+      const name = c.name.toLowerCase().trim();
+      const count = allProducts.filter((p) => {
+        const pCat = String(p.category || "").toLowerCase().trim();
+        const pSlug = pCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        return pCat === name || pSlug === slug || pCat === slug;
+      }).length;
+      return {
+        ...c,
+        status: c.status || "approved",
+        type: c.type || "custom",
+        createdBy: c.createdBy || (c.sellerId ? "seller" : "system"),
+        productCount: count,
+      };
+    });
+
+    let result = categoriesWithCount;
+
+    if (filters?.status && filters.status !== "all") {
+      if (filters.status === "active") {
+        result = result.filter((c) => c.active && (c.status === "approved" || !c.status));
+      } else if (filters.status === "inactive") {
+        result = result.filter((c) => !c.active);
+      } else {
+        result = result.filter((c) => (c.status || "approved") === filters.status);
+      }
+    }
+
+    if (filters?.sellerId) {
+      result = result.filter((c) => c.sellerId === filters.sellerId);
+    }
+
+    if (filters?.type && filters.type !== "all") {
+      result = result.filter((c) => (c.type || "custom").toLowerCase() === filters.type!.toLowerCase());
+    }
+
+    if (filters?.search) {
+      const q = filters.search.toLowerCase().trim();
+      result = result.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.slug.toLowerCase().includes(q) ||
+          (c.sellerName && c.sellerName.toLowerCase().includes(q))
+      );
+    }
+
+    if (filters?.sort) {
+      if (filters.sort === "newest") {
+        result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      } else if (filters.sort === "oldest") {
+        result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      } else if (filters.sort === "productCount") {
+        result.sort((a, b) => (b.productCount ?? 0) - (a.productCount ?? 0));
+      }
+    }
+
+    return result;
+  },
+
+  async getCategoryStats(): Promise<{
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    active: number;
+    noCoverImage: number;
+  }> {
+    const all = await this.listAll();
+    return {
+      total: all.length,
+      pending: all.filter((c) => c.status === "pending").length,
+      approved: all.filter((c) => c.status === "approved" || !c.status).length,
+      rejected: all.filter((c) => c.status === "rejected").length,
+      active: all.filter((c) => c.active && (c.status === "approved" || !c.status)).length,
+      noCoverImage: all.filter((c) => !c.coverImage).length,
+    };
+  },
+
+  async findById(id: string): Promise<ProductCategoryDoc | null> {
+    if (!id) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        const found = await col.findOne({ $or: [{ id }, { slug: id }, { _id: id as any }] });
+        if (found) return found;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return (
+      Array.from(inMemoryCategoriesMap.values()).find(
+        (c) => c.id === id || c.slug === id || (c as any)._id === id
+      ) || null
+    );
+  },
+
+  async findBySlug(slug: string): Promise<ProductCategoryDoc | null> {
+    const cleanSlug = slugifyCategoryName(slug);
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        const found = await col.findOne({ slug: cleanSlug });
+        if (found) return found;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return inMemoryCategoriesMap.get(cleanSlug) || null;
+  },
+
+  async create(data: {
+    name: string;
+    type?: string;
+    parentId?: string | null;
+    createdBy?: string;
+    sellerId?: string | null;
+    sellerName?: string | null;
+    status?: string;
+    coverImage?: string | null;
+  }): Promise<ProductCategoryDoc> {
+    const trimmed = String(data.name).trim();
+    const slug = slugifyCategoryName(trimmed);
+    const existing = (await this.findBySlug(slug)) || (await this.findById(slug));
+
+    if (existing) {
+      if (!existing.active) {
+        existing.active = true;
+        inMemoryCategoriesMap.set(slug, existing);
+        if (isMongoDbConnected()) {
+          try {
+            const col = getCollection<ProductCategoryDoc>("product_categories");
+            await col.updateOne({ $or: [{ id: existing.id }, { slug }] }, { $set: { active: true } });
+          } catch {
+            setMongoConnected(false);
+          }
+        }
+      }
+      return existing;
+    }
+
+    const createdBy = data.createdBy || (data.sellerId ? "seller" : "system");
+    const status = data.status || (createdBy === "seller" ? "pending" : "approved");
+    const now = new Date();
+
+    const newDoc: ProductCategoryDoc = {
+      id: crypto.randomUUID(),
+      name: trimmed,
+      slug,
+      parentId: data.parentId && String(data.parentId).trim() ? String(data.parentId).trim() : null,
+      type: data.type || "custom",
+      createdBy,
+      sellerId: data.sellerId || null,
+      sellerName: data.sellerName || null,
+      coverImage: data.coverImage || null,
+      status,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    inMemoryCategoriesMap.set(slug, newDoc);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        await col.insertOne(newDoc);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    return newDoc;
+  },
+
+  async update(id: string, updates: Partial<ProductCategoryDoc>): Promise<ProductCategoryDoc | null> {
+    const existing = (await this.findById(id)) || (await this.findBySlug(id));
+    if (!existing) return null;
+
+    const setObj: Partial<ProductCategoryDoc> = { updatedAt: new Date() };
+    if (updates.name !== undefined) {
+      setObj.name = String(updates.name).trim();
+      setObj.slug = slugifyCategoryName(setObj.name);
+    }
+    if (updates.type !== undefined) {
+      setObj.type = String(updates.type).trim();
+    }
+    if (updates.status !== undefined) {
+      setObj.status = String(updates.status).trim();
+    }
+    if (updates.active !== undefined) {
+      setObj.active = Boolean(updates.active);
+    }
+    if (updates.coverImage !== undefined) {
+      setObj.coverImage = updates.coverImage ? String(updates.coverImage).trim() : null;
+    }
+    if (updates.parentId !== undefined) {
+      setObj.parentId = updates.parentId && String(updates.parentId).trim() ? String(updates.parentId).trim() : null;
+    }
+
+    const updatedDoc: ProductCategoryDoc = { ...existing, ...setObj };
+
+    inMemoryCategoriesMap.set(updatedDoc.slug, updatedDoc);
+    if (existing.slug !== updatedDoc.slug) {
+      inMemoryCategoriesMap.delete(existing.slug);
+    }
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        await col.updateOne(
+          { $or: [{ id: existing.id }, { slug: existing.slug }, { _id: existing.id as any }] },
+          { $set: setObj }
+        );
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    return updatedDoc;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    const existing = (await this.findById(id)) || (await this.findBySlug(id));
+    if (existing) {
+      inMemoryCategoriesMap.delete(existing.slug);
+    }
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        await col.deleteOne({
+          $or: [{ id }, { slug: id }, { _id: id as any }]
+        });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return true;
+  },
+};
+
+// ─── SHIPMENTS (Multi-Seller Shiprocket Integration) ──────────────────────────
+const inMemoryShipmentsMap = new Map<string, MongoShipmentDoc>();
+
+export const mongoShipments = {
+  async findById(id: string): Promise<MongoShipmentDoc | null> {
+    if (!id) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        const found = await col.findOne({ $or: [{ id }, { _id: id as any }] } as Filter<MongoShipmentDoc>);
+        if (found) {
+          inMemoryShipmentsMap.set(found.id || id, found);
+          return found;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return inMemoryShipmentsMap.get(id) || Array.from(inMemoryShipmentsMap.values()).find((s) => s.id === id || (s as any)._id === id) || null;
+  },
+
+  async findByOrderId(orderId: string): Promise<MongoShipmentDoc[]> {
+    if (!orderId) return [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        const list = await col.find({ orderId } as Filter<MongoShipmentDoc>).toArray();
+        if (list.length > 0) {
+          list.forEach((s) => inMemoryShipmentsMap.set(s.id, s));
+          return list;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return Array.from(inMemoryShipmentsMap.values()).filter((s) => s.orderId === orderId);
+  },
+
+  async findByVendorId(vendorId: string): Promise<MongoShipmentDoc[]> {
+    if (!vendorId) return [];
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        const list = await col.find({ vendorId } as Filter<MongoShipmentDoc>).toArray();
+        if (list.length > 0) {
+          list.forEach((s) => inMemoryShipmentsMap.set(s.id, s));
+          return list;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return Array.from(inMemoryShipmentsMap.values()).filter((s) => s.vendorId === vendorId);
+  },
+
+  async findByAwb(awbNumber: string): Promise<MongoShipmentDoc | null> {
+    if (!awbNumber) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        const found = await col.findOne({ awbNumber } as Filter<MongoShipmentDoc>);
+        if (found) {
+          inMemoryShipmentsMap.set(found.id, found);
+          return found;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return Array.from(inMemoryShipmentsMap.values()).find((s) => s.awbNumber === awbNumber) || null;
+  },
+
+  async findMany(
+    filter: Filter<MongoShipmentDoc> = {},
+    options: { sort?: Sort; limit?: number; skip?: number } = {}
+  ): Promise<MongoShipmentDoc[]> {
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        let cursor = col.find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        if (options.skip) cursor = cursor.skip(options.skip);
+        if (options.limit) cursor = cursor.limit(options.limit);
+        const list = await cursor.toArray();
+        if (list.length > 0) {
+          list.forEach((s) => inMemoryShipmentsMap.set(s.id, s));
+          return list;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    let list = Array.from(inMemoryShipmentsMap.values());
+    if (filter.vendorId) list = list.filter((s) => s.vendorId === filter.vendorId);
+    if (filter.orderId) list = list.filter((s) => s.orderId === filter.orderId);
+    if (filter.status) list = list.filter((s) => s.status === filter.status);
+    if (options.skip) list = list.slice(options.skip);
+    if (options.limit) list = list.slice(0, options.limit);
+    return list;
+  },
+
+  async insert(data: Partial<MongoShipmentDoc>): Promise<MongoShipmentDoc> {
+    const id = data.id || `SHP-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date();
+    const doc: MongoShipmentDoc = {
+      status: "created",
+      items: [],
+      deliveryAddress: {},
+      parcelWeightKg: "0.5",
+      parcelDimensions: { length: 25, breadth: 20, height: 5 },
+      pickupLocationName: "",
+      pickupPincode: "",
+      trackingHistory: [],
+      createdAt: now,
+      updatedAt: now,
+      ...data,
+      id,
+      _id: id,
+    } as MongoShipmentDoc;
+
+    inMemoryShipmentsMap.set(id, doc);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        await col.updateOne(
+          { $or: [{ id }, { _id: id as any }] } as Filter<MongoShipmentDoc>,
+          { $set: doc },
+          { upsert: true }
+        );
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return doc;
+  },
+
+  async update(id: string, updateData: Partial<MongoShipmentDoc>): Promise<MongoShipmentDoc | null> {
+    const existing = await this.findById(id);
+    const now = new Date();
+    const updated: MongoShipmentDoc = {
+      ...(existing || {}),
+      ...updateData,
+      updatedAt: now,
+      id,
+    } as MongoShipmentDoc;
+
+    inMemoryShipmentsMap.set(id, updated);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        await col.updateOne(
+          { $or: [{ id }, { _id: id as any }] } as Filter<MongoShipmentDoc>,
+          { $set: { ...updateData, updatedAt: now } }
+        );
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return updated;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    inMemoryShipmentsMap.delete(id);
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<MongoShipmentDoc>("shipments");
+        const res = await col.deleteOne({ $or: [{ id }, { _id: id as any }] } as Filter<MongoShipmentDoc>);
+        return res.deletedCount > 0;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    return true;
+  },
+};
+
+// ─── GENERAL GENERIC COLLECTION ACCESSOR ─────────────────────────────────────
 export const mongoGeneric = {
   getCollection
+};
+
+// ─── REWARDS & LOYALTY PROGRAM ───────────────────────────────────────────────
+export type RewardProfileDoc = {
+  id: string;
+  _id?: string;
+  userId: string;
+  totalPoints: number;
+  lifetimePoints: number;
+  loyaltyTier: "silver" | "gold" | "platinum";
+  referralCode: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type RewardLogDoc = {
+  id: string;
+  _id?: string;
+  userId: string;
+  points: number;
+  type: "earned" | "bonus" | "redeemed";
+  description: string;
+  orderId?: string | null;
+  createdAt: Date;
+};
+
+export type ReferralDoc = {
+  id: string;
+  _id?: string;
+  referrerUserId: string;
+  referredUserId: string;
+  firstOrderId?: string | null;
+  createdAt: Date;
+};
+
+const inMemoryRewardProfilesMap = new Map<string, RewardProfileDoc>();
+const inMemoryRewardLogsMap = new Map<string, RewardLogDoc>();
+const inMemoryReferralsMap = new Map<string, ReferralDoc>();
+
+function computeLoyaltyTier(points: number): "silver" | "gold" | "platinum" {
+  if (points >= 5000) return "platinum";
+  if (points >= 1000) return "gold";
+  return "silver";
+}
+
+function makeReferralCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "VAST";
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+export const mongoRewards = {
+  computeTier: computeLoyaltyTier,
+
+  async getOrCreateProfile(userId: string): Promise<RewardProfileDoc> {
+    if (!userId) throw new Error("userId required");
+    const cleanId = String(userId).trim();
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<RewardProfileDoc>("user_profiles");
+        let found = await col.findOne({ userId: cleanId });
+        if (found) {
+          inMemoryRewardProfilesMap.set(cleanId, found);
+          return found;
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    const inMem = inMemoryRewardProfilesMap.get(cleanId);
+    if (inMem) return inMem;
+
+    // Create a new rewards profile with 100 welcome bonus points
+    const now = new Date();
+    const id = crypto.randomUUID();
+    const referralCode = makeReferralCode();
+    const doc: RewardProfileDoc = {
+      id,
+      _id: id,
+      userId: cleanId,
+      totalPoints: 100,
+      lifetimePoints: 100,
+      loyaltyTier: "silver",
+      referralCode,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    inMemoryRewardProfilesMap.set(cleanId, doc);
+
+    // Add initial log entry for welcome points
+    const welcomeLogId = crypto.randomUUID();
+    const welcomeLog: RewardLogDoc = {
+      id: welcomeLogId,
+      _id: welcomeLogId,
+      userId: cleanId,
+      points: 100,
+      type: "bonus",
+      description: "Welcome bonus points",
+      orderId: null,
+      createdAt: now,
+    };
+    inMemoryRewardLogsMap.set(welcomeLogId, welcomeLog);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<RewardProfileDoc>("user_profiles");
+        await col.insertOne(doc as any);
+        const logCol = getCollection<RewardLogDoc>("reward_points_log");
+        await logCol.insertOne(welcomeLog as any);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    return doc;
+  },
+
+  async getSummary(userId: string) {
+    const profile = await this.getOrCreateProfile(userId);
+
+    let referralCount = 0;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ReferralDoc>("referrals");
+        referralCount = await col.countDocuments({ referrerUserId: profile.userId });
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    if (!referralCount) {
+      referralCount = Array.from(inMemoryReferralsMap.values()).filter(
+        (r) => r.referrerUserId === profile.userId
+      ).length;
+    }
+
+    return {
+      balance: profile.totalPoints,
+      tier: profile.loyaltyTier,
+      lifetimeEarned: profile.lifetimePoints,
+      referralCode: profile.referralCode,
+      referralCount,
+    };
+  },
+
+  async getHistory(userId: string, page = 1, limit = 20) {
+    const cleanId = String(userId).trim();
+    const offset = Math.max(0, (page - 1) * limit);
+
+    let rows: RewardLogDoc[] = [];
+    let total = 0;
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<RewardLogDoc>("reward_points_log");
+        total = await col.countDocuments({ userId: cleanId });
+        rows = await col.find({ userId: cleanId }).sort({ createdAt: -1 }).skip(offset).limit(limit).toArray();
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    if (rows.length === 0 && total === 0) {
+      const all = Array.from(inMemoryRewardLogsMap.values())
+        .filter((l) => l.userId === cleanId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      total = all.length;
+      rows = all.slice(offset, offset + limit);
+    }
+
+    return {
+      history: rows,
+      page,
+      total,
+      pages: Math.max(1, Math.ceil(total / limit)),
+    };
+  },
+
+  async addPoints(
+    userId: string,
+    points: number,
+    type: "earned" | "bonus" | "redeemed",
+    description: string,
+    orderId?: string | null
+  ): Promise<RewardProfileDoc> {
+    const profile = await this.getOrCreateProfile(userId);
+    const now = new Date();
+    const newTotal = Math.max(0, profile.totalPoints + points);
+    const newLifetime = points > 0 ? profile.lifetimePoints + points : profile.lifetimePoints;
+    const newTier = computeLoyaltyTier(newTotal);
+
+    profile.totalPoints = newTotal;
+    profile.lifetimePoints = newLifetime;
+    profile.loyaltyTier = newTier;
+    profile.updatedAt = now;
+    inMemoryRewardProfilesMap.set(profile.userId, profile);
+
+    const logId = crypto.randomUUID();
+    const logDoc: RewardLogDoc = {
+      id: logId,
+      _id: logId,
+      userId: profile.userId,
+      points,
+      type,
+      description,
+      orderId: orderId || null,
+      createdAt: now,
+    };
+    inMemoryRewardLogsMap.set(logId, logDoc);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<RewardProfileDoc>("user_profiles");
+        await col.updateOne(
+          { userId: profile.userId },
+          { $set: { totalPoints: newTotal, lifetimePoints: newLifetime, loyaltyTier: newTier, updatedAt: now } }
+        );
+        const logCol = getCollection<RewardLogDoc>("reward_points_log");
+        await logCol.insertOne(logDoc as any);
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    return profile;
+  },
+
+  async applyReferral(referredUserId: string, referralCode: string): Promise<boolean> {
+    const code = referralCode.trim().toUpperCase();
+
+    // Check if referee already used a code
+    let alreadyReferred = false;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ReferralDoc>("referrals");
+        const found = await col.findOne({ referredUserId });
+        if (found) alreadyReferred = true;
+      } catch {}
+    }
+    if (!alreadyReferred) {
+      alreadyReferred = Array.from(inMemoryReferralsMap.values()).some((r) => r.referredUserId === referredUserId);
+    }
+    if (alreadyReferred) {
+      throw Object.assign(new Error("You have already used a referral code"), { code: "ALREADY_USED" });
+    }
+
+    // Find referrer by code
+    let referrer: RewardProfileDoc | null = null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<RewardProfileDoc>("user_profiles");
+        referrer = await col.findOne({ referralCode: code });
+      } catch {}
+    }
+    if (!referrer) {
+      referrer = Array.from(inMemoryRewardProfilesMap.values()).find((p) => p.referralCode === code) || null;
+    }
+
+    if (!referrer) {
+      throw Object.assign(new Error("Invalid referral code"), { code: "INVALID_CODE" });
+    }
+
+    if (referrer.userId === referredUserId) {
+      throw Object.assign(new Error("You cannot use your own referral code"), { code: "SELF_REFERRAL" });
+    }
+
+    const refId = crypto.randomUUID();
+    const refDoc: ReferralDoc = {
+      id: refId,
+      _id: refId,
+      referrerUserId: referrer.userId,
+      referredUserId,
+      createdAt: new Date(),
+    };
+    inMemoryReferralsMap.set(refId, refDoc);
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ReferralDoc>("referrals");
+        await col.insertOne(refDoc as any);
+      } catch {}
+    }
+
+    // Award 200 points to referrer
+    await this.addPoints(referrer.userId, 200, "bonus", "Referral bonus: friend joined");
+    // Award 100 points to referee
+    await this.addPoints(referredUserId, 100, "bonus", "Referral welcome bonus");
+
+    return true;
+  },
+};
+
+// ─── ADVERTISEMENTS (SCROLLING WINDOW) ───────────────────────────────────────
+export type AdvertisementDoc = {
+  id: string;
+  _id?: string;
+  title?: string | null;
+  description?: string | null;
+  imageUrl: string;
+  imageSource?: "upload" | "url";
+  objectKey?: string | null;
+  linkUrl?: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const mongoAdvertisements = {
+  getCollection: () => getCollection<AdvertisementDoc>("advertisements"),
 };

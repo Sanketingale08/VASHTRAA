@@ -2,25 +2,34 @@ import { Router } from "express";
 import { isCustomer } from "../middlewares/isCustomer";
 import { db, cartItemsTable, productsTable, mongoCart, mongoProducts } from "@workspace/db";
 import { eq, and } from "@workspace/db";
+import { getApprovedVendorData, isProductVendorValid } from "../lib/vendorValidation";
+import { emitUserEvent } from "../lib/socket";
 
 const router = Router();
 
 router.get("/cart", isCustomer, async (req: any, res) => {
   try {
+    const approvedVendorData = await getApprovedVendorData();
     try {
       const cartItems = await mongoCart.findByUserId(req.userId);
-      if (cartItems.length > 0) {
-        const productIds = cartItems.map(c => c.productId);
-        const products = await mongoProducts.findMany({ id: { $in: productIds } });
-        const prodMap = new Map(products.map(p => [p.id, p]));
-        const items = cartItems.map(c => {
+      if (cartItems.length === 0) {
+        return res.json({ items: [] });
+      }
+      const productIds = cartItems.map(c => c.productId);
+      const products = await mongoProducts.findMany({ id: { $in: productIds } });
+      const prodMap = new Map(products.map(p => [p.id, p]));
+      const items = cartItems
+        .map(c => {
           const p = prodMap.get(c.productId);
+          if (!p || !isProductVendorValid(p, approvedVendorData)) return null;
           return {
             id: c.productId,
             productId: c.productId,
             quantity: c.quantity,
             name: p?.name ?? "Product",
             price: p?.price ?? 0,
+            basePrice: p?.basePrice ?? (p?.price ? Math.round(p.price / 1.155) : 0),
+            shippingFee: p?.shippingFee ?? 100,
             originalPrice: p?.originalPrice ?? null,
             images: p?.images ?? [],
             vendorName: p?.vendorName ?? "",
@@ -31,9 +40,9 @@ router.get("/cart", isCustomer, async (req: any, res) => {
             rating: p?.rating ?? 4.5,
             reviewCount: p?.reviewCount ?? 0,
           };
-        });
-        return res.json({ items });
-      }
+        })
+        .filter(Boolean);
+      return res.json({ items });
     } catch {}
 
     const rows = await db
@@ -42,9 +51,12 @@ router.get("/cart", isCustomer, async (req: any, res) => {
         quantity: cartItemsTable.quantity,
         name: productsTable.name,
         price: productsTable.price,
+        basePrice: productsTable.basePrice,
+        shippingFee: productsTable.shippingFee,
         originalPrice: productsTable.originalPrice,
         images: productsTable.images,
         vendorName: productsTable.vendorName,
+        vendorId: productsTable.vendorId,
         stock: productsTable.stock,
         category: productsTable.category,
         isBestSeller: productsTable.isBestSeller,
@@ -56,15 +68,20 @@ router.get("/cart", isCustomer, async (req: any, res) => {
       .innerJoin(productsTable, eq(cartItemsTable.productId, productsTable.id))
       .where(eq(cartItemsTable.userId, req.userId));
 
-    res.json({ items: rows.map((r) => ({ ...r, id: r.productId })) });
+    const validRows = rows.filter(r => isProductVendorValid(r, approvedVendorData));
+    res.json({ items: validRows.map((r) => ({ ...r, id: r.productId })) });
   } catch (err) {
     req.log.error({ err }, "Failed to get cart");
     res.status(500).json({ error: "Failed to fetch cart" });
   }
 });
 
-router.post("/cart/:productId", isCustomer, async (req: any, res: any): Promise<void> => {
-  const { productId } = req.params;
+async function handleAddToCart(req: any, res: any): Promise<void> {
+  const productId = req.params.productId || req.body.productId;
+  if (!productId) {
+    res.status(400).json({ error: "productId is required" });
+    return;
+  }
   const quantity = Math.max(1, parseInt(req.body.quantity ?? "1", 10));
   try {
     let product: any = await mongoProducts.findById(productId);
@@ -73,8 +90,9 @@ router.post("/cart/:productId", isCustomer, async (req: any, res: any): Promise<
       product = rows[0];
     }
 
-    if (!product) {
-      res.status(404).json({ error: "Product not found" });
+    const approvedVendorData = await getApprovedVendorData();
+    if (!product || !isProductVendorValid(product, approvedVendorData)) {
+      res.status(400).json({ error: "Product is unavailable because its vendor is not active" });
       return;
     }
     if (product.stock === 0) {
@@ -99,12 +117,16 @@ router.post("/cart/:productId", isCustomer, async (req: any, res: any): Promise<
         });
     } catch {}
 
+    emitUserEvent(req.userId, "cart:updated", { productId, quantity: cappedQty });
     res.json({ success: true, quantity: cappedQty });
   } catch (err) {
-    req.log.error({ err }, "Failed to add to cart");
+    req.log?.error?.({ err }, "Failed to add to cart");
     res.status(500).json({ error: "Failed to add to cart" });
   }
-});
+}
+
+router.post("/cart", isCustomer, handleAddToCart);
+router.post("/cart/:productId", isCustomer, handleAddToCart);
 
 router.put("/cart/:productId", isCustomer, async (req: any, res: any): Promise<void> => {
   const { productId } = req.params;
@@ -138,6 +160,7 @@ router.put("/cart/:productId", isCustomer, async (req: any, res: any): Promise<v
         });
     } catch {}
 
+    emitUserEvent(req.userId, "cart:updated", { productId, quantity: cappedQty });
     res.json({ success: true, quantity: cappedQty });
   } catch (err) {
     req.log.error({ err }, "Failed to update cart");
@@ -154,6 +177,7 @@ router.delete("/cart/:productId", isCustomer, async (req: any, res) => {
         .delete(cartItemsTable)
         .where(and(eq(cartItemsTable.userId, req.userId), eq(cartItemsTable.productId, productId)));
     } catch {}
+    emitUserEvent(req.userId, "cart:updated", { productId, action: "removed" });
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to remove from cart");
@@ -167,6 +191,7 @@ router.delete("/cart", isCustomer, async (req: any, res) => {
     try {
       await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, req.userId));
     } catch {}
+    emitUserEvent(req.userId, "cart:cleared", { userId: req.userId });
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to clear cart");

@@ -14,12 +14,12 @@ if (!process.env.DATABASE_URL) {
 }
 
 if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
+  process.env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/vastraa";
 }
 
 export default defineConfig({
   schema: "./src/schema/*.ts",
-  out: path.join(__dirname, "./drizzle"),
+  out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,

@@ -8,6 +8,9 @@
 GUEST_/
 patch-fs.js
 package-lock.json
+.gemini/
+scratch/
+*.log
 
 # compiled output
 dist

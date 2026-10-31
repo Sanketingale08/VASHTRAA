@@ -70,7 +70,7 @@ async function saveSessionToStore(session: AuthSessionRecord): Promise<void> {
   }
 }
 
-async function findSessionInStore(sessionId: string): Promise<AuthSessionRecord | null> {
+export async function findSessionInStore(sessionId: string): Promise<AuthSessionRecord | null> {
   if (!sessionId) return null;
   if (isMongoDbConnected()) {
     try {

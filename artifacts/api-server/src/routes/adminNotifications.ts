@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, mongoNotifications } from "@workspace/db";
 import { notificationsTable, ADMIN_NOTIFICATION_USER_ID, emailOutboxTable } from "@workspace/db";
 import { eq, and, desc, sql, inArray, ilike, or, gte, lte } from "drizzle-orm";
 
@@ -9,14 +9,24 @@ import { requireAdminKey } from "../middlewares/isAdmin";
 
 router.get("/admin/notifications/unread-count", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
-    const [row] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(notificationsTable)
-      .where(and(eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID), eq(notificationsTable.read, false)));
-    res.json({ count: row?.count ?? 0 });
+    let count = 0;
+    try {
+      count = await mongoNotifications.count({
+        userId: ADMIN_NOTIFICATION_USER_ID,
+        $or: [{ read: false }, { isRead: false }],
+      });
+    } catch {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notificationsTable)
+        .where(and(eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID), eq(notificationsTable.read, false)))
+        .catch(() => []);
+      count = row?.count ?? 0;
+    }
+    res.json({ count });
   } catch (err: any) {
-    req.log?.error({ err }, "admin/notifications/unread-count failed");
-    res.status(500).json({ error: "Failed to fetch unread count" });
+    req.log?.error?.({ err }, "admin/notifications/unread-count failed");
+    res.json({ count: 0 });
   }
 });
 
@@ -34,45 +44,71 @@ router.get("/admin/notifications", requireAdminKey, async (req: any, res: any): 
       ? (Array.isArray(rawType) ? rawType : String(rawType).split(",")).map(String).filter(Boolean)
       : [];
 
-    const conditions: any[] = [eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)];
-    if (types.length === 1) conditions.push(eq(notificationsTable.type, types[0] as any));
-    else if (types.length > 1) conditions.push(inArray(notificationsTable.type, types as any));
-    if (search) {
-      conditions.push(
-        or(ilike(notificationsTable.title, `%${search}%`), ilike(notificationsTable.body, `%${search}%`))
-      );
+    let rows: any[] = [];
+    let total = 0;
+    try {
+      const filter: any = { userId: ADMIN_NOTIFICATION_USER_ID };
+      if (types.length === 1) filter.type = types[0];
+      else if (types.length > 1) filter.type = { $in: types };
+      if (search) filter.$or = [{ title: { $regex: search, $options: "i" } }, { body: { $regex: search, $options: "i" } }];
+      if (dateFrom || dateTo) {
+        filter.createdAt = {};
+        if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+        if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+      }
+
+      rows = await mongoNotifications.findMany(filter, { limit, skip: offset, sort: { read: 1, createdAt: -1 } });
+      total = await mongoNotifications.count(filter);
+    } catch {
+      const conditions: any[] = [eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)];
+      if (types.length === 1) conditions.push(eq(notificationsTable.type, types[0] as any));
+      else if (types.length > 1) conditions.push(inArray(notificationsTable.type, types as any));
+      if (search) {
+        conditions.push(
+          or(ilike(notificationsTable.title, `%${search}%`), ilike(notificationsTable.body, `%${search}%`))
+        );
+      }
+      if (dateFrom) conditions.push(gte(notificationsTable.createdAt, new Date(dateFrom)));
+      if (dateTo) conditions.push(lte(notificationsTable.createdAt, new Date(dateTo)));
+      const whereClause = and(...conditions);
+
+      rows = await db
+        .select()
+        .from(notificationsTable)
+        .where(whereClause)
+        .orderBy(sql`${notificationsTable.read} ASC`, desc(notificationsTable.createdAt))
+        .limit(limit)
+        .offset(offset)
+        .catch(() => []);
+
+      const countRows = await db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(notificationsTable)
+        .where(whereClause)
+        .catch(() => []);
+      total = countRows[0]?.total ?? 0;
     }
-    if (dateFrom) conditions.push(gte(notificationsTable.createdAt, new Date(dateFrom)));
-    if (dateTo) conditions.push(lte(notificationsTable.createdAt, new Date(dateTo)));
-    const whereClause = and(...conditions);
-
-    const rows = await db
-      .select()
-      .from(notificationsTable)
-      .where(whereClause)
-      .orderBy(sql`${notificationsTable.read} ASC`, desc(notificationsTable.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [{ total }] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(notificationsTable)
-      .where(whereClause);
 
     res.json({ notifications: rows, total, page, limit });
   } catch (err: any) {
-    req.log?.error({ err }, "admin/notifications failed");
-    res.status(500).json({ error: "Failed to fetch notifications" });
+    req.log?.error?.({ err }, "admin/notifications failed");
+    res.json({ notifications: [], total: 0, page: 1, limit: 20 });
   }
 });
 
 router.patch("/admin/notifications/read-all", requireAdminKey, async (req: any, res: any): Promise<void> => {
   try {
-    await db
-      .update(notificationsTable)
-      .set({ read: true })
-      .where(and(eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID), eq(notificationsTable.read, false)));
-    res.json({ success: true });
+    try {
+      await mongoNotifications.markAllRead(ADMIN_NOTIFICATION_USER_ID);
+    } catch {}
+    try {
+      await db
+        .update(notificationsTable)
+        .set({ read: true })
+        .where(and(eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID), eq(notificationsTable.read, false)))
+        .catch(() => {});
+    } catch {}
+    res.json({ success: true, message: "All admin notifications marked as read" });
   } catch (err: any) {
     req.log?.error({ err }, "admin/notifications/read-all failed");
     res.status(500).json({ error: "Failed to mark all notifications as read" });
@@ -81,17 +117,39 @@ router.patch("/admin/notifications/read-all", requireAdminKey, async (req: any, 
 
 router.patch("/admin/notifications/:id/read", requireAdminKey, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
+  if (!id) {
+    res.status(400).json({ error: "Notification ID is required" });
+    return;
+  }
   try {
-    const rows = await db
-      .update(notificationsTable)
-      .set({ read: true })
-      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
-      .returning({ id: notificationsTable.id });
-    if (rows.length === 0) {
-      res.status(404).json({ error: "Notification not found" });
-      return;
+    let success = false;
+    try {
+      const existing = await mongoNotifications.findById(id);
+      if (existing) {
+        if (existing.userId && existing.userId !== ADMIN_NOTIFICATION_USER_ID) {
+          res.status(403).json({ error: "Forbidden: Notification belongs to another account" });
+          return;
+        }
+        await mongoNotifications.update(id, { read: true, isRead: true });
+        success = true;
+      }
+    } catch {
+      // Fallback
     }
-    res.json({ success: true });
+
+    if (!success) {
+      const rows = await db
+        .update(notificationsTable)
+        .set({ read: true })
+        .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
+        .returning({ id: notificationsTable.id })
+        .catch(() => []);
+      if (rows.length === 0) {
+        res.status(404).json({ error: "Notification not found" });
+        return;
+      }
+    }
+    res.json({ success: true, message: "Notification marked as read" });
   } catch (err: any) {
     req.log?.error({ err }, "admin/notifications/:id/read failed");
     res.status(500).json({ error: "Failed to mark notification as read" });
@@ -100,35 +158,103 @@ router.patch("/admin/notifications/:id/read", requireAdminKey, async (req: any, 
 
 router.patch("/admin/notifications/:id/unread", requireAdminKey, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
+  if (!id) {
+    res.status(400).json({ error: "Notification ID is required" });
+    return;
+  }
   try {
-    const rows = await db
-      .update(notificationsTable)
-      .set({ read: false })
-      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
-      .returning({ id: notificationsTable.id });
-    if (rows.length === 0) {
-      res.status(404).json({ error: "Notification not found" });
-      return;
+    let success = false;
+    try {
+      const existing = await mongoNotifications.findById(id);
+      if (existing) {
+        if (existing.userId && existing.userId !== ADMIN_NOTIFICATION_USER_ID) {
+          res.status(403).json({ error: "Forbidden: Notification belongs to another account" });
+          return;
+        }
+        await mongoNotifications.update(id, { read: false, isRead: false });
+        success = true;
+      }
+    } catch {
+      // Fallback
     }
-    res.json({ success: true });
+
+    if (!success) {
+      const rows = await db
+        .update(notificationsTable)
+        .set({ read: false })
+        .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
+        .returning({ id: notificationsTable.id })
+        .catch(() => []);
+      if (rows.length === 0) {
+        res.status(404).json({ error: "Notification not found" });
+        return;
+      }
+    }
+    res.json({ success: true, message: "Notification marked as unread" });
   } catch (err: any) {
     req.log?.error({ err }, "admin/notifications/:id/unread failed");
     res.status(500).json({ error: "Failed to mark notification as unread" });
   }
 });
 
+// Clear all admin notifications handler
+const handleAdminClearAll = async (req: any, res: any): Promise<void> => {
+  try {
+    let clearedCount = 0;
+    try {
+      clearedCount = await mongoNotifications.deleteMany({ userId: ADMIN_NOTIFICATION_USER_ID });
+    } catch {}
+
+    try {
+      await db
+        .delete(notificationsTable)
+        .where(eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID))
+        .catch(() => []);
+    } catch {}
+
+    res.json({ success: true, clearedCount, deletedCount: clearedCount, message: "All admin notifications cleared successfully" });
+  } catch (err: any) {
+    req.log?.error({ err }, "admin/notifications clear-all failed");
+    res.status(500).json({ error: "Failed to clear admin notifications" });
+  }
+};
+
+router.delete("/admin/notifications/clear-all", requireAdminKey, handleAdminClearAll);
+router.delete("/admin/notifications", requireAdminKey, handleAdminClearAll);
+router.post("/admin/notifications/clear-all", requireAdminKey, handleAdminClearAll);
+
 router.delete("/admin/notifications/:id", requireAdminKey, async (req: any, res: any): Promise<void> => {
   const { id } = req.params;
+  if (!id || id === "clear-all") {
+    return handleAdminClearAll(req, res);
+  }
   try {
-    const rows = await db
-      .delete(notificationsTable)
-      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
-      .returning({ id: notificationsTable.id });
-    if (rows.length === 0) {
-      res.status(404).json({ error: "Notification not found" });
-      return;
+    let success = false;
+    try {
+      const existing = await mongoNotifications.findById(id);
+      if (existing) {
+        if (existing.userId && existing.userId !== ADMIN_NOTIFICATION_USER_ID) {
+          res.status(403).json({ error: "Forbidden: Notification belongs to another account" });
+          return;
+        }
+        success = await mongoNotifications.delete(id);
+      }
+    } catch {
+      // Fallback
     }
-    res.json({ success: true });
+
+    if (!success) {
+      const rows = await db
+        .delete(notificationsTable)
+        .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, ADMIN_NOTIFICATION_USER_ID)))
+        .returning({ id: notificationsTable.id })
+        .catch(() => []);
+      if (rows.length === 0) {
+        res.status(404).json({ error: "Notification not found" });
+        return;
+      }
+    }
+    res.json({ success: true, message: "Notification deleted successfully" });
   } catch (err: any) {
     req.log?.error({ err }, "admin/notifications/:id delete failed");
     res.status(500).json({ error: "Failed to delete notification" });

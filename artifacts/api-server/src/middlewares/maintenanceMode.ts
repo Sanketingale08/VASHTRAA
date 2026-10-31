@@ -8,8 +8,8 @@
  * The setting value is cached for 30 seconds to avoid a DB query on every
  * request during normal operation.
  */
-import { db, siteSettingsTable } from "@workspace/db";
-import { eq } from "@workspace/db";
+import { db, siteSettingsTable, mongoSiteSettings } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 
 let _cache: { enabled: boolean; expiresAt: number } | null = null;
@@ -21,6 +21,16 @@ export function clearMaintenanceModeCache(): void {
 
 async function isMaintenanceEnabled(): Promise<boolean> {
   if (_cache && Date.now() < _cache.expiresAt) return _cache.enabled;
+  try {
+    if (mongoSiteSettings && typeof mongoSiteSettings.get === "function") {
+      const mongoVal = await mongoSiteSettings.get("maintenance_mode");
+      if (mongoVal !== null) {
+        const enabled = mongoVal === "true";
+        _cache = { enabled, expiresAt: Date.now() + 30_000 };
+        return enabled;
+      }
+    }
+  } catch {}
   try {
     const [row] = await db
       .select({ value: siteSettingsTable.value })

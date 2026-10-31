@@ -69,6 +69,7 @@ vi.mock("@workspace/db", () => {
     vendorsTable: tag("vendors", ["id", "ownerId", "status", "name"]),
     ordersTable:  tag("orders",  ["id", "userId"]),
     productsTable: tag("products", ["id", "vendorId"]),
+    isMongoDbConnected: vi.fn(() => false),
   };
 });
 

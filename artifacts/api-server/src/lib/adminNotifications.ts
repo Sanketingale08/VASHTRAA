@@ -1,6 +1,6 @@
 import { db, notificationsTable, ADMIN_NOTIFICATION_USER_ID, siteSettingsTable, mongoSiteSettings, mongoGeneric } from "@workspace/db";
 import type { AdminNotificationType } from "@workspace/db";
-import { eq } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 // ─── Map notification types → admin_notification_prefs category keys ──────────
 
@@ -24,8 +24,14 @@ let _prefCache: { prefs: Record<string, PrefRow>; expiresAt: number } | null = n
 
 async function getAdminNotifPrefs(): Promise<Record<string, PrefRow>> {
   if (_prefCache && Date.now() < _prefCache.expiresAt) return _prefCache.prefs;
+  let val: string | null = null;
   try {
-    const val = await mongoSiteSettings.get("admin_notification_prefs");
+    if (mongoSiteSettings && typeof mongoSiteSettings.get === "function") {
+      val = await mongoSiteSettings.get("admin_notification_prefs");
+    }
+  } catch {}
+
+  try {
     let prefs: Record<string, PrefRow> = {};
     if (val) {
       prefs = JSON.parse(val);

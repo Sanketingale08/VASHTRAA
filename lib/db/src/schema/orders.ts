@@ -27,6 +27,13 @@ export const ordersTable = pgTable("orders", {
   refundIdempotencyKey: text("refund_idempotency_key"),
   deliveredAt: timestamp("delivered_at"),
   displayId: text("display_id"),
+  pricingVersion: text("pricing_version").notNull().default("v1"),
+  financials: jsonb("financials"),
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  cashfreeOrderId: text("cashfree_order_id"),
+  cashfreePaymentSessionId: text("cashfree_payment_session_id"),
+  cashfreePaymentId: text("cashfree_payment_id"),
+  paymentVerifiedAt: timestamp("payment_verified_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

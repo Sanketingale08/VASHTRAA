@@ -97,7 +97,7 @@ vi.mock("@workspace/db", () => {
           values: vi.fn(() =>
             Object.assign(Promise.resolve(undefined), {
               returning: vi.fn(() =>
-                Promise.resolve([{ id: `TD${orderSeq++}` }]),
+                Promise.resolve([{ id: `V${orderSeq++}` }]),
               ),
               onConflictDoNothing: vi.fn(() => Promise.resolve()),
             }),
@@ -105,13 +105,11 @@ vi.mock("@workspace/db", () => {
         })),
         update: vi.fn(() => ({
           set: vi.fn(() => ({
-            where: vi.fn(() =>
-              Object.assign(Promise.resolve(undefined), {
-                returning: vi.fn(() =>
-                  Promise.resolve([{ totalPoints: 0, loyaltyTier: "silver" }]),
-                ),
-              }),
-            ),
+            where: vi.fn(() => ({
+              returning: vi.fn(() =>
+                Promise.resolve([{ id: "prod-uuid-1", stock: 9, totalPoints: 0, loyaltyTier: "silver" }]),
+              ),
+            })),
           })),
         })),
         delete: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })),
@@ -123,6 +121,14 @@ vi.mock("@workspace/db", () => {
 
   return {
     db: dbMock,
+    inArray: vi.fn((a, b) => ({ type: "inArray", a, b })),
+    eq: vi.fn((a, b) => ({ type: "eq", a, b })),
+    and: vi.fn((...args) => ({ type: "and", args })),
+    desc: vi.fn((a) => ({ type: "desc", a })),
+    sql: vi.fn((strings: any, ...values: any[]) => ({ type: "sql", strings, values })),
+    gte: vi.fn((a, b) => ({ type: "gte", a, b })),
+    mongoOrders: { insert: vi.fn(() => Promise.resolve()), findMany: vi.fn(() => Promise.resolve([])), findById: vi.fn(() => Promise.resolve(null)) },
+    mongoProducts: { findById: vi.fn(() => Promise.resolve(null)), decrementStock: vi.fn(() => Promise.resolve({ success: true })) },
     vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId", status: "status" },
     ordersTable: { _t: "orders", id: "id", userId: "userId" },
     productsTable: {

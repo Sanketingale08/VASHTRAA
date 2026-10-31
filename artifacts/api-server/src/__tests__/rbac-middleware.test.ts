@@ -46,8 +46,28 @@ vi.mock("@clerk/express", () => ({
 const mockDbSelect = vi.fn();
 vi.mock("@workspace/db", () => ({
   db: { select: (...args: unknown[]) => mockDbSelect(...args) },
-  vendorsTable: { id: "id", ownerId: "ownerId", status: "status" },
+  vendorsTable: { id: "id", ownerId: "ownerId", status: "status", contactEmail: "contactEmail" },
   commissionRulesTable: { active: "active" },
+  eq: (a: any, b: any) => ({ a, b }),
+  or: (...args: any[]) => ({ args }),
+  mongoSellers: {
+    findByOwnerId: vi.fn().mockResolvedValue(null),
+    findById: vi.fn().mockResolvedValue(null),
+    findBySellerId: vi.fn().mockResolvedValue(null),
+    findByVendorId: vi.fn().mockResolvedValue(null),
+    findByEmail: vi.fn().mockResolvedValue(null),
+  },
+  mongoVendors: {
+    findByOwnerId: vi.fn().mockResolvedValue(null),
+    findById: vi.fn().mockResolvedValue(null),
+    findBySellerId: vi.fn().mockResolvedValue(null),
+    findByVendorId: vi.fn().mockResolvedValue(null),
+    findByEmail: vi.fn().mockResolvedValue(null),
+  },
+  mongoUsers: {
+    findById: vi.fn().mockResolvedValue(null),
+    findByEmail: vi.fn().mockResolvedValue(null),
+  },
   // Required by isAdmin middleware (key-hash and 2FA-enabled lookups)
   siteSettingsTable: { key: "key", value: "value", updatedAt: "updatedAt" },
   adminLoginSessionsTable: {

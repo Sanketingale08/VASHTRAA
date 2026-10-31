@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { mongoUsers, mongoSessions, mongoVendors } from "@workspace/db";
+import { mongoUsers, mongoSessions, mongoVendors, mongoSellers } from "@workspace/db";
 import {
   getGoogleOAuthUrl,
   verifyGoogleTokenOrCode,
@@ -8,6 +8,8 @@ import {
   resendGoogleAuthOtp,
 } from "../lib/googleAuth";
 import { logger } from "../lib/logger";
+import { createAuthSession, setRefreshTokenCookie, type UserRole } from "../lib/sessions";
+import { sendAccountWelcomeEmail } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -18,9 +20,10 @@ router.get("/auth/google/url", async (req: Request, res: Response): Promise<void
   try {
     const role = (req.query.role as string) === "seller" ? "seller" : "customer";
     const mode = (req.query.mode as string) === "signup" ? "signup" : "login";
+    const returnTo = (req.query.returnTo as string) || (req.query.redirect as string) || "";
     const redirectUri = (req.query.redirectUri as string) || `${req.protocol}://${req.get("host")}/google-callback`;
 
-    const stateObj = { role, mode, nonce: Math.random().toString(36).substring(2) };
+    const stateObj = { role, mode, returnTo, redirectUri, nonce: Math.random().toString(36).substring(2) };
     const state = Buffer.from(JSON.stringify(stateObj)).toString("base64url");
     const url = getGoogleOAuthUrl(redirectUri, state);
 
@@ -32,12 +35,198 @@ router.get("/auth/google/url", async (req: Request, res: Response): Promise<void
 });
 
 /**
- * POST /api/auth/google/callback — Handles Google OAuth response, verifies identity server-side,
- * checks existing account, creates Google OTP challenge, and sends 6-digit OTP.
+ * Helper function to authenticate existing user or create a new user account from verified Google identity.
+ * Strictly enforces server-side role resolution:
+ *  - New social-login users ALWAYS default to "customer" role.
+ *  - Social login NEVER auto-grants seller access or creates approved vendor profiles.
+ *  - Existing accounts preserve their database role without being overwritten.
+ *  - Seller dashboard access is strictly granted ONLY if an approved vendor profile exists in DB.
+ *  - Customers attempting seller login are redirected to seller onboarding (/seller/register).
+ */
+async function authenticateOrRegisterGoogleUser(
+  opts: {
+    email: string;
+    googleId: string;
+    name: string;
+    picture?: string;
+    targetRole?: "customer" | "seller";
+    returnTo?: string;
+  },
+  req: Request,
+  res: Response
+) {
+  const cleanEmail = opts.email.toLowerCase().trim();
+
+  // 1. Account lookup: If targetRole is specified, search for matching role-specific account first
+  let user = null;
+  if (opts.targetRole) {
+    user = await mongoUsers.findByEmail(cleanEmail, opts.targetRole);
+  }
+
+  // 2. If not found by role-specific email, check by stable googleId matching the targetRole
+  if (!user) {
+    const byGoogle = await mongoUsers.findByGoogleId(opts.googleId);
+    if (byGoogle) {
+      if (!opts.targetRole || byGoogle.role === opts.targetRole) {
+        user = byGoogle;
+      }
+    }
+  }
+
+  // 3. Fallback check by verified email
+  if (!user) {
+    if (opts.targetRole === "seller") {
+      user = await mongoUsers.findByEmail(cleanEmail, "seller");
+    } else if (opts.targetRole === "customer") {
+      user = await mongoUsers.findByEmail(cleanEmail, "customer");
+    }
+    if (!user && !opts.targetRole) {
+      user = await mongoUsers.findByEmail(cleanEmail);
+    }
+  }
+
+  let isNewUser = false;
+
+  // 3. New user registration: Social login MUST default to customer with least privilege
+  // Clicking a social login button must NEVER automatically grant seller access!
+  if (!user) {
+    isNewUser = true;
+    user = await mongoUsers.insert({
+      name: opts.name || cleanEmail.split("@")[0],
+      email: cleanEmail,
+      passwordHash: "",
+      role: "customer", // Always customer by default
+      googleId: opts.googleId,
+      authProvider: "google",
+      avatar: opts.picture || "/images/artisan-1.png",
+      profilePicture: opts.picture || "/images/artisan-1.png",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    if (user && user.role === "customer") {
+      void sendAccountWelcomeEmail({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+      }).catch((err) => {
+        logger.warn({ err, userId: user.id }, "[GoogleAuth] Failed to send welcome email");
+      });
+    }
+  } else {
+    // Existing user: Link googleId if not yet linked, and update avatar if missing
+    // CRITICAL: NEVER overwrite or escalate existing account's role when signing in through Google!
+    const updateData: Record<string, any> = {};
+    if (!user.googleId) updateData.googleId = opts.googleId;
+    if (!user.authProvider) updateData.authProvider = "google";
+    if (opts.picture && (!user.avatar || !user.profilePicture)) {
+      updateData.avatar = opts.picture;
+      updateData.profilePicture = opts.picture;
+    }
+    if (Object.keys(updateData).length > 0) {
+      user = (await mongoUsers.update(user.id, updateData)) || user;
+    }
+  }
+
+  // 4. Role determination & Dashboard Redirection:
+  // Derived strictly from verified server-side database records, NEVER from client params!
+  let effectiveRole: UserRole = "customer";
+  let redirectUrl = opts.returnTo || "/account/overview";
+
+  if (user.role === "seller") {
+    // Verify whether this seller account has an approved vendor profile in the database
+    let vendor = null;
+    try {
+      if (mongoVendors) {
+        vendor = (await mongoVendors.findByOwnerId(user.id)) ||
+                 (await mongoVendors.findByEmail(cleanEmail)) ||
+                 (await mongoVendors.findById(user.id));
+      }
+    } catch {}
+
+    if (!vendor) {
+      try {
+        if (mongoSellers && mongoSellers !== mongoVendors) {
+          vendor = (await mongoSellers.findByOwnerId(user.id)) ||
+                   (await mongoSellers.findByEmail(cleanEmail)) ||
+                   (await mongoSellers.findById(user.id));
+        }
+      } catch {}
+    }
+
+    if (vendor) {
+      const vStatus = vendor.status || vendor.approvalStatus;
+      if (vStatus === "suspended") {
+        const error: any = new Error("Your seller account has been suspended. Please contact support.");
+        error.code = "VENDOR_SUSPENDED";
+        error.statusCode = 403;
+        throw error;
+      }
+      if (vStatus === "rejected" || vStatus === "declined") {
+        const error: any = new Error("Your vendor application has been rejected by Super Admin.");
+        error.code = "VENDOR_REJECTED";
+        error.statusCode = 403;
+        throw error;
+      }
+      if (vStatus === "approved" || vStatus === "active") {
+        effectiveRole = "seller";
+        redirectUrl = opts.returnTo || "/seller/dashboard";
+      } else {
+        // Pending or not approved: cannot access seller dashboard
+        effectiveRole = "customer";
+        redirectUrl = "/seller/register";
+      }
+    } else {
+      // Seller user with no approved vendor profile: redirect to seller onboarding
+      effectiveRole = "customer";
+      redirectUrl = "/seller/register";
+    }
+  } else if (user.role === "admin" || (user as any).role === "super_admin") {
+    effectiveRole = "admin";
+    redirectUrl = "/admin/dashboard";
+  } else {
+    // Role is "customer"
+    effectiveRole = "customer";
+    if (opts.targetRole === "seller") {
+      // Customer attempting to log in via seller portal:
+      // Redirect to seller onboarding (registration) page, maintaining customer role
+      redirectUrl = "/seller/register";
+    } else {
+      redirectUrl = opts.returnTo || "/account/overview";
+    }
+  }
+
+  // 5. Create authenticated session using the verified server-side role
+  const { accessToken, refreshToken, session } = await createAuthSession(
+    user.id,
+    user.email,
+    effectiveRole,
+    req
+  );
+  setRefreshTokenCookie(res, effectiveRole, refreshToken, session.id);
+
+  return {
+    token: accessToken,
+    accessToken,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: effectiveRole,
+      avatar: user.avatar || user.profilePicture,
+    },
+    redirectUrl,
+    isNewUser,
+  };
+}
+
+/**
+ * POST /api/auth/google/callback — Direct Google OAuth Handler.
+ * Verifies identity server-side, checks existing account (Login vs Create Account),
+ * issues session token, and returns target redirect URL to land on VASTRAA Dashboard.
  */
 router.post("/auth/google/callback", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { code, token, role, mode, redirectUri } = req.body || {};
+    const { code, token, role, mode, state, redirectUri } = req.body || {};
     const codeOrToken = (code || token || "").toString().trim();
 
     if (!codeOrToken) {
@@ -45,8 +234,23 @@ router.post("/auth/google/callback", async (req: Request, res: Response): Promis
       return;
     }
 
-    const targetRole = role === "seller" ? "seller" : "customer";
-    const targetMode = mode === "signup" ? "signup" : "login";
+    let targetRole: "customer" | "seller" = role === "seller" ? "seller" : "customer";
+    let returnTo: string | undefined = undefined;
+
+    if (state && typeof state === "string") {
+      try {
+        const decoded = JSON.parse(Buffer.from(state, "base64url").toString("utf-8"));
+        if (decoded.role === "seller" || decoded.role === "customer") {
+          targetRole = decoded.role;
+        }
+        if (decoded.returnTo && typeof decoded.returnTo === "string") {
+          returnTo = decoded.returnTo;
+        }
+      } catch {
+        /* ignore invalid state parsing */
+      }
+    }
+
     const callbackRedirectUri = redirectUri || `${req.protocol}://${req.get("host")}/google-callback`;
 
     // Verify identity server-side with Google (never trust frontend profile data)
@@ -57,41 +261,46 @@ router.post("/auth/google/callback", async (req: Request, res: Response): Promis
       return;
     }
 
-    const cleanEmail = identity.email.toLowerCase().trim();
+    // Direct Login / Registration flow with server-side role resolution
+    const authResult = await authenticateOrRegisterGoogleUser(
+      {
+        email: identity.email,
+        googleId: identity.googleId,
+        name: identity.name,
+        picture: identity.picture,
+        targetRole,
+        returnTo,
+      },
+      req,
+      res
+    );
 
-    // Check existing account in database
-    const existingUser = await mongoUsers.findByEmail(cleanEmail);
-
-    // Create secure 6-digit OTP challenge
-    const challengeResult = await createGoogleAuthChallenge({
-      email: cleanEmail,
-      googleId: identity.googleId,
-      name: identity.name,
-      picture: identity.picture,
-      targetRole,
-      mode: targetMode,
-    });
+    logger.info(
+      { userId: authResult.user.id, email: authResult.user.email, role: authResult.user.role, redirectUrl: authResult.redirectUrl, isNewUser: authResult.isNewUser },
+      "[GoogleAuth API] Direct Google SSO login/registration successful"
+    );
 
     res.status(200).json({
       success: true,
-      requiresOtp: true,
-      challengeId: challengeResult.challengeId,
-      email: challengeResult.email,
-      targetRole: challengeResult.targetRole,
-      accountExists: !!existingUser,
-      message: `OTP sent to ${challengeResult.email}`,
+      token: authResult.token,
+      accessToken: authResult.accessToken,
+      user: authResult.user,
+      redirectUrl: authResult.redirectUrl,
+      isNewUser: authResult.isNewUser,
     });
   } catch (err: any) {
     logger.error({ err: err?.message || err }, "[GoogleAuth API] Callback verification error");
-    res.status(400).json({
+    const statusCode = err?.statusCode || (err?.code === "VENDOR_SUSPENDED" || err?.code === "VENDOR_REJECTED" ? 403 : 400);
+    res.status(statusCode).json({
       success: false,
       error: err?.message || "Google authentication failed. Please try again.",
+      code: err?.code,
     });
   }
 });
 
 /**
- * POST /api/auth/google/verify-otp — Verifies the 6-digit OTP, creates or authenticates user/seller account,
+ * POST /api/auth/google/verify-otp — Verifies the 6-digit OTP, authenticates user account,
  * creates active session token, and returns user payload + target redirect URL.
  */
 router.post("/auth/google/verify-otp", async (req: Request, res: Response): Promise<void> => {
@@ -126,94 +335,39 @@ router.post("/auth/google/verify-otp", async (req: Request, res: Response): Prom
 
     const { email, googleId, name, picture, targetRole } = verification.challenge;
 
-    // Check if account already exists
-    let user = await mongoUsers.findByEmail(email);
-
-    if (user) {
-      // Account exists — authenticate existing account & update Google metadata if missing
-      const updateData: Record<string, any> = {};
-      if (!user.googleId) updateData.googleId = googleId;
-      if (!user.authProvider) updateData.authProvider = "google";
-      if (picture && (!user.avatar || !user.profilePicture)) {
-        updateData.avatar = picture;
-        updateData.profilePicture = picture;
-      }
-      if (Object.keys(updateData).length > 0) {
-        user = (await mongoUsers.update(user.id, updateData)) || user;
-      }
-    } else {
-      // Account does not exist — create new user account using verified Google identity
-      user = await mongoUsers.insert({
-        name: name || email.split("@")[0],
+    // Direct Login / Registration flow with server-side role resolution
+    const authResult = await authenticateOrRegisterGoogleUser(
+      {
         email,
-        passwordHash: "",
-        role: targetRole === "seller" ? "seller" : "customer",
         googleId,
-        authProvider: "google",
-        avatar: picture || "/images/artisan-1.png",
-        profilePicture: picture || "/images/artisan-1.png",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
-
-    // If target role is seller, ensure seller/vendor record is active
-    let redirectUrl = "/account/overview";
-
-    if (targetRole === "seller" || user.role === "seller") {
-      let vendor = await mongoVendors.findByOwnerId(user.id);
-      if (!vendor) {
-        vendor = await mongoVendors.insert({
-          name: `${user.name}'s Shop`,
-          location: "Yeola, Maharashtra",
-          rating: 4.8,
-          sareesCount: 0,
-          avatar: picture || "/images/artisan-1.png",
-          bio: `Handcrafted saree collection by ${user.name}`,
-          contactEmail: user.email,
-          status: "approved",
-          ownerId: user.id,
-          vendorId: `VEND_${user.id.substring(0, 8).toUpperCase()}`,
-        });
-      }
-
-      if (vendor.status === "suspended") {
-        res.status(403).json({
-          success: false,
-          error: "Your seller account has been suspended. Please contact support.",
-          code: "VENDOR_SUSPENDED",
-        });
-        return;
-      }
-
-      redirectUrl = "/seller/dashboard";
-    }
-
-    // Create session in MongoDB
-    const session = await mongoSessions.createSession(user.id);
+        name,
+        picture,
+        targetRole,
+      },
+      req,
+      res
+    );
 
     logger.info(
-      { userId: user.id, email: user.email, role: user.role, redirectUrl },
+      { userId: authResult.user.id, email: authResult.user.email, role: authResult.user.role, redirectUrl: authResult.redirectUrl },
       "[GoogleAuth API] Successful Google authentication + OTP verification"
     );
 
     res.status(200).json({
       success: true,
-      token: session.token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar || user.profilePicture,
-      },
-      redirectUrl,
+      token: authResult.token,
+      accessToken: authResult.accessToken,
+      user: authResult.user,
+      redirectUrl: authResult.redirectUrl,
+      isNewUser: authResult.isNewUser,
     });
   } catch (err: any) {
     logger.error({ err: err?.message || err }, "[GoogleAuth API] OTP verification error");
-    res.status(500).json({
+    const statusCode = err?.statusCode || (err?.code === "VENDOR_SUSPENDED" || err?.code === "VENDOR_REJECTED" ? 403 : 500);
+    res.status(statusCode).json({
       success: false,
-      error: "Unable to verify OTP. Please try again.",
+      error: err?.message || "Unable to verify OTP. Please try again.",
+      code: err?.code,
     });
   }
 });

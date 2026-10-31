@@ -25,7 +25,7 @@ for (const envPath of possibleEnvPaths) {
         const idx = trimmed.indexOf("=");
         const key = trimmed.slice(0, idx).trim();
         const val = trimmed.slice(idx + 1).trim();
-        if (!process.env[key] || process.env[key]?.includes("placeholder") || process.env[key]?.startsWith("re_123456")) {
+        if (val) {
           process.env[key] = val;
         }
       }
@@ -34,20 +34,21 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-const rawPort = process.env["API_PORT"] || process.env["API_SERVER_PORT"] || "3001";
+import http from "http";
+import { initSocketIO } from "./lib/socket";
+
+const rawPort = process.env["API_PORT"] || process.env["API_SERVER_PORT"] || process.env["PORT"] || "5000";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid API PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+const server = http.createServer(app);
+initSocketIO(server);
 
-  logger.info({ port }, "Server listening on port " + port);
+server.listen(port, "0.0.0.0", () => {
+  logger.info({ port }, "Server listening on port " + port + " with Real-Time Socket.IO");
 
   bootstrapDatabase()
     .then(() => {
@@ -111,3 +112,36 @@ function startFeaturedExpiryWorker(): void {
   run();
   setInterval(run, INTERVAL_MS).unref();
 }
+
+// ── Graceful Shutdown Handling ───────────────────────────────────────────────
+function setupGracefulShutdown(): void {
+  let isShuttingDown = false;
+
+  const shutdown = (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    logger.info({ signal }, `Received ${signal}. Starting graceful shutdown...`);
+
+    const forceTimer = setTimeout(() => {
+      logger.error("Forced shutdown after timeout expiration.");
+      process.exit(1);
+    }, 10_000);
+    forceTimer.unref();
+
+    server.close((err) => {
+      clearTimeout(forceTimer);
+      if (err) {
+        logger.error({ err }, "Error closing HTTP server during shutdown");
+        process.exit(1);
+      }
+      logger.info("HTTP server closed cleanly. Exiting process.");
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+setupGracefulShutdown();
+

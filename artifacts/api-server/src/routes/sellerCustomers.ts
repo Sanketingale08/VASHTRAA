@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { clerkClient } from "@clerk/express";
-import { db } from "@workspace/db";
+import { db, mongoSupport, mongoGeneric, mongoProducts } from "@workspace/db";
 import {
   ordersTable,
   productsTable,
@@ -15,11 +15,35 @@ import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 
 const router = Router();
 
-async function getVendorProductIds(vendorId: string): Promise<Set<string>> {
+function getCandidateVendorIds(req: any): string[] {
+  return Array.from(
+    new Set(
+      [
+        req.vendorId,
+        req.sellerId,
+        req.vendor?.id,
+        req.vendor?.vendorId,
+        req.vendor?.sellerId,
+        req.vendor?.ownerId,
+        req.vendor?._id ? String(req.vendor._id) : null,
+      ].filter(Boolean)
+    )
+  );
+}
+
+async function getVendorProductIds(vendorId: string, candidateVendorIds: string[] = []): Promise<Set<string>> {
+  const allVendorIds = Array.from(new Set([vendorId, ...candidateVendorIds].filter(Boolean)));
+  try {
+    const prods = await mongoProducts.find({ vendorId: { $in: allVendorIds } });
+    if (prods && prods.length > 0) {
+      return new Set(prods.map((p: any) => String(p._id || p.id)));
+    }
+  } catch {}
   const products = await db
     .select({ id: productsTable.id })
     .from(productsTable)
-    .where(eq(productsTable.vendorId, vendorId));
+    .where(inArray(productsTable.vendorId, allVendorIds))
+    .catch(() => []);
   return new Set(products.map((p) => p.id));
 }
 
@@ -166,23 +190,43 @@ router.get("/seller/customers/:userId", requireVendorAuth, async (req: any, res:
       email = u.primaryEmailAddress?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? "";
     } catch {}
 
-    const reviews = await db
-      .select()
-      .from(productReviewsTable)
-      .where(and(eq(productReviewsTable.userId, userId), eq(productReviewsTable.vendorId, vendorId)))
-      .orderBy(desc(productReviewsTable.createdAt));
+    let reviews: any[] = [];
+    try {
+      const col = mongoGeneric.getCollection("product_reviews");
+      reviews = await col.find({ userId, vendorId }).sort({ createdAt: -1 }).toArray();
+    } catch {
+      reviews = await db
+        .select()
+        .from(productReviewsTable)
+        .where(and(eq(productReviewsTable.userId, userId), eq(productReviewsTable.vendorId, vendorId)))
+        .orderBy(desc(productReviewsTable.createdAt))
+        .catch(() => []);
+    }
 
-    const queries = await db
-      .select()
-      .from(productQueriesTable)
-      .where(and(eq(productQueriesTable.userId, userId), eq(productQueriesTable.vendorId, vendorId)))
-      .orderBy(desc(productQueriesTable.createdAt));
+    let queries: any[] = [];
+    try {
+      const col = mongoGeneric.getCollection("product_queries");
+      queries = await col.find({ userId, vendorId }).sort({ createdAt: -1 }).toArray();
+    } catch {
+      queries = await db
+        .select()
+        .from(productQueriesTable)
+        .where(and(eq(productQueriesTable.userId, userId), eq(productQueriesTable.vendorId, vendorId)))
+        .orderBy(desc(productQueriesTable.createdAt))
+        .catch(() => []);
+    }
 
-    const tickets = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.userId, userId), eq(supportTicketsTable.vendorId, vendorId)))
-      .orderBy(desc(supportTicketsTable.createdAt));
+    let tickets: any[] = [];
+    try {
+      tickets = await mongoSupport.findTickets({ userId, vendorId }, { sort: { createdAt: -1 } });
+    } catch {
+      tickets = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(eq(supportTicketsTable.userId, userId), eq(supportTicketsTable.vendorId, vendorId)))
+        .orderBy(desc(supportTicketsTable.createdAt))
+        .catch(() => []);
+    }
 
     res.json({
       userId,
@@ -212,23 +256,53 @@ router.get("/seller/reviews", requireVendorAuth, async (req: any, res: any) => {
   const reportedOnly = req.query.reported === "true";
 
   try {
-    const rows = await db
-      .select({
-        review: productReviewsTable,
-        productName: productsTable.name,
-        productImages: productsTable.images,
-      })
-      .from(productReviewsTable)
-      .leftJoin(productsTable, eq(productReviewsTable.productId, productsTable.id))
-      .where(eq(productReviewsTable.vendorId, vendorId))
-      .orderBy(desc(productReviewsTable.createdAt));
+    let rawReviews: any[] = [];
+    try {
+      const col = mongoGeneric.getCollection("product_reviews");
+      rawReviews = await col.find({ vendorId }).sort({ createdAt: -1 }).toArray();
+    } catch {}
 
-    let reviews = rows.map((r) => ({
-      ...r.review,
-      productName: r.productName ?? "Product",
-      productImage: (Array.isArray(r.productImages) ? r.productImages[0] : null) ?? null,
-    }));
+    if (rawReviews.length === 0) {
+      const rows = await db
+        .select({
+          review: productReviewsTable,
+          productName: productsTable.name,
+          productImages: productsTable.images,
+        })
+        .from(productReviewsTable)
+        .leftJoin(productsTable, eq(productReviewsTable.productId, productsTable.id))
+        .where(eq(productReviewsTable.vendorId, vendorId))
+        .orderBy(desc(productReviewsTable.createdAt))
+        .catch(() => []);
 
+      rawReviews = rows.map((r) => ({
+        ...r.review,
+        productName: r.productName ?? "Product",
+        productImage: (Array.isArray(r.productImages) ? r.productImages[0] : null) ?? null,
+      }));
+    } else {
+      const productIds = Array.from(new Set(rawReviews.map((r) => r.productId).filter(Boolean)));
+      const productMap = new Map<string, any>();
+      await Promise.all(
+        productIds.map(async (pid) => {
+          try {
+            const p = await mongoProducts.findById(pid);
+            if (p) productMap.set(pid, p);
+          } catch {}
+        })
+      );
+      rawReviews = rawReviews.map((r) => {
+        const prod = productMap.get(r.productId);
+        return {
+          ...r,
+          id: r.id || r._id,
+          productName: prod?.name || r.productName || "Product",
+          productImage: (Array.isArray(prod?.images) ? prod.images[0] : prod?.image) || null,
+        };
+      });
+    }
+
+    let reviews = rawReviews;
     if (ratingFilter) reviews = reviews.filter((r) => r.rating === ratingFilter);
     if (reportedOnly) reviews = reviews.filter((r) => r.reported);
 
@@ -246,17 +320,40 @@ router.post("/seller/reviews/:id/reply", requireVendorAuth, async (req: any, res
   if (!reply || !String(reply).trim()) return res.status(400).json({ error: "reply is required" });
 
   try {
-    const [review] = await db.select().from(productReviewsTable).where(eq(productReviewsTable.id, id)).limit(1);
+    let review: any = null;
+    let col: any = null;
+    try {
+      col = mongoGeneric.getCollection("product_reviews");
+      review = await col.findOne({ $or: [{ id }, { _id: id }] });
+    } catch {}
+
+    if (!review) {
+      const [r] = await db.select().from(productReviewsTable).where(eq(productReviewsTable.id, id)).limit(1).catch(() => []);
+      review = r;
+    }
+
     if (!review) return res.status(404).json({ error: "Review not found" });
-    if (review.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden" });
+    if (review.vendorId && review.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden" });
 
-    const [updated] = await db
-      .update(productReviewsTable)
-      .set({ sellerReply: String(reply).trim(), sellerRepliedAt: new Date() })
-      .where(eq(productReviewsTable.id, id))
-      .returning();
+    const updateData = { sellerReply: String(reply).trim(), sellerRepliedAt: new Date() };
 
-    res.json(updated);
+    let updated: any = null;
+    if (col) {
+      await col.updateOne({ $or: [{ id }, { _id: id }] }, { $set: updateData });
+      updated = { ...review, ...updateData };
+    }
+
+    try {
+      const [pgUpdated] = await db
+        .update(productReviewsTable)
+        .set(updateData)
+        .where(eq(productReviewsTable.id, id))
+        .returning()
+        .catch(() => []);
+      if (pgUpdated) updated = pgUpdated;
+    } catch {}
+
+    res.json(updated || { id, ...updateData });
   } catch (err: any) {
     req.log?.error({ err }, "seller/reviews/reply failed");
     res.status(500).json({ error: "Failed to reply to review" });
@@ -269,17 +366,40 @@ router.post("/seller/reviews/:id/report", requireVendorAuth, async (req: any, re
   const { reason } = req.body;
 
   try {
-    const [review] = await db.select().from(productReviewsTable).where(eq(productReviewsTable.id, id)).limit(1);
+    let review: any = null;
+    let col: any = null;
+    try {
+      col = mongoGeneric.getCollection("product_reviews");
+      review = await col.findOne({ $or: [{ id }, { _id: id }] });
+    } catch {}
+
+    if (!review) {
+      const [r] = await db.select().from(productReviewsTable).where(eq(productReviewsTable.id, id)).limit(1).catch(() => []);
+      review = r;
+    }
+
     if (!review) return res.status(404).json({ error: "Review not found" });
-    if (review.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden" });
+    if (review.vendorId && review.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden" });
 
-    const [updated] = await db
-      .update(productReviewsTable)
-      .set({ reported: true, reportReason: reason ? String(reason).trim() : "Reported by seller" })
-      .where(eq(productReviewsTable.id, id))
-      .returning();
+    const updateData = { reported: true, reportReason: reason ? String(reason).trim() : "Reported by seller" };
 
-    res.json(updated);
+    let updated: any = null;
+    if (col) {
+      await col.updateOne({ $or: [{ id }, { _id: id }] }, { $set: updateData });
+      updated = { ...review, ...updateData };
+    }
+
+    try {
+      const [pgUpdated] = await db
+        .update(productReviewsTable)
+        .set(updateData)
+        .where(eq(productReviewsTable.id, id))
+        .returning()
+        .catch(() => []);
+      if (pgUpdated) updated = pgUpdated;
+    } catch {}
+
+    res.json(updated || { id, ...updateData });
   } catch (err: any) {
     req.log?.error({ err }, "seller/reviews/report failed");
     res.status(500).json({ error: "Failed to report review" });
@@ -289,27 +409,79 @@ router.post("/seller/reviews/:id/report", requireVendorAuth, async (req: any, re
 // ---------- Product Queries ----------
 
 router.get("/seller/queries", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const status = (req.query.status as string | undefined)?.trim();
 
   try {
-    const rows = await db
-      .select({
-        query: productQueriesTable,
-        productName: productsTable.name,
-        productImages: productsTable.images,
-      })
-      .from(productQueriesTable)
-      .leftJoin(productsTable, eq(productQueriesTable.productId, productsTable.id))
-      .where(eq(productQueriesTable.vendorId, vendorId))
-      .orderBy(desc(productQueriesTable.createdAt));
+    const productIdsSet = await getVendorProductIds(req.vendorId, vendorIds);
+    const productIdsList = Array.from(productIdsSet);
 
-    let queries = rows.map((r) => ({
-      ...r.query,
-      productName: r.productName ?? "Product",
-      productImage: (Array.isArray(r.productImages) ? r.productImages[0] : null) ?? null,
-    }));
+    let rawQueries: any[] = [];
+    try {
+      const col = mongoGeneric.getCollection("product_queries");
+      const mongoFilter: any = {
+        $or: [
+          { vendorId: { $in: vendorIds } },
+          ...(productIdsList.length > 0 ? [{ productId: { $in: productIdsList } }] : []),
+        ],
+      };
+      if (status && status !== "all") {
+        mongoFilter.status = status;
+      }
+      rawQueries = await col.find(mongoFilter).sort({ createdAt: -1 }).toArray();
+    } catch {}
 
+    if (rawQueries.length === 0) {
+      const conditions: any[] = [
+        or(
+          inArray(productQueriesTable.vendorId, vendorIds),
+          productIdsList.length > 0 ? inArray(productQueriesTable.productId, productIdsList) : sql`false`
+        ),
+      ];
+      if (status && status !== "all") {
+        conditions.push(eq(productQueriesTable.status, status as any));
+      }
+
+      const rows = await db
+        .select({
+          query: productQueriesTable,
+          productName: productsTable.name,
+          productImages: productsTable.images,
+        })
+        .from(productQueriesTable)
+        .leftJoin(productsTable, eq(productQueriesTable.productId, productsTable.id))
+        .where(and(...conditions))
+        .orderBy(desc(productQueriesTable.createdAt))
+        .catch(() => []);
+
+      rawQueries = rows.map((r) => ({
+        ...r.query,
+        productName: r.productName ?? "Product",
+        productImage: (Array.isArray(r.productImages) ? r.productImages[0] : null) ?? null,
+      }));
+    } else {
+      const productIds = Array.from(new Set(rawQueries.map((q) => q.productId).filter(Boolean)));
+      const productMap = new Map<string, any>();
+      await Promise.all(
+        productIds.map(async (pid) => {
+          try {
+            const p = await mongoProducts.findById(pid);
+            if (p) productMap.set(pid, p);
+          } catch {}
+        })
+      );
+      rawQueries = rawQueries.map((q) => {
+        const prod = productMap.get(q.productId);
+        return {
+          ...q,
+          id: q.id || q._id,
+          productName: prod?.name || q.productName || "Product",
+          productImage: (Array.isArray(prod?.images) ? prod.images[0] : prod?.image) || null,
+        };
+      });
+    }
+
+    let queries = rawQueries;
     if (status && status !== "all") queries = queries.filter((q) => q.status === status);
 
     res.json({ queries });
@@ -320,25 +492,54 @@ router.get("/seller/queries", requireVendorAuth, async (req: any, res: any) => {
 });
 
 router.post("/seller/queries/:id/reply", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
   const { reply, status } = req.body;
   if (!reply || !String(reply).trim()) return res.status(400).json({ error: "reply is required" });
 
   try {
-    const [query] = await db.select().from(productQueriesTable).where(eq(productQueriesTable.id, id)).limit(1);
+    let query: any = null;
+    let col: any = null;
+    try {
+      col = mongoGeneric.getCollection("product_queries");
+      query = await col.findOne({ $or: [{ id }, { _id: id }] });
+    } catch {}
+
+    if (!query) {
+      const [q] = await db.select().from(productQueriesTable).where(eq(productQueriesTable.id, id)).limit(1).catch(() => []);
+      query = q;
+    }
+
     if (!query) return res.status(404).json({ error: "Query not found" });
-    if (query.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden" });
+    const productIdsSet = await getVendorProductIds(req.vendorId, vendorIds);
+    const isOwner = !query.vendorId || vendorIds.includes(query.vendorId) || (query.productId && productIdsSet.has(query.productId));
+    if (!isOwner) return res.status(403).json({ error: "Forbidden" });
 
     const nextStatus = status && ["Open", "In Progress", "Resolved"].includes(status) ? status : "Resolved";
+    const updateData = {
+      sellerReply: String(reply).trim(),
+      sellerRepliedAt: new Date(),
+      status: nextStatus,
+      updatedAt: new Date(),
+    };
 
-    const [updated] = await db
-      .update(productQueriesTable)
-      .set({ sellerReply: String(reply).trim(), sellerRepliedAt: new Date(), status: nextStatus, updatedAt: new Date() })
-      .where(eq(productQueriesTable.id, id))
-      .returning();
+    let updated: any = null;
+    if (col) {
+      await col.updateOne({ $or: [{ id }, { _id: id }] }, { $set: updateData });
+      updated = { ...query, ...updateData };
+    }
 
-    res.json(updated);
+    try {
+      const [pgUpdated] = await db
+        .update(productQueriesTable)
+        .set(updateData)
+        .where(eq(productQueriesTable.id, id))
+        .returning()
+        .catch(() => []);
+      if (pgUpdated) updated = pgUpdated;
+    } catch {}
+
+    res.json(updated || { id, ...updateData });
   } catch (err: any) {
     req.log?.error({ err }, "seller/queries/reply failed");
     res.status(500).json({ error: "Failed to reply to query" });
@@ -346,7 +547,7 @@ router.post("/seller/queries/:id/reply", requireVendorAuth, async (req: any, res
 });
 
 router.patch("/seller/queries/:id/status", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
   const { status } = req.body;
   if (!["Open", "In Progress", "Resolved"].includes(status)) {
@@ -354,17 +555,42 @@ router.patch("/seller/queries/:id/status", requireVendorAuth, async (req: any, r
   }
 
   try {
-    const [query] = await db.select().from(productQueriesTable).where(eq(productQueriesTable.id, id)).limit(1);
+    let query: any = null;
+    let col: any = null;
+    try {
+      col = mongoGeneric.getCollection("product_queries");
+      query = await col.findOne({ $or: [{ id }, { _id: id }] });
+    } catch {}
+
+    if (!query) {
+      const [q] = await db.select().from(productQueriesTable).where(eq(productQueriesTable.id, id)).limit(1).catch(() => []);
+      query = q;
+    }
+
     if (!query) return res.status(404).json({ error: "Query not found" });
-    if (query.vendorId !== vendorId) return res.status(403).json({ error: "Forbidden" });
+    const productIdsSet = await getVendorProductIds(req.vendorId, vendorIds);
+    const isOwner = !query.vendorId || vendorIds.includes(query.vendorId) || (query.productId && productIdsSet.has(query.productId));
+    if (!isOwner) return res.status(403).json({ error: "Forbidden" });
 
-    const [updated] = await db
-      .update(productQueriesTable)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(productQueriesTable.id, id))
-      .returning();
+    const updateData = { status, updatedAt: new Date() };
 
-    res.json(updated);
+    let updated: any = null;
+    if (col) {
+      await col.updateOne({ $or: [{ id }, { _id: id }] }, { $set: updateData });
+      updated = { ...query, ...updateData };
+    }
+
+    try {
+      const [pgUpdated] = await db
+        .update(productQueriesTable)
+        .set(updateData)
+        .where(eq(productQueriesTable.id, id))
+        .returning()
+        .catch(() => []);
+      if (pgUpdated) updated = pgUpdated;
+    } catch {}
+
+    res.json(updated || { id, ...updateData });
   } catch (err: any) {
     req.log?.error({ err }, "seller/queries/status failed");
     res.status(500).json({ error: "Failed to update query status" });
@@ -374,137 +600,256 @@ router.patch("/seller/queries/:id/status", requireVendorAuth, async (req: any, r
 // ---------- Support Tickets (vendor-scoped) ----------
 
 router.get("/seller/tickets", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const status = (req.query.status as string | undefined)?.trim();
   const priority = (req.query.priority as string | undefined)?.trim();
 
   try {
-    let tickets = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(eq(supportTicketsTable.vendorId, vendorId))
-      .orderBy(desc(supportTicketsTable.updatedAt));
+    let tickets: any[] = [];
+    try {
+      const filter: any = {
+        $or: [
+          { vendorId: { $in: vendorIds } },
+          { userId: req.userId },
+        ],
+      };
+      if (status && status !== "all") filter.status = status;
+      if (priority && priority !== "all") filter.priority = priority;
+      tickets = await mongoSupport.findTickets(filter, { sort: { updatedAt: -1 } });
+    } catch {
+      // Fallback
+    }
 
-    if (status && status !== "all") tickets = tickets.filter((t) => t.status === status);
-    if (priority && priority !== "all") tickets = tickets.filter((t) => t.priority === priority);
+    if (tickets.length === 0) {
+      const conditions: any[] = [
+        or(
+          inArray(supportTicketsTable.vendorId, vendorIds),
+          eq(supportTicketsTable.userId, req.userId)
+        ),
+      ];
+      if (status && status !== "all") tickets = tickets.filter((t: any) => t.status === status);
+      if (priority && priority !== "all") tickets = tickets.filter((t: any) => t.priority === priority);
+
+      tickets = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(...conditions))
+        .orderBy(desc(supportTicketsTable.updatedAt))
+        .catch(() => []);
+    }
 
     res.json({ tickets });
   } catch (err: any) {
-    req.log?.error({ err }, "seller/tickets failed");
+    req.log?.error?.({ err }, "seller/tickets failed");
     res.status(500).json({ error: "Failed to load tickets" });
   }
 });
 
 router.get("/seller/tickets/:id", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
 
   try {
-    const [ticket] = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
-      .limit(1);
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    let ticket: any = null;
+    let messages: any[] = [];
 
-    const messages = await db
-      .select()
-      .from(ticketMessagesTable)
-      .where(eq(ticketMessagesTable.ticketId, id))
-      .orderBy(ticketMessagesTable.createdAt);
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+      const isOwner = ticket && (vendorIds.includes(ticket.vendorId) || ticket.userId === req.userId);
+      if (ticket && isOwner) {
+        messages = await mongoSupport.findTicketMessages(id);
+      } else if (ticket && !isOwner) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (!ticket) {
+      const [t] = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(eq(supportTicketsTable.id, id), or(inArray(supportTicketsTable.vendorId, vendorIds), eq(supportTicketsTable.userId, req.userId))))
+        .limit(1)
+        .catch(() => []);
+      ticket = t;
+      if (ticket) {
+        messages = await db
+          .select()
+          .from(ticketMessagesTable)
+          .where(eq(ticketMessagesTable.ticketId, id))
+          .orderBy(ticketMessagesTable.createdAt)
+          .catch(() => []);
+      }
+    }
+
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
     res.json({ ...ticket, messages });
   } catch (err: any) {
-    req.log?.error({ err }, "seller/tickets/:id failed");
+    req.log?.error?.({ err }, "seller/tickets/:id failed");
     res.status(500).json({ error: "Failed to load ticket" });
   }
 });
 
 router.post("/seller/tickets/:id/messages", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
   const { body, internal } = req.body;
   if (!body || !String(body).trim()) return res.status(400).json({ error: "body is required" });
 
   try {
-    const [ticket] = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
-      .limit(1);
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {
+      // Fallback
+    }
 
-    const [msg] = await db
-      .insert(ticketMessagesTable)
-      .values({ ticketId: id, userId: req.userId, body: String(body).trim(), isStaff: true, internal: Boolean(internal) })
-      .returning();
+    if (!ticket) {
+      const [t] = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(eq(supportTicketsTable.id, id), or(inArray(supportTicketsTable.vendorId, vendorIds), eq(supportTicketsTable.userId, req.userId))))
+        .limit(1)
+        .catch(() => []);
+      ticket = t;
+    }
 
-    await db.update(supportTicketsTable).set({ updatedAt: new Date() }).where(eq(supportTicketsTable.id, id));
+    if (!ticket || (!vendorIds.includes(ticket.vendorId) && ticket.userId !== req.userId)) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
 
-    res.status(201).json(msg);
+    let msg: any = null;
+    try {
+      msg = await mongoSupport.insertTicketMessage({
+        ticketId: id,
+        userId: req.userId,
+        vendorId: req.vendorId,
+        body: String(body).trim(),
+        isStaff: true,
+        internal: Boolean(internal),
+      });
+      await mongoSupport.updateTicket(id, { updatedAt: new Date() });
+    } catch {
+      const [m] = await db
+        .insert(ticketMessagesTable)
+        .values({ ticketId: id, userId: req.userId, body: String(body).trim(), isStaff: true, internal: Boolean(internal) })
+        .returning()
+        .catch(() => []);
+      msg = m;
+      await db.update(supportTicketsTable).set({ updatedAt: new Date() }).where(eq(supportTicketsTable.id, id)).catch(() => {});
+    }
+
+    res.status(201).json(msg || { ticketId: id, userId: req.userId, body: String(body).trim(), createdAt: new Date() });
   } catch (err: any) {
-    req.log?.error({ err }, "seller/tickets/:id/messages failed");
+    req.log?.error?.({ err }, "seller/tickets/:id/messages failed");
     res.status(500).json({ error: "Failed to add message" });
   }
 });
 
 router.post("/seller/tickets/:id/escalate", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
   const { reason } = req.body;
 
   try {
-    const [ticket] = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
-      .limit(1);
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {
+      // Fallback
+    }
 
-    const [updated] = await db
-      .update(supportTicketsTable)
-      .set({ isDispute: true, disputeStatus: "needs_admin", updatedAt: new Date() })
-      .where(eq(supportTicketsTable.id, id))
-      .returning();
+    if (!ticket) {
+      const [t] = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(eq(supportTicketsTable.id, id), or(inArray(supportTicketsTable.vendorId, vendorIds), eq(supportTicketsTable.userId, req.userId))))
+        .limit(1)
+        .catch(() => []);
+      ticket = t;
+    }
 
-    await db.insert(ticketMessagesTable).values({
-      ticketId: id,
-      userId: req.userId,
-      body: reason && String(reason).trim() ? `Escalated to admin: ${String(reason).trim()}` : "Escalated to admin for dispute resolution.",
-      isStaff: true,
-      internal: true,
-    });
+    if (!ticket || (!vendorIds.includes(ticket.vendorId) && ticket.userId !== req.userId)) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
 
-    res.json(updated);
+    const updates = { isDispute: true, disputeStatus: "needs_admin", updatedAt: new Date() };
+    let updated: any = null;
+    try {
+      updated = await mongoSupport.updateTicket(id, updates);
+      await mongoSupport.insertTicketMessage({
+        ticketId: id,
+        userId: req.userId,
+        body: reason && String(reason).trim() ? `Escalated to admin: ${String(reason).trim()}` : "Escalated to admin for dispute resolution.",
+        isStaff: true,
+        internal: true,
+      });
+    } catch {
+      const [u] = await db
+        .update(supportTicketsTable)
+        .set(updates)
+        .where(eq(supportTicketsTable.id, id))
+        .returning()
+        .catch(() => []);
+      updated = u;
+      await db.insert(ticketMessagesTable).values({
+        ticketId: id,
+        userId: req.userId,
+        body: reason && String(reason).trim() ? `Escalated to admin: ${String(reason).trim()}` : "Escalated to admin for dispute resolution.",
+        isStaff: true,
+        internal: true,
+      }).catch(() => {});
+    }
+
+    res.json(updated || { ...ticket, ...updates });
   } catch (err: any) {
-    req.log?.error({ err }, "seller/tickets/:id/escalate failed");
+    req.log?.error?.({ err }, "seller/tickets/:id/escalate failed");
     res.status(500).json({ error: "Failed to escalate ticket" });
   }
 });
 
 router.post("/seller/tickets/:id/evidence", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
   const { url } = req.body;
   if (!url || !String(url).trim()) return res.status(400).json({ error: "url is required" });
 
   try {
-    const [ticket] = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
-      .limit(1);
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {}
+    if (!ticket) {
+      const [t] = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(eq(supportTicketsTable.id, id), or(inArray(supportTicketsTable.vendorId, vendorIds), eq(supportTicketsTable.userId, req.userId))))
+        .limit(1)
+        .catch(() => []);
+      ticket = t;
+    }
+    if (!ticket || (!vendorIds.includes(ticket.vendorId) && ticket.userId !== req.userId)) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
 
     const nextEvidence = [...(ticket.evidenceUrls ?? []), String(url).trim()];
 
-    const [updated] = await db
-      .update(supportTicketsTable)
-      .set({ evidenceUrls: nextEvidence, updatedAt: new Date() })
-      .where(eq(supportTicketsTable.id, id))
-      .returning();
+    let updated: any = null;
+    try {
+      updated = await mongoSupport.updateTicket(id, { evidenceUrls: nextEvidence, updatedAt: new Date() });
+    } catch {
+      const [u] = await db
+        .update(supportTicketsTable)
+        .set({ evidenceUrls: nextEvidence, updatedAt: new Date() })
+        .where(eq(supportTicketsTable.id, id))
+        .returning()
+        .catch(() => []);
+      updated = u;
+    }
 
-    res.json(updated);
+    res.json(updated || { ...ticket, evidenceUrls: nextEvidence });
   } catch (err: any) {
     req.log?.error({ err }, "seller/tickets/:id/evidence failed");
     res.status(500).json({ error: "Failed to add evidence" });
@@ -512,7 +857,7 @@ router.post("/seller/tickets/:id/evidence", requireVendorAuth, async (req: any, 
 });
 
 router.patch("/seller/tickets/:id", requireVendorAuth, async (req: any, res: any) => {
-  const vendorId = req.vendorId;
+  const vendorIds = getCandidateVendorIds(req);
   const { id } = req.params;
   const { status, priority } = req.body;
 
@@ -527,24 +872,41 @@ router.patch("/seller/tickets/:id", requireVendorAuth, async (req: any, res: any
   }
 
   try {
-    const [ticket] = await db
-      .select()
-      .from(supportTicketsTable)
-      .where(and(eq(supportTicketsTable.id, id), eq(supportTicketsTable.vendorId, vendorId)))
-      .limit(1);
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    let ticket: any = null;
+    try {
+      ticket = await mongoSupport.findTicketById(id);
+    } catch {}
+    if (!ticket) {
+      const [t] = await db
+        .select()
+        .from(supportTicketsTable)
+        .where(and(eq(supportTicketsTable.id, id), or(inArray(supportTicketsTable.vendorId, vendorIds), eq(supportTicketsTable.userId, req.userId))))
+        .limit(1)
+        .catch(() => []);
+      ticket = t;
+    }
+    if (!ticket || (!vendorIds.includes(ticket.vendorId) && ticket.userId !== req.userId)) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
 
     const updateSet: Record<string, any> = { updatedAt: new Date() };
     if (status !== undefined) updateSet.status = status;
     if (priority !== undefined) updateSet.priority = priority;
 
-    const [updated] = await db
-      .update(supportTicketsTable)
-      .set(updateSet)
-      .where(eq(supportTicketsTable.id, id))
-      .returning();
+    let updated: any = null;
+    try {
+      updated = await mongoSupport.updateTicket(id, updateSet);
+    } catch {
+      const [u] = await db
+        .update(supportTicketsTable)
+        .set(updateSet)
+        .where(eq(supportTicketsTable.id, id))
+        .returning()
+        .catch(() => []);
+      updated = u;
+    }
 
-    res.json(updated);
+    res.json(updated || { ...ticket, ...updateSet });
   } catch (err: any) {
     req.log?.error({ err }, "seller/tickets/:id patch failed");
     res.status(500).json({ error: "Failed to update ticket" });
@@ -554,15 +916,17 @@ router.patch("/seller/tickets/:id", requireVendorAuth, async (req: any, res: any
 // ---------- Summary Dashboard ----------
 
 router.get("/seller/customers-summary", requireVendorAuth, async (req: any, res: any) => {
+  const vendorIds = getCandidateVendorIds(req);
   const vendorId = req.vendorId;
 
   try {
-    const productIdSet = await getVendorProductIds(vendorId);
+    const productIdSet = await getVendorProductIds(vendorId, vendorIds);
+    const productIdsList = Array.from(productIdSet);
 
     let totalCustomers = 0;
     let activeCustomers = 0;
     if (productIdSet.size > 0) {
-      const allOrders = await db.select().from(ordersTable);
+      const allOrders = await db.select().from(ordersTable).catch(() => []);
       const lastOrderMap = new Map<string, Date>();
       for (const order of allOrders) {
         const items = (order.items as any[]) ?? [];
@@ -584,22 +948,47 @@ router.get("/seller/customers-summary", requireVendorAuth, async (req: any, res:
         reported: sql<number>`count(*) filter (where ${productReviewsTable.reported} = true)::int`,
       })
       .from(productReviewsTable)
-      .where(eq(productReviewsTable.vendorId, vendorId));
+      .where(or(inArray(productReviewsTable.vendorId, vendorIds), eq(productReviewsTable.vendorId, vendorId)))
+      .catch(() => [{ count: 0, avgRating: 0, reported: 0 }]);
 
-    const [pendingQueries] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(productQueriesTable)
-      .where(and(eq(productQueriesTable.vendorId, vendorId), sql`${productQueriesTable.status} != 'Resolved'`));
+    let pendingQueriesCount = 0;
+    try {
+      const col = mongoGeneric.getCollection("product_queries");
+      pendingQueriesCount = await col.countDocuments({
+        $or: [
+          { vendorId: { $in: vendorIds } },
+          ...(productIdsList.length > 0 ? [{ productId: { $in: productIdsList } }] : []),
+        ],
+        status: { $ne: "Resolved" },
+      });
+    } catch {
+      const [pendingQueries] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(productQueriesTable)
+        .where(and(inArray(productQueriesTable.vendorId, vendorIds), sql`${productQueriesTable.status} != 'Resolved'`))
+        .catch(() => [{ count: 0 }]);
+      pendingQueriesCount = pendingQueries?.count ?? 0;
+    }
 
-    const [openTickets] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(supportTicketsTable)
-      .where(
-        and(
-          eq(supportTicketsTable.vendorId, vendorId),
-          sql`${supportTicketsTable.status} IN ('Open', 'In Progress', 'Waiting for Customer')`
+    let openTicketsCount = 0;
+    try {
+      openTicketsCount = await mongoSupport.countTickets({
+        vendorId: { $in: vendorIds },
+        status: { $in: ["Open", "In Progress", "Waiting for Customer"] },
+      });
+    } catch {
+      const [openTickets] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(supportTicketsTable)
+        .where(
+          and(
+            inArray(supportTicketsTable.vendorId, vendorIds),
+            sql`${supportTicketsTable.status} IN ('Open', 'In Progress', 'Waiting for Customer')`
+          )
         )
-      );
+        .catch(() => [{ count: 0 }]);
+      openTicketsCount = openTickets?.count ?? 0;
+    }
 
     res.json({
       totalCustomers,
@@ -607,8 +996,8 @@ router.get("/seller/customers-summary", requireVendorAuth, async (req: any, res:
       totalReviews: reviewStats?.count ?? 0,
       avgRating: Number(reviewStats?.avgRating ?? 0),
       reportedReviews: reviewStats?.reported ?? 0,
-      pendingQueries: pendingQueries?.count ?? 0,
-      openTickets: openTickets?.count ?? 0,
+      pendingQueries: pendingQueriesCount,
+      openTickets: openTicketsCount,
     });
   } catch (err: any) {
     req.log?.error({ err }, "seller/customers-summary failed");
@@ -617,15 +1006,17 @@ router.get("/seller/customers-summary", requireVendorAuth, async (req: any, res:
 });
 
 router.get("/seller/dashboard-summary", requireVendorAuth, async (req: any, res: any) => {
+  const vendorIds = getCandidateVendorIds(req);
   const vendorId = req.vendorId;
 
   try {
-    const productIdSet = await getVendorProductIds(vendorId);
+    const productIdSet = await getVendorProductIds(vendorId, vendorIds);
+    const productIdsList = Array.from(productIdSet);
 
     let newOrders = 0;
     let pendingReturns = 0;
     if (productIdSet.size > 0) {
-      const allOrders = await db.select().from(ordersTable);
+      const allOrders = await db.select().from(ordersTable).catch(() => []);
       for (const order of allOrders) {
         const items = (order.items as any[]) ?? [];
         if (!items.some((i) => productIdSet.has(i.productId))) continue;
@@ -637,59 +1028,107 @@ router.get("/seller/dashboard-summary", requireVendorAuth, async (req: any, res:
     const [unreadNotifications] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(notificationsTable)
-      .where(and(eq(notificationsTable.vendorId, vendorId), eq(notificationsTable.read, false)));
+      .where(and(inArray(notificationsTable.vendorId, vendorIds), eq(notificationsTable.read, false)))
+      .catch(() => [{ count: 0 }]);
 
     const [lowStock] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(productsTable)
-      .where(and(eq(productsTable.vendorId, vendorId), sql`${productsTable.stock} <= ${productsTable.lowStockThreshold}`));
+      .where(and(inArray(productsTable.vendorId, vendorIds), sql`${productsTable.stock} <= ${productsTable.lowStockThreshold}`))
+      .catch(() => [{ count: 0 }]);
 
-    const [openTickets] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(supportTicketsTable)
-      .where(
-        and(
-          eq(supportTicketsTable.vendorId, vendorId),
-          sql`${supportTicketsTable.status} IN ('Open', 'In Progress', 'Waiting for Customer')`
+    let openTicketsCount = 0;
+    try {
+      openTicketsCount = await mongoSupport.countTickets({
+        vendorId: { $in: vendorIds },
+        status: { $in: ["Open", "In Progress", "Waiting for Customer"] },
+      });
+    } catch {
+      const [openTickets] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(supportTicketsTable)
+        .where(
+          and(
+            inArray(supportTicketsTable.vendorId, vendorIds),
+            sql`${supportTicketsTable.status} IN ('Open', 'In Progress', 'Waiting for Customer')`
+          )
         )
-      );
+        .catch(() => [{ count: 0 }]);
+      openTicketsCount = openTickets?.count ?? 0;
+    }
 
-    const [pendingQueries] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(productQueriesTable)
-      .where(and(eq(productQueriesTable.vendorId, vendorId), sql`${productQueriesTable.status} != 'Resolved'`));
+    let pendingQueriesCount = 0;
+    try {
+      const col = mongoGeneric.getCollection("product_queries");
+      pendingQueriesCount = await col.countDocuments({
+        $or: [
+          { vendorId: { $in: vendorIds } },
+          ...(productIdsList.length > 0 ? [{ productId: { $in: productIdsList } }] : []),
+        ],
+        status: { $ne: "Resolved" },
+      });
+    } catch {
+      const [pendingQueries] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(productQueriesTable)
+        .where(and(inArray(productQueriesTable.vendorId, vendorIds), sql`${productQueriesTable.status} != 'Resolved'`))
+        .catch(() => [{ count: 0 }]);
+      pendingQueriesCount = pendingQueries?.count ?? 0;
+    }
 
-    const [activeComplaints] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(supportTicketsTable)
-      .where(
-        and(
-          eq(supportTicketsTable.vendorId, vendorId),
-          sql`${supportTicketsTable.category} IN ('Order Issue', 'Return/Refund')`,
-          sql`${supportTicketsTable.status} NOT IN ('Resolved', 'Closed')`
+    let activeComplaintsCount = 0;
+    try {
+      activeComplaintsCount = await mongoSupport.countTickets({
+        vendorId: { $in: vendorIds },
+        category: { $in: ["Order Issue", "Return/Refund"] },
+        status: { $nin: ["Resolved", "Closed"] },
+      });
+    } catch {
+      const [activeComplaints] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(supportTicketsTable)
+        .where(
+          and(
+            inArray(supportTicketsTable.vendorId, vendorIds),
+            sql`${supportTicketsTable.category} IN ('Order Issue', 'Return/Refund')`,
+            sql`${supportTicketsTable.status} NOT IN ('Resolved', 'Closed')`
+          )
         )
-      );
+        .catch(() => [{ count: 0 }]);
+      activeComplaintsCount = activeComplaints?.count ?? 0;
+    }
 
-    const [activeDisputes] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(supportTicketsTable)
-      .where(
-        and(
-          eq(supportTicketsTable.vendorId, vendorId),
-          eq(supportTicketsTable.isDispute, true),
-          sql`${supportTicketsTable.disputeStatus} != 'resolved'`
+    let activeDisputesCount = 0;
+    try {
+      activeDisputesCount = await mongoSupport.countTickets({
+        vendorId: { $in: vendorIds },
+        isDispute: true,
+        disputeStatus: { $ne: "resolved" },
+      });
+    } catch {
+      const [activeDisputes] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(supportTicketsTable)
+        .where(
+          and(
+            inArray(supportTicketsTable.vendorId, vendorIds),
+            eq(supportTicketsTable.isDispute, true),
+            sql`${supportTicketsTable.disputeStatus} != 'resolved'`
+          )
         )
-      );
+        .catch(() => [{ count: 0 }]);
+      activeDisputesCount = activeDisputes?.count ?? 0;
+    }
 
     res.json({
       unreadNotifications: unreadNotifications?.count ?? 0,
       newOrders,
       pendingReturns,
       lowStock: lowStock?.count ?? 0,
-      openTickets: openTickets?.count ?? 0,
-      pendingQueries: pendingQueries?.count ?? 0,
-      activeComplaints: activeComplaints?.count ?? 0,
-      activeDisputes: activeDisputes?.count ?? 0,
+      openTickets: openTicketsCount,
+      pendingQueries: pendingQueriesCount,
+      activeComplaints: activeComplaintsCount,
+      activeDisputes: activeDisputesCount,
     });
   } catch (err: any) {
     req.log?.error({ err }, "seller/dashboard-summary failed");

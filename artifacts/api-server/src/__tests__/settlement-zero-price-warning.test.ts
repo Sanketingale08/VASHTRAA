@@ -163,6 +163,47 @@ vi.mock("@workspace/db", () => {
     commissionRulesTable: tag("commissionRules", [
       "id", "scope", "vendorId", "category", "rate", "active", "effectiveFrom", "effectiveTo",
     ]),
+    eq: (a: any, b: any) => ({ [a]: b }),
+    and: (...args: any[]) => args,
+    or: (...args: any[]) => args,
+    desc: (col: any) => col,
+    asc: (col: any) => col,
+    sql: Object.assign((...args: any[]) => "", { raw: (s: any) => s }),
+    inArray: (a: any, b: any) => ({ [a]: b }),
+    gte: (a: any, b: any) => ({ [a]: b }),
+    lte: (a: any, b: any) => ({ [a]: b }),
+    ilike: (a: any, b: any) => ({ [a]: b }),
+    isNotNull: (a: any) => a,
+    isNull: (a: any) => a,
+    lt: (a: any, b: any) => ({ [a]: b }),
+    isMongoDbConnected: () => true,
+    getNextSequenceValue: vi.fn(() => Promise.resolve(1001)),
+    mongoProducts: {
+      findById: vi.fn((id: string) => Promise.resolve(state.product.id === id ? state.product : null)),
+      decrementStock: vi.fn(() => Promise.resolve({ stock: 10 })),
+      update: vi.fn(() => Promise.resolve()),
+    },
+    mongoOrders: {
+      insert: vi.fn((doc: any) => Promise.resolve(doc)),
+      findById: vi.fn(() => Promise.resolve(state.order)),
+      update: vi.fn(() => Promise.resolve()),
+      findMany: vi.fn(() => Promise.resolve(state.order ? [state.order] : [])),
+    },
+    mongoVendors: {
+      findById: vi.fn(() => Promise.resolve(state.vendor)),
+      findByOwnerId: vi.fn(() => Promise.resolve(state.vendor)),
+      findMany: vi.fn(() => Promise.resolve([state.vendor])),
+    },
+    mongoSellers: {
+      findById: vi.fn(() => Promise.resolve(state.vendor)),
+      findByOwnerId: vi.fn(() => Promise.resolve(state.vendor)),
+      findMany: vi.fn(() => Promise.resolve([state.vendor])),
+    },
+    mongoGeneric: {
+      getCollection: vi.fn(() => ({
+        insertOne: vi.fn(() => Promise.resolve()),
+      })),
+    },
   };
 });
 

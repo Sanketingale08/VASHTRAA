@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice {{ invoice.number }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --navy: #0A1F44;
+    --navy-light: #15326C;
+    --gold: #B8912A;
+    --gold-light: #F6EFD9;
+    --line: #D9D5C7;
+    --line-light: #E5E7EB;
+    --muted: #6B7280;
+    --text: #1F2937;
+    --bg-page: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', Helvetica, Arial, 'DejaVu Sans', sans-serif;
+    font-size: 8.8pt;
+    color: var(--text);
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: var(--bg-page);
+  }
+  .page:last-child { page-break-after: auto; }
+  .topbar { height: 4mm; background: var(--navy); border-bottom: 1.2mm solid var(--gold); }
+  .wrap { padding: 6.5mm 12mm 0 12mm; }
+  .serif { font-family: 'Playfair Display', 'DejaVu Serif', Georgia, serif; }
+
+  .header { display: table; width: 100%; }
+  .header > div { display: table-cell; vertical-align: middle; }
+  .header .l { width: 75mm; }
+  .header .l img { width: 66mm; height: auto; max-height: 24mm; object-fit: contain; }
+  .header .r { text-align: right; }
+  .title {
+    font-family: 'Playfair Display', 'DejaVu Serif', Georgia, serif;
+    font-size: 21pt;
+    letter-spacing: .16em;
+    color: var(--navy);
+    margin: 0;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .invno {
+    display: inline-block;
+    margin-top: 2mm;
+    border: 1px dashed var(--gold);
+    padding: 1.5mm 3.5mm;
+    font-size: 8.8pt;
+    background: #FFFCF5;
+  }
+  .rule { border-top: 1px solid var(--gold); margin: 3.5mm 0; }
+  .rule-s { border-top: 1px solid var(--line); margin: 2.5mm 0; }
+
+  .label {
+    font-size: 7.5pt;
+    letter-spacing: .12em;
+    color: var(--gold);
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1mm;
+    margin-bottom: 1.5mm;
+  }
+  .name { font-weight: bold; color: var(--navy); font-size: 9.6pt; line-height: 1.3; }
+  .small { color: #4B5563; font-size: 8.4pt; line-height: 1.35; }
+  .muted { color: var(--muted); }
+  .cols { display: table; width: 100%; table-layout: fixed; }
+  .col { display: table-cell; vertical-align: top; padding-right: 5mm; }
+  .col:last-child { padding-right: 0; }
+  .block { margin-bottom: 3.5mm; }
+
+  table.items { width: 100%; border-collapse: collapse; margin-top: 1.5mm; }
+  table.items th {
+    background: var(--navy);
+    color: #fff;
+    font-size: 7.3pt;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 2.2mm 1.5mm;
+    vertical-align: middle;
+  }
+  table.items td {
+    padding: 2.4mm 1.5mm;
+    border-bottom: 1px solid var(--line-light);
+    font-size: 8.4pt;
+    vertical-align: top;
+  }
+  table.items tr.total td {
+    font-weight: bold;
+    background: var(--gold-light);
+    border-top: 1.2px solid var(--line);
+    border-bottom: 1.2px solid var(--gold);
+  }
+  .t-left { text-align: left !important; }
+  .t-center { text-align: center !important; }
+  .t-right { text-align: right !important; }
+
+  .pname { font-weight: bold; color: var(--navy); font-size: 9.2pt; }
+
+  .summary-section { margin-top: 3.5mm; display: table; width: 100%; }
+  .summary-left { display: table-cell; vertical-align: top; width: 45%; }
+  .summary-right { display: table-cell; vertical-align: top; width: 55%; text-align: right; }
+  .summary-table { width: 100%; max-width: 95mm; margin-left: auto; border-collapse: collapse; }
+  .summary-table td { padding: 1.2mm 0; font-size: 8.4pt; }
+  .summary-table td.sum-label { text-align: left; color: var(--muted); }
+  .summary-table td.sum-val { text-align: right; color: var(--navy); font-weight: 500; }
+  .summary-table tr.sum-grand td {
+    border-top: 1px solid var(--gold);
+    border-bottom: 1.5px solid var(--navy);
+    padding: 2mm 0;
+  }
+  .summary-table tr.sum-grand td.sum-label { font-size: 10pt; font-weight: bold; color: var(--navy); }
+  .summary-table tr.sum-grand td.sum-val { font-size: 12.5pt; font-weight: bold; color: var(--navy); }
+  .summary-words { font-size: 8pt; color: var(--muted); text-align: right; margin-top: 1.5mm; line-height: 1.3; }
+
+  .cg { text-align: center; font-style: italic; font-size: 8pt; color: var(--muted); margin-top: 5mm; border-top: 1px solid var(--line-light); padding-top: 2mm; }
+
+  .thanks { position: absolute; right: 12mm; bottom: 30mm; text-align: right; }
+  .thanks img { width: 36mm; height: auto; max-height: 14mm; object-fit: contain; }
+  .thanks div { font-size: 8.8pt; font-weight: 600; color: var(--navy); margin-top: 1mm; }
+
+  .foot { position: absolute; left: 12mm; right: 12mm; bottom: 8mm; font-size: 7.5pt; color: #4B5563; }
+  .foot .rp { margin-bottom: 1.5mm; line-height: 1.35; }
+  .foot .ep { text-align: right; font-weight: bold; margin-top: 1mm; }
+
+  /* bill of supply */
+  .box { border: 1px solid var(--line); margin-bottom: 2.8mm; padding: 2.5mm 3.5mm; background: #FAFAFA; }
+  .qr { text-align: right; } .qr img { width: 24mm; height: 24mm; }
+  table.bos { width: 100%; border-collapse: collapse; margin-bottom: 2.8mm; }
+  table.bos th { background: var(--navy); color: #fff; font-size: 7.4pt; text-transform: uppercase; padding: 2mm 2mm; vertical-align: middle; }
+  table.bos td { padding: 2mm 2mm; border-bottom: 1px solid var(--line-light); font-size: 8.4pt; vertical-align: top; }
+  table.bos tr.total td { font-weight: bold; background: var(--gold-light); }
+  .sect { background: var(--gold-light); border-left: 1.2mm solid var(--gold); padding: 1.6mm 3mm; font-weight: bold; font-size: 8.2pt; letter-spacing: .06em; color: var(--navy); margin: 2.5mm 0 1.8mm 0; text-transform: uppercase; }
+  .paid { margin-top: 2.5mm; background: var(--navy); color: #fff; padding: 2.8mm 4mm; display: table; width: 100%; border-radius: 2px; }
+  .paid > div { display: table-cell; vertical-align: middle; }
+  .paid > div:last-child { text-align: right; font-weight: bold; color: #F3D675; font-size: 12.5pt; }
+
+  /* Screen preview styling */
+  @media screen {
+    html {
+      background: #0F172A;
+      min-height: 100%;
+    }
+    body {
+      background: #0F172A;
+      padding: 16px 12px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .screen-toolbar {
+      width: 100%;
+      max-width: 210mm;
+      background: #0A1F44;
+      color: #FFFFFF;
+      padding: 10px 16px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+      position: sticky;
+      top: 12px;
+      z-index: 9999;
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .screen-toolbar .title-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .screen-toolbar .badge {
+      background: rgba(184, 145, 42, 0.25);
+      border: 1px solid #B8912A;
+      color: #F6EFD9;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2.5px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .screen-toolbar .doc-name {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #E2E8F0;
+    }
+    .screen-toolbar .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .screen-toolbar button {
+      background: #FFFFFF;
+      color: #0A1F44;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    .screen-toolbar button:hover {
+      background: #F1F5F9;
+      transform: translateY(-1px);
+    }
+    .page {
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+      margin: 0 auto 28px auto;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+  }
+  @media print {
+    .screen-toolbar {
+      display: none !important;
+    }
+    body {
+      background: transparent !important;
+      padding: 0 !important;
+      display: block !important;
+    }
+    .page {
+      box-shadow: none !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="screen-toolbar">
+  <div class="title-area">
+    <span class="badge">Live Preview</span>
+    <span class="doc-name">{{ document_title or 'TAX INVOICE' }} #{{ invoice.number }} · {{ seller.trade_name or seller.legal_name or "VASTRAA" }}</span>
+  </div>
+  <div class="actions">
+    <button onclick="window.print()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+      Print / Save PDF
+    </button>
+  </div>
+</div>
+
+<!-- ================= PAGE 1 : TAX INVOICE ================= -->
+<div class="page">
+  <div class="topbar"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="l"><img src="{{ company.logo }}" alt="{{ company.name }}"></div>
+      <div class="r">
+        <p class="title">{{ document_title or 'TAX INVOICE' }}</p>
+        <div class="invno"><b>{{ document_number_label or 'Invoice Number' }}</b> # {{ invoice.number }}</div>
+        {% if order.original_invoice_no %}<div class="small" style="margin-top:1.5mm"><b>Original Invoice No:</b> # {{ order.original_invoice_no }}{% if order.original_invoice_date %} (Dated: {{ order.original_invoice_date }}){% endif %}</div>{% endif %}
+      </div>
+    </div>
+    <div class="rule"></div>
+
+    <div class="block">
+      <div class="name">Sold By: {{ seller.name }}</div>
+      <div class="small"><i><b>Ship-from Address:</b> {{ seller.address }}</i></div>
+      {% if seller.gstin %}<div class="small"><b>GSTIN</b> - {{ seller.gstin }}</div>{% endif %}
+    </div>
+    <div class="rule-s"></div>
+
+    <div class="cols block">
+      <div class="col">
+        <div class="label">Order Details</div>
+        <div class="name">Order ID: {{ order.id }}</div>
+        <div class="small" style="margin-top:1.5mm"><b>Order Date:</b> {{ order.date }}<br><b>Invoice Date:</b> {{ invoice.date }}{% if seller.pan %}<br><b>PAN:</b> {{ seller.pan }}{% endif %}</div>
+      </div>
+      <div class="col">
+        <div class="label">Bill To</div>
+        <div class="name">{{ customer.name }}</div>
+        <div class="small" style="margin-top:1.5mm">{{ billing.line1 }}<br>{{ billing.line2 }}<br>{{ billing.state }} - {{ billing.pin }}<br>Phone: {{ customer.phone }}{% if customer.gstin %}<br>Buyer GSTIN: {{ customer.gstin }}{% endif %}</div>
+      </div>
+      <div class="col">
+        <div class="label">Ship To</div>
+        <div class="name">{{ customer.name }}</div>
+        <div class="small" style="margin-top:1.5mm">{{ shipping.line1 }}<br>{{ shipping.line2 }}<br>{{ shipping.state }} - {{ shipping.pin }}<br>Phone: {{ customer.phone }}</div>
+      </div>
+    </div>
+    <div class="small muted" style="font-style:italic;margin-bottom:2.5mm">*Keep this invoice and the product box for warranty purposes.</div>
+
+    <div class="small" style="margin-bottom:1.5mm">
+      {% if items|length > 1 %}
+      <b>Total distinct products:</b> {{ items|length }} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Total Items:</b> {{ totals.qty }} {{ 'unit' if totals.qty == 1 else 'units' }}
+      {% else %}
+      <b>Total Items:</b> {{ totals.qty }} {{ 'item' if totals.qty == 1 else 'items' }}
+      {% endif %}
+    </div>
+    <table class="items">
+      <thead><tr>
+        <th class="t-left" style="width:26mm">Product</th>
+        <th class="t-left">Title &amp; Vendor</th>
+        <th class="t-center" style="width:12mm">Qty</th>
+        <th class="t-right">Gross Amount<br>₹</th>
+        <th class="t-right">Discount<br>₹</th>
+        <th class="t-right">Taxable Value<br>₹</th>
+        {% if tax.intra_state %}
+        <th class="t-right">SGST<br>₹</th>
+        <th class="t-right">CGST<br>₹</th>
+        {% else %}
+        <th class="t-right">IGST<br>₹</th>
+        {% endif %}
+        <th class="t-right">Total<br>₹</th>
+      </tr></thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td class="t-left small">{{ it.category }}<br>{% if it.sku %}SKU: {{ it.sku }}<br>{% endif %}HSN/SAC: {{ it.hsn }}</td>
+          <td class="t-left"><span class="pname">{{ it.name }}</span><br><span class="small">Vendor: {{ it.vendor }}</span><br>
+            <span class="small">{% if tax.intra_state %}SGST/UTGST: {{ it.gst_rate/2 }} %<br>CGST: {{ it.gst_rate/2 }} %{% else %}IGST: {{ it.gst_rate }} %{% endif %}</span></td>
+          <td class="t-center">{{ it.qty }}</td>
+          <td class="t-right">{{ num(it.gross) }}</td>
+          <td class="t-right">{{ '-' ~ num(it.discount) if it.discount else '0.00' }}</td>
+          <td class="t-right">{{ num(it.taxable) }}</td>
+          {% if tax.intra_state %}
+          <td class="t-right">{{ num(it.sgst) }}</td>
+          <td class="t-right">{{ num(it.cgst) }}</td>
+          {% else %}
+          <td class="t-right">{{ num(it.igst) }}</td>
+          {% endif %}
+          <td class="t-right">{{ num(it.total) }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total">
+          <td></td>
+          <td class="t-left">Total</td>
+          <td class="t-center">{{ totals.qty }}</td>
+          <td class="t-right">{{ num(totals.gross) }}</td>
+          <td class="t-right">{{ '-' ~ num(totals.discount) if totals.discount else '0.00' }}</td>
+          <td class="t-right">{{ num(totals.taxable) }}</td>
+          {% if tax.intra_state %}
+          <td class="t-right">{{ num(totals.sgst) }}</td>
+          <td class="t-right">{{ num(totals.cgst) }}</td>
+          {% else %}
+          <td class="t-right">{{ num(totals.igst) }}</td>
+          {% endif %}
+          <td class="t-right">{{ num(totals.items_subtotal) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="summary-section">
+      <div class="summary-left"></div>
+      <div class="summary-right">
+        <table class="summary-table">
+          <tr>
+            <td class="sum-label">Subtotal ({% if items|length > 1 %}{{ items|length }} products, {% endif %}{{ totals.qty }} {{ 'item' if totals.qty == 1 else 'items' }}):</td>
+            <td class="sum-val">{{ money(totals.items_subtotal) }}</td>
+          </tr>
+          {% if totals.discount and totals.discount > 0 %}
+          <tr>
+            <td class="sum-label">Product Discount:</td>
+            <td class="sum-val">-{{ money(totals.discount) }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td class="sum-label">Taxable Base Value:</td>
+            <td class="sum-val">{{ money(totals.taxable) }}</td>
+          </tr>
+          {% if tax.intra_state %}
+          <tr>
+            <td class="sum-label">CGST (Central Tax):</td>
+            <td class="sum-val">{{ money(totals.cgst) }}</td>
+          </tr>
+          <tr>
+            <td class="sum-label">SGST / UTGST (State Tax):</td>
+            <td class="sum-val">{{ money(totals.sgst) }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td class="sum-label">IGST (Integrated Tax):</td>
+            <td class="sum-val">{{ money(totals.igst) }}</td>
+          </tr>
+          {% endif %}
+          {% if totals.charges and totals.charges > 0 %}
+          <tr>
+            <td class="sum-label">Platform &amp; Delivery Charges:</td>
+            <td class="sum-val">{{ money(totals.charges) }}</td>
+          </tr>
+          {% endif %}
+          <tr class="sum-grand">
+            <td class="sum-label">Grand Total:</td>
+            <td class="sum-val">{{ money(totals.grand) }}</td>
+          </tr>
+        </table>
+        <div class="summary-words">{{ totals.words }}</div>
+      </div>
+    </div>
+
+    <div class="cg">This is a computer generated invoice. No signature required.</div>
+  </div>
+
+  <div class="thanks"><img src="{{ company.logo }}" alt="{{ company.name }}"><div>Thank You for shopping with {{ company.name }}!</div></div>
+
+  <div class="foot">
+    <div class="rp"><b>Returns Policy:</b> {{ policy.returns }}</div>
+    {% if seller.regd_office %}<div class="rp"><i>Regd. office: {{ seller.name }}, {{ seller.regd_office }}</i></div>{% endif %}
+    <div style="border-top:1px dotted #999;padding-top:1.5mm">Contact {{ company.name }}: {{ company.phone }}{% if company.phone %} || {% endif %}{{ company.email }} || {{ company.website }}</div>
+    <div class="ep">E. &amp; O.E. &nbsp;&nbsp; page 1 of 2</div>
+  </div>
+</div>
+
+<!-- ================= PAGE 2 : BILL OF SUPPLY ================= -->
+<div class="page">
+  <div class="topbar"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="l"><img src="{{ company.logo }}" alt="{{ company.name }}"></div>
+      <div class="r"><p class="title" style="font-size:16pt;white-space:nowrap">{{ bos_title or 'BILL OF SUPPLY' }}</p></div>
+      <div style="width:28mm;text-align:right"><img src="{{ qr }}" style="width:24mm;height:24mm" alt="QR Verification"></div>
+    </div>
+    <div class="rule"></div>
+
+    <div class="box"><div class="cols">
+      <div class="col"><div class="label">Bill of Supply Details</div>
+        <b>Bill of Supply Number</b> : {{ bos.number }}<br><b>Bill of Supply Date</b> : {{ bos.date }}<br><b>Order Number</b> : {{ order.id }}</div>
+      <div class="col"><div class="label">Transaction</div>
+        <b>Nature of transaction</b> : {{ 'INTRA' if tax.intra_state else 'INTER' }}<br><b>Nature Of Supply</b> : Service</div>
+    </div></div>
+
+    <div class="box"><div class="cols">
+      <div class="col"><div class="label">Billed From</div>
+        <b>{{ company.legal_name }}</b><br><span class="small">{{ company.address }}</span><br>
+        <b>GSTIN :</b> {{ company.gstin }}{% if company.pan %}<br><b>PAN :</b> {{ company.pan }}{% endif %}</div>
+      <div class="col"><div class="label">Billed To</div>
+        <b>{{ customer.name }}</b><br><span class="small">{{ billing.line1 }}, {{ billing.line2 }}, India - {{ billing.pin }}</span><br>
+        <b>State :</b> {{ billing.state }}<br><b>State Code :</b> {{ billing.iso }}<br><b>Place of Supply :</b> {{ billing.state|upper }}</div>
+    </div></div>
+
+    <div class="box"><div class="cols">
+      <div class="col"><div class="label">Shipped From</div><span class="small">{{ seller.name }}, {{ seller.address }}</span></div>
+      <div class="col"><div class="label">Shipped To</div><b>{{ customer.name }}</b><br><span class="small">{{ shipping.line1 }}, {{ shipping.line2 }}, {{ shipping.state }} - {{ shipping.pin }}</span></div>
+    </div></div>
+
+    <table class="bos">
+      <thead><tr>
+        <th class="t-left">Particulars</th>
+        <th class="t-left">SAC</th>
+        <th class="t-center" style="width:12mm">Qty</th>
+        <th class="t-right">Gross Amount</th>
+        <th class="t-right">Taxable Value</th>
+        {% if tax.intra_state %}
+        <th class="t-right">SGST</th>
+        <th class="t-right">CGST</th>
+        {% else %}
+        <th class="t-right">IGST</th>
+        {% endif %}
+        <th class="t-right">Total</th>
+      </tr></thead>
+      <tbody>
+        {% for f in charges %}
+        <tr>
+          <td class="t-left">{{ f.name }}</td>
+          <td class="t-left">{{ f.sac }}<br><span class="small">{% if tax.intra_state %}CGST {{ f.gst_rate/2 }} %<br>SGST {{ f.gst_rate/2 }} %{% else %}IGST {{ f.gst_rate }} %{% endif %}</span></td>
+          <td class="t-center">1.0</td>
+          <td class="t-right">{{ money(f.amount) }}</td>
+          <td class="t-right">{{ money(f.taxable) }}</td>
+          {% if tax.intra_state %}
+          <td class="t-right">{{ money(f.sgst) }}</td>
+          <td class="t-right">{{ money(f.cgst) }}</td>
+          {% else %}
+          <td class="t-right">{{ money(f.igst) }}</td>
+          {% endif %}
+          <td class="t-right">{% if f.amount == 0 and f.free_label %}<b>{{ f.free_label }}</b>{% else %}{{ money(f.amount) }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total">
+          <td></td>
+          <td class="t-left">Total</td>
+          <td class="t-center">{{ charges|length }}.0</td>
+          <td class="t-right">{{ money(totals.charges) }}</td>
+          <td class="t-right">{{ money(totals.charges_taxable) }}</td>
+          {% if tax.intra_state %}
+          <td class="t-right">{{ money(totals.charges_sgst) }}</td>
+          <td class="t-right">{{ money(totals.charges_cgst) }}</td>
+          {% else %}
+          <td class="t-right">{{ money(totals.charges_igst) }}</td>
+          {% endif %}
+          <td class="t-right">{{ money(totals.charges) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="sect">Details of goods shipped</div>
+    <table class="bos">
+      <thead><tr>
+        <th class="t-left">Description of Goods</th>
+        <th class="t-center" style="width:14mm">Qty</th>
+        <th class="t-center" style="width:40mm">Gross Weight of Consignment</th>
+        <th class="t-right" style="width:30mm">Value of Goods</th>
+      </tr></thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td class="t-left">{{ it.name }} ({{ it.qty }})</td>
+          <td class="t-center">{{ it.qty }}.0</td>
+          <td class="t-center">{{ it.weight or '—' }}</td>
+          <td class="t-right">{{ money(it.total) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="box"><div class="cols">
+      <div class="col"><b>Consignor details:</b> {{ seller.name }} (on behalf of {{ company.name }})<br><br><b>Consignee details:</b> {{ customer.name }}</div>
+      <div class="col"><b>Place of Origin :</b> <span class="small">{{ seller.address }}</span><br><br>
+        <b>Destination :</b> <span class="small">{{ customer.name }}, {{ shipping.line1 }}, {{ shipping.line2 }}, {{ shipping.state }} - {{ shipping.pin }}</span>
+        {% if order.vehicle_no %}<br><br><b>Registration No. of Goods Carriage:</b> {{ order.vehicle_no }}{% endif %}
+        {% if order.tracking_id %}<br><br><b>Tracking ID:</b> {{ order.tracking_id }}{% endif %}</div>
+    </div></div>
+
+    <div class="paid"><div>
+      {% if order.payment_status == 'REFUNDED' or order.payment_status == 'refunded' %}
+        Order amount refunded via {{ order.payment_method }}{% if order.refund_ref %}<br><span style="font-size:8pt;color:#cbd5e1">Refund Ref: {{ order.refund_ref }}</span>{% endif %}
+      {% elif order.payment_method == 'COD' or order.payment_method == 'Cash on Delivery' or order.payment_method == 'cod' %}
+        Order total payable via Cash on Delivery<br><span style="font-size:8pt;color:#cbd5e1">Payment: PENDING on Delivery</span>
+      {% elif order.payment_status == 'PAID' or order.payment_status == 'paid' %}
+        Order total paid via {{ order.payment_method }} ({{ document_title or 'Tax Invoice' }} + Bill of Supply){% if order.gateway_ref %}<br><span style="font-size:8pt;color:#cbd5e1">Transaction Ref: {{ order.gateway_ref }}</span>{% endif %}
+      {% else %}
+        Order total payable via {{ order.payment_method }}<br><span style="font-size:8pt;color:#cbd5e1">Payment: {{ order.payment_status or 'PENDING' }}</span>
+      {% endif %}
+      <br><span style="font-size:7.8pt;color:#cbd5e1">{{ totals.words }}</span>
+    </div><div>{{ money(totals.grand) }}</div></div>
+
+    <div class="small" style="margin-top:3.5mm">
+      <b>Is the supply subject to reverse charge:</b> No<br>
+      Signature / Digital Signature: <i>Computer generated — no signature required.</i>
+    </div>
+  </div>
+  <div class="foot"><div class="ep">E. &amp; O.E. &nbsp;&nbsp; page 2 of 2</div></div>
+</div>
+
+</body>
+</html>

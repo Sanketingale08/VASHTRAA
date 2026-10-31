@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { sendSellerVerificationEmail } from "./transactionalEmail";
-import { mongoSellers } from "@workspace/db";
+import { mongoSellers, mongoUsers } from "@workspace/db";
 import { logger } from "./logger";
 
 interface VerificationRecord {
@@ -26,7 +26,7 @@ function sha256hex(s: string): string {
 }
 
 /**
- * Generates and sends a 6-digit email verification code to the seller's email address via Resend.
+ * Generates and sends a 6-digit email verification code to the seller's email address via SMTP or Resend.
  * Securely hashes the OTP and sets a 5-minute expiration time.
  */
 export async function sendSellerVerificationCode(
@@ -47,8 +47,16 @@ export async function sendSellerVerificationCode(
         error: "A seller account with this email address already exists. Please sign in instead.",
       };
     }
-  } catch (err) {
-    logger.warn({ err, email: cleanEmail }, "[sellerVerification] Error checking existing seller account by email");
+
+    const existingUser = await mongoUsers.findByEmail(cleanEmail);
+    if (existingUser && existingUser.role === "seller") {
+      return {
+        delivered: false,
+        error: "A seller account with this email address already exists. Please sign in instead.",
+      };
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, email: cleanEmail }, "[sellerVerification] Error checking existing seller account by email");
   }
 
   const existingRecord = codeStore.get(cleanEmail);

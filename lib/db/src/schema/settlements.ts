@@ -2,7 +2,7 @@ import { pgTable, text, uuid, integer, real, boolean, timestamp, index } from "d
 import { vendorsTable } from "./vendors";
 
 export const VENDOR_SETTLEMENT_TYPES = ["release", "payout", "order_settlement"] as const;
-export const VENDOR_SETTLEMENT_STATUSES = ["pending", "approved", "rejected", "completed", "failed", "processing", "paid"] as const;
+export const VENDOR_SETTLEMENT_STATUSES = ["pending", "approved", "rejected", "completed", "failed", "processing", "paid", "eligible", "on_hold"] as const;
 export const SETTLEMENT_PAYMENT_METHODS = ["bank_transfer", "upi", "cheque", "other"] as const;
 
 export const vendorSettlementsTable = pgTable("vendor_settlements", {
@@ -10,7 +10,7 @@ export const vendorSettlementsTable = pgTable("vendor_settlements", {
   vendorId: uuid("vendor_id").notNull().references(() => vendorsTable.id),
   amount: integer("amount").notNull().default(0),
   type: text("type").$type<typeof VENDOR_SETTLEMENT_TYPES[number]>().notNull(),
-  status: text("status").$type<typeof VENDOR_SETTLEMENT_STATUSES[number]>().notNull().default("completed"),
+  status: text("status").$type<typeof VENDOR_SETTLEMENT_STATUSES[number]>().notNull().default("pending"),
   paymentMethod: text("payment_method").$type<typeof SETTLEMENT_PAYMENT_METHODS[number]>(),
   transactionId: text("transaction_id"),
   note: text("note"),
@@ -25,6 +25,35 @@ export const vendorSettlementsTable = pgTable("vendor_settlements", {
   netPayout: integer("net_payout"),
   paidAt: timestamp("paid_at"),
   utrNumber: text("utr_number"),
+  payoutReference: text("payout_reference"),
+  cashfreeTransferId: text("cashfree_transfer_id"),
+  failureReason: text("failure_reason"),
+  settlementEligibilityDate: timestamp("settlement_eligibility_date"),
+  idempotencyKey: text("idempotency_key"),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: text("approved_by"),
+
+  // Pricing Engine Snapshot Columns (Integer Paise)
+  pricingVersion: text("pricing_version").notNull().default("v1"),
+  sellerBasePrice: integer("seller_base_price"),
+  platformCommission: integer("platform_commission"),
+  shippingFee: integer("shipping_fee"),
+  taxableAmount: integer("taxable_amount"),
+  gstRateBps: integer("gst_rate_bps"),
+  gstAmount: integer("gst_amount"),
+  cgst: integer("cgst"),
+  sgst: integer("sgst"),
+  igst: integer("igst"),
+  customerPays: integer("customer_pays"),
+  gstOnCommission: integer("gst_on_commission"),
+  tcsDeduction: integer("tcs_deduction"),
+  sellerSettlement: integer("seller_settlement"),
+  platformKeeps: integer("platform_keeps"),
+
+  // Rate Snapshot Columns (Basis Points)
+  commissionBps: integer("commission_bps"),
+  commissionGstBps: integer("commission_gst_bps"),
+  tcsBps: integer("tcs_bps"),
 });
 
 export type VendorSettlement = typeof vendorSettlementsTable.$inferSelect;

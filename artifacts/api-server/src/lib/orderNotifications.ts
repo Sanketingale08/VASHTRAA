@@ -1,9 +1,10 @@
-import { db, mongoGeneric } from "@workspace/db";
+import { db, mongoGeneric, mongoNotifications, mongoNotificationPreferences } from "@workspace/db";
 import { notificationsTable, notificationPreferencesTable } from "@workspace/db";
-import { eq } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { sendTransactionalEmail, type TransactionalEmailType } from "./transactionalEmail";
 
 type OrderNotifType =
+  | "order_placed"
   | "order_confirmed"
   | "order_processing"
   | "order_packed"
@@ -19,10 +20,13 @@ type OrderNotifType =
   | "refund_rejected"
   | "refund_completed"
   | "payment_successful"
+  | "payment_failed"
   | "vendor_item_rejected";
 
 const EMAIL_TYPES = new Set<OrderNotifType>([
+  "order_placed",
   "order_confirmed",
+  "order_processing",
   "order_packed",
   "order_shipped",
   "out_for_delivery",
@@ -31,9 +35,13 @@ const EMAIL_TYPES = new Set<OrderNotifType>([
   "vendor_item_rejected",
   "return_requested",
   "return_approved",
+  "return_rejected",
   "refund_requested",
   "refund_approved",
+  "refund_rejected",
   "refund_completed",
+  "payment_successful",
+  "payment_failed",
 ]);
 
 interface InsertOrderNotificationOpts {
@@ -43,7 +51,13 @@ interface InsertOrderNotificationOpts {
   orderId: string;
   itemName: string;
   extraItemCount: number;
+  totalAmount?: number;
   trackingNumber?: string;
+  carrier?: string;
+  note?: string;
+  invoiceAttachment?: { filename: string; content: Buffer };
+  customerEmail?: string;
+  toEmail?: string;
 }
 
 function buildNotifContent(
@@ -52,6 +66,11 @@ function buildNotifContent(
   extra: string
 ): { title: string; body: string } {
   switch (type) {
+    case "order_placed":
+      return {
+        title: "Order placed successfully",
+        body: `We have received your order for ${itemName}${extra}. Thank you for shopping with VASTRAA!`,
+      };
     case "order_confirmed":
       return {
         title: "Order confirmed",
@@ -127,6 +146,11 @@ function buildNotifContent(
         title: "Payment successful",
         body: `Your payment for ${itemName}${extra} was successful.`,
       };
+    case "payment_failed":
+      return {
+        title: "Payment unsuccessful",
+        body: `Payment for your order with ${itemName}${extra} could not be completed. Please retry to secure your order.`,
+      };
     case "vendor_item_rejected":
       return {
         title: "Item(s) unavailable",
@@ -144,12 +168,12 @@ export async function insertOrderStatusNotification(
   let wantsEmailOrderUpdates = true;
 
   try {
-    const prefDoc = await mongoGeneric.getCollection("notification_preferences").findOne({ userId });
-    if (prefDoc) {
-      if (prefDoc.orderUpdates === false) wantsOrderUpdates = false;
-      if (prefDoc.emailOrderUpdates === false) wantsEmailOrderUpdates = false;
-    }
-  } catch {
+    const prefs = await mongoNotificationPreferences.findByUserId(userId);
+    if (prefs.orderUpdates === false) wantsOrderUpdates = false;
+    if (prefs.emailOrderUpdates === false) wantsEmailOrderUpdates = false;
+  } catch {}
+
+  try {
     const client = opts.tx ?? db;
     const prefs = await client
       .select({
@@ -160,11 +184,11 @@ export async function insertOrderStatusNotification(
       .where(eq(notificationPreferencesTable.userId, userId))
       .limit(1);
 
-    if (prefs.length > 0) {
+    if (prefs && prefs.length > 0) {
       if (prefs[0].orderUpdates === false) wantsOrderUpdates = false;
       if (prefs[0].emailOrderUpdates === false) wantsEmailOrderUpdates = false;
     }
-  }
+  } catch {}
 
   if (!wantsOrderUpdates) return;
 
@@ -172,37 +196,52 @@ export async function insertOrderStatusNotification(
   const { title, body } = buildNotifContent(type, itemName, extra);
 
   const id = crypto.randomUUID();
+  let inserted = false;
   try {
-    await mongoGeneric.getCollection("notifications").insertOne({
-      id,
-      _id: id,
-      userId,
-      type,
-      title,
-      body,
-      isRead: false,
-      metadata: { orderId },
-      createdAt: new Date(),
-    } as any);
-  } catch {
-    const client = opts.tx ?? db;
-    await client.insert(notificationsTable).values({
-      userId,
-      type,
-      title,
-      body,
-      metadata: { orderId },
-    });
+    if (!opts.tx && typeof mongoNotifications !== "undefined" && mongoNotifications?.create) {
+      await mongoNotifications.create({
+        id,
+        userId,
+        type,
+        title,
+        body,
+        read: false,
+        isRead: false,
+        metadata: { orderId },
+        createdAt: new Date(),
+      });
+      inserted = true;
+    }
+  } catch {}
+
+  if (!inserted) {
+    try {
+      const client = opts.tx ?? db;
+      await client.insert(notificationsTable).values({
+        userId,
+        type,
+        title,
+        body,
+        metadata: { orderId },
+      });
+    } catch {}
   }
 
+  // 2. Transactional / notification email: gated strictly by emailOrderUpdates
   if (EMAIL_TYPES.has(type) && wantsEmailOrderUpdates) {
     void sendTransactionalEmail({
       userId,
+      toEmail: opts.customerEmail || opts.toEmail,
       type: type as TransactionalEmailType,
       orderId,
       itemName,
       extraItemCount,
+      totalAmount: opts.totalAmount,
+      trackingNumber: opts.trackingNumber,
+      carrier: opts.carrier,
       reference: trackingNumber,
+      note: opts.note,
+      attachments: opts.invoiceAttachment ? [opts.invoiceAttachment] : undefined,
     });
   }
 }

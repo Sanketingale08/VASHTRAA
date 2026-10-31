@@ -1,0 +1,391 @@
+@layer theme, base, clerk, components, utilities;
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: var(--destructive-border);
+
+  --color-twirl-navy: #0A1F44;
+  --color-twirl-accent: #2C3E6B;
+  --color-twirl-platinum: #C7CCD1;
+  --color-twirl-light-platinum: #E5E8EC;
+  --color-twirl-dark: #0B0C10;
+  --color-twirl-light: #F4F5F7;
+
+  /* Aliases for legacy tokens mapped to Navy & Platinum */
+  --color-twirl-maroon: #0A1F44;
+  --color-twirl-gold: #C7CCD1;
+  --color-twirl-ivory: #F4F5F7;
+  --color-twirl-cream: #E5E8EC;
+  --color-twirl-beige: #C7CCD1;
+
+  --font-sans: 'DM Sans', sans-serif;
+  --font-serif: 'Cormorant Garamond', serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+
+  --background: 220 14% 96%; /* #F4F5F7 light base */
+  --foreground: 225 18% 9%;  /* #12141A primary text light */
+  
+  --card: 0 0% 100%;
+  --card-foreground: 225 18% 9%;
+  --card-border: 210 10% 80%; /* #C7CCD1 */
+  
+  --popover: 220 14% 96%;
+  --popover-foreground: 225 18% 9%;
+  --popover-border: 210 10% 80%;
+  
+  --primary: 218 74% 15%; /* #0A1F44 button default */
+  --primary-foreground: 220 10% 94%; /* #EDEEF0 button text */
+  
+  --secondary: 223 42% 30%; /* #2C3E6B button hover */
+  --secondary-foreground: 220 10% 94%;
+  
+  --muted: 214 17% 91%; /* #E5E8EC icon/emoji background light */
+  --muted-foreground: 218 17% 35%; /* #4A5568 secondary text light */
+  
+  --accent: 210 10% 80%; /* #C7CCD1 platinum highlight */
+  --accent-foreground: 218 74% 15%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 218 17% 35%;
+  --input: 214 17% 91%;
+  --ring: 218 74% 15%;
+
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 228 19% 5%; /* #0B0C10 dark base */
+  --foreground: 220 10% 94%; /* #EDEEF0 primary text dark */
+  
+  --card: 225 18% 9%;
+  --card-foreground: 220 10% 94%;
+  --card-border: 218 17% 35%;
+  
+  --popover: 228 19% 5%;
+  --popover-foreground: 220 10% 94%;
+  --popover-border: 218 17% 35%;
+  
+  --primary: 218 74% 15%; /* #0A1F44 */
+  --primary-foreground: 220 10% 94%;
+  
+  --secondary: 223 42% 30%; /* #2C3E6B */
+  --secondary-foreground: 220 10% 94%;
+  
+  --muted: 225 15% 18%; /* #1E222D icon/emoji background dark */
+  --muted-foreground: 210 10% 80%; /* #C7CCD1 secondary text dark */
+  
+  --accent: 210 10% 80%; /* #C7CCD1 */
+  --accent-foreground: 228 19% 5%;
+  
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 218 17% 35%;
+  --input: 225 15% 20%;
+  --ring: 210 10% 80%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    overflow-x: clip;
+    min-width: 320px;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+  /* Prevent iOS auto-zoom on input focus */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* Responsive & Safe-Area Utilities */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@layer components {
+  /* Global button recoloring rules */
+  .btn-primary, button[type="submit"] {
+    background-color: #0A1F44;
+    color: #EDEEF0;
+    transition: background-color 0.2s ease;
+  }
+  .btn-primary:hover, button[type="submit"]:hover {
+    background-color: #2C3E6B;
+  }
+
+  /* Icon & Emoji background container recoloring rules */
+  .icon-bg, .emoji-bg, .avatar-badge {
+    background-color: #E5E8EC;
+    color: #0A1F44;
+  }
+  .dark .icon-bg, .dark .emoji-bg, .dark .avatar-badge {
+    background-color: #1E222D;
+    color: #EDEEF0;
+  }
+}
+
+.texture-overlay {
+  position: relative;
+}
+.texture-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* Clerk placeholder text visibility */
+.cl-formFieldInput::placeholder {
+  color: #9b8a75;
+  opacity: 1;
+}
+
+/* Skeleton Shimmer System */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 232, 236, 0.75) 0%,
+    rgba(244, 245, 247, 0.95) 50%,
+    rgba(229, 232, 236, 0.75) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.8s infinite ease-in-out;
+}
+
+.dark .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(30, 34, 45, 0.75) 0%,
+    rgba(44, 62, 107, 0.35) 50%,
+    rgba(30, 34, 45, 0.75) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.8s infinite ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE & CROSS-BROWSER FOUNDATION UTILITIES
+   ========================================================================== */
+
+/* Prevent horizontal body blowout across all browsers */
+html, body {
+  overflow-x: clip;
+  max-width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  overflow-x: clip;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dynamic Viewport Units for iOS Safari & Modern Browsers */
+.min-h-screen-dynamic {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.h-screen-dynamic {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.max-h-screen-dynamic {
+  max-height: 100vh;
+  max-height: 100dvh;
+}
+
+/* Safe-Area Inset Utilities (iPhone Notch, Dynamic Island, Home Indicator) */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Combined safe-area with standard padding */
+.pt-safe-4 {
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+.pb-safe-4 {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+.pb-safe-6 {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* iOS Safari Input Auto-Zoom Prevention (< 768px) */
+@media screen and (max-width: 767px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="search"],
+  input[type="url"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Ergonomic Touch Target Utility (WCAG 2.1 AA 44px min) */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Cross-Browser Scrollbar Normalization */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #C7CCD1 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #C7CCD1;
+  border-radius: 9999px;
+}
+
+.dark .scrollbar-thin {
+  scrollbar-color: #4A5568 transparent;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #4A5568;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* iOS Momentum Scrolling */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* WebKit Backdrop Filter Fallback */
+.backdrop-blur-glass {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+

@@ -108,4 +108,145 @@ router.get("/shipping/check", (req: any, res: any) => {
   });
 });
 
+/**
+ * POST /shipping/shiprocket-webhook
+ * Ingests live tracking webhook events from Shiprocket.
+ * Note: Marks parcel as physically collected ONLY when courier scan confirms PICKED UP.
+ */
+router.post("/shipping/shiprocket-webhook", async (req: any, res: any) => {
+  const payload = req.body || {};
+  const awb = payload.awb || payload.awb_code || payload.tracking_number;
+  const rawStatus = String(payload.current_status || payload.status || "").trim().toUpperCase();
+  const location = payload.location || payload.current_city || "";
+  const activity = payload.activity || payload.scans?.[0]?.activity || `Status updated to ${rawStatus}`;
+  const timestamp = payload.current_timestamp || new Date().toISOString();
+
+  if (!awb) {
+    return res.status(400).json({ error: "AWB number is required in webhook payload" });
+  }
+
+  try {
+    const { mongoShipments, mongoOrders, db, ordersTable, eq } = await import("@workspace/db");
+    const { insertOrderStatusNotification } = await import("../lib/orderNotifications");
+    const { emitOrderEvent } = await import("../lib/socket");
+
+    const shipment = await mongoShipments.findByAwb(String(awb).trim());
+    if (!shipment) {
+      req.log?.warn?.({ awb }, "Webhook received for untracked AWB");
+      return res.json({ success: true, message: "AWB not found in local system, ignored." });
+    }
+
+    // Map Shiprocket status to VASTRAA internal shipment status
+    let mappedStatus = shipment.status;
+    let orderNotificationType: any = null;
+
+    if (rawStatus.includes("PICKED UP") || rawStatus === "PICKED_UP") {
+      mappedStatus = "picked_up";
+      orderNotificationType = "order_shipped";
+    } else if (rawStatus.includes("TRANSIT") || rawStatus === "IN_TRANSIT") {
+      mappedStatus = "in_transit";
+    } else if (rawStatus.includes("OUT FOR DELIVERY") || rawStatus === "OUT_FOR_DELIVERY") {
+      mappedStatus = "out_for_delivery";
+      orderNotificationType = "out_for_delivery";
+    } else if (rawStatus.includes("DELIVERED") && !rawStatus.includes("RTO")) {
+      mappedStatus = "delivered";
+      orderNotificationType = "order_delivered";
+    } else if (rawStatus.includes("RTO") || rawStatus.includes("RETURN")) {
+      mappedStatus = "rto_initiated";
+    } else if (rawStatus.includes("CANCEL")) {
+      mappedStatus = "cancelled";
+    }
+
+    const trackingHistory = Array.isArray(shipment.trackingHistory) ? [...shipment.trackingHistory] : [];
+    trackingHistory.push({
+      status: mappedStatus,
+      timestamp,
+      activity: `${activity} (Courier: ${shipment.courierName || "Shiprocket"})`,
+      location,
+    });
+
+    // Update shipment in MongoDB
+    await mongoShipments.update(shipment.id, {
+      status: mappedStatus as any,
+      trackingHistory,
+      updatedAt: new Date(),
+    });
+
+    // Update parent order
+    const order = await mongoOrders.findById(shipment.orderId);
+    if (order) {
+      const orderHistory = Array.isArray(order.statusHistory) ? [...order.statusHistory] : [];
+      orderHistory.push({
+        status: mappedStatus,
+        vendorId: shipment.vendorId,
+        timestamp,
+        note: `Shipment ${shipment.id} (${shipment.courierName}) tracking update: ${activity}`,
+        courierName: shipment.courierName,
+        trackingNumber: awb,
+      });
+
+      const orderUpdates: Record<string, any> = {
+        statusHistory: orderHistory,
+        updatedAt: new Date(),
+      };
+
+      // Check all shipments for this order to see if overall order status should advance
+      const allOrderShipments = await mongoShipments.findByOrderId(order.id);
+      const allPickedUpOrInTransit = allOrderShipments.length > 0 && allOrderShipments.every(
+        (s) => ["picked_up", "in_transit", "out_for_delivery", "delivered"].includes(s.status)
+      );
+      const allDelivered = allOrderShipments.length > 0 && allOrderShipments.every(
+        (s) => s.status === "delivered"
+      );
+
+      if (allDelivered) {
+        orderUpdates.status = "delivered";
+        orderUpdates.deliveredAt = new Date();
+      } else if (allPickedUpOrInTransit && order.status !== "delivered") {
+        orderUpdates.status = "in_transit";
+      }
+
+      try {
+        await mongoOrders.update(order.id, orderUpdates);
+      } catch {}
+      try {
+        await db.update(ordersTable).set(orderUpdates as any).where(eq(ordersTable.id, order.id));
+      } catch {}
+
+      if (orderNotificationType) {
+        try {
+          await insertOrderStatusNotification({
+            userId: order.userId,
+            type: orderNotificationType,
+            orderId: order.id,
+            itemName: shipment.items[0]?.name || "your order",
+            extraItemCount: shipment.items.length > 1 ? shipment.items.length - 1 : 0,
+            trackingNumber: awb,
+            carrier: shipment.courierName || undefined,
+          });
+        } catch {}
+      }
+
+      try {
+        emitOrderEvent("order:status_changed", {
+          ...order,
+          ...orderUpdates,
+          shipment: { ...shipment, status: mappedStatus },
+        });
+      } catch {}
+    }
+
+    return res.json({
+      success: true,
+      shipmentId: shipment.id,
+      awb,
+      status: mappedStatus,
+      message: "Webhook tracking event processed successfully",
+    });
+  } catch (err: any) {
+    req.log?.error?.({ err }, "shipping/shiprocket-webhook failed");
+    return res.status(500).json({ error: "Internal error processing tracking webhook" });
+  }
+});
+
 export default router;

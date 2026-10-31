@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { mongoUsers, mongoSessions, mongoSellers } from "@workspace/db";
+import { db, vendorsTable, eq, or, mongoUsers, mongoSessions, mongoSellers } from "@workspace/db";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import {
   createAuthSession,
@@ -15,6 +15,9 @@ import { authRateLimiter, refreshRateLimiter, passwordResetLimiter } from "../mi
 import { isCustomer } from "../middlewares/isCustomer";
 import { isSeller } from "../middlewares/isSeller";
 import { writeAuditLog, getIp } from "../lib/auditLog";
+import { checkAccountLockout, recordFailedAttempt, recordSuccessfulLogin } from "../lib/authSecurity";
+import { verifyAccessToken } from "../lib/jwt";
+import { sendAccountWelcomeEmail } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -56,10 +59,10 @@ router.post("/auth/sign-up", authRateLimiter, async (req: Request, res: Response
       return;
     }
 
-    // Check if user already exists in MongoDB
-    const existingUser = await mongoUsers.findByEmail(cleanEmail);
+    // Check if customer user already exists in MongoDB
+    const existingUser = await mongoUsers.findByEmail(cleanEmail, "customer");
     if (existingUser) {
-      res.status(400).json({ success: false, error: "An account with this email or User ID already exists. Please log in instead." });
+      res.status(400).json({ success: false, error: "A Customer account with this email address already exists. Please log in instead." });
       return;
     }
 
@@ -91,6 +94,15 @@ router.post("/auth/sign-up", authRateLimiter, async (req: Request, res: Response
     const { accessToken, refreshToken, session } = await createAuthSession(user.id, user.email, "customer", req);
     setRefreshTokenCookie(res, "customer", refreshToken, session.id);
 
+    // Send welcome email asynchronously without blocking registration response
+    if (isEmail) {
+      void sendAccountWelcomeEmail({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+      });
+    }
+
     res.status(201).json({
       success: true,
       token: accessToken,
@@ -119,43 +131,121 @@ router.post("/auth/sign-in", authRateLimiter, async (req: Request, res: Response
     const rawIdentifier = (email || id || userId || username || "").toString();
 
     if (!rawIdentifier || !rawIdentifier.trim() || !password || typeof password !== "string") {
-      res.status(401).json({ success: false, error: "Invalid email/User ID or password." });
+      res.status(401).json({ success: false, error: "Invalid ID or Password." });
       return;
     }
 
     const cleanEmail = rawIdentifier.trim().toLowerCase();
-    const user = await mongoUsers.findByEmail(cleanEmail);
+
+    const clientIp = getIp(req);
+
+    // Check account lockout state before password check
+    const lockout = await checkAccountLockout(cleanEmail, "customer", clientIp);
+    if (lockout.isLocked) {
+      writeAuditLog({
+        eventType: "login_lockout_blocked",
+        role: "customer",
+        email: cleanEmail,
+        ipAddress: clientIp,
+        userAgent: req.headers["user-agent"] || "",
+        metadata: { remainingSeconds: lockout.remainingSeconds },
+      });
+      res.status(429).json({
+        success: false,
+        error: lockout.retryMessage || "Your login is temporarily locked. Please try again later.",
+        code: "ACCOUNT_TEMPORARILY_LOCKED",
+        retryAfterSeconds: lockout.remainingSeconds,
+      });
+      return;
+    }
+
+    // 1. Look up user by email or ID/userId for Customer role
+    let user = await mongoUsers.findByEmail(cleanEmail, "customer");
+    if (!user) {
+      const byId = (await mongoUsers.findById(rawIdentifier.trim())) || (await mongoUsers.findById(cleanEmail));
+      if (byId && (byId.role === "customer" || !byId.role)) {
+        user = byId;
+      }
+    }
+    if (!user) {
+      const candidate = await mongoUsers.findByEmail(cleanEmail);
+      if (candidate && (candidate.role === "customer" || !candidate.role)) {
+        user = candidate;
+      } else if (candidate && candidate.role === "seller") {
+        res.status(403).json({
+          success: false,
+          error: "This email is registered as a Seller account. Please log in using the Seller Portal.",
+          code: "SELLER_ACCOUNT_WRONG_PORTAL",
+        });
+        return;
+      }
+    }
 
     if (!user) {
+      const failState = await recordFailedAttempt(cleanEmail, "customer", clientIp, req);
       writeAuditLog({
         eventType: "login_failure",
         role: "customer",
         email: cleanEmail,
-        ipAddress: getIp(req),
+        ipAddress: clientIp,
         userAgent: req.headers["user-agent"] || "",
-        metadata: { reason: "user_not_found" },
+        metadata: { reason: "user_not_found", attempts: failState.attempts },
       });
-      res.status(401).json({ success: false, error: "Invalid email/User ID or password." });
+
+      if (failState.isLocked) {
+        res.status(429).json({
+          success: false,
+          error: `Too many failed login attempts. Your account is temporarily locked for ${failState.lockMinutes} minutes.`,
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          retryAfterSeconds: failState.remainingSeconds,
+        });
+        return;
+      }
+
+      res.status(401).json({ success: false, error: "Invalid ID or Password." });
       return;
     }
 
-    const isPasswordValid = verifyPassword(password, user.passwordHash);
+    // Self-heal user email if missing or empty
+    if ((!user.email || user.email === "") && rawIdentifier.trim().includes("@")) {
+      user.email = rawIdentifier.trim().toLowerCase();
+      mongoUsers.update(user.id, { email: user.email }).catch(() => {});
+    }
+
+    const isPasswordValid = verifyPassword(password, user.passwordHash) || verifyPassword(password.trim(), user.passwordHash);
     if (!isPasswordValid) {
+      const failState = await recordFailedAttempt(cleanEmail, "customer", clientIp, req);
       writeAuditLog({
         eventType: "login_failure",
         role: "customer",
         userId: user.id,
-        email: cleanEmail,
-        ipAddress: getIp(req),
+        email: user.email || cleanEmail,
+        ipAddress: clientIp,
         userAgent: req.headers["user-agent"] || "",
-        metadata: { reason: "invalid_password" },
+        metadata: { reason: "invalid_password", attempts: failState.attempts },
       });
-      res.status(401).json({ success: false, error: "Invalid email/User ID or password." });
+
+      if (failState.isLocked) {
+        res.status(429).json({
+          success: false,
+          error: `Too many failed login attempts. Your account is temporarily locked for ${failState.lockMinutes} minutes.`,
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          retryAfterSeconds: failState.remainingSeconds,
+        });
+        return;
+      }
+
+      res.status(401).json({ success: false, error: "Invalid ID or Password." });
       return;
     }
 
+    // Reset failed attempt tracking on successful login
+    await recordSuccessfulLogin(cleanEmail, "customer", clientIp, req);
+
+
     // Create auth session & JWT access token
-    const { accessToken, refreshToken, session } = await createAuthSession(user.id, user.email, "customer", req);
+    const effectiveEmail = user.email || cleanEmail;
+    const { accessToken, refreshToken, session } = await createAuthSession(user.id, effectiveEmail, "customer", req);
     setRefreshTokenCookie(res, "customer", refreshToken, session.id);
 
     res.status(200).json({
@@ -165,12 +255,12 @@ router.post("/auth/sign-in", authRateLimiter, async (req: Request, res: Response
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
-        role: user.role,
+        email: effectiveEmail,
+        role: user.role || "customer",
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: "Invalid email or password." });
+    res.status(500).json({ success: false, error: "Invalid ID or Password." });
   }
 });
 
@@ -250,7 +340,21 @@ router.get("/auth/me", isCustomer, async (req: Request, res: Response): Promise<
  */
 const handleSignOut = async (req: Request, res: Response): Promise<void> => {
   try {
-    const sessionId = (req as any).sessionId;
+    let sessionId = (req as any).sessionId;
+    let userId = (req as any).userId;
+
+    if (!sessionId) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.substring(7).trim();
+        const payload = verifyAccessToken(token);
+        if (payload?.sid) {
+          sessionId = payload.sid;
+          userId = payload.sub;
+        }
+      }
+    }
+
     if (sessionId) {
       await revokeSession(sessionId, "user_logout");
     }
@@ -265,7 +369,7 @@ const handleSignOut = async (req: Request, res: Response): Promise<void> => {
     writeAuditLog({
       eventType: "logout",
       role: "customer",
-      userId: (req as any).userId || "anonymous",
+      userId: userId || "anonymous",
       ipAddress: getIp(req),
       userAgent: req.headers["user-agent"] || "",
     });
@@ -347,7 +451,7 @@ router.delete("/auth/sessions/:sessionId", isCustomer, async (req: Request, res:
       return;
     }
 
-    await revokeSession(sessionId, "user_revoked_session");
+    await revokeSession(String(sessionId), "user_revoked_session");
     res.status(200).json({ success: true, message: "Session revoked successfully" });
   } catch (err) {
     res.status(500).json({ success: false, error: "Failed to revoke session" });
@@ -367,10 +471,11 @@ router.post("/auth/forgot-password", passwordResetLimiter, async (req: Request, 
     const { email } = req.body || {};
     const origin = req.headers.origin || `${req.protocol}://${req.get("host")}`;
     const result = await requestPasswordReset(email, "customer", origin);
+    const { debugResetUrl, ...safeResult } = result as any;
     if (result.success) {
-      res.status(200).json(result);
+      res.status(200).json(safeResult);
     } else {
-      res.status(400).json(result);
+      res.status(400).json(safeResult);
     }
   } catch (err: any) {
     res.status(500).json({
@@ -388,10 +493,11 @@ router.post("/seller/forgot-password", passwordResetLimiter, async (req: Request
     const { email } = req.body || {};
     const origin = req.headers.origin || `${req.protocol}://${req.get("host")}`;
     const result = await requestPasswordReset(email, "seller", origin);
+    const { debugResetUrl, ...safeResult } = result as any;
     if (result.success) {
-      res.status(200).json(result);
+      res.status(200).json(safeResult);
     } else {
-      res.status(400).json(result);
+      res.status(400).json(safeResult);
     }
   } catch (err: any) {
     res.status(500).json({
@@ -404,7 +510,7 @@ router.post("/seller/forgot-password", passwordResetLimiter, async (req: Request
 /**
  * GET /api/auth/verify-reset-token — Verify reset link for customer or seller
  */
-router.get("/auth/verify-reset-token", async (req: Request, res: Response): Promise<void> => {
+router.get("/auth/verify-reset-token", passwordResetLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const token = (req.query.token as string) || "";
     const role = (req.query.role as string) === "seller" ? "seller" : "customer";
@@ -422,7 +528,7 @@ router.get("/auth/verify-reset-token", async (req: Request, res: Response): Prom
 /**
  * GET /api/seller/verify-reset-token — Verify reset link specifically for seller
  */
-router.get("/seller/verify-reset-token", async (req: Request, res: Response): Promise<void> => {
+router.get("/seller/verify-reset-token", passwordResetLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const token = (req.query.token as string) || "";
     const result = await validateResetToken(token, "seller");
@@ -439,7 +545,7 @@ router.get("/seller/verify-reset-token", async (req: Request, res: Response): Pr
 /**
  * POST /api/auth/reset-password — Execute password update for customer or seller
  */
-router.post("/auth/reset-password", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/reset-password", passwordResetLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, newPassword, password, confirmPassword, role } = req.body || {};
     const targetPassword = newPassword || password || "";
@@ -459,7 +565,7 @@ router.post("/auth/reset-password", async (req: Request, res: Response): Promise
 /**
  * POST /api/seller/reset-password — Execute password update specifically for seller
  */
-router.post("/seller/reset-password", async (req: Request, res: Response): Promise<void> => {
+router.post("/seller/reset-password", passwordResetLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, newPassword, password, confirmPassword } = req.body || {};
     const targetPassword = newPassword || password || "";
@@ -480,83 +586,303 @@ router.post("/seller/reset-password", async (req: Request, res: Response): Promi
  */
 router.post("/seller/login", authRateLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body || {};
-    if (!email || typeof email !== "string" || !email.trim() || !password || typeof password !== "string") {
-      res.status(401).json({ success: false, error: "Invalid email or password." });
+    const { email, password, identifier } = req.body || {};
+    const inputIdentifier = (email || identifier || "").trim();
+    if (!inputIdentifier || !password || typeof password !== "string") {
+      res.status(401).json({ success: false, error: "Invalid ID or Password." });
       return;
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = inputIdentifier.toLowerCase();
+    const cleanPassword = password.trim();
+    const clientIp = getIp(req);
 
-    // 1. Look up seller directly in dedicated Seller collection
+    // Check account lockout state before login processing
+    const lockout = await checkAccountLockout(cleanEmail, "seller", clientIp);
+    if (lockout.isLocked) {
+      writeAuditLog({
+        eventType: "login_lockout_blocked",
+        role: "seller",
+        email: cleanEmail,
+        ipAddress: clientIp,
+        userAgent: req.headers["user-agent"] || "",
+        metadata: { remainingSeconds: lockout.remainingSeconds },
+      });
+      res.status(429).json({
+        success: false,
+        error: lockout.retryMessage || "Your login is temporarily locked. Please try again later.",
+        code: "ACCOUNT_TEMPORARILY_LOCKED",
+        retryAfterSeconds: lockout.remainingSeconds,
+      });
+      return;
+    }
+
+    // 1. Look up seller and user records by email, ownerId, sellerId, vendorId, or id
     let seller = await mongoSellers.findByEmail(cleanEmail);
-    let user: any = null;
+    if (!seller) {
+      seller = (await mongoSellers.findById(inputIdentifier)) ||
+               (await mongoSellers.findBySellerId(inputIdentifier)) ||
+               (await mongoSellers.findByVendorId(inputIdentifier)) ||
+               (await mongoSellers.findByOwnerId(inputIdentifier));
+    }
 
-    if (seller) {
-      if (!seller.passwordHash) {
-        // Check fallback user record if passwordHash missing on seller doc
-        user = await mongoUsers.findByEmail(cleanEmail);
-        if (user && user.role === "seller" && user.passwordHash) {
-          seller.passwordHash = user.passwordHash;
-          await mongoSellers.update(seller.id, { passwordHash: user.passwordHash });
-        }
-      }
-    } else {
-      // Check if seller user exists in mongoUsers with role seller
-      user = await mongoUsers.findByEmail(cleanEmail);
-      if (user && user.role === "seller") {
-        let vendor = await mongoSellers.findByOwnerId(user.id);
-        if (!vendor) {
-          vendor = await mongoSellers.insert({
-            id: user.id,
-            name: `${user.name}'s Shop`,
-            sellerName: user.name,
-            shopName: `${user.name}'s Shop`,
-            email: user.email,
-            contactEmail: user.email,
-            mobile: user.phone || "",
-            passwordHash: user.passwordHash,
-            location: "Yeola, Maharashtra",
-            rating: 4.8,
-            sareesCount: 0,
-            avatar: user.avatar || "/images/artisan-1.png",
-            status: "approved",
-            ownerId: user.id,
-            sellerId: `TDV_${user.id.substring(0, 8).toUpperCase()}`,
-          });
-        }
-        seller = vendor;
+    let user: any = await mongoUsers.findByEmail(cleanEmail, "seller");
+    if (!user) {
+      user = await mongoUsers.findById(inputIdentifier);
+      if (user && user.role !== "seller") {
+        user = null;
       }
     }
 
-    if (!seller || !seller.passwordHash) {
+    if (!seller && user) {
+      seller = (await mongoSellers.findByOwnerId(user.id)) || (await mongoSellers.findById(user.id));
+    }
+
+    if (!user && seller) {
+      if (seller.ownerId) {
+        user = await mongoUsers.findById(seller.ownerId);
+      }
+      if (!user && (seller.email || seller.contactEmail)) {
+        user = (await mongoUsers.findByEmail(seller.email, "seller")) ||
+               (seller.contactEmail ? await mongoUsers.findByEmail(seller.contactEmail, "seller") : null);
+        if (user && user.role !== "seller") {
+          user = null;
+        }
+      }
+    }
+
+    // Fallback: search Postgres vendorsTable if seller missing from Mongo
+    if (!seller) {
+      try {
+        const conditions: any[] = [];
+        if (vendorsTable.contactEmail) {
+          conditions.push(eq(vendorsTable.contactEmail, cleanEmail));
+          conditions.push(sql`lower(${vendorsTable.contactEmail}) = ${cleanEmail}`);
+        }
+        if (vendorsTable.id) conditions.push(eq(vendorsTable.id, inputIdentifier));
+        if (vendorsTable.ownerId) conditions.push(eq(vendorsTable.ownerId, inputIdentifier));
+        if ((vendorsTable as any).vendorId) conditions.push(eq((vendorsTable as any).vendorId, inputIdentifier));
+
+        if (conditions.length > 0) {
+          const pgRows = await db
+            .select()
+            .from(vendorsTable)
+            .where(or(...conditions))
+            .limit(1);
+
+          if (pgRows.length > 0) {
+            const pgVendor = pgRows[0];
+            if (!user && pgVendor.ownerId) {
+              user = await mongoUsers.findById(pgVendor.ownerId);
+            }
+            if (!user && pgVendor.contactEmail) {
+              user = await mongoUsers.findByEmail(pgVendor.contactEmail);
+            }
+            const pwdHash = user?.passwordHash || "";
+            seller = await mongoSellers.insert({
+              id: pgVendor.id,
+              name: pgVendor.name,
+              sellerName: pgVendor.name,
+              shopName: pgVendor.name,
+              email: pgVendor.contactEmail || cleanEmail,
+              contactEmail: pgVendor.contactEmail || cleanEmail,
+              mobile: pgVendor.mobile || "",
+              location: pgVendor.location,
+              passwordHash: pwdHash,
+              status: pgVendor.status as any,
+              ownerId: pgVendor.ownerId || pgVendor.id,
+              sellerId: pgVendor.vendorId || pgVendor.id,
+              vendorId: pgVendor.vendorId || pgVendor.id,
+            });
+          }
+        }
+      } catch {}
+    }
+
+    // Auto-provision seller document if user exists with role 'seller'
+    if (!seller && user && user.role === "seller") {
+      seller = await mongoSellers.insert({
+        id: user.id,
+        name: `${user.name}'s Shop`,
+        sellerName: user.name,
+        shopName: `${user.name}'s Shop`,
+        email: user.email,
+        contactEmail: user.email,
+        mobile: user.phone || "",
+        passwordHash: user.passwordHash || "",
+        location: "India",
+        rating: 4.8,
+        sareesCount: 0,
+        status: "approved",
+        ownerId: user.id,
+        sellerId: `VEND_${user.id.substring(0, 8).toUpperCase()}`,
+      });
+    }
+
+    const candidateHashes = [
+      seller?.passwordHash,
+      user?.passwordHash,
+    ].filter((h): h is string => Boolean(h && typeof h === "string" && (h.trim().startsWith("pbkdf2:") || h.trim().startsWith("$pbkdf2$") || h.trim().startsWith("pbkdf2$"))));
+
+    if (!seller || candidateHashes.length === 0) {
+      const failState = await recordFailedAttempt(cleanEmail, "seller", clientIp, req);
       writeAuditLog({
         eventType: "login_failure",
         role: "seller",
         email: cleanEmail,
-        ipAddress: getIp(req),
+        ipAddress: clientIp,
         userAgent: req.headers["user-agent"] || "",
-        metadata: { reason: "seller_not_found" },
+        metadata: { reason: "seller_not_found_or_no_password", attempts: failState.attempts },
       });
-      res.status(401).json({ success: false, error: "Invalid email or password." });
+      if (failState.isLocked) {
+        res.status(429).json({
+          success: false,
+          error: `Too many failed login attempts. Your account is temporarily locked for ${failState.lockMinutes} minutes.`,
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          retryAfterSeconds: failState.remainingSeconds,
+        });
+        return;
+      }
+      if (user && user.role === "customer") {
+        res.status(403).json({
+          success: false,
+          error: "This account is registered as a Customer. Access to Seller Panel requires a Seller account.",
+          code: "CUSTOMER_ACCOUNT_WRONG_PORTAL",
+        });
+        return;
+      }
+      res.status(401).json({ success: false, error: "Invalid ID or Password." });
       return;
     }
 
-    // Verify password against stored passwordHash on seller record
-    const isValid = verifyPassword(password, seller.passwordHash);
-    if (!isValid) {
+    // Verify password against candidate PBKDF2 hashes (supports raw & trimmed password)
+    let isValid = false;
+    let matchedHash = "";
+    for (const hash of candidateHashes) {
+      if (verifyPassword(password, hash) || verifyPassword(cleanPassword, hash)) {
+        isValid = true;
+        matchedHash = hash;
+        break;
+      }
+    }
+
+    if (!isValid || !matchedHash) {
+      const failState = await recordFailedAttempt(cleanEmail, "seller", clientIp, req);
       writeAuditLog({
         eventType: "login_failure",
         role: "seller",
         email: cleanEmail,
         userId: seller.ownerId || seller.id,
-        ipAddress: getIp(req),
+        ipAddress: clientIp,
         userAgent: req.headers["user-agent"] || "",
-        metadata: { reason: "invalid_password" },
+        metadata: { reason: "invalid_password", attempts: failState.attempts },
       });
-      res.status(401).json({ success: false, error: "Invalid email or password." });
+      if (failState.isLocked) {
+        res.status(429).json({
+          success: false,
+          error: `Too many failed login attempts. Your account is temporarily locked for ${failState.lockMinutes} minutes.`,
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          retryAfterSeconds: failState.remainingSeconds,
+        });
+        return;
+      }
+      res.status(401).json({ success: false, error: "Invalid ID or Password." });
       return;
     }
+
+    // Synchronize valid matched password hash across seller and user records if out of sync
+    if (seller && seller.passwordHash !== matchedHash) {
+      seller.passwordHash = matchedHash;
+      try {
+        await mongoSellers.update(seller.id, { passwordHash: matchedHash });
+      } catch {}
+    }
+    if (user && user.role === "seller" && user.passwordHash !== matchedHash) {
+      user.passwordHash = matchedHash;
+      try {
+        await mongoUsers.update(user.id, { passwordHash: matchedHash });
+      } catch {}
+    }
+
+    // Check status in Postgres vendorsTable if available for authoritative approval state
+    let currentStatus = seller.status || "approved";
+    let currentStatusReason = seller.statusReason || null;
+    try {
+      const pgRows = await db
+        .select({ status: vendorsTable.status, statusReason: vendorsTable.statusReason })
+        .from(vendorsTable)
+        .where(or(eq(vendorsTable.id, seller.id), eq(vendorsTable.ownerId, seller.ownerId || seller.id)))
+        .limit(1);
+      if (pgRows.length > 0) {
+        currentStatus = pgRows[0].status;
+        currentStatusReason = pgRows[0].statusReason ?? currentStatusReason;
+      }
+    } catch {}
+
+    if (currentStatus === "pending" || (seller as any)?.approvalStatus === "pending") {
+      res.status(403).json({
+        success: false,
+        error: "Your shop registration is pending Super Admin approval. Please wait for approval before logging in.",
+        code: "VENDOR_PENDING",
+        status: "pending",
+      });
+      return;
+    }
+
+    if (currentStatus === "rejected" || (currentStatus as string) === "declined" || (seller as any)?.approvalStatus === "rejected" || (seller as any)?.approvalStatus === "declined") {
+      res.status(403).json({
+        success: false,
+        error: currentStatusReason ? `Your shop application was rejected: ${currentStatusReason}` : "Your shop application has been rejected by Super Admin.",
+        code: "VENDOR_REJECTED",
+        status: currentStatus,
+        statusReason: currentStatusReason,
+      });
+      return;
+    }
+
+    if (currentStatus === "suspended") {
+      res.status(403).json({
+        success: false,
+        error: "Your account has been suspended.",
+        code: "VENDOR_SUSPENDED",
+        status: currentStatus,
+        statusReason: currentStatusReason,
+      });
+      return;
+    }
+
+    if (currentStatus === "deactivated") {
+      res.status(403).json({
+        success: false,
+        error: "Your account has been deactivated.",
+        code: "VENDOR_DEACTIVATED",
+        status: currentStatus,
+        statusReason: currentStatusReason,
+      });
+      return;
+    }
+
+    if (currentStatus !== "approved" && currentStatus !== "active") {
+      res.status(403).json({
+        success: false,
+        error: "Your seller account is not active.",
+        code: "VENDOR_INACTIVE",
+        status: currentStatus,
+      });
+      return;
+    }
+
+    // Reset failed login tracking on success
+    await recordSuccessfulLogin(cleanEmail, "seller");
+
+    writeAuditLog({
+      eventType: "login_success",
+      role: "seller",
+      userId: seller.ownerId || seller.id,
+      email: cleanEmail,
+      ipAddress: getIp(req),
+      userAgent: req.headers["user-agent"] || "",
+    });
 
     // Create seller auth session & JWT access token
     const sellerUserId = seller.ownerId || seller.id;
@@ -569,19 +895,22 @@ router.post("/seller/login", authRateLimiter, async (req: Request, res: Response
       accessToken,
       user: {
         id: sellerUserId,
-        name: seller.name,
-        email: seller.email || seller.contactEmail,
+        name: seller.shopName || seller.name,
+        email: seller.email || seller.contactEmail || cleanEmail,
         role: "seller",
       },
       vendor: {
         id: seller.id,
-        sellerId: seller.sellerId || (seller as any).vendorId,
-        name: seller.name,
-        status: seller.status,
+        sellerId: seller.sellerId || (seller as any).vendorId || seller.id,
+        name: seller.shopName || seller.name,
+        shopName: seller.shopName || seller.name,
+        status: currentStatus,
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: "Invalid email or password." });
+    console.error("Seller login processing error:", err);
+    req.log?.error({ err }, "Seller login processing error");
+    res.status(500).json({ success: false, error: "An unexpected error occurred during seller login. Please try again." });
   }
 });
 
@@ -603,12 +932,70 @@ router.post("/seller/refresh", refreshRateLimiter, async (req: Request, res: Res
       return;
     }
 
+    // Verify vendor status before allowing session refresh
+    const sellerUserId = rotated.session.userId;
+    let seller = (await mongoSellers.findByOwnerId(sellerUserId)) ||
+                 (await mongoSellers.findById(sellerUserId)) ||
+                 (await mongoSellers.findBySellerId(sellerUserId)) ||
+                 (await mongoVendors.findByOwnerId(sellerUserId)) ||
+                 (await mongoVendors.findById(sellerUserId));
+
+    let currentStatus = seller?.status || "approved";
+    let currentStatusReason = seller?.statusReason || null;
+    try {
+      const pgRows = await db
+        .select({ status: vendorsTable.status, statusReason: vendorsTable.statusReason })
+        .from(vendorsTable)
+        .where(or(eq(vendorsTable.id, sellerUserId), eq(vendorsTable.ownerId, sellerUserId)))
+        .limit(1);
+      if (pgRows.length > 0) {
+        currentStatus = pgRows[0].status;
+        currentStatusReason = pgRows[0].statusReason ?? currentStatusReason;
+      }
+    } catch {}
+
+    if (currentStatus === "suspended") {
+      clearRefreshTokenCookie(res, "seller");
+      res.status(403).json({
+        success: false,
+        error: "Your account has been suspended.",
+        code: "VENDOR_SUSPENDED",
+        status: currentStatus,
+        statusReason: currentStatusReason,
+      });
+      return;
+    }
+
+    if (currentStatus === "rejected" || currentStatus === "declined") {
+      clearRefreshTokenCookie(res, "seller");
+      res.status(403).json({
+        success: false,
+        error: currentStatusReason || "Your shop application has been rejected by Super Admin.",
+        code: "VENDOR_REJECTED",
+        status: currentStatus,
+        statusReason: currentStatusReason,
+      });
+      return;
+    }
+
+    if (currentStatus === "pending") {
+      res.status(403).json({
+        success: false,
+        error: "Your vendor registration is pending Super Admin approval.",
+        code: "VENDOR_PENDING",
+        status: currentStatus,
+      });
+      return;
+    }
+
     setRefreshTokenCookie(res, "seller", rotated.refreshToken, rotated.session.id);
 
     res.status(200).json({
       success: true,
       token: rotated.accessToken,
       accessToken: rotated.accessToken,
+      refreshToken: rotated.refreshToken,
+      sessionId: rotated.session.id,
     });
   } catch (err) {
     res.status(401).json({ success: false, error: "Unable to refresh seller session." });
@@ -620,7 +1007,21 @@ router.post("/seller/refresh", refreshRateLimiter, async (req: Request, res: Res
  */
 const handleSellerSignOut = async (req: Request, res: Response): Promise<void> => {
   try {
-    const sessionId = (req as any).sessionId;
+    let sessionId = (req as any).sessionId;
+    let userId = (req as any).userId;
+
+    if (!sessionId) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.substring(7).trim();
+        const payload = verifyAccessToken(token);
+        if (payload?.sid) {
+          sessionId = payload.sid;
+          userId = payload.sub;
+        }
+      }
+    }
+
     if (sessionId) {
       await revokeSession(sessionId, "seller_logout");
     }
@@ -635,7 +1036,7 @@ const handleSellerSignOut = async (req: Request, res: Response): Promise<void> =
     writeAuditLog({
       eventType: "logout",
       role: "seller",
-      userId: (req as any).userId || "anonymous",
+      userId: userId || "anonymous",
       ipAddress: getIp(req),
       userAgent: req.headers["user-agent"] || "",
     });
@@ -717,7 +1118,7 @@ router.delete("/seller/sessions/:sessionId", isSeller, async (req: Request, res:
       return;
     }
 
-    await revokeSession(sessionId, "seller_revoked_session");
+    await revokeSession(String(sessionId), "seller_revoked_session");
     res.status(200).json({ success: true, message: "Session revoked successfully" });
   } catch (err) {
     res.status(500).json({ success: false, error: "Failed to revoke session" });

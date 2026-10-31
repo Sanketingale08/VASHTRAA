@@ -62,7 +62,7 @@ async function seed() {
     .returning();
 
   const vendorMap: Record<string, string> = {};
-  insertedVendors.forEach((v) => {
+  insertedVendors.forEach((v: any) => {
     vendorMap[v.name] = v.id;
   });
 

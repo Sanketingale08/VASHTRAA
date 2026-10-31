@@ -2,6 +2,7 @@ import { Router } from "express";
 import { isCustomer } from "../middlewares/isCustomer";
 import { db, mongoAddresses, savedAddressesTable } from "@workspace/db";
 import { eq, desc, and } from "@workspace/db";
+import { emitUserEvent } from "../lib/socket";
 
 const router = Router();
 
@@ -91,6 +92,7 @@ router.post("/addresses", isCustomer, async (req: any, res: any): Promise<void> 
       }
 
       const created = await mongoAddresses.insert(payload);
+      emitUserEvent(req.userId, "address:created", created);
       res.status(201).json({ address: created });
       return;
     } catch {
@@ -106,6 +108,7 @@ router.post("/addresses", isCustomer, async (req: any, res: any): Promise<void> 
         .values(payload)
         .returning();
 
+      emitUserEvent(req.userId, "address:created", created);
       res.status(201).json({ address: created });
     }
   } catch (err) {
@@ -156,6 +159,7 @@ router.put("/addresses/:id", isCustomer, async (req: any, res: any): Promise<voi
       }
 
       const updated = await mongoAddresses.update(id, updatePayload);
+      emitUserEvent(req.userId, "address:updated", updated);
       res.json({ address: updated });
       return;
     } catch {
@@ -183,6 +187,7 @@ router.put("/addresses/:id", isCustomer, async (req: any, res: any): Promise<voi
         .where(and(eq(savedAddressesTable.id, id), eq(savedAddressesTable.userId, req.userId)))
         .returning();
 
+      emitUserEvent(req.userId, "address:updated", updated);
       res.json({ address: updated });
     }
   } catch (err) {
@@ -202,6 +207,7 @@ router.delete("/addresses/:id", isCustomer, async (req: any, res: any): Promise<
         return;
       }
       await mongoAddresses.delete(id);
+      emitUserEvent(req.userId, "address:deleted", { id });
       res.json({ success: true });
       return;
     } catch {
@@ -220,6 +226,7 @@ router.delete("/addresses/:id", isCustomer, async (req: any, res: any): Promise<
         .delete(savedAddressesTable)
         .where(and(eq(savedAddressesTable.id, id), eq(savedAddressesTable.userId, req.userId)));
 
+      emitUserEvent(req.userId, "address:deleted", { id });
       res.json({ success: true });
     }
   } catch (err) {
@@ -247,6 +254,7 @@ router.patch("/addresses/:id/default", isCustomer, async (req: any, res: any): P
       }
 
       const updated = await mongoAddresses.update(id, { isDefault: true });
+      emitUserEvent(req.userId, "address:updated", updated);
       res.json({ address: updated });
       return;
     } catch {
@@ -272,6 +280,7 @@ router.patch("/addresses/:id/default", isCustomer, async (req: any, res: any): P
         .where(and(eq(savedAddressesTable.id, id), eq(savedAddressesTable.userId, req.userId)))
         .returning();
 
+      emitUserEvent(req.userId, "address:updated", updated);
       res.json({ address: updated });
     }
   } catch (err) {

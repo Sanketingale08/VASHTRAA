@@ -11,6 +11,7 @@ import type { ListProductsSort } from './listProductsSort';
 export type ListProductsParams = {
 search?: string;
 category?: ListProductsCategory;
+subcategory?: string;
 fabric?: string;
 color?: string;
 occasion?: string;

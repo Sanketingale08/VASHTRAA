@@ -197,6 +197,41 @@ vi.mock("@workspace/db", () => {
     stockHistoryTable: tag("stockHistory", ["id", "productId", "vendorId", "previousStock", "newStock", "source", "reason", "orderId"]),
     commissionRulesTable: tag("commissionRules", ["id", "active", "scope", "vendorId", "category", "rate", "effectiveFrom", "effectiveTo"]),
     vendorSettlementsTable: tag("vendorSettlements", ["id", "orderId", "vendorId", "type", "status", "amount", "productAmount", "commission", "commissionRate", "shippingCharge", "settlementTax", "netPayout"]),
+    savedPaymentMethodsTable: tag("savedPaymentMethods", ["id", "userId"]),
+    mongoGeneric: {
+      getCollection: vi.fn(() => {
+        throw new Error("mongo disconnected in mock");
+      }),
+    },
+    mongoOrders: {
+      findById: vi.fn().mockResolvedValue(null),
+      updateOne: vi.fn().mockResolvedValue(null),
+    },
+    mongoProducts: {
+      findById: vi.fn().mockResolvedValue(null),
+      updateStock: vi.fn().mockResolvedValue(null),
+    },
+    mongoSupport: { insertTicket: vi.fn().mockResolvedValue(null) },
+    mongoCart: {},
+    mongoShipments: {},
+    mongoNotifications: undefined,
+    getNextSequenceValue: vi.fn().mockResolvedValue(1001),
+    isMongoDbConnected: vi.fn().mockReturnValue(false),
+    eq: (a: any, b: any) => ({ col: a, val: b }),
+    and: (...args: any[]) => ({ args }),
+    or: (...args: any[]) => ({ args }),
+    desc: (col: any) => col,
+    asc: (col: any) => col,
+    ne: (a: any, b: any) => ({ col: a, val: b }),
+    isNotNull: (col: any) => ({ col }),
+    isNull: (col: any) => ({ col }),
+    lt: (a: any, b: any) => ({ col: a, val: b }),
+    lte: (a: any, b: any) => ({ col: a, val: b }),
+    gt: (a: any, b: any) => ({ col: a, val: b }),
+    gte: (a: any, b: any) => ({ col: a, val: b }),
+    ilike: (a: any, b: any) => ({ col: a, val: b }),
+    inArray: (a: any, b: any) => ({ col: a, val: b }),
+    sql: Object.assign((...args: any[]) => args, { raw: (s: string) => s, empty: () => "" }),
   };
 });
 

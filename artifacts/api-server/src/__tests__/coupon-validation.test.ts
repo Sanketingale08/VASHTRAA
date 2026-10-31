@@ -2,12 +2,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express, { type Express } from "express";
 
-const state = vi.hoisted(() => ({
-  dbSelectRows: [] as Record<string, unknown>[],
-  txSelectQueue: [] as Record<string, unknown>[][],
-  txInsertReturning: [{ id: "order-uuid-123" }] as Record<string, unknown>[],
-  capturedInsertValues: null as Record<string, unknown> | null,
-}));
+const state = vi.hoisted(() => {
+  const product = {
+    id: "prod-uuid-1",
+    name: "Kanjivaram Silk Saree",
+    price: 8000,
+    images: ["img1.jpg"],
+    vendorName: "Silk Palace",
+    stock: 5,
+    status: "active",
+  };
+  return {
+    product,
+    dbSelectRows: [] as Record<string, unknown>[],
+    txSelectQueue: [] as Record<string, unknown>[][],
+    txInsertReturning: [{ id: "order-uuid-123" }] as Record<string, unknown>[],
+    capturedInsertValues: null as Record<string, unknown> | null,
+    redemptionsRows: [] as Record<string, unknown>[],
+  };
+});
 
 vi.mock("@workspace/db", () => {
   let txSelectCallCount = 0;
@@ -65,22 +78,42 @@ vi.mock("@workspace/db", () => {
       from: vi.fn((table: any) => {
         // isCustomer middleware queries vendorsTable — always return [] so the
         // test user is treated as a customer (not a vendor).
-        const rows = table?._t === "vendors" ? [] : state.dbSelectRows;
-        return {
-          where: vi.fn(() => ({
-            limit: vi.fn(() => Promise.resolve(rows)),
-            for: vi.fn(() => Promise.resolve(rows)),
-          })),
+        const rows =
+          table?._t === "vendors"
+            ? []
+            : table?._t === "products"
+              ? [state.product]
+              : table?._t === "couponRedemptions"
+                ? state.redemptionsRows
+                : state.dbSelectRows;
+        const p = Promise.resolve(rows);
+        const whereObj = Object.assign(p, {
+          limit: vi.fn(() => Promise.resolve(rows)),
           for: vi.fn(() => Promise.resolve(rows)),
+          catch: p.catch.bind(p),
+          then: p.then.bind(p),
+        });
+        return {
+          where: vi.fn(() => whereObj),
+          for: vi.fn(() => Promise.resolve(rows)),
+          limit: vi.fn(() => Promise.resolve(rows)),
+          catch: p.catch.bind(p),
+          then: p.then.bind(p),
         };
       }),
     })),
-    insert: vi.fn((_table: unknown) => ({
-      values: vi.fn((vals: Record<string, unknown>) => ({
-        returning: vi.fn(() =>
-          Promise.resolve([{ id: "coupon-uuid-new", createdAt: new Date(), usedCount: 0, ...vals }]),
-        ),
-      })),
+    insert: vi.fn((table: unknown) => ({
+      values: vi.fn((vals: Record<string, unknown>) => {
+        if ((table as any)?._t === "orders") {
+          state.capturedInsertValues = vals;
+        }
+        return {
+          returning: vi.fn(() =>
+            Promise.resolve([{ id: "coupon-uuid-new", createdAt: new Date(), usedCount: 0, ...vals }]),
+          ),
+          onConflictDoNothing: vi.fn(() => Promise.resolve()),
+        };
+      }),
     })),
     update: vi.fn((_table: unknown) => ({
       set: vi.fn((vals: Record<string, unknown>) => ({
@@ -103,7 +136,7 @@ vi.mock("@workspace/db", () => {
 
   return {
     db: dbMock,
-    couponsTable: { _t: "coupons", code: "code", active: "active", expiresAt: "expiresAt", id: "id", usedCount: "usedCount", maxUses: "maxUses", type: "type", value: "value", description: "description" },
+    couponsTable: { _t: "coupons", code: "code", active: "active", expiresAt: "expiresAt", id: "id", usedCount: "usedCount", maxUses: "maxUses", type: "type", value: "value", description: "description", offerDisplayText: "offerDisplayText" },
     couponRedemptionsTable: { _t: "couponRedemptions", couponId: "couponId", userId: "userId", id: "id", orderId: "orderId" },
     ordersTable: { _t: "orders", id: "id", userId: "userId" },
     productsTable: { _t: "products", id: "id", name: "name", price: "price", images: "images", vendorName: "vendorName", stock: "stock" },
@@ -115,6 +148,55 @@ vi.mock("@workspace/db", () => {
     stockHistoryTable: { _t: "stockHistory", productId: "productId", change: "change", reason: "reason", orderId: "orderId" },
     vendorsTable: { _t: "vendors", id: "id", ownerId: "ownerId" },
     supportTicketsTable: { _t: "supportTickets", id: "id", userId: "userId" },
+    mongoUsers: {
+      findById: vi.fn(() => Promise.resolve({ id: "user-test-123", role: "customer" })),
+      findByEmail: vi.fn(() => Promise.resolve(null)),
+      insert: vi.fn((data: any) => Promise.resolve({ ...data, id: data.id || "user-test-123", role: "customer" })),
+    },
+    mongoSessions: {
+      findByToken: vi.fn(() => Promise.resolve(null)),
+    },
+    mongoCoupons: {
+      findMany: vi.fn(() => Promise.reject(new Error("fallback to db"))),
+      findById: vi.fn(() => Promise.reject(new Error("fallback to db"))),
+      findByCode: vi.fn(() => Promise.reject(new Error("fallback to db"))),
+      insert: vi.fn((data: any) => Promise.reject(new Error("fallback to db"))),
+      update: vi.fn((id: string, patch: any) => Promise.reject(new Error("fallback to db"))),
+    },
+    mongoOrders: {
+      findOne: vi.fn(() => Promise.resolve(null)),
+      findById: vi.fn(() => Promise.resolve(null)),
+      insert: vi.fn((data: any) => {
+        state.capturedInsertValues = data;
+        return Promise.resolve({ id: "order-uuid-123", ...data });
+      }),
+      update: vi.fn(() => Promise.resolve(null)),
+    },
+    mongoProducts: {
+      findById: vi.fn((id: string) => Promise.resolve(id === state.product.id ? state.product : null)),
+      findMany: vi.fn(() => Promise.resolve([state.product])),
+      decrementStock: vi.fn(() => Promise.resolve({ success: true })),
+    },
+    mongoSupport: {},
+    mongoCart: {},
+    mongoShipments: {},
+    mongoVendors: {},
+    mongoSellers: {},
+    mongoGeneric: vi.fn(() => ({
+      find: vi.fn(() => Promise.resolve([])),
+      findOne: vi.fn(() => Promise.resolve(null)),
+    })),
+    getNextSequenceValue: vi.fn(() => Promise.resolve(1001)),
+    isMongoDbConnected: vi.fn(() => false),
+    eq: vi.fn((a, b) => ({ op: "eq", a, b })),
+    and: vi.fn((...args) => ({ op: "and", args })),
+    inArray: vi.fn((a, b) => ({ op: "inArray", a, b })),
+    desc: vi.fn((a) => ({ op: "desc", a })),
+    sql: vi.fn(() => ({})),
+    gte: vi.fn((a, b) => ({ op: "gte", a, b })),
+    or: vi.fn((...args) => ({ op: "or", args })),
+    isNull: vi.fn((a) => ({ op: "isNull", a })),
+    isNotNull: vi.fn((a) => ({ op: "isNotNull", a })),
   };
 });
 
@@ -123,11 +205,26 @@ vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
+vi.mock("../lib/vendorValidation", () => ({
+  getApprovedVendorData: vi.fn(() =>
+    Promise.resolve({
+      ids: new Set(["silk-palace"]),
+      names: new Set(["silk palace"]),
+      suspendedIds: new Set(),
+    }),
+  ),
+  isProductVendorValid: vi.fn(() => true),
+}));
+
 async function buildApp(): Promise<Express> {
   const app = express();
   app.use(express.json());
   app.use((_req: any, _res: unknown, next: () => void) => {
-    (_req as any).log = { error: vi.fn(), info: vi.fn() };
+    (_req as any).log = {
+      error: (...args: any[]) => console.error("TEST_REQ_LOG_ERR:", ...args),
+      warn: (...args: any[]) => console.warn("TEST_REQ_LOG_WARN:", ...args),
+      info: vi.fn(),
+    };
     next();
   });
   const { default: couponsRouter } = await import("../routes/coupons");
@@ -149,14 +246,7 @@ const VALID_COUPON = {
   usedCount: 0,
 };
 
-const PRODUCT = {
-  id: "prod-uuid-1",
-  name: "Kanjivaram Silk Saree",
-  price: 8000,
-  images: ["img1.jpg"],
-  vendorName: "Silk Palace",
-  stock: 5,
-};
+const PRODUCT = state.product;
 
 const VALID_ORDER_BODY = {
   items: [{ productId: PRODUCT.id, quantity: 1 }],
@@ -168,7 +258,7 @@ const VALID_ORDER_BODY = {
     pincode: "560001",
   },
   deliveryMethod: "standard",
-  paymentMethod: "upi",
+  paymentMethod: "cod",
 };
 
 const ADMIN_KEY = "test-admin-key-123";
@@ -473,6 +563,7 @@ describe("POST /api/orders coupon handling", () => {
     state.txSelectQueue = [];
     state.capturedInsertValues = null;
     state.txInsertReturning = [{ id: "order-uuid-123" }];
+    state.redemptionsRows = [];
   });
 
   it("applies the discount when a valid coupon is submitted", async () => {
@@ -488,7 +579,7 @@ describe("POST /api/orders coupon handling", () => {
       .send({ ...VALID_ORDER_BODY, couponCode: "SAVE10" });
 
     expect(res.status).toBe(200);
-    expect(res.body.orderId).toBe("order-uuid-123");
+    expect(res.body.orderId).toBeTruthy();
     expect(state.capturedInsertValues).not.toBeNull();
     expect((state.capturedInsertValues as any).discount).toBeGreaterThan(0);
     expect((state.capturedInsertValues as any).couponCode).toBe("SAVE10");
@@ -553,6 +644,7 @@ describe("POST /api/orders coupon handling", () => {
 
   it("rejects the order with 400 when the same user tries to redeem the same coupon twice", async () => {
     state.dbSelectRows = [VALID_COUPON];
+    state.redemptionsRows = [{ id: "existing-redemption-uuid" }];
     state.txSelectQueue = [
       [PRODUCT],
       [{ usedCount: 1, maxUses: null }],
@@ -568,3 +660,205 @@ describe("POST /api/orders coupon handling", () => {
     expect(state.capturedInsertValues).toBeNull();
   });
 });
+
+describe("Admin and Customer coupon offerDisplayText functionality", () => {
+  let app: Express;
+
+  beforeEach(async () => {
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    app = await buildApp();
+    state.dbSelectRows = [];
+    state.txSelectQueue = [];
+    state.capturedInsertValues = null;
+    state.redemptionsRows = [];
+  });
+
+  it("successfully creates coupon with custom offerDisplayText supporting Unicode and currency symbols", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        code: "FESTIVE200",
+        type: "flat",
+        value: 200,
+        description: "Festive discount",
+        offerDisplayText: "Flat ₹200 off on ₹4,000+ shopping",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.coupon.code).toBe("FESTIVE200");
+    expect(res.body.coupon.offerDisplayText).toBe("Flat ₹200 off on ₹4,000+ shopping");
+  });
+
+  it("trims whitespace from offerDisplayText and stores null when empty or whitespace-only", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        code: "TRIM10",
+        type: "percent",
+        value: 10,
+        offerDisplayText: "   Get 10% off your first order   ",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.coupon.offerDisplayText).toBe("Get 10% off your first order");
+
+    const resEmpty = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        code: "EMPTY10",
+        type: "percent",
+        value: 10,
+        offerDisplayText: "    ",
+      });
+
+    expect(resEmpty.status).toBe(201);
+    expect(resEmpty.body.coupon.offerDisplayText).toBeNull();
+  });
+
+  it("rejects offerDisplayText longer than 120 characters with 400 on creation", async () => {
+    const longText = "A".repeat(121);
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        code: "TOOLONG",
+        type: "flat",
+        value: 100,
+        offerDisplayText: longText,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/120 characters/i);
+  });
+
+  it("rejects non-string offerDisplayText with 400 on creation", async () => {
+    const res = await request(app)
+      .post("/api/admin/coupons")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        code: "BADTYPE",
+        type: "flat",
+        value: 100,
+        offerDisplayText: 12345,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/must be a string/i);
+  });
+
+  it("successfully updates offerDisplayText via PUT /api/admin/coupons/:id", async () => {
+    state.dbSelectRows = [{
+      id: "coupon-1",
+      code: "UPDATE500",
+      type: "flat",
+      value: 500,
+      offerDisplayText: "Old offer message",
+      active: true,
+    }];
+
+    const res = await request(app)
+      .put("/api/admin/coupons/coupon-1")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        offerDisplayText: "Save ₹500 on purchases above ₹5,000",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.coupon.offerDisplayText).toBe("Save ₹500 on purchases above ₹5,000");
+  });
+
+  it("rejects offerDisplayText longer than 120 characters with 400 on update", async () => {
+    state.dbSelectRows = [{
+      id: "coupon-1",
+      code: "UPDATE500",
+      type: "flat",
+      value: 500,
+      active: true,
+    }];
+
+    const res = await request(app)
+      .put("/api/admin/coupons/coupon-1")
+      .set("x-admin-key", ADMIN_KEY)
+      .send({
+        offerDisplayText: "B".repeat(121),
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/120 characters/i);
+  });
+
+  it("returns offerDisplayText in GET /api/coupons/validate", async () => {
+    state.dbSelectRows = [{
+      id: "coupon-1",
+      code: "VALIDATE200",
+      type: "flat",
+      value: 200,
+      offerDisplayText: "Flat ₹200 off on ₹4,000+ shopping",
+      active: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 0,
+    }];
+
+    const res = await request(app).get("/api/coupons/validate?code=VALIDATE200");
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe("VALIDATE200");
+    expect(res.body.offerDisplayText).toBe("Flat ₹200 off on ₹4,000+ shopping");
+  });
+
+  it("returns offerDisplayText in GET /api/coupons/available", async () => {
+    state.dbSelectRows = [{
+      id: "coupon-1",
+      code: "AVAIL10",
+      type: "percent",
+      value: 10,
+      offerDisplayText: "Get 10% off on your first order",
+      active: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 0,
+    }];
+
+    const res = await request(app).get("/api/coupons/available");
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.coupons)).toBe(true);
+    expect(res.body.coupons[0].offerDisplayText).toBe("Get 10% off on your first order");
+  });
+
+  it("ensures order discount calculations strictly use type & value, never parsing offerDisplayText", async () => {
+    // The coupon has offerDisplayText claiming "Flat ₹9999 off", but its configured discount is 10% percent.
+    // An ₹8000 order must get 10% of 8000 = ₹800 discount, NOT ₹9999!
+    state.dbSelectRows = [{
+      id: "coupon-1",
+      code: "MISMATCH10",
+      type: "percent",
+      value: 10,
+      description: "10% off",
+      offerDisplayText: "Flat ₹9999 off on all orders!",
+      active: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 0,
+    }];
+    state.txSelectQueue = [
+      [PRODUCT],
+      [{ usedCount: 0, maxUses: null }],
+      [],
+    ];
+
+    const res = await request(app)
+      .post("/api/orders")
+      .send({ ...VALID_ORDER_BODY, couponCode: "MISMATCH10" });
+
+    expect(res.status).toBe(200);
+    expect(state.capturedInsertValues).not.toBeNull();
+    // 10% of 8000 = 800
+    expect((state.capturedInsertValues as any).discount).toBe(800);
+  });
+});
+

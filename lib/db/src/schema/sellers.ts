@@ -18,7 +18,7 @@ export interface Seller {
   rating?: number;
   sareesCount?: number;
   productsCount?: number;
-  status: "pending" | "approved" | "suspended";
+  status: "pending" | "approved" | "suspended" | "rejected";
   statusReason?: string | null;
 
   // Business details
@@ -30,6 +30,14 @@ export interface Seller {
   bankName?: string | null;
   bankAccount?: string | null;
   bankIfsc?: string | null;
+  bankVerified?: boolean;
+  bankVerificationStatus?: "unverified" | "verification_pending" | "verified" | "verification_failed";
+  bankVerificationDetails?: any;
+  bankVerifiedAt?: Date | null;
+  cashfreeBeneficiaryId?: string | null;
+  beneficiaryStatus?: "unregistered" | "beneficiary_registration_pending" | "beneficiary_active" | "beneficiary_registration_failed";
+  beneficiaryRegisteredAt?: Date | null;
+  beneficiaryError?: string | null;
 
   // Seller address
   shopStreet?: string | null;
@@ -48,6 +56,14 @@ export interface Seller {
   pickupPincode?: string | null;
   pickupCountry?: string | null;
   pickupSameAsShop?: boolean;
+
+  // Shiprocket automated pickup location mapping
+  shiprocketPickupLocationName?: string | null;
+  shiprocketPickupId?: number | null;
+  shiprocketPickupStatus?: "unregistered" | "registered" | "failed" | "pending";
+  shiprocketPickupError?: string | null;
+  shiprocketAddressHash?: string | null;
+  shippingActivated?: boolean;
 
   ownerId?: string | null;
   termsAcceptedAt?: Date | null;

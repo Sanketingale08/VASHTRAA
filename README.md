@@ -17,7 +17,7 @@ VASTRAA is a modern, full-stack, multi-vendor fashion and apparel e-commerce eco
 
 ## 🚀 Key Features
 
-### 🛒 Customer Storefront (`@workspace/twirldrape`)
+### 🛒 Customer Storefront (`@workspace/VASTRAA`)
 - **Product Discovery**: Browse curated clothing collections, dynamic search, multi-attribute filtering (category, size, color, price, tag), and quick view modals.
 - **Cart & Checkout**: Real-time shopping cart drawer, saved cards, saved UPI payment methods, address book with Google Maps autocomplete, and order confirmation.
 - **Account & Orders**: Order history, order tracking timeline, returns & refunds management, user preferences, and wishlist synchronization.
@@ -33,7 +33,7 @@ VASTRAA is a modern, full-stack, multi-vendor fashion and apparel e-commerce eco
 - **Promotions & Content**: Site-wide coupon management, banner configuration, system notifications, and 2FA authentication.
 - **Automated Workers**: Background cron workers for weekly executive reporting, email outbox retry queue, and seller registration nudge automation.
 
-### 📱 Mobile Experience (`@workspace/twirldrape-mobile`)
+### 📱 Mobile Experience (`@workspace/VASTRAA-mobile`)
 - Native mobile client powered by **React Native & Expo**, featuring mobile product navigation, shopper cart/checkout flow, and seller dashboard views.
 
 ---

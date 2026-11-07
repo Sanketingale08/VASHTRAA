@@ -86,14 +86,25 @@ describe("Seller Registration Verification HTTP API — E2E Flow", () => {
   });
 
   it("5. Completes send -> verify flow successfully", async () => {
+    let capturedCode = "";
+    vi.spyOn(nodemailer, "createTransport").mockReturnValue({
+      sendMail: vi.fn(async (mailOpts: any) => {
+        const match = mailOpts.text?.match(/\b\d{6}\b/);
+        if (match) capturedCode = match[0];
+        return { messageId: "e2e-msg-123" };
+      }),
+    } as any);
+
     const testEmail = "e2e-flow@example.com";
     const sendRes = await request(app)
       .post("/api/seller/send-verification-code")
       .send({ email: testEmail });
 
     expect(sendRes.status).toBe(200);
-    expect(sendRes.body.devCode).toBeDefined();
-    const code = sendRes.body.devCode;
+    // In production, OTP code is dispatched via email and never returned in the response
+    expect(sendRes.body.devCode).toBeUndefined();
+    expect(capturedCode).toMatch(/^[0-9]{6}$/);
+    const code = capturedCode;
 
     // Verify with bad code first
     const badVerify = await request(app)

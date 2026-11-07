@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Search, ChevronRight, Package, AlertCircle } from "lucide-react";
+import { Search, ChevronRight, Package, AlertCircle, RotateCcw } from "lucide-react";
 import { SellerLayout } from "./SellerDashboard";
 import { apiFetch } from "@/lib/api";
 import { TableRowSkeleton } from "@/components/skeletons";
@@ -108,7 +108,7 @@ export default function SellerOrders() {
       const customEvent = e as CustomEvent;
       const detail = customEvent.detail;
       if (!detail) return;
-      if (["order:created", "order:status_changed", "order:cancelled"].includes(detail.name)) {
+      if (["order:created", "order:status_changed", "order:cancelled", "payment:status_updated", "order:tracking_updated"].includes(detail.name)) {
         load(tab, appliedSearch);
       }
     };
@@ -143,6 +143,14 @@ export default function SellerOrders() {
               <span className="text-sm font-semibold px-3 py-1.5 rounded-full" style={{ background: CREAM, color: MAROON }}>
                 {orders.length} order{orders.length !== 1 ? "s" : ""}
               </span>
+              <Link
+                href="/seller/returns"
+                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-[#0A1F44]/20 hover:bg-[#0A1F44] hover:text-white transition-colors ml-2"
+                style={{ color: MAROON }}
+              >
+                <RotateCcw size={13} />
+                Returns & Exchanges Portal →
+              </Link>
             </div>
           )}
         </div>

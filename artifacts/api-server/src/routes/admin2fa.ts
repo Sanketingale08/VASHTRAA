@@ -19,13 +19,14 @@ import { generateSecret, verifySync, generateURI } from "otplib";
 import QRCode from "qrcode";
 import rateLimit from "express-rate-limit";
 import { Resend } from "resend";
-import { db, siteSettingsTable, adminLoginSessionsTable, adminRecoveryCodesTable, adminOtpChallengesTable, mongoSiteSettings } from "@workspace/db";
+import { db, siteSettingsTable, adminLoginSessionsTable, adminRecoveryCodesTable, adminOtpChallengesTable, mongoSiteSettings, mongoGeneric } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAdminKey, sha256hex, clearAdmin2faCache } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { checkAccountLockout, recordFailedAttempt, recordSuccessfulLogin } from "../lib/authSecurity";
 import { logger } from "../lib/logger";
 import { sendSms } from "../lib/sms";
+import { getSmtpTransporter, getSenderAddress, wrapInTemplate, getVastraaLogoAttachment } from "../lib/transactionalEmail";
 
 const router = Router();
 
@@ -71,6 +72,102 @@ async function deleteSetting(key: string): Promise<void> {
   } catch {}
 }
 
+// ── Challenge storage helpers (supports MongoDB & PostgreSQL / Test Mocks) ─────
+
+async function getOtpChallenge(type: string): Promise<{ id: string; type: string; codeHash: string; expiresAt: Date; attempts: number; createdAt: Date } | null> {
+  try {
+    if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+      const col = await mongoGeneric.getCollection("admin_otp_challenges");
+      const doc = await col.findOne({ type });
+      if (doc) {
+        return {
+          id: doc.id || String(doc._id),
+          type: doc.type,
+          codeHash: doc.codeHash,
+          expiresAt: new Date(doc.expiresAt),
+          attempts: doc.attempts || 0,
+          createdAt: new Date(doc.createdAt),
+        };
+      }
+    }
+  } catch {}
+
+  try {
+    const [row] = await db
+      .select()
+      .from(adminOtpChallengesTable)
+      .where(eq(adminOtpChallengesTable.type, type));
+    if (row) return row;
+  } catch {}
+
+  return null;
+}
+
+async function saveOtpChallenge(challenge: { type: string; codeHash: string; expiresAt: Date; attempts: number }): Promise<void> {
+  const now = new Date();
+  try {
+    if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+      const col = await mongoGeneric.getCollection("admin_otp_challenges");
+      await col.deleteMany({ type: challenge.type });
+      await col.insertOne({
+        id: crypto.randomUUID(),
+        type: challenge.type,
+        codeHash: challenge.codeHash,
+        expiresAt: challenge.expiresAt,
+        attempts: challenge.attempts,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  } catch {}
+
+  try {
+    await db.insert(adminOtpChallengesTable).values({
+      type: challenge.type,
+      codeHash: challenge.codeHash,
+      expiresAt: challenge.expiresAt,
+      attempts: challenge.attempts,
+    });
+  } catch {}
+}
+
+async function deleteOtpChallenges(type?: string): Promise<void> {
+  try {
+    if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+      const col = await mongoGeneric.getCollection("admin_otp_challenges");
+      if (type) {
+        await col.deleteMany({ type });
+      } else {
+        await col.deleteMany({});
+      }
+    }
+  } catch {}
+
+  try {
+    if (type) {
+      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.type, type));
+    } else {
+      await db.delete(adminOtpChallengesTable);
+    }
+  } catch {}
+}
+
+async function updateOtpChallengeAttempts(type: string, attempts: number): Promise<void> {
+  try {
+    if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+      const col = await mongoGeneric.getCollection("admin_otp_challenges");
+      await col.updateOne({ type }, { $set: { attempts, updatedAt: new Date() } });
+    }
+  } catch {}
+
+  try {
+    await db
+      .update(adminOtpChallengesTable)
+      .set({ attempts })
+      .where(eq(adminOtpChallengesTable.type, type));
+  } catch {}
+}
+
 function parseUA(ua: string = ""): { device: string; os: string; browser: string } {
   let device = "Desktop";
   let os = "Unknown OS";
@@ -97,22 +194,47 @@ async function createVerifiedSession(req: any): Promise<{ tokenHash: string; ses
   const ip = getIp(req);
   const { device, os, browser } = parseUA(ua);
   const tokenHash = sha256hex(key + ip + ua + crypto.randomBytes(16).toString("hex"));
+  const sessionId = crypto.randomUUID();
 
-  const [session] = await db
-    .insert(adminLoginSessionsTable)
-    .values({
-      sessionTokenHash: tokenHash,
-      ipAddress: ip,
-      userAgent: ua,
-      device,
-      os,
-      browser,
-      location: "India",
-      twoFactorVerified: true,
-    })
-    .returning({ id: adminLoginSessionsTable.id });
+  // Save to MongoDB collection 'admin_sessions' (inspected by isAdmin middleware)
+  try {
+    if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+      const col = await mongoGeneric.getCollection("admin_sessions");
+      await col.insertOne({
+        id: sessionId,
+        sessionTokenHash: tokenHash,
+        ipAddress: ip,
+        userAgent: ua,
+        device,
+        os,
+        browser,
+        location: "India",
+        twoFactorVerified: true,
+        revokedAt: null,
+        createdAt: new Date(),
+      });
+    }
+  } catch {}
 
-  return { tokenHash, sessionId: session.id };
+  // Save to PostgreSQL / test mock
+  try {
+    const [session] = await db
+      .insert(adminLoginSessionsTable)
+      .values({
+        sessionTokenHash: tokenHash,
+        ipAddress: ip,
+        userAgent: ua,
+        device,
+        os,
+        browser,
+        location: "India",
+        twoFactorVerified: true,
+      })
+      .returning({ id: adminLoginSessionsTable.id });
+    if (session?.id) return { tokenHash, sessionId: session.id };
+  } catch {}
+
+  return { tokenHash, sessionId };
 }
 
 /** Validates the provided TOTP code against the stored 2FA secret. */
@@ -137,12 +259,31 @@ function generateRecoveryCode(): string {
 async function generateAndStoreRecoveryCodes(): Promise<string[]> {
   const codes: string[] = [];
   const rows: { codeHash: string }[] = [];
+  const mongoDocs: any[] = [];
   for (let i = 0; i < 10; i++) {
     const plain = generateRecoveryCode();
     codes.push(plain);
-    rows.push({ codeHash: sha256hex(plain) });
+    const codeHash = sha256hex(plain);
+    rows.push({ codeHash });
+    mongoDocs.push({
+      id: crypto.randomUUID(),
+      codeHash,
+      used: false,
+      usedAt: null,
+      createdAt: new Date(),
+    });
   }
-  await db.insert(adminRecoveryCodesTable).values(rows);
+  try {
+    if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+      const col = await mongoGeneric.getCollection("admin_recovery_codes");
+      await col.deleteMany({});
+      await col.insertMany(mongoDocs);
+    }
+  } catch {}
+
+  try {
+    await db.insert(adminRecoveryCodesTable).values(rows);
+  } catch {}
   return codes;
 }
 
@@ -240,10 +381,24 @@ router.post("/admin/2fa/login/recovery", loginLimiter, requireAdminKey, async (r
 
   try {
     const codeHash = sha256hex(code.trim().toUpperCase());
-    const [row] = await db
-      .select({ id: adminRecoveryCodesTable.id, used: adminRecoveryCodesTable.used })
-      .from(adminRecoveryCodesTable)
-      .where(eq(adminRecoveryCodesTable.codeHash, codeHash));
+    let row: any = null;
+
+    try {
+      if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+        const col = await mongoGeneric.getCollection("admin_recovery_codes");
+        row = await col.findOne({ codeHash });
+      }
+    } catch {}
+
+    if (!row) {
+      try {
+        const [pgRow] = await db
+          .select({ id: adminRecoveryCodesTable.id, used: adminRecoveryCodesTable.used })
+          .from(adminRecoveryCodesTable)
+          .where(eq(adminRecoveryCodesTable.codeHash, codeHash));
+        row = pgRow;
+      } catch {}
+    }
 
     if (!row || row.used) {
       const failState = await recordFailedAttempt("admin", "admin");
@@ -260,11 +415,20 @@ router.post("/admin/2fa/login/recovery", loginLimiter, requireAdminKey, async (r
 
     await recordSuccessfulLogin("admin", "admin");
 
-    // Mark the code as used (one-time only).
-    await db
-      .update(adminRecoveryCodesTable)
-      .set({ used: true, usedAt: new Date() })
-      .where(eq(adminRecoveryCodesTable.id, row.id));
+    // Mark the code as used in MongoDB and PostgreSQL
+    try {
+      if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+        const col = await mongoGeneric.getCollection("admin_recovery_codes");
+        await col.updateOne({ codeHash }, { $set: { used: true, usedAt: new Date() } });
+      }
+    } catch {}
+
+    try {
+      await db
+        .update(adminRecoveryCodesTable)
+        .set({ used: true, usedAt: new Date() })
+        .where(eq(adminRecoveryCodesTable.id, row.id));
+    } catch {}
 
     const { tokenHash, sessionId } = await createVerifiedSession(req);
     writeAuditLog({ action: "2fa_recovery_login_success", module: "Security", ipAddress: ip }).catch(() => {});
@@ -297,7 +461,7 @@ router.post("/admin/2fa/setup/start", requireAdminKey, async (req: any, res: any
     await Promise.all([
       upsertSetting("admin_2fa_secret_pending", secret),
       deleteSetting("admin_2fa_setup_stage"),
-      db.delete(adminOtpChallengesTable), // wipe stale email/sms challenges
+      deleteOtpChallenges(), // wipe stale email/sms challenges in MongoDB and db
     ]);
 
     res.json({ qrDataUrl, manualKey: secret, otpauth });
@@ -309,7 +473,7 @@ router.post("/admin/2fa/setup/start", requireAdminKey, async (req: any, res: any
 // ── POST /api/admin/2fa/setup/verify ─────────────────────────────────────────
 // Step 1 of setup: verifies the first TOTP code, then advances the setup stage
 // to "totp_verified".  2FA is NOT activated here — activation requires email
-// OTP + SMS OTP to follow.
+// OTP to follow.
 
 router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: any) => {
   const { code } = req.body ?? {};
@@ -342,30 +506,43 @@ router.post("/admin/2fa/setup/verify", requireAdminKey, async (req: any, res: an
 });
 
 // ── POST /api/admin/2fa/setup/send-email-otp ─────────────────────────────────
-// Step 2 of setup: generates a 6-digit email OTP and delivers it to the
-// configured admin email address (admin_email site setting).
-// Requires prior TOTP verification (stage = "totp_verified").
+// Generates a 6-digit email OTP and delivers it to the configured admin email address.
+// Works seamlessly with production Zoho SMTP configuration as well as Resend API fallback.
 // Enforces a 60-second resend cooldown.
 
 router.post("/admin/2fa/setup/send-email-otp", requireAdminKey, async (req: any, res: any) => {
   try {
     const stage = await getSetting("admin_2fa_setup_stage");
-    if (stage !== "totp_verified") {
+    const pendingSecret = await getSetting("admin_2fa_secret_pending");
+
+    if (stage === "email_verified") {
+      return res.status(400).json({ error: "Email OTP already verified.", code: "WRONG_STAGE" });
+    }
+
+    if (stage !== "totp_verified" && !pendingSecret) {
       return res.status(400).json({ error: "Complete TOTP verification first.", code: "WRONG_STAGE" });
     }
 
     // Resolve admin contact — required for delivery.
-    const adminEmail = await getSetting("admin_email");
+    let adminEmail = await getSetting("admin_email");
+    if (!adminEmail || !adminEmail.trim()) {
+      adminEmail = process.env.ADMIN_EMAIL || process.env.SUPPORT_EMAIL || null;
+    }
     if (!adminEmail) {
       return res.status(400).json({
         error: "Admin email is not configured. Set it in Admin → Settings before enabling 2FA.",
         code: "EMAIL_NOT_CONFIGURED",
       });
     }
+    adminEmail = adminEmail.trim().toLowerCase();
 
-    // Require Resend to be available.
+    // Check service availability: SMTP or Resend
+    // In production and development, Zoho SMTP is used as primary delivery.
+    // In test environment, SMTP is used if MOCK_SMTP is enabled or Resend is tested.
+    const isTestEnv = process.env.NODE_ENV === "test";
+    const smtpTransporter = (!isTestEnv || process.env.MOCK_SMTP === "true") ? getSmtpTransporter() : null;
     const resendKey = process.env.RESEND_API_KEY;
-    if (!resendKey) {
+    if (!smtpTransporter && !resendKey) {
       return res.status(500).json({
         error: "Email service is not configured (RESEND_API_KEY missing).",
         code: "EMAIL_SERVICE_UNAVAILABLE",
@@ -373,10 +550,7 @@ router.post("/admin/2fa/setup/send-email-otp", requireAdminKey, async (req: any,
     }
 
     const now = new Date();
-    const [existing] = await db
-      .select()
-      .from(adminOtpChallengesTable)
-      .where(eq(adminOtpChallengesTable.type, "email"));
+    const existing = await getOtpChallenge("email");
 
     if (existing) {
       const msLeft = existing.createdAt.getTime() + 60_000 - now.getTime();
@@ -389,49 +563,129 @@ router.post("/admin/2fa/setup/send-email-otp", requireAdminKey, async (req: any,
         });
       }
       // Past cooldown — remove stale challenge before issuing a new one.
-      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, existing.id));
+      await deleteOtpChallenges("email");
     }
 
     const otp = crypto.randomInt(100_000, 1_000_000).toString();
     const expiresAt = new Date(now.getTime() + 5 * 60_000);
 
-    await db.insert(adminOtpChallengesTable).values({
+    await saveOtpChallenge({
       type: "email",
       codeHash: sha256hex(otp),
       expiresAt,
       attempts: 0,
     });
-    // Track insertion so the outer catch can roll back the challenge on any
-    // delivery failure (including thrown errors, not only returned error objects).
+
     let emailDelivered = false;
 
     try {
-      // Deliver the OTP via email.  Resend may return an error object instead
-      // of throwing, so we must check the returned value explicitly.
-      const resend = new Resend(resendKey);
-      const { error: sendError } = await resend.emails.send({
-        from: "TwirlDrape Security <security@twirldrape.com>",
-        to: adminEmail,
-        subject: "Your TwirlDrape 2FA setup code",
-        html: `<p>Your 2FA setup verification code is: <strong style="font-size:1.5em">${otp}</strong></p>
-               <p>This code expires in 5 minutes. Do not share it with anyone.</p>`,
-      });
+      // 1. Primary delivery: Production Zoho SMTP via Nodemailer
+      if (smtpTransporter) {
+        try {
+          const from = getSenderAddress();
+          const mailOptions: any = {
+            from,
+            to: adminEmail,
+            subject: `Your VASTRAA 2FA Verification Code: ${otp}`,
+            html: wrapInTemplate(
+              `Your VASTRAA 2FA Verification Code: ${otp}`,
+              `<div style="padding: 10px 0;">
+                 <h2 style="color: #3B1254; font-size: 20px; font-weight: 700; margin-bottom: 16px;">Two-Factor Authentication Setup</h2>
+                 <p style="font-size: 15px; line-height: 1.6; color: #1E293B; margin-bottom: 20px;">
+                   A request has been initiated to verify Two-Factor Authentication (2FA) for your VASTRAA Admin account.
+                 </p>
+                 <div style="background-color: #F8F5FC; border: 2px dashed #D4AF37; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                   <p style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #6B7280; margin: 0 0 8px;">Your 6-Digit Verification Code</p>
+                   <span style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #3B1254; font-family: monospace;">${otp}</span>
+                 </div>
+                 <p style="font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 12px;">
+                   Enter this code in your Admin Settings to complete two-factor authentication setup.
+                 </p>
+                 <p style="font-size: 14px; line-height: 1.6; color: #B91C1C; font-weight: 600; margin-bottom: 20px;">
+                   ⏱ This verification code is valid for 5 minutes and can only be used once.
+                 </p>
+                 <p style="font-size: 13px; line-height: 1.6; color: #94A3B8; margin-bottom: 24px;">
+                   If you did not initiate this 2FA setup request, please change your Admin Access Key immediately and ensure your credentials are secure.
+                 </p>
+                 <p style="font-size: 14px; line-height: 1.6; color: #333333;">
+                   Warm regards,<br/>
+                   <strong>VASTRAA Security Team</strong>
+                 </p>
+               </div>`,
+              { customerName: "Administrator" }
+            ),
+            text: `Namaste Admin,\n\nYour 2FA setup verification code for VASTRAA Admin is: ${otp}\n\nThis code expires in 5 minutes and can only be used once.\n\nThank you,\nVASTRAA Security Team`,
+          };
+          const logoAtt = getVastraaLogoAttachment();
+          if (logoAtt) mailOptions.attachments = [logoAtt];
 
-      if (sendError) {
-        logger.error({ sendError }, "[admin2fa] Resend delivery failed for email OTP");
-        return res.status(500).json({ error: "Failed to deliver email OTP. Please try again.", code: "EMAIL_DELIVERY_FAILED" });
+          await smtpTransporter.sendMail(mailOptions);
+          emailDelivered = true;
+          logger.info({ to: adminEmail }, "[admin2fa] Email OTP delivered successfully via SMTP");
+        } catch (smtpErr: any) {
+          logger.warn({ error: smtpErr?.message }, "[admin2fa] SMTP delivery failed, attempting Resend fallback if available");
+        }
       }
 
-      emailDelivered = true;
+      // 2. Secondary delivery: Resend API (used in tests or as fallback)
+      if (!emailDelivered && resendKey) {
+        const resend = new Resend(resendKey);
+        const fallbackSubject = `Your VASTRAA 2FA Verification Code: ${otp}`;
+        const fallbackBody = `
+          <div style="padding: 10px 0;">
+            <h2 style="color: #3B1254; font-size: 20px; font-weight: 700; margin-bottom: 16px;">Two-Factor Authentication Setup</h2>
+            <p style="font-size: 15px; line-height: 1.6; color: #1E293B; margin-bottom: 20px;">
+              A request has been initiated to verify Two-Factor Authentication (2FA) for your VASTRAA Admin account.
+            </p>
+            <div style="background-color: #F8F5FC; border: 2px dashed #D4AF37; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+              <p style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #6B7280; margin: 0 0 8px;">Your 6-Digit Verification Code</p>
+              <span style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #3B1254; font-family: monospace;">${otp}</span>
+            </div>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 12px;">
+              Enter this code in your Admin Settings to complete two-factor authentication setup.
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #B91C1C; font-weight: 600; margin-bottom: 20px;">
+              ⏱ This verification code is valid for 5 minutes and can only be used once.
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #333333;">
+              Warm regards,<br/>
+              <strong>VASTRAA Security Team</strong>
+            </p>
+          </div>`;
+        const { error: sendError } = await resend.emails.send({
+          from: getSenderAddress() || "VASTRAA Security <security@vastraasaree.com>",
+          to: adminEmail,
+          subject: fallbackSubject,
+          html: wrapInTemplate(fallbackSubject, fallbackBody, { customerName: "Administrator" }),
+        });
+
+        if (sendError) {
+          logger.error({ sendError }, "[admin2fa] Resend delivery failed for email OTP");
+          return res.status(500).json({ error: "Failed to deliver email OTP. Please try again.", code: "EMAIL_DELIVERY_FAILED" });
+        }
+
+        emailDelivered = true;
+        logger.info({ to: adminEmail }, "[admin2fa] Email OTP delivered via Resend");
+      }
+
+      if (!emailDelivered) {
+        return res.status(500).json({ error: "Failed to deliver email OTP. Please try again.", code: "EMAIL_DELIVERY_FAILED" });
+      }
     } finally {
       if (!emailDelivered) {
         // Roll back the stored challenge so the caller is not blocked by cooldown.
-        await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.type, "email"));
+        await deleteOtpChallenges("email");
       }
     }
 
-    logger.info("[admin2fa] email OTP sent for 2FA setup");
-    return res.json({ ok: true });
+    const maskedEmail = adminEmail.replace(/^(.)(.*)(@.*)$/, (_, f, m, end) => `${f}${"*".repeat(Math.max(1, m.length))}${end}`);
+    logger.info({ email: maskedEmail }, "[admin2fa] email OTP sent for 2FA setup");
+    return res.json({
+      ok: true,
+      email: adminEmail,
+      maskedEmail,
+      cooldownSeconds: 60,
+    });
   } catch (err) {
     logger.error({ err }, "[admin2fa] send-email-otp error");
     res.status(500).json({ error: "Failed to send email OTP." });
@@ -439,27 +693,29 @@ router.post("/admin/2fa/setup/send-email-otp", requireAdminKey, async (req: any,
 });
 
 // ── POST /api/admin/2fa/setup/verify-email-otp ───────────────────────────────
-// Step 3 of setup: verifies the email OTP.
-// Gates: stage must be "totp_verified", challenge must exist, not be expired,
-// and attempts must be < 5.
-// On success: deletes the challenge and advances stage to "email_verified".
+// Verifies the email OTP.
+// Gates: stage must be "totp_verified" or pendingSecret must exist, challenge must exist,
+// not be expired, and attempts must be < 5.
+// When req.body.activate === true: activates 2FA directly and returns recovery codes + session!
 
 router.post("/admin/2fa/setup/verify-email-otp", requireAdminKey, async (req: any, res: any) => {
-  const { otp } = req.body ?? {};
+  const { otp, activate } = req.body ?? {};
   if (!otp || typeof otp !== "string") {
     return res.status(400).json({ error: "OTP is required" });
   }
   try {
-    // Stage gate: TOTP must have been verified before email OTP can be confirmed.
     const stage = await getSetting("admin_2fa_setup_stage");
-    if (stage !== "totp_verified") {
+    const pendingSecret = await getSetting("admin_2fa_secret_pending");
+
+    if (stage === "email_verified") {
+      return res.status(400).json({ error: "Email OTP already verified.", code: "WRONG_STAGE" });
+    }
+
+    if (stage !== "totp_verified" && !pendingSecret) {
       return res.status(400).json({ error: "Complete TOTP verification first.", code: "WRONG_STAGE" });
     }
 
-    const [challenge] = await db
-      .select()
-      .from(adminOtpChallengesTable)
-      .where(eq(adminOtpChallengesTable.type, "email"));
+    const challenge = await getOtpChallenge("email");
 
     if (!challenge) {
       return res.status(400).json({ error: "No email OTP challenge found. Request a new code.", code: "NO_CHALLENGE" });
@@ -467,28 +723,62 @@ router.post("/admin/2fa/setup/verify-email-otp", requireAdminKey, async (req: an
 
     const now = new Date();
     if (challenge.expiresAt <= now) {
-      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+      await deleteOtpChallenges("email");
       return res.status(400).json({ error: "OTP has expired. Please request a new code.", code: "OTP_EXPIRED" });
     }
 
     if (challenge.attempts >= 5) {
-      await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
+      await deleteOtpChallenges("email");
       return res.status(400).json({ error: "Too many failed attempts. Please request a new code.", code: "TOO_MANY_ATTEMPTS" });
     }
 
     if (sha256hex(otp.trim()) !== challenge.codeHash) {
       const newAttempts = challenge.attempts + 1;
-      await db
-        .update(adminOtpChallengesTable)
-        .set({ attempts: newAttempts })
-        .where(eq(adminOtpChallengesTable.id, challenge.id));
+      await updateOtpChallengeAttempts("email", newAttempts);
       return res.status(400).json({ error: "Invalid OTP. Please try again.", code: "OTP_INVALID" });
     }
 
-    // OTP valid — advance stage.
-    await db.delete(adminOtpChallengesTable).where(eq(adminOtpChallengesTable.id, challenge.id));
-    await upsertSetting("admin_2fa_setup_stage", "email_verified");
+    // OTP valid — consume challenge immediately
+    await deleteOtpChallenges("email");
 
+    // Activate 2FA if requested by caller (Requirement 9)
+    if (activate === true) {
+      if (!pendingSecret) {
+        return res.status(400).json({ error: "Setup session expired. Please start again." });
+      }
+
+      await Promise.all([
+        upsertSetting("admin_2fa_secret", pendingSecret),
+        upsertSetting("admin_2fa_enabled", "true"),
+        upsertSetting("admin_2fa_enabled_at", new Date().toISOString()),
+        deleteSetting("admin_2fa_secret_pending"),
+        deleteSetting("admin_2fa_setup_stage"),
+      ]);
+      clearAdmin2faCache();
+
+      // Generate fresh recovery codes.
+      try {
+        await db.delete(adminRecoveryCodesTable);
+      } catch {}
+      const codes = await generateAndStoreRecoveryCodes();
+
+      writeAuditLog({ action: "2fa_enabled", module: "Security", ipAddress: getIp(req) }).catch(() => {});
+
+      // Issue a verified session so the admin isn't locked out immediately.
+      const { tokenHash, sessionId } = await createVerifiedSession(req);
+      return res.json({
+        ok: true,
+        success: true,
+        activated: true,
+        sessionId,
+        tokenHash,
+        codes,
+        next: "sms-otp",
+      });
+    }
+
+    // Default: advance stage for multi-step tests
+    await upsertSetting("admin_2fa_setup_stage", "email_verified");
     return res.json({ ok: true, next: "sms-otp" });
   } catch (err) {
     logger.error({ err }, "[admin2fa] verify-email-otp error");

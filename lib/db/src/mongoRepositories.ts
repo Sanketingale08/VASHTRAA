@@ -17,6 +17,7 @@ import type {
   Shipment,
   MongoShipmentDoc,
 } from "./schema";
+import { CATALOG_CATEGORIES, PRESERVED_SAREE_CATEGORIES, registerDynamicSubcategory, findCategoryDefinition } from "./categories";
 
 // ─── SELLERS / VENDORS ────────────────────────────────────────────────────────
 const inMemorySellersMap = new Map<string, Seller & Vendor>();
@@ -604,6 +605,9 @@ export const mongoProducts = {
     if ((existing as any)?._id) {
       inMemoryProductsMap.set(String((existing as any)._id), updated);
     }
+    if ((existing as any)?.productId) {
+      inMemoryProductsMap.set((existing as any).productId, updated);
+    }
 
     if (isMongoDbConnected()) {
       try {
@@ -629,11 +633,17 @@ export const mongoProducts = {
           } catch {}
         }
         const { _id, id: _safeId, ...safeSet } = updateWithTimestamp as any;
-        await col.updateOne(
+        const res = await col.updateMany(
           { $or: orClause } as Filter<Product>,
-          { $set: { ...safeSet, id: canonicalId, productId: canonicalId } },
-          { upsert: false } // Update existing document, never create a duplicate!
+          { $set: { ...safeSet, id: canonicalId, productId: canonicalId } }
         );
+        if (res.matchedCount === 0 && (updateData as any).status && existing?.name) {
+          // Fallback: match by product name if id was not matched
+          await col.updateMany(
+            { name: existing.name } as Filter<Product>,
+            { $set: { ...safeSet, id: canonicalId, productId: canonicalId } }
+          );
+        }
       } catch (err: any) {
         console.warn(`[mongoProducts.update] Warning updating ${id}:`, err?.message || err);
       }
@@ -700,13 +710,64 @@ export const mongoProducts = {
   },
 
   async delete(id: string): Promise<boolean> {
-    inMemoryProductsMap.delete(id);
+    const strId = String(id).trim();
+    // 1. Try to find existing doc first to gather all identifiers
+    const existing = await this.findById(strId).catch(() => null);
+    const canonicalId = existing?.id || strId;
+    const mongoIdStr = (existing as any)?._id ? String((existing as any)._id) : "";
+
+    // 2. Remove all references from inMemoryProductsMap
+    inMemoryProductsMap.delete(strId);
+    inMemoryProductsMap.delete(canonicalId);
+    if (mongoIdStr) inMemoryProductsMap.delete(mongoIdStr);
+    if ((existing as any)?.productId) inMemoryProductsMap.delete((existing as any).productId);
+    for (const [k, p] of inMemoryProductsMap.entries()) {
+      if (
+        p.id === strId ||
+        p.id === canonicalId ||
+        (p as any).productId === strId ||
+        (p as any).productId === canonicalId ||
+        (p as any)._id === strId ||
+        String((p as any)._id) === strId ||
+        (mongoIdStr && String((p as any)._id) === mongoIdStr)
+      ) {
+        inMemoryProductsMap.delete(k);
+      }
+    }
+
+    // 3. Delete from MongoDB collection
     if (isMongoDbConnected()) {
       try {
-        const res = await getCollection<Product>("products").deleteOne({ $or: [{ id }, { _id: id as any }] } as Filter<Product>);
-        return res.deletedCount > 0;
-      } catch {
-        setMongoConnected(false);
+        const col = getCollection<Product>("products");
+        const orClause: any[] = [
+          { id: strId },
+          { id: canonicalId },
+          { productId: strId },
+          { productId: canonicalId },
+          { _id: strId as any },
+        ];
+        if (ObjectId.isValid(strId)) {
+          try {
+            orClause.push({ _id: new ObjectId(strId) as any });
+          } catch {}
+        }
+        if (existing) {
+          if (existing.id && existing.id !== strId) orClause.push({ id: existing.id });
+          if ((existing as any).productId && (existing as any).productId !== strId) orClause.push({ productId: (existing as any).productId });
+          if ((existing as any)._id) {
+            orClause.push({ _id: (existing as any)._id as any });
+            const s = String((existing as any)._id);
+            if (ObjectId.isValid(s)) {
+              try {
+                orClause.push({ _id: new ObjectId(s) as any });
+              } catch {}
+            }
+          }
+        }
+        const res = await col.deleteMany({ $or: orClause } as Filter<Product>);
+        return (res.deletedCount ?? 0) > 0;
+      } catch (err: any) {
+        console.warn(`[mongoProducts.delete] Warning deleting product ${id}:`, err?.message || err);
       }
     }
     return true;
@@ -1391,7 +1452,7 @@ export const mongoUsers = {
     }
     return doc;
   },
-  async update(id: string, updateData: Partial<User>): Promise<User | null> {
+  async update(id: string, updateData: Partial<User>, unsetFields?: string[]): Promise<User | null> {
     const setObj: Record<string, any> = { ...updateData, updatedAt: new Date() };
     if (setObj.email) {
       setObj.email = setObj.email.trim().toLowerCase();
@@ -1410,13 +1471,26 @@ export const mongoUsers = {
         setObj.email = (targetId.includes("@") ? targetId : id).trim().toLowerCase();
       }
       const updated = { ...existing, ...setObj };
+      if (unsetFields && unsetFields.length > 0) {
+        for (const field of unsetFields) {
+          delete (updated as any)[field];
+        }
+      }
       inMemoryUsersMap.set(targetId, updated);
       inMemoryUsersMap.set(id, updated);
 
       if (isMongoDbConnected()) {
         try {
           const col = getCollection<User>("users");
-          await col.updateOne({ $or: [{ id: targetId }, { _id: targetId as any }, { id }, { _id: id as any }] } as Filter<User>, { $set: setObj });
+          const updateDoc: Record<string, any> = { $set: setObj };
+          if (unsetFields && unsetFields.length > 0) {
+            const unsetObj: Record<string, string> = {};
+            for (const f of unsetFields) {
+              unsetObj[f] = "";
+            }
+            updateDoc.$unset = unsetObj;
+          }
+          await col.updateOne({ $or: [{ id: targetId }, { _id: targetId as any }, { id }, { _id: id as any }] } as Filter<User>, updateDoc);
         } catch {
           setMongoConnected(false);
         }
@@ -1434,6 +1508,35 @@ export const mongoUsers = {
       });
       return doc;
     }
+  },
+  async findByVerificationTokenHash(tokenHash: string): Promise<User | null> {
+    if (!tokenHash || typeof tokenHash !== "string") return null;
+    const cleanHash = tokenHash.trim();
+    if (!cleanHash) return null;
+
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<User>("users");
+        const found = await col.findOne({ emailVerificationTokenHash: cleanHash });
+        if (found) return found;
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+
+    return Array.from(inMemoryUsersMap.values()).find(
+      (u) => (u as any).emailVerificationTokenHash === cleanHash
+    ) || null;
+  },
+  async verifyUserEmail(userId: string): Promise<User | null> {
+    return this.update(
+      userId,
+      {
+        isEmailVerified: true,
+        emailVerified: true,
+      },
+      ["emailVerificationTokenHash", "emailVerificationExpires"]
+    );
   },
   async delete(id: string): Promise<boolean> {
     inMemoryUsersMap.delete(id);
@@ -2145,6 +2248,10 @@ export const mongoNotifications = {
     return all.length;
   },
 
+  async create(data: any): Promise<any> {
+    return this.insert(data);
+  },
+
   async insert(data: any): Promise<any> {
     const id = data.id || crypto.randomUUID();
     const now = new Date();
@@ -2271,9 +2378,6 @@ export const mongoNotifications = {
   },
   async deleteNotification(id: string): Promise<boolean> {
     return this.delete(id);
-  },
-  async create(data: any): Promise<any> {
-    return this.insert(data);
   },
   async clearAll(filter: any = {}): Promise<number> {
     return this.deleteMany(filter);
@@ -2581,6 +2685,7 @@ export interface R2AssetRecord {
   contentType: string;
   size: number;
   status: "presigned_generated" | "uploaded" | "verified" | "deleted";
+  contentHash?: string;
   bufferBase64?: string;
   uploadedAt: Date | string;
   createdAt: Date | string;
@@ -2606,6 +2711,7 @@ export const mongoR2Assets = {
       contentType: data.contentType || "image/webp",
       size: data.size || 0,
       status: data.status || "presigned_generated",
+      contentHash: data.contentHash || undefined,
       bufferBase64: data.bufferBase64 || (data as any).bufferBase64 || undefined,
       uploadedAt: data.uploadedAt || now,
       createdAt: data.createdAt || now,
@@ -2629,6 +2735,23 @@ export const mongoR2Assets = {
     return doc;
   },
 
+  async findByContentHash(contentHash: string, sellerId: string): Promise<R2AssetRecord | null> {
+    if (!contentHash || !sellerId) return null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<R2AssetRecord>("r2_assets");
+        const found = await col.findOne({ contentHash, sellerId });
+        if (found) return found;
+      } catch {}
+    }
+    for (const asset of inMemoryR2AssetsMap.values()) {
+      if ((asset as any).contentHash === contentHash && asset.sellerId === sellerId) {
+        return asset;
+      }
+    }
+    return null;
+  },
+
   async findByObjectKey(objectKey: string): Promise<R2AssetRecord | null> {
     if (!objectKey) return null;
     if (isMongoDbConnected()) {
@@ -2641,6 +2764,10 @@ export const mongoR2Assets = {
       }
     }
     return inMemoryR2AssetsMap.get(objectKey) || null;
+  },
+
+  async findByKey(objectKey: string): Promise<R2AssetRecord | null> {
+    return this.findByObjectKey(objectKey);
   },
 
   async findBySellerId(sellerId: string, assetType?: string): Promise<R2AssetRecord[]> {
@@ -2700,20 +2827,203 @@ export interface ProductCategoryDoc {
   id: string;
   name: string;
   slug: string;
+  route?: string | null;
   parentId?: string | null;
+  parentCategory?: string | null;
   type?: string;
   createdBy?: string;
   sellerId?: string | null;
   sellerName?: string | null;
   coverImage?: string | null;
+  bannerImage?: string | null;
+  description?: string | null;
+  displayOrder?: number;
+  subcategoriesCount?: number;
+  subtypesCount?: number;
   status?: "pending" | "approved" | "rejected" | string;
   active: boolean;
   productCount?: number;
+  subcategories?: any[];
   createdAt: Date;
   updatedAt?: Date;
 }
 
+export const CATALOG_DEFAULT_CATEGORIES: ProductCategoryDoc[] = CATALOG_CATEGORIES.flatMap((cat) => {
+  const mainDoc: ProductCategoryDoc = {
+    id: cat.id,
+    name: cat.name,
+    slug: cat.slug,
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    displayOrder: cat.displayOrder,
+    description: cat.description,
+    coverImage: cat.coverImage || null,
+    bannerImage: cat.bannerImage || null,
+    subcategoriesCount: cat.subcategories.length,
+    subtypesCount: cat.subcategories.reduce((acc, s) => acc + s.subtypes.length, 0),
+    subcategories: cat.subcategories,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+
+  const specialSubcatIds = new Set([
+    "cat-bridal-default", "bridal",
+    "cat-wedding-paithani-main", "wedding-paithani-main",
+    "cat-western-paithani-main", "western-paithani-main",
+    "cat-bollywood-default", "bollywood",
+    "cat-contemporary-silk-main", "contemporary-silk-main",
+    "cat-party-default", "party"
+  ]);
+
+  const subDocs: ProductCategoryDoc[] = cat.subcategories.map((sub, idx) => {
+    const slug = sub.slug;
+    return {
+      id: sub.id,
+      name: sub.name,
+      slug,
+      route: (sub as any).route || null,
+      type: "subcategory",
+      createdBy: "system",
+      status: "approved",
+      parentId: cat.id,
+      parentCategory: cat.slug,
+      group: (sub as any).group || null,
+      active: true,
+      displayOrder: idx + 1,
+      description: `${sub.name} under ${cat.name}`,
+      subtypesCount: sub.subtypes.length,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+  });
+
+  return [mainDoc, ...subDocs];
+});
+
+export const PRESERVED_DEFAULT_SAREE_CATEGORIES: ProductCategoryDoc[] = PRESERVED_SAREE_CATEGORIES.flatMap((cat) => {
+  const mainDoc: ProductCategoryDoc = {
+    id: cat.id,
+    name: cat.name,
+    slug: cat.slug,
+    type: "main",
+    createdBy: "system",
+    status: "approved",
+    parentId: null,
+    active: true,
+    displayOrder: cat.displayOrder,
+    description: cat.description,
+    coverImage: cat.coverImage || null,
+    bannerImage: cat.bannerImage || null,
+    subcategoriesCount: cat.subcategories.length,
+    subtypesCount: cat.subcategories.reduce((acc, s) => acc + s.subtypes.length, 0),
+    subcategories: cat.subcategories,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+
+  const subDocs: ProductCategoryDoc[] = cat.subcategories.map((sub, idx) => ({
+    id: sub.id,
+    name: sub.name,
+    slug: sub.slug,
+    route: (sub as any).route || null,
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: cat.id,
+    active: true,
+    displayOrder: idx + 1,
+    description: `${sub.name} under ${cat.name}`,
+    subtypesCount: sub.subtypes.length,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  }));
+
+  return [mainDoc, ...subDocs];
+});
+
 const DEFAULT_CATEGORIES: ProductCategoryDoc[] = [
+  // 6 Authoritative Catalog Categories and Subcategories
+  ...CATALOG_DEFAULT_CATEGORIES,
+  // Preserved Saree Categories for legacy integrity
+  ...PRESERVED_DEFAULT_SAREE_CATEGORIES,
+  {
+    id: "cat-festival-paithani",
+    name: "Festival Paithani",
+    slug: "festival-paithani",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-wedding-paithani",
+    name: "Wedding Paithani",
+    slug: "wedding-paithani",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-contemporary-silk-paithani",
+    name: "Contemporary Silk",
+    slug: "contemporary-silk-paithani",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-paithani-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-bollywood-sarees",
+    name: "Bollywood Sarees",
+    slug: "bollywood-sarees",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-wedding-designer-sarees",
+    name: "Wedding Designer Sarees",
+    slug: "wedding-designer-sarees",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-designer-bridal",
+    name: "Bridal",
+    slug: "designer-bridal",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+];
+
+const _UNUSED_LEGACY_CATEGORIES: ProductCategoryDoc[] = [
   {
     id: "cat-indian-wear",
     name: "Indian Wear",
@@ -3086,96 +3396,26 @@ const DEFAULT_CATEGORIES: ProductCategoryDoc[] = [
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   },
-  // Authoritative catalog categories and subcategories
+  // 12 Authoritative Catalog Categories and Subcategories
+  ...CATALOG_DEFAULT_CATEGORIES,
+
+  // Legacy subcategory aliases for backwards compatibility
   {
-    id: "cat-paithani-default",
-    name: "Paithani",
-    slug: "paithani",
-    type: "main",
+    id: "cat-festival-paithani",
+    name: "Festival Paithani",
+    slug: "festival-paithani",
+    type: "subcategory",
     createdBy: "system",
     status: "approved",
-    parentId: null,
+    parentId: "cat-paithani-default",
     active: true,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   },
   {
-    id: "cat-designer-default",
-    name: "Designer",
-    slug: "designer",
-    type: "main",
-    createdBy: "system",
-    status: "approved",
-    parentId: null,
-    active: true,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  },
-  {
-    id: "cat-bollywood-default",
-    name: "Bollywood",
-    slug: "bollywood",
-    type: "main",
-    createdBy: "system",
-    status: "approved",
-    parentId: null,
-    active: true,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  },
-  {
-    id: "cat-bridal-default",
-    name: "Bridal",
-    slug: "bridal",
-    type: "main",
-    createdBy: "system",
-    status: "approved",
-    parentId: null,
-    active: true,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  },
-  {
-    id: "cat-contemporary-silk-main",
-    name: "Contemporary Silk",
-    slug: "contemporary-silk",
-    type: "main",
-    createdBy: "system",
-    status: "approved",
-    parentId: null,
-    active: true,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  },
-  {
-    id: "cat-wedding-paithani-main",
+    id: "cat-wedding-paithani",
     name: "Wedding Paithani",
     slug: "wedding-paithani",
-    type: "main",
-    createdBy: "system",
-    status: "approved",
-    parentId: null,
-    active: true,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  },
-  {
-    id: "cat-western-paithani-main",
-    name: "Western Paithani",
-    slug: "western-paithani",
-    type: "main",
-    createdBy: "system",
-    status: "approved",
-    parentId: null,
-    active: true,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  },
-  // Subcategories
-  {
-    id: "cat-bridal-paithani",
-    name: "Bridal Paithani",
-    slug: "bridal-paithani",
     type: "subcategory",
     createdBy: "system",
     status: "approved",
@@ -3192,6 +3432,18 @@ const DEFAULT_CATEGORIES: ProductCategoryDoc[] = [
     createdBy: "system",
     status: "approved",
     parentId: "cat-paithani-default",
+    active: true,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  },
+  {
+    id: "cat-bollywood-sarees",
+    name: "Bollywood Sarees",
+    slug: "bollywood-sarees",
+    type: "subcategory",
+    createdBy: "system",
+    status: "approved",
+    parentId: "cat-designer-default",
     active: true,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -3234,6 +3486,23 @@ export function slugifyCategoryName(name: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
+const subcategorySlugsToParent: Record<string, string> = {
+  "bollywood": "cat-designer-default",
+  "contemporary-silk-main": "cat-designer-default",
+  "party": "cat-designer-default",
+  "bridal": "cat-paithani-default",
+  "wedding-paithani-main": "cat-paithani-default",
+  "western-paithani-main": "cat-paithani-default",
+};
+
+for (const cat of CATALOG_CATEGORIES) {
+  for (const sub of cat.subcategories) {
+    if (!subcategorySlugsToParent[sub.slug]) {
+      subcategorySlugsToParent[sub.slug] = cat.id;
+    }
+  }
+}
+
 export const mongoProductCategories = {
   async seedDefaults(): Promise<void> {
     for (const cat of DEFAULT_CATEGORIES) {
@@ -3246,6 +3515,30 @@ export const mongoProductCategories = {
           const existing = await col.findOne({ $or: [{ id: cat.id }, { slug: cat.slug }] });
           if (!existing) {
             await col.insertOne(cat);
+          } else if (cat.type === "main") {
+            const updates: Partial<ProductCategoryDoc> = {
+              name: cat.name,
+              displayOrder: cat.displayOrder ?? existing.displayOrder,
+              description: cat.description || existing.description,
+              coverImage: existing.coverImage || cat.coverImage,
+              bannerImage: existing.bannerImage || cat.bannerImage,
+              subcategoriesCount: cat.subcategoriesCount,
+              subtypesCount: cat.subtypesCount,
+              type: "main",
+              active: existing.active !== undefined ? existing.active : true,
+              updatedAt: new Date(),
+            };
+            await col.updateOne(
+              { _id: (existing as any)._id },
+              { $set: updates }
+            );
+          } else if (cat.type === "subcategory" && (cat as any).group) {
+            if (!(existing as any).group || (existing as any).group !== (cat as any).group) {
+              await col.updateOne(
+                { _id: (existing as any)._id },
+                { $set: { group: (cat as any).group, parentId: cat.parentId, parentCategory: (cat as any).parentCategory, updatedAt: new Date() } }
+              );
+            }
           }
         } catch {
           setMongoConnected(false);
@@ -3259,7 +3552,7 @@ export const mongoProductCategories = {
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<ProductCategoryDoc>("product_categories");
-        categories = await col.find({ active: true }).sort({ name: 1 }).toArray();
+        categories = await col.find({ active: true }).sort({ displayOrder: 1, name: 1 }).toArray();
       } catch {
         setMongoConnected(false);
       }
@@ -3273,19 +3566,87 @@ export const mongoProductCategories = {
       });
     }
 
-    // Ensure default categories are present
-    for (const def of DEFAULT_CATEGORIES) {
-      if (!categories.some((c) => c.slug === def.slug || c.name.toLowerCase() === def.name.toLowerCase())) {
-        categories.unshift(def);
+    // Ensure default 12 catalog categories are present
+    for (const def of CATALOG_DEFAULT_CATEGORIES) {
+      if (!categories.some((c) => c.slug === def.slug || c.id === def.id)) {
+        categories.push(def);
       }
     }
 
-    return categories.filter((c) => {
-      const status = c.status || "approved";
-      if (status === "approved") return true;
-      if (sellerId && c.sellerId === sellerId) return true;
-      return false;
+    categories = categories.map((c) => {
+      if (subcategorySlugsToParent[c.slug]) {
+        return {
+          ...c,
+          parentId: subcategorySlugsToParent[c.slug],
+          type: "subcategory",
+        };
+      }
+      return c;
     });
+
+    // Merge dynamic child subcategories into parent categories' subcategories array
+    const childSubcategories = categories.filter((c) => Boolean(c.parentId) || c.type === "subcategory");
+    for (const mainCat of categories) {
+      if (!mainCat.parentId && mainCat.type !== "subcategory") {
+        const existingSubs = Array.isArray(mainCat.subcategories) ? [...mainCat.subcategories] : [];
+        const matchingChildren = childSubcategories.filter(
+          (sub) => sub.parentId === mainCat.id || sub.parentId === mainCat.slug
+        );
+        for (const child of matchingChildren) {
+          const existingIdx = existingSubs.findIndex(
+            (s: any) => s.id === child.id || s.slug === child.slug || s.name?.toLowerCase() === child.name?.toLowerCase()
+          );
+          if (existingIdx === -1) {
+            existingSubs.push({
+              id: child.id,
+              name: child.name,
+              slug: child.slug,
+              coverImage: child.coverImage || null,
+              route: child.route || `/${mainCat.slug}?subcategory=${child.slug}`,
+              subtypes: (child as any).subtypes || [],
+            });
+            registerDynamicSubcategory(mainCat.slug, {
+              id: child.id,
+              name: child.name,
+              slug: child.slug,
+              coverImage: child.coverImage || null,
+              route: child.route || `/${mainCat.slug}?subcategory=${child.slug}`,
+              subtypes: (child as any).subtypes || [],
+            });
+          } else {
+            if (child.coverImage) {
+              existingSubs[existingIdx].coverImage = child.coverImage;
+            }
+          }
+        }
+        mainCat.subcategories = existingSubs;
+        mainCat.subcategoriesCount = existingSubs.length;
+      }
+    }
+
+    const officialMainSlugs = new Set([
+      "sarees", "kurtis", "kurta-sets", "ethnic-dresses", "western-dresses", "winter-wear", "tops", "womens-tops",
+      "cat-sarees-default", "cat-kurtis-default", "cat-kurta-sets-default", "cat-ethnic-dresses-default", "cat-western-dresses-default", "cat-winter-wear-default", "cat-tops-default", "cat-womens-tops-default"
+    ]);
+
+    const legacyNonSareeSlugs = new Set([
+      "indian-wear", "fashion-wear", "lehenga", "salwar",
+      "co-ords", "playsuits", "jumpsuits", "shrugs", "sweaters-sweatshirts", "jackets-coats", "blazers-waistcoats",
+      "cat-indian-wear", "cat-western-wear", "cat-fashion-wear"
+    ]);
+
+    return categories
+      .filter((c) => {
+        const isOfficial = officialMainSlugs.has(c.slug) || officialMainSlugs.has(c.id) || officialMainSlugs.has(String(c.parentId || ""));
+        if (!isOfficial && (legacyNonSareeSlugs.has(c.slug) || legacyNonSareeSlugs.has(c.id) || legacyNonSareeSlugs.has(String(c.parentId || "")))) {
+          return false;
+        }
+        const status = c.status || "approved";
+        if (status === "approved") return true;
+        if (sellerId && c.sellerId === sellerId) return true;
+        return false;
+      })
+      .sort((a, b) => (a.displayOrder ?? 99) - (b.displayOrder ?? 99) || a.name.localeCompare(b.name));
   },
 
   async listAll(filters?: {
@@ -3299,7 +3660,7 @@ export const mongoProductCategories = {
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<ProductCategoryDoc>("product_categories");
-        categories = await col.find({}).sort({ name: 1 }).toArray();
+        categories = await col.find({}).sort({ displayOrder: 1, name: 1 }).toArray();
       } catch {
         setMongoConnected(false);
       }
@@ -3313,27 +3674,186 @@ export const mongoProductCategories = {
       });
     }
 
-    for (const def of DEFAULT_CATEGORIES) {
-      if (!categories.some((c) => c.slug === def.slug || c.name.toLowerCase() === def.name.toLowerCase())) {
-        categories.unshift(def);
+    for (const def of CATALOG_DEFAULT_CATEGORIES) {
+      if (!categories.some((c) => c.slug === def.slug || c.id === def.id)) {
+        categories.push(def);
       }
     }
 
-    const allProducts = await mongoProducts.findMany({}, { limit: 10000 });
+    categories = categories.map((c) => {
+      if (subcategorySlugsToParent[c.slug]) {
+        return {
+          ...c,
+          parentId: subcategorySlugsToParent[c.slug],
+          type: "subcategory",
+        };
+      }
+      return c;
+    });
+
+    const legacyNonSareeSlugs = new Set([
+      "indian-wear", "western-wear", "fashion-wear", "dresses", "kurti", "lehenga", "salwar",
+      "co-ords", "playsuits", "jumpsuits", "shrugs", "sweaters-sweatshirts", "jackets-coats", "blazers-waistcoats",
+      "cat-indian-wear", "cat-western-wear", "cat-fashion-wear"
+    ]);
+    categories = categories.filter((c) => {
+      if (c.slug === "tops" || c.slug === "womens-tops" || c.id === "cat-tops-default" || c.parentId === "cat-tops-default" || (c as any).parentCategory === "tops") {
+        return true;
+      }
+      return !legacyNonSareeSlugs.has(c.slug) && !legacyNonSareeSlugs.has(c.id) && !legacyNonSareeSlugs.has(String(c.parentId || ""));
+    });
+
+    const allProducts = await mongoProducts.findMany({ isDeleted: { $ne: true } }, { limit: 10000 });
     const categoriesWithCount = categories.map((c) => {
       const slug = c.slug.toLowerCase().trim();
       const name = c.name.toLowerCase().trim();
       const count = allProducts.filter((p) => {
         const pCat = String(p.category || "").toLowerCase().trim();
         const pSlug = pCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-        return pCat === name || pSlug === slug || pCat === slug;
+        const pCatId = String((p as any).categoryId || "").trim();
+        const pSub = String((p as any).subCategory || p.subcategory || "").toLowerCase().trim();
+        const pSubSlug = pSub.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        const pSubId = String((p as any).subcategoryId || "").trim();
+
+        if (c.type === "main" || !c.parentId) {
+          if (pCatId && (pCatId === c.id || pCatId === c.slug)) return true;
+          if (pCat === name || pSlug === slug || pCat === slug) return true;
+          if (slug === "paithani" && (pCat.includes("paithani") || pCat === "paithani sarees")) return true;
+          if (slug === "designer" && (pCat.includes("designer") || pCat === "designer sarees")) return true;
+          if (slug === "chanderi" && (pCat.includes("chanderi") || pCat === "chanderi sarees")) return true;
+          if (slug === "banarasi" && (pCat.includes("banarasi") || pCat === "banarasi sarees")) return true;
+          if (slug === "kanjivaram" && (pCat.includes("kanjivaram") || pCat === "kanjivaram sarees")) return true;
+          if (slug === "gadwal" && (pCat.includes("gadwal") || pCat === "gadwal sarees")) return true;
+          if (slug === "bandhani" && (pCat.includes("bandhani") || pCat === "bandhani sarees")) return true;
+          if (slug === "mysore-silk" && (pCat.includes("mysore") || pCat === "mysore silk sarees")) return true;
+          if (slug === "ikat" && (pCat.includes("ikat") || pCat === "ikat sarees")) return true;
+          if (slug === "cotton" && (pCat.includes("cotton") || pCat === "cotton sarees")) return true;
+          if (slug === "silk" && (pCat.includes("silk") || pCat === "silk sarees")) return true;
+          if (slug === "other-traditional" && (pCat.includes("traditional") || pCat === "other traditional sarees")) return true;
+          if (slug === "sarees" && (pCat.includes("saree") || ["paithani", "designer", "banarasi", "kanjivaram", "gadwal", "chanderi", "bandhani", "mysore-silk", "ikat", "cotton", "silk", "other-traditional"].includes(pSlug))) return true;
+          if (slug === "kurtis" && (pCat.includes("kurti") || pCat.includes("tunic"))) return true;
+          if (slug === "kurta-sets" && (pCat.includes("kurta set") || pCat.includes("suit"))) return true;
+          if (slug === "ethnic-dresses" && (pCat.includes("ethnic dress") || pCat.includes("anarkali"))) return true;
+          if (slug === "western-dresses" && (pCat.includes("western dress") || pCat.includes("maxi") || pCat.includes("midi") || pCat.includes("mini") || pCat.includes("bodycon"))) return true;
+          if (slug === "winter-wear" && (pCat.includes("winter") || pCat.includes("sweater") || pCat.includes("jacket") || pCat.includes("coat"))) return true;
+          if ((slug === "tops" || slug === "womens-tops") && (pCat.includes("top") || pCat.includes("blouse") || pCat.includes("tunic") || pCatId === "cat-tops-default" || pCatId === "tops" || pCatId === "womens-tops" || pCat.includes("women's tops"))) return true;
+          return false;
+        } else {
+          if (pSubId && (pSubId === c.id || pSubId === c.slug)) return true;
+          if (pSub === name || pSubSlug === slug || pSub === slug) return true;
+          if (slug === "bridal" && (pSub.includes("bridal") || pSubSlug.includes("bridal"))) return true;
+          if (slug === "bollywood" && (pSub.includes("bollywood") || pSubSlug.includes("bollywood"))) return true;
+          if (slug === "party" && (pSub.includes("party") || pSubSlug.includes("party"))) return true;
+          if ((slug === "wedding-paithani-main" || slug === "wedding-paithani") && (pSub.includes("wedding") || pSubSlug.includes("wedding"))) return true;
+          if ((slug === "western-paithani-main" || slug === "western-paithani") && (pSub.includes("western") || pSubSlug.includes("western"))) return true;
+          if ((slug === "contemporary-silk-main" || slug === "contemporary-silk") && (pSub.includes("contemporary") || pSubSlug.includes("contemporary"))) return true;
+          return false;
+        }
       }).length;
+
+      let subcategoriesWithCounts: any[] | undefined = undefined;
+      let subcategoriesCount = c.subcategoriesCount;
+
+      if (c.type === "main" || !c.parentId) {
+        const rawSubs = categories.filter((sub) => sub.parentId === c.id || sub.parentId === c.slug || (sub as any).parentCategory === c.slug);
+        const catalogDef = findCategoryDefinition(c.slug) || findCategoryDefinition(c.id);
+        const mergedSubsMap = new Map<string, any>();
+        rawSubs.forEach((sub) => mergedSubsMap.set(sub.slug.toLowerCase(), { ...sub }));
+        if (Array.isArray(c.subcategories)) {
+          c.subcategories.forEach((sub: any) => {
+            const key = (sub.slug || sub.id || "").toLowerCase();
+            if (key && !mergedSubsMap.has(key)) {
+              mergedSubsMap.set(key, { ...sub, parentId: c.id, parentCategory: c.slug, type: "subcategory" });
+            }
+          });
+        }
+        if (catalogDef?.subcategories) {
+          for (const staticSub of catalogDef.subcategories) {
+            const key = staticSub.slug.toLowerCase();
+            if (!mergedSubsMap.has(key)) {
+              mergedSubsMap.set(key, {
+                id: staticSub.id,
+                name: staticSub.name,
+                slug: staticSub.slug,
+                type: "subcategory",
+                parentId: c.id,
+                parentCategory: c.slug,
+                group: (staticSub as any).group || null,
+                active: true,
+                status: "approved",
+                subtypes: staticSub.subtypes || [],
+                createdBy: "system",
+              });
+            } else {
+              const existing = mergedSubsMap.get(key);
+              if (!existing.subtypes || existing.subtypes.length === 0) {
+                existing.subtypes = staticSub.subtypes || [];
+              }
+              if (!existing.group && (staticSub as any).group) {
+                existing.group = (staticSub as any).group;
+              }
+            }
+          }
+        }
+        const subcategoriesList = Array.from(mergedSubsMap.values());
+        subcategoriesWithCounts = subcategoriesList.map((sub) => {
+          const sSlug = sub.slug.toLowerCase().trim();
+          const sName = sub.name.toLowerCase().trim();
+          const sId = sub.id;
+
+          const subCount = allProducts.filter((p) => {
+            const pCat = String(p.category || "").toLowerCase().trim();
+            const pCatSlug = pCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+            const pCatId = String((p as any).categoryId || "").trim();
+
+            const matchesParent = (
+              pCatId === c.id || pCatId === c.slug || pCat === name || pCatSlug === slug || pCat === slug ||
+              (slug === "paithani" && (pCat.includes("paithani") || pCat === "paithani sarees")) ||
+              (slug === "designer" && (pCat.includes("designer") || pCat === "designer sarees")) ||
+              (slug === "chanderi" && (pCat.includes("chanderi") || pCat === "chanderi sarees")) ||
+              (slug === "banarasi" && (pCat.includes("banarasi") || pCat === "banarasi sarees")) ||
+              (slug === "kanjivaram" && (pCat.includes("kanjivaram") || pCat === "kanjivaram sarees")) ||
+              (slug === "gadwal" && (pCat.includes("gadwal") || pCat === "gadwal sarees")) ||
+              (slug === "bandhani" && (pCat.includes("bandhani") || pCat === "bandhani sarees")) ||
+              (slug === "mysore-silk" && (pCat.includes("mysore") || pCat === "mysore silk sarees")) ||
+              (slug === "ikat" && (pCat.includes("ikat") || pCat === "ikat sarees")) ||
+              (slug === "cotton" && (pCat.includes("cotton") || pCat === "cotton sarees")) ||
+              (slug === "silk" && (pCat.includes("silk") || pCat === "silk sarees")) ||
+              (slug === "other-traditional" && (pCat.includes("traditional") || pCat === "other traditional sarees")) ||
+              (slug === "sarees") ||
+              (slug === "tops" && (pCat.includes("top") || pCat.includes("blouse") || pCat.includes("tunic") || pCatId === "cat-tops-default" || pCatId === "tops"))
+            );
+            if (!matchesParent) return false;
+
+            const pSub = String((p as any).subCategory || p.subcategory || "").toLowerCase().trim();
+            const pSubSlug = pSub.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+            const pSubId = String((p as any).subcategoryId || "").trim();
+
+            return (pSubId && (pSubId === sId || pSubId === sSlug)) ||
+              pSub === sName || pSubSlug === sSlug || pSub === sSlug ||
+              (sSlug.includes("bridal") && pSub.includes("bridal")) ||
+              (sSlug.includes("party") && pSub.includes("party")) ||
+              (sSlug.includes("anarkali") && pSub.includes("anarkali"));
+          }).length;
+
+          return {
+            ...sub,
+            productCount: subCount,
+            active: sub.active !== undefined ? sub.active : true,
+            status: sub.status || "approved",
+          };
+        });
+        subcategoriesCount = subcategoriesWithCounts.length;
+      }
+
       return {
         ...c,
         status: c.status || "approved",
         type: c.type || "custom",
         createdBy: c.createdBy || (c.sellerId ? "seller" : "system"),
         productCount: count,
+        subcategories: subcategoriesWithCounts,
+        subcategoriesCount: subcategoriesCount !== undefined ? subcategoriesCount : c.subcategoriesCount,
       };
     });
 
@@ -3363,7 +3883,10 @@ export const mongoProductCategories = {
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.slug.toLowerCase().includes(q) ||
-          (c.sellerName && c.sellerName.toLowerCase().includes(q))
+          (c.sellerName && c.sellerName.toLowerCase().includes(q)) ||
+          (c.subcategories && Array.isArray(c.subcategories) && c.subcategories.some(
+            (sub: any) => sub.name.toLowerCase().includes(q) || sub.slug.toLowerCase().includes(q)
+          ))
       );
     }
 
@@ -3374,7 +3897,11 @@ export const mongoProductCategories = {
         result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       } else if (filters.sort === "productCount") {
         result.sort((a, b) => (b.productCount ?? 0) - (a.productCount ?? 0));
+      } else if (filters.sort === "displayOrder") {
+        result.sort((a, b) => (a.displayOrder ?? 99) - (b.displayOrder ?? 99));
       }
+    } else {
+      result.sort((a, b) => (a.displayOrder ?? 99) - (b.displayOrder ?? 99) || a.name.localeCompare(b.name));
     }
 
     return result;
@@ -3440,56 +3967,161 @@ export const mongoProductCategories = {
     sellerName?: string | null;
     status?: string;
     coverImage?: string | null;
+    bannerImage?: string | null;
+    description?: string | null;
+    displayOrder?: number;
   }): Promise<ProductCategoryDoc> {
     const trimmed = String(data.name).trim();
-    const slug = slugifyCategoryName(trimmed);
-    const existing = (await this.findBySlug(slug)) || (await this.findById(slug));
+    const cleanParentId = data.parentId && String(data.parentId).trim() ? String(data.parentId).trim() : null;
+    const isSubcategory = Boolean(cleanParentId) || data.type === "subcategory";
+    const slugBase = slugifyCategoryName(trimmed);
+    const slug = cleanParentId ? `${slugifyCategoryName(cleanParentId)}-${slugBase}` : slugBase;
+
+    // Check duplicate under this parent
+    const parentCategorySlug = (data as any).parentCategory || (cleanParentId ? slugifyCategoryName(cleanParentId) : null);
+    let existing: ProductCategoryDoc | null = null;
+    if (isMongoDbConnected()) {
+      try {
+        const col = getCollection<ProductCategoryDoc>("product_categories");
+        if (cleanParentId) {
+          existing = await col.findOne({
+            $and: [
+              { $or: [{ parentId: cleanParentId }, { parentId: parentCategorySlug }, { parentCategory: parentCategorySlug }] },
+              { $or: [{ name: { $regex: new RegExp(`^${trimmed.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}$`, "i") } }, { slug }, { slug: slugBase }] },
+            ],
+          });
+        } else {
+          existing = await col.findOne({
+            $or: [
+              { slug },
+              { id: slug },
+              { name: { $regex: new RegExp(`^${trimmed.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}$`, "i") } },
+            ],
+          });
+        }
+      } catch {
+        setMongoConnected(false);
+      }
+    }
+    if (!existing) {
+      existing = Array.from(inMemoryCategoriesMap.values()).find((c) => {
+        if (cleanParentId) {
+          return (
+            (c.parentId === cleanParentId || c.parentId === parentCategorySlug || c.parentCategory === parentCategorySlug) &&
+            (c.name.toLowerCase() === trimmed.toLowerCase() || c.slug === slug || c.slug === slugBase)
+          );
+        }
+        return c.slug === slug || c.id === slug || c.name.toLowerCase() === trimmed.toLowerCase();
+      }) || null;
+    }
 
     if (existing) {
+      const fieldUpdates: any = {};
       if (!existing.active) {
         existing.active = true;
-        inMemoryCategoriesMap.set(slug, existing);
+        fieldUpdates.active = true;
+      }
+      if (data.coverImage && data.coverImage !== existing.coverImage) {
+        existing.coverImage = data.coverImage;
+        fieldUpdates.coverImage = data.coverImage;
+      }
+      if (data.description && data.description !== existing.description) {
+        existing.description = data.description;
+        fieldUpdates.description = data.description;
+      }
+      if (Object.keys(fieldUpdates).length > 0) {
+        fieldUpdates.updatedAt = new Date();
+        inMemoryCategoriesMap.set(existing.slug, existing);
         if (isMongoDbConnected()) {
           try {
             const col = getCollection<ProductCategoryDoc>("product_categories");
-            await col.updateOne({ $or: [{ id: existing.id }, { slug }] }, { $set: { active: true } });
-          } catch {
-            setMongoConnected(false);
-          }
+            await col.updateOne({ $or: [{ id: existing.id }, { slug: existing.slug }] }, { $set: fieldUpdates });
+          } catch {}
+        }
+      }
+      if (cleanParentId) {
+        registerDynamicSubcategory(cleanParentId, {
+          id: existing.id,
+          name: existing.name,
+          slug: existing.slug,
+          route: existing.route || `/${parentCategorySlug || cleanParentId}?subcategory=${existing.slug}`,
+          subtypes: [],
+        });
+        if (parentCategorySlug && parentCategorySlug !== cleanParentId) {
+          registerDynamicSubcategory(parentCategorySlug, {
+            id: existing.id,
+            name: existing.name,
+            slug: existing.slug,
+            route: existing.route || `/${parentCategorySlug}?subcategory=${existing.slug}`,
+            subtypes: [],
+          });
         }
       }
       return existing;
     }
 
     const createdBy = data.createdBy || (data.sellerId ? "seller" : "system");
-    const status = data.status || (createdBy === "seller" ? "pending" : "approved");
+    const status = data.status || "approved";
     const now = new Date();
 
     const newDoc: ProductCategoryDoc = {
-      id: crypto.randomUUID(),
+      id: (data as any).id || crypto.randomUUID(),
       name: trimmed,
-      slug,
-      parentId: data.parentId && String(data.parentId).trim() ? String(data.parentId).trim() : null,
-      type: data.type || "custom",
+      slug: slugBase,
+      parentId: cleanParentId,
+      parentCategory: parentCategorySlug,
+      type: cleanParentId ? "subcategory" : (data.type || "custom"),
+      subcategories: Array.isArray((data as any).subcategories) ? (data as any).subcategories : [],
       createdBy,
       sellerId: data.sellerId || null,
       sellerName: data.sellerName || null,
       coverImage: data.coverImage || null,
+      bannerImage: data.bannerImage || null,
+      description: data.description || null,
+      displayOrder: data.displayOrder ?? 99,
       status,
       active: true,
+      route: cleanParentId ? `/${parentCategorySlug || cleanParentId}?subcategory=${slugBase}` : undefined,
       createdAt: now,
       updatedAt: now,
     };
 
-    inMemoryCategoriesMap.set(slug, newDoc);
+    inMemoryCategoriesMap.set(slugBase, newDoc);
 
     if (isMongoDbConnected()) {
       try {
         const col = getCollection<ProductCategoryDoc>("product_categories");
         await col.insertOne(newDoc);
+        if (cleanParentId) {
+          await col.updateOne(
+            { $or: [{ id: cleanParentId }, { slug: cleanParentId }] },
+            {
+              $addToSet: {
+                subcategories: {
+                  id: newDoc.id,
+                  name: newDoc.name,
+                  slug: newDoc.slug,
+                  route: newDoc.route,
+                  subtypes: [],
+                },
+              },
+              $inc: { subcategoriesCount: 1 },
+            }
+          );
+        }
       } catch {
         setMongoConnected(false);
       }
+    }
+
+    if (cleanParentId) {
+      registerDynamicSubcategory(cleanParentId, {
+        id: newDoc.id,
+        name: newDoc.name,
+        slug: newDoc.slug,
+        route: newDoc.route || undefined,
+        subtypes: [],
+      });
     }
 
     return newDoc;
@@ -3516,8 +4148,28 @@ export const mongoProductCategories = {
     if (updates.coverImage !== undefined) {
       setObj.coverImage = updates.coverImage ? String(updates.coverImage).trim() : null;
     }
+    if (updates.bannerImage !== undefined) {
+      setObj.bannerImage = updates.bannerImage ? String(updates.bannerImage).trim() : null;
+    }
+    if (updates.description !== undefined) {
+      setObj.description = updates.description ? String(updates.description).trim() : null;
+    }
+    if (updates.displayOrder !== undefined) {
+      setObj.displayOrder = typeof updates.displayOrder === "number" ? updates.displayOrder : parseInt(String(updates.displayOrder), 10) || 0;
+    }
     if (updates.parentId !== undefined) {
       setObj.parentId = updates.parentId && String(updates.parentId).trim() ? String(updates.parentId).trim() : null;
+    }
+    if (updates.subcategoriesCount !== undefined) {
+      setObj.subcategoriesCount = updates.subcategoriesCount;
+    }
+    if (updates.subtypesCount !== undefined) {
+      setObj.subtypesCount = updates.subtypesCount;
+    }
+    if ((updates as any).subtypes !== undefined) {
+      (setObj as any).subtypes = Array.isArray((updates as any).subtypes)
+        ? (updates as any).subtypes
+        : String((updates as any).subtypes).split(",").map((s: string) => s.trim()).filter(Boolean);
     }
 
     const updatedDoc: ProductCategoryDoc = { ...existing, ...setObj };
@@ -3534,8 +4186,34 @@ export const mongoProductCategories = {
           { $or: [{ id: existing.id }, { slug: existing.slug }, { _id: existing.id as any }] },
           { $set: setObj }
         );
+        // If this is a subcategory, also update any parent category's embedded subcategory array
+        if (existing.parentId || existing.type === "subcategory" || updates.coverImage !== undefined) {
+          const effectiveCover = setObj.coverImage !== undefined ? setObj.coverImage : existing.coverImage;
+          await col.updateMany(
+            { "subcategories.id": existing.id },
+            { $set: { "subcategories.$[elem].coverImage": effectiveCover } },
+            { arrayFilters: [{ "elem.id": existing.id }] }
+          );
+          await col.updateMany(
+            { "subcategories.slug": existing.slug },
+            { $set: { "subcategories.$[elem].coverImage": effectiveCover } },
+            { arrayFilters: [{ "elem.slug": existing.slug }] }
+          );
+        }
       } catch {
         setMongoConnected(false);
+      }
+    }
+
+    // Also update in-memory parent categories' embedded subcategory list
+    for (const parent of inMemoryCategoriesMap.values()) {
+      if (Array.isArray(parent.subcategories)) {
+        for (const sub of parent.subcategories) {
+          if (sub.id === existing.id || sub.slug === existing.slug) {
+            if (setObj.coverImage !== undefined) sub.coverImage = setObj.coverImage;
+            if (setObj.name !== undefined) sub.name = setObj.name;
+          }
+        }
       }
     }
 
@@ -3560,6 +4238,7 @@ export const mongoProductCategories = {
     return true;
   },
 };
+
 
 // ─── SHIPMENTS (Multi-Seller Shiprocket Integration) ──────────────────────────
 const inMemoryShipmentsMap = new Map<string, MongoShipmentDoc>();
@@ -4060,3 +4739,223 @@ export type AdvertisementDoc = {
 export const mongoAdvertisements = {
   getCollection: () => getCollection<AdvertisementDoc>("advertisements"),
 };
+
+// ─── AUDIT & APPLICATION LOGS ───────────────────────────────────────────────
+export interface AuditLogDocument {
+  _id?: any;
+  timestamp: string;          // ISO 8601 UTC
+  service: string;            // "vastraa-backend"
+  environment: string;        // "production" | "development"
+  actor: {
+    id: string;               // User ID or "system"
+    role: "admin" | "seller" | "customer" | "system";
+    email?: string;
+    ip?: string;
+    userAgent?: string;
+  };
+  action: string;             // e.g. "SELLER_PRODUCT_SUBMITTED", "ADMIN_KYC_APPROVED"
+  resource: {
+    type: "product" | "seller" | "order" | "category" | "coupon" | "settlement" | "auth" | "system";
+    id: string;
+    name?: string;
+  };
+  request?: {
+    method: string;
+    route: string;
+  };
+  result: "success" | "failure";
+  failureReason?: string;
+  requestId: string;
+  message: string;
+  metadata?: Record<string, any>;
+  changes?: {
+    before?: Record<string, any>;
+    after?: Record<string, any>;
+  };
+}
+
+export interface ApplicationLogDocument {
+  _id?: any;
+  timestamp: string;
+  createdAt: Date;
+  level: "debug" | "info" | "warn" | "error" | "fatal";
+  service: string;
+  environment: string;
+  message: string;
+  requestId?: string;
+  actor?: {
+    id?: string;
+    role?: string;
+  };
+  error?: {
+    name: string;
+    message: string;
+    stack?: string;
+    code?: string | number;
+  };
+  thirdParty?: {
+    provider: "cashfree" | "shiprocket" | "cloudflare_r2" | "zoho_smtp";
+    endpoint: string;
+    method: string;
+    statusCode: number;
+    durationMs: number;
+    success: boolean;
+    retryCount?: number;
+  };
+  metadata?: Record<string, any>;
+}
+
+export const mongoLogs = {
+  getAuditCollection: () => getCollection<AuditLogDocument>("audit_logs"),
+  getAppCollection: () => getCollection<ApplicationLogDocument>("application_logs"),
+
+  async insertAuditLog(log: AuditLogDocument): Promise<void> {
+    if (!isMongoDbConnected()) return;
+    try {
+      const col = getCollection<AuditLogDocument>("audit_logs");
+      await col.insertOne({
+        ...log,
+        timestamp: log.timestamp || new Date().toISOString(),
+        service: log.service || "vastraa-backend",
+        environment: log.environment || process.env.NODE_ENV || "development",
+      } as any);
+    } catch (err: any) {
+      console.error("[AuditLog] Failed to persist audit log to MongoDB:", err?.message || err);
+    }
+  },
+
+  async queryAuditLogs(filter: {
+    role?: string;
+    actorId?: string;
+    action?: string;
+    resourceType?: string;
+    resourceId?: string;
+    result?: string;
+    requestId?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, Number(filter.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filter.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    if (!isMongoDbConnected()) {
+      return { logs: [], totalCount: 0, totalPages: 0, page, limit };
+    }
+
+    try {
+      const col = getCollection<AuditLogDocument>("audit_logs");
+      const query: any = {};
+      if (filter.role && filter.role !== "all") query["actor.role"] = filter.role;
+      if (filter.actorId) query["actor.id"] = filter.actorId;
+      if (filter.action && filter.action !== "all") query.action = filter.action;
+      if (filter.resourceType && filter.resourceType !== "all") query["resource.type"] = filter.resourceType;
+      if (filter.resourceId) query["resource.id"] = filter.resourceId;
+      if (filter.result && filter.result !== "all") query.result = filter.result;
+      if (filter.requestId) query.requestId = filter.requestId;
+
+      if (filter.startDate || filter.endDate) {
+        query.timestamp = {};
+        if (filter.startDate) query.timestamp.$gte = filter.startDate;
+        if (filter.endDate) query.timestamp.$lte = filter.endDate;
+      }
+
+      if (filter.search) {
+        const regex = new RegExp(filter.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        query.$or = [
+          { message: regex },
+          { "resource.id": regex },
+          { "actor.email": regex },
+          { requestId: regex },
+          { action: regex },
+        ];
+      }
+
+      const [logs, totalCount] = await Promise.all([
+        col.find(query).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray(),
+        col.countDocuments(query),
+      ]);
+
+      return {
+        logs,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        page,
+        limit,
+      };
+    } catch (err: any) {
+      console.error("[AuditLog] Query error:", err?.message || err);
+      return { logs: [], totalCount: 0, totalPages: 0, page, limit };
+    }
+  },
+
+  async insertAppLog(log: Omit<ApplicationLogDocument, "createdAt">): Promise<void> {
+    if (!isMongoDbConnected()) return;
+    try {
+      const col = getCollection<ApplicationLogDocument>("application_logs");
+      await col.insertOne({
+        ...log,
+        createdAt: new Date(),
+        timestamp: log.timestamp || new Date().toISOString(),
+        service: log.service || "vastraa-backend",
+        environment: log.environment || process.env.NODE_ENV || "development",
+      } as any);
+    } catch (err: any) {
+      console.error("[AppLog] Failed to persist app log to MongoDB:", err?.message || err);
+    }
+  },
+
+  async queryAppLogs(filter: {
+    level?: string;
+    service?: string;
+    requestId?: string;
+    provider?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, Number(filter.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filter.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    if (!isMongoDbConnected()) {
+      return { logs: [], totalCount: 0, totalPages: 0, page, limit };
+    }
+
+    try {
+      const col = getCollection<ApplicationLogDocument>("application_logs");
+      const query: any = {};
+      if (filter.level && filter.level !== "all") query.level = filter.level;
+      if (filter.service) query.service = filter.service;
+      if (filter.requestId) query.requestId = filter.requestId;
+      if (filter.provider && filter.provider !== "all") query["thirdParty.provider"] = filter.provider;
+
+      if (filter.startDate || filter.endDate) {
+        query.timestamp = {};
+        if (filter.startDate) query.timestamp.$gte = filter.startDate;
+        if (filter.endDate) query.timestamp.$lte = filter.endDate;
+      }
+
+      const [logs, totalCount] = await Promise.all([
+        col.find(query).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray(),
+        col.countDocuments(query),
+      ]);
+
+      return {
+        logs,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        page,
+        limit,
+      };
+    } catch (err: any) {
+      console.error("[AppLog] Query error:", err?.message || err);
+      return { logs: [], totalCount: 0, totalPages: 0, page, limit };
+    }
+  },
+};
+

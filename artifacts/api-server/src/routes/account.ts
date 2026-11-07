@@ -11,17 +11,19 @@ const router = Router();
 
 
 // ─── In-memory phone OTP store ──────────────────────────────────────────────
-// userId → { otp, phone, expiresAt, requests: Date[], attempts: number }
+// userId → { otpHash, phone, expiresAt, lastRequestAt, requests: Date[], attempts: number }
 interface OtpEntry {
-  otp: string;
+  otpHash: string;
   phone: string;
   expiresAt: Date;
+  lastRequestAt: Date;
   requests: Date[];
   attempts: number;     // verify attempts for brute-force protection
 }
 const phoneOtpStore = new Map<string, OtpEntry>();
 
 const OTP_TTL_MS      = 10 * 60 * 1000;  // 10 minutes
+const COOLDOWN_MS     = 30 * 1000;       // 30 seconds resend cooldown
 const RATE_LIMIT      = 5;               // max OTP *send* requests per hour
 const RATE_WINDOW     = 60 * 60 * 1000;  // 1 hour
 const MAX_VERIFY_TRIES = 5;              // max verify attempts before OTP is invalidated
@@ -30,41 +32,89 @@ function generateOtp(): string {
   return String(crypto.randomInt(100_000, 999_999));
 }
 
-async function getUserEmail(userId: string): Promise<string | null> {
+function hashOtp(otp: string): string {
+  return crypto.createHash("sha256").update(otp.trim()).digest("hex");
+}
+
+async function getUserEmail(userId: string, fallbackEmail?: string | null): Promise<string | null> {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // 1. Check fallbackEmail from authenticated request
+  if (fallbackEmail && emailRegex.test(fallbackEmail.trim())) {
+    return fallbackEmail.trim().toLowerCase();
+  }
+  // 2. Check if userId is itself an email address
+  if (emailRegex.test(userId.trim())) {
+    return userId.trim().toLowerCase();
+  }
+  // 3. Mongo user lookup by id or email
+  try {
+    const mongoUser = await mongoUsers.findById(userId);
+    if (mongoUser?.email && emailRegex.test(mongoUser.email)) {
+      return mongoUser.email.trim().toLowerCase();
+    }
+    const mongoUserByEmail = await mongoUsers.findByEmail(userId, "customer");
+    if (mongoUserByEmail?.email && emailRegex.test(mongoUserByEmail.email)) {
+      return mongoUserByEmail.email.trim().toLowerCase();
+    }
+  } catch { /* ignore */ }
+  // 4. Clerk user lookup
   try {
     const u = await clerkClient.users.getUser(userId);
     const email = u.primaryEmailAddress?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? null;
-    if (email) return email;
+    if (email && emailRegex.test(email)) return email.trim().toLowerCase();
   } catch { /* ignore */ }
-  const mongoUser = await mongoUsers.findById(userId);
-  return mongoUser?.email ?? null;
+
+  return null;
 }
 
 // ─── In-memory email change OTP store ─────────────────────────────────────
 interface EmailOtpEntry {
-  otp: string;
+  otpHash: string;
   newEmail: string;
   expiresAt: Date;
+  lastRequestAt: Date;
   requests: Date[];
   attempts: number;
 }
 const emailOtpStore = new Map<string, EmailOtpEntry>();
 
-async function sendEmailChangeOtpEmail(toEmail: string, otp: string): Promise<void> {
+async function sendOtpEmail(toEmail: string, otp: string, phone: string): Promise<{ delivered: boolean; error?: string }> {
   try {
-    await sendTransactionalEmail({
+    const result = await sendTransactionalEmail({
+      userId: toEmail,
+      toEmail,
+      type: "phone_change_otp",
+      reference: otp,
+      note: `Use this verification code to update your registered mobile number to +91 ${phone}.`,
+    });
+
+    if (result.delivered) {
+      return { delivered: true };
+    }
+
+    return { delivered: false, error: result.error || "Email delivery failed" };
+  } catch (err: any) {
+    return { delivered: false, error: err?.message || "Failed to dispatch verification email" };
+  }
+}
+
+async function sendEmailChangeOtpEmail(toEmail: string, otp: string): Promise<{ delivered: boolean; error?: string }> {
+  try {
+    const result = await sendTransactionalEmail({
       userId: toEmail,
       toEmail,
       type: "email_change_otp",
       reference: otp,
       note: "Use this verification code to confirm your new email address.",
     });
-  } catch (err) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info(`[email-change-otp] DEV: Verification OTP for ${toEmail} → ${otp}`);
-    } else {
-      throw err;
+
+    if (result.delivered) {
+      return { delivered: true };
     }
+
+    return { delivered: false, error: result.error || "Email delivery failed" };
+  } catch (err: any) {
+    return { delivered: false, error: err?.message || "Failed to dispatch verification email" };
   }
 }
 
@@ -165,8 +215,16 @@ router.post("/account/phone-otp/request", requireAuth, async (req: any, res: any
   const userId: string = req.userId;
   const now = new Date();
 
-  // Rate limiting
+  // Rate limiting & cooldown
   const entry = phoneOtpStore.get(userId);
+  if (entry) {
+    const timeSinceLast = now.getTime() - entry.lastRequestAt.getTime();
+    if (timeSinceLast < COOLDOWN_MS) {
+      const waitSec = Math.ceil((COOLDOWN_MS - timeSinceLast) / 1000);
+      res.status(429).json({ error: `Please wait ${waitSec} second${waitSec !== 1 ? "s" : ""} before requesting another code.` });
+      return;
+    }
+  }
   const recentRequests = (entry?.requests ?? []).filter(
     (d) => now.getTime() - d.getTime() < RATE_WINDOW
   );
@@ -175,31 +233,38 @@ router.post("/account/phone-otp/request", requireAuth, async (req: any, res: any
     return;
   }
 
-  const toEmail = await getUserEmail(userId);
+  const toEmail = await getUserEmail(userId, req.user?.email || req.userEmail);
   if (!toEmail) {
-    res.status(400).json({ error: "Could not resolve your email address." });
+    res.status(400).json({ error: "Could not resolve your registered email address. Please update your profile first." });
     return;
   }
 
   const otp = generateOtp();
+  const otpHash = hashOtp(otp);
   phoneOtpStore.set(userId, {
-    otp,
+    otpHash,
     phone,
     expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+    lastRequestAt: now,
     requests: [...recentRequests, now],
     attempts: 0,
   });
 
-  try {
-    await sendOtpEmail(toEmail, otp, phone);
-  } catch (err) {
-    req.log?.error({ err }, "[phone-otp] Failed to send OTP email — invalidating entry");
+  const sendRes = await sendOtpEmail(toEmail, otp, phone);
+  if (!sendRes.delivered) {
+    req.log?.error({ error: sendRes.error }, "[phone-otp] Failed to send OTP email — invalidating entry");
     phoneOtpStore.delete(userId);
-    res.status(500).json({ error: "Failed to send verification email. Please try again." });
+    res.status(500).json({
+      error: `Failed to deliver verification email to ${toEmail}: ${sendRes.error || "Email service unavailable"}. Please ensure email settings are configured in Admin Settings.`,
+    });
     return;
   }
 
-  res.json({ success: true, sentTo: toEmail.replace(/^(.{2})(.*)(@.+)$/, "$1***$3") });
+  res.json({
+    success: true,
+    sentTo: toEmail.replace(/^(.{2})(.*)(@.+)$/, "$1***$3"),
+    message: `Verification code sent successfully to ${toEmail}.`,
+  });
 });
 
 // ─── Phone OTP: verify ───────────────────────────────────────────────────────
@@ -233,7 +298,8 @@ router.post("/account/phone-otp/verify", requireAuth, async (req: any, res: any)
     return;
   }
 
-  if (entry.otp !== String(code).trim()) {
+  const codeHash = hashOtp(String(code).trim());
+  if (entry.otpHash !== codeHash) {
     entry.attempts += 1;
     const remaining = MAX_VERIFY_TRIES - entry.attempts;
     if (remaining <= 0) {
@@ -296,6 +362,14 @@ router.post("/account/email-otp/request", requireAuth, async (req: any, res: any
 
   const now = new Date();
   const entry = emailOtpStore.get(userId);
+  if (entry) {
+    const timeSinceLast = now.getTime() - entry.lastRequestAt.getTime();
+    if (timeSinceLast < COOLDOWN_MS) {
+      const waitSec = Math.ceil((COOLDOWN_MS - timeSinceLast) / 1000);
+      res.status(429).json({ error: `Please wait ${waitSec} second${waitSec !== 1 ? "s" : ""} before requesting another code.` });
+      return;
+    }
+  }
   const recentRequests = (entry?.requests ?? []).filter(
     (d) => now.getTime() - d.getTime() < RATE_WINDOW
   );
@@ -305,27 +379,29 @@ router.post("/account/email-otp/request", requireAuth, async (req: any, res: any
   }
 
   const otp = generateOtp();
+  const otpHash = hashOtp(otp);
   emailOtpStore.set(userId, {
-    otp,
+    otpHash,
     newEmail: cleanNewEmail,
     expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+    lastRequestAt: now,
     requests: [...recentRequests, now],
     attempts: 0,
   });
 
-  try {
-    await sendEmailChangeOtpEmail(cleanNewEmail, otp);
-  } catch (err) {
-    req.log?.error({ err }, "[email-otp] Failed to send verification email");
+  const sendRes = await sendEmailChangeOtpEmail(cleanNewEmail, otp);
+  if (!sendRes.delivered) {
+    req.log?.error({ error: sendRes.error }, "[email-otp] Failed to send verification email");
     emailOtpStore.delete(userId);
-    res.status(500).json({ error: "Failed to send verification email. Please try again." });
+    res.status(500).json({
+      error: `Failed to deliver verification email to ${cleanNewEmail}: ${sendRes.error || "Email service unavailable"}. Please ensure email settings are configured in Admin Settings.`,
+    });
     return;
   }
 
   res.json({
     success: true,
     message: `Verification code sent successfully to ${cleanNewEmail}.`,
-    devCode: process.env.NODE_ENV !== "production" ? otp : undefined,
   });
 });
 
@@ -365,7 +441,8 @@ router.post("/account/email-otp/verify", requireAuth, async (req: any, res: any)
     return;
   }
 
-  if (entry.otp !== cleanCode) {
+  const codeHash = hashOtp(cleanCode);
+  if (entry.otpHash !== codeHash) {
     entry.attempts += 1;
     const remaining = MAX_VERIFY_TRIES - entry.attempts;
     if (remaining <= 0) {

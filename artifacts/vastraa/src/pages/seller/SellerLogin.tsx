@@ -91,6 +91,7 @@ export default function SellerLogin() {
         localStorage.setItem("vastraa_seller_email", email.trim());
         if (data.token) {
           localStorage.setItem("vastraa_auth_token", data.token);
+          localStorage.setItem("vastraa_seller_token", data.token);
         }
         setLocation("/seller/dashboard");
         setLoading(false);
@@ -309,6 +310,9 @@ export default function SellerLogin() {
                   }
                   if (data.token) {
                     localStorage.setItem("vastraa_auth_token", data.token);
+                    if (data.user?.role === "seller") {
+                      localStorage.setItem("vastraa_seller_token", data.token);
+                    }
                   }
                   setLocation(
                     data.redirectUrl ||

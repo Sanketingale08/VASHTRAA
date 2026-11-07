@@ -1,6 +1,20 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { CATALOG_CATEGORIES } from "@/constants/categories";
+
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function render(ui: React.ReactElement) {
+  return rtlRender(
+    <QueryClientProvider client={testQueryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
 
 beforeAll(() => {
   class MockIntersectionObserver {
@@ -36,6 +50,18 @@ vi.mock("@/components/Layout", () => ({
   Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout-container">{children}</div>,
 }));
 
+vi.mock("@clerk/clerk-react", () => ({
+  useUser: () => ({ user: null, isSignedIn: false }),
+}));
+
+vi.mock("@clerk/react", () => ({
+  useUser: () => ({ user: null, isSignedIn: false }),
+}));
+
+vi.mock("@/components/AdvertisementCarousel", () => ({
+  AdvertisementCarousel: () => <div data-testid="ad-carousel" />,
+}));
+
 vi.mock("@/components/QuickViewModal", () => ({
   QuickViewModal: () => null,
 }));
@@ -55,64 +81,34 @@ describe("Home — Artisan Handloom Hero and New Arrivals Redesign", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSearchStr = "";
+    testQueryClient.clear();
   });
 
-  describe("1. Main Hero Section", () => {
-    it("renders the Artisan Handloom Collection eyebrow and H1 heading", () => {
+  describe("1. Removal of Main Hero Banner", () => {
+    it("ensures the Artisan Handloom Collection eyebrow and hero heading are removed from the landing page", () => {
       render(<Home />);
 
-      expect(screen.getByText("ARTISAN HANDLOOM COLLECTION")).toBeInTheDocument();
-      const h1 = screen.getByRole("heading", { level: 1, name: /Authentic Paithani & Designer Sarees/i });
-      expect(h1).toBeInTheDocument();
+      expect(screen.queryByText("ARTISAN HANDLOOM COLLECTION")).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { level: 1, name: /Authentic Paithani & Designer Sarees/i })).not.toBeInTheDocument();
     });
 
-    it("renders the exact artisan handloom description copy", () => {
+    it("ensures the artisan handloom description copy is removed", () => {
       render(<Home />);
 
-      const desc = screen.getByText(/Handcrafted by master artisans from Maharashtra/i);
-      expect(desc).toBeInTheDocument();
-      expect(desc.textContent).toContain(
-        "Handcrafted by master artisans from Maharashtra, our sarees feature vibrant silk fabrics adorned with traditional peacock, muniya, and floral motifs, making them perfect for special occasions."
-      );
+      expect(screen.queryByText(/Handcrafted by master artisans from Maharashtra/i)).not.toBeInTheDocument();
     });
 
-    it("renders both primary and secondary CTAs navigating to /paithani and /designer", () => {
+    it("ensures hero CTA buttons are removed", () => {
       render(<Home />);
 
-      const paithaniCTA = screen.getByRole("link", { name: /SHOP PAITHANI SAREES/i });
-      expect(paithaniCTA).toBeInTheDocument();
-      expect(paithaniCTA).toHaveAttribute("href", "/paithani");
-
-      const designerCTA = screen.getByRole("link", { name: /SHOP DESIGNER SAREES/i });
-      expect(designerCTA).toBeInTheDocument();
-      expect(designerCTA).toHaveAttribute("href", "/designer");
+      expect(screen.queryByRole("link", { name: /SHOP PAITHANI SAREES/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /SHOP DESIGNER SAREES/i })).not.toBeInTheDocument();
     });
 
-    it("renders the authentic artisan saree showcase image", () => {
+    it("ensures the hero showcase image is removed", () => {
       render(<Home />);
 
-      const img = screen.getByAltText("Authentic Paithani & Designer Saree") as HTMLImageElement;
-      expect(img).toBeInTheDocument();
-      expect(img.src).toContain("/images/artisan-handloom-saree.png");
-    });
-
-    it("renders the hero section as a card with image on the left and text on the right", () => {
-      const { container } = render(<Home />);
-      const firstSection = container.querySelectorAll("section")[0];
-
-      // Elevated card container
-      const card = firstSection.querySelector(".rounded-2xl, .rounded-3xl");
-      expect(card).toBeInTheDocument();
-
-      // Grid with Left column (image, col-span-5) and Right column (text, col-span-7)
-      const grid = card?.querySelector(".grid");
-      expect(grid).toBeInTheDocument();
-      const columns = grid?.children;
-      expect(columns).toHaveLength(2);
-      expect(columns?.[0].className).toContain("lg:col-span-5");
-      expect(columns?.[0].querySelector("img")).toBeInTheDocument();
-      expect(columns?.[1].className).toContain("lg:col-span-7");
-      expect(columns?.[1].querySelector("h1")).toBeInTheDocument();
+      expect(screen.queryByAltText("Authentic Paithani & Designer Saree")).not.toBeInTheDocument();
     });
   });
 
@@ -141,63 +137,91 @@ describe("Home — Artisan Handloom Hero and New Arrivals Redesign", () => {
   });
 
   describe("3. Section Order and Hierarchy", () => {
-    it("ensures Main Hero precedes Shop By Budget", () => {
+    it("ensures Explore by Category precedes Shop By Budget", () => {
       const { container } = render(<Home />);
       const sections = container.querySelectorAll("section");
 
       // Verify sections exist
       expect(sections.length).toBeGreaterThanOrEqual(2);
 
-      // Section 1 contains H1
-      expect(sections[0].querySelector("h1")?.textContent).toContain("Authentic Paithani & Designer Sarees");
+      // Section 1 contains Explore by Category
+      expect(sections[0].textContent).toContain("Explore by Category");
 
-      // Section 2 contains "Shop By Budget"
-      expect(sections[1].textContent).toContain("Shop By Budget");
-      expect(sections[1].textContent).toContain("Explore Saree Collections by Price");
+      // Verify Shop By Budget section exists
+      const budgetSection = Array.from(sections).find((s) => s.textContent?.includes("SHOP BY BUDGET"));
+      expect(budgetSection).toBeDefined();
+      expect(budgetSection?.textContent).toContain("Explore Collections by Price");
     });
 
-    it("ensures no duplicate Artisan Handloom Collection section exists after Shop By Budget", () => {
+    it("ensures no Artisan Handloom Collection hero section exists", () => {
       render(<Home />);
 
-      // Exactly 1 instance of ARTISAN HANDLOOM COLLECTION
-      const eyebrowMatches = screen.getAllByText("ARTISAN HANDLOOM COLLECTION");
-      expect(eyebrowMatches).toHaveLength(1);
+      // 0 instances of ARTISAN HANDLOOM COLLECTION
+      expect(screen.queryByText("ARTISAN HANDLOOM COLLECTION")).not.toBeInTheDocument();
 
-      // Exactly 1 H1 heading
+      // H1 heading is Explore by Category
       const h1Headings = screen.getAllByRole("heading", { level: 1 });
-      expect(h1Headings).toHaveLength(1);
+      expect(h1Headings[0].textContent).toContain("Explore by Category");
     });
   });
 
-  describe("4. Recently Viewed Products with Paithani and Designer Options", () => {
+  describe("4. Recently Viewed Products Across All Categories (Paithani & Designer buttons removed)", () => {
     it("renders the Recently Viewed Products section on the landing page", () => {
       render(<Home />);
 
       expect(screen.getByText("Recently Viewed Products")).toBeInTheDocument();
     });
 
-    it("renders both Paithani and Designer option buttons", () => {
+    it("ensures Paithani and Designer standalone option buttons and legacy category menu are removed", () => {
       render(<Home />);
 
-      const paithaniTab = screen.getByRole("tab", { name: /^Paithani$/i });
-      const designerTab = screen.getByRole("tab", { name: /^Designer$/i });
-
-      expect(paithaniTab).toBeInTheDocument();
-      expect(designerTab).toBeInTheDocument();
-      expect(paithaniTab).toHaveAttribute("aria-selected", "true");
-      expect(designerTab).toHaveAttribute("aria-selected", "false");
+      expect(screen.queryByRole("tab", { name: /^Paithani$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: /^Designer$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Category filter menu/i })).not.toBeInTheDocument();
     });
 
-    it("switches to Designer option when clicked and updates View All link", () => {
+    it("renders category tabs for All and all catalog categories with All selected by default", () => {
       render(<Home />);
 
-      const designerTab = screen.getByRole("tab", { name: /^Designer$/i });
-      fireEvent.click(designerTab);
+      const allTab = screen.getByRole("tab", { name: /^All$/i });
+      expect(allTab).toBeInTheDocument();
+      expect(allTab).toHaveAttribute("aria-selected", "true");
 
-      expect(designerTab).toHaveAttribute("aria-selected", "true");
-      const viewAllLink = screen.getByRole("link", { name: /View All Designer Sarees/i });
+      for (const cat of CATALOG_CATEGORIES) {
+        expect(screen.getByRole("tab", { name: new RegExp(cat.name, "i") })).toBeInTheDocument();
+      }
+
+      // Default bottom CTA points to full catalog
+      const viewCatalogLink = screen.getByRole("link", { name: /Explore Complete Catalog/i });
+      expect(viewCatalogLink).toBeInTheDocument();
+      expect(viewCatalogLink).toHaveAttribute("href", "/products");
+    });
+
+    it("switches to Kurtis category tab when clicked and updates View All link", () => {
+      render(<Home />);
+
+      const kurtisTab = screen.getByRole("tab", { name: /^Kurtis$/i });
+      fireEvent.click(kurtisTab);
+
+      expect(kurtisTab).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tab", { name: /^All$/i })).toHaveAttribute("aria-selected", "false");
+
+      const viewAllLink = screen.getByRole("link", { name: /View All Kurtis/i });
       expect(viewAllLink).toBeInTheDocument();
-      expect(viewAllLink).toHaveAttribute("href", "/designer/shop");
+      expect(viewAllLink).toHaveAttribute("href", "/kurtis");
+    });
+
+    it("switches to Women's Tops category tab when clicked and updates View All link", () => {
+      render(<Home />);
+
+      const topsTab = screen.getByRole("tab", { name: /Women's Tops/i });
+      fireEvent.click(topsTab);
+
+      expect(topsTab).toHaveAttribute("aria-selected", "true");
+      const viewAllLink = screen.getByRole("link", { name: /View All Women's Tops/i });
+      expect(viewAllLink).toBeInTheDocument();
+      expect(viewAllLink).toHaveAttribute("href", "/tops");
     });
   });
 });
+

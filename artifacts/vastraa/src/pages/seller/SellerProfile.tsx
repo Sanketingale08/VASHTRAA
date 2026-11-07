@@ -342,9 +342,23 @@ export default function SellerProfile() {
 
     setBankVerifying(true);
     try {
+      const sellerToken =
+        (typeof window !== "undefined" && (
+          localStorage.getItem("vastraa_seller_token") ||
+          localStorage.getItem("vastraa_auth_token") ||
+          localStorage.getItem("seller_token")
+        )) || null;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (sellerToken) {
+        headers["Authorization"] = `Bearer ${sellerToken}`;
+      }
+
       const res = await apiFetch("/api/seller/bank/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           bankHolder: bankHolder.trim(),
           bankName: bankName.trim() || "Bank",

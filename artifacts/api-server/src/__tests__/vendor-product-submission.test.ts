@@ -206,6 +206,7 @@ vi.mock("@workspace/db", () => {
     mongoSiteSettings: {
       get: vi.fn(async (key: string) => {
         if (key === "admin_2fa_enabled") return "false";
+        if (key === "admin_key_hash") return "hash:dev-admin-key";
         return null;
       }),
     },
@@ -281,6 +282,7 @@ describe("Vendor Product Creation, Approval, and Storefront Flow", () => {
   let app: express.Express;
 
   beforeEach(() => {
+    process.env.ADMIN_API_KEY = "dev-admin-key";
     mockSellersMap.clear();
     mockUsersMap.clear();
     mockProductsMap.clear();
@@ -362,6 +364,7 @@ describe("Vendor Product Creation, Approval, and Storefront Flow", () => {
     expect(res.body.status).toBe("pending");
     expect(res.body.active).toBe(false);
     expect(res.body.vendorId).toBe("TDV123456");
+    expect(res.body.vendorName).toBe("Vastraa Heritage Silks");
 
     // Verify stored in MongoDB mock with correct vendor linkage
     const savedInMongo = mockProductsMap.get(res.body.id);
@@ -369,13 +372,15 @@ describe("Vendor Product Creation, Approval, and Storefront Flow", () => {
     expect(savedInMongo.status).toBe("pending");
     expect(savedInMongo.active).toBe(false);
     expect(savedInMongo.vendorId).toBe("TDV123456");
+    expect(savedInMongo.vendorName).toBe("Vastraa Heritage Silks");
     expect(savedInMongo.images).toHaveLength(2);
 
-    // Verify notifications were triggered
+    // Verify notifications were triggered with resolved seller name
     expect(mockSellerNotifications.length).toBeGreaterThan(0);
     expect(mockSellerNotifications[0].type).toBe("product_pending_approval");
     expect(mockAdminNotifications.length).toBeGreaterThan(0);
     expect(mockAdminNotifications[0].type).toBe("product_pending_approval");
+    expect(mockAdminNotifications[0].body).toContain('from seller "Vastraa Heritage Silks" requires approval');
   });
 
   it("2. Seller can save product as draft with status 'draft'", async () => {
@@ -639,5 +644,91 @@ describe("Vendor Product Creation, Approval, and Storefront Flow", () => {
       .send({ name: "Unauthenticated Saree", price: 5000, category: "silk" });
 
     expect(resNoAuth.status).toBe(401);
+  });
+
+  it("7. Dynamic category specifications and matching blouse segregation", async () => {
+    const sellerUser = { id: "usr_dyn_seller_1", email: "dynseller@vastraa.com", role: "seller" as const };
+    const vendor = {
+      id: "vend_dyn_1",
+      vendorId: "VDYN1001",
+      name: "Heritage Weaves Studio",
+      ownerId: sellerUser.id,
+      email: sellerUser.email,
+      status: "approved",
+      active: true,
+    };
+    mockUsersMap.set(sellerUser.id, sellerUser);
+    mockSellersMap.set(vendor.id, vendor);
+
+    const sellerToken = signAccessToken({
+      sub: sellerUser.id,
+      email: sellerUser.email,
+      role: "seller",
+    });
+
+    // 7a: Saree product with blouse piece and dedicated blouse images
+    const sareePayload = {
+      name: "Royal Peacock Pure Silk Saree",
+      category: "paithani",
+      subcategory: "Traditional Paithani",
+      price: 18500,
+      fabric: "Pure Silk",
+      color: "Royal Blue",
+      blouseIncluded: true,
+      blouseImages: ["r2/blouse_piece_front.jpg", "r2/blouse_piece_border.jpg"],
+      blouseDetails: {
+        fabric: "Pure Silk",
+        color: "Royal Blue",
+        length: "0.80 Metre (Standard Unstitched)",
+        design: "Matching Running Blouse Piece",
+      },
+      specifications: [
+        { key: "Weave", value: "Pit Loom Handwoven" },
+        { key: "Zari", value: "Pure Gold Tested Zari" },
+      ],
+      images: ["r2/saree_main.jpg", "r2/saree_pallu.jpg"],
+    };
+
+    const sareeRes = await request(app)
+      .post("/api/products")
+      .set("Authorization", `Bearer ${sellerToken}`)
+      .send(sareePayload);
+
+    expect(sareeRes.status).toBe(201);
+    expect(sareeRes.body.blouseIncluded).toBe(true);
+    expect(sareeRes.body.blouseImages).toHaveLength(2);
+    expect(sareeRes.body.blouseDetails.fabric).toBe("Pure Silk");
+
+    // 7b: Kurti product with category-specific attributes (should force blouseIncluded = false)
+    const kurtiPayload = {
+      name: "Embroidered Festive Anarkali Kurti",
+      category: "kurtis",
+      subcategory: "Anarkali Kurtis",
+      price: 3499,
+      fabric: "Georgette",
+      color: "Teal",
+      kurtiType: "Anarkali Kurti",
+      sleeveLength: "3/4th Sleeve",
+      neckStyle: "Mandarin Collar",
+      fit: "Flared",
+      pattern: "Floral Embroidered",
+      closureType: "Front Buttons",
+      blouseIncluded: true, // Should be rejected/sanitized to false for non-sarees
+      blouseImages: ["r2/accidental_blouse.jpg"],
+      images: ["r2/kurti_front.jpg"],
+    };
+
+    const kurtiRes = await request(app)
+      .post("/api/products")
+      .set("Authorization", `Bearer ${sellerToken}`)
+      .send(kurtiPayload);
+
+    expect(kurtiRes.status).toBe(201);
+    // Verified: Non-sarees are strictly sanitized to blouseIncluded: false
+    expect(kurtiRes.body.blouseIncluded).toBe(false);
+    expect(kurtiRes.body.blouseImages).toEqual([]);
+    expect(kurtiRes.body.kurtiType).toBe("Anarkali Kurti");
+    expect(kurtiRes.body.sleeveLength).toBe("3/4th Sleeve");
+    expect(kurtiRes.body.neckStyle).toBe("Mandarin Collar");
   });
 });

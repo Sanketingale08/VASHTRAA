@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { OAuth2Client } from "google-auth-library";
 import { logger } from "./logger";
 import { sendGoogleAuthOtpEmail } from "./transactionalEmail";
@@ -39,15 +41,62 @@ setInterval(() => {
   }
 }, 60_000).unref();
 
+let hasAttemptedEnvLoad = false;
+function ensureEnvLoaded(): void {
+  if (hasAttemptedEnvLoad) return;
+  hasAttemptedEnvLoad = true;
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) return;
+
+  const candidatePaths = [
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "artifacts/api-server/.env"),
+    path.resolve(import.meta.dirname || __dirname, "../../../.env"),
+    path.resolve(import.meta.dirname || __dirname, "../../.env"),
+    path.resolve(import.meta.dirname || __dirname, "../.env"),
+  ];
+
+  for (const envPath of candidatePaths) {
+    try {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, "utf-8");
+        for (const line of content.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
+            const idx = trimmed.indexOf("=");
+            const key = trimmed.slice(0, idx).trim();
+            const val = trimmed.slice(idx + 1).trim();
+            if (val && !process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore env read error */
+    }
+  }
+}
+
 function getGoogleClientId(): string {
+  ensureEnvLoaded();
   return (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "").trim();
 }
 
 function getGoogleClientSecret(): string {
+  ensureEnvLoaded();
   return (process.env.GOOGLE_CLIENT_SECRET || "").trim();
 }
 
 export function isGoogleOauthConfigured(): boolean {
+  // Option 2 Dual-mode support: If explicitly requested via env, fallback to dev mock login
+  if (
+    process.env.GOOGLE_OAUTH_DEV_FALLBACK === "true" ||
+    process.env.ENABLE_GOOGLE_DEV_AUTH === "true"
+  ) {
+    return false;
+  }
+
   const clientId = getGoogleClientId();
   const clientSecret = getGoogleClientSecret();
 
@@ -235,7 +284,7 @@ export async function createGoogleAuthChallenge(opts: {
   picture?: string;
   targetRole: "customer" | "seller";
   mode: "login" | "signup";
-}): Promise<{ challengeId: string; email: string; targetRole: "customer" | "seller"; devCode?: string }> {
+}): Promise<{ challengeId: string; email: string; targetRole: "customer" | "seller" }> {
   const challengeId = crypto.randomUUID();
   const otp = crypto.randomInt(100000, 999999).toString();
   const now = new Date();
@@ -259,7 +308,7 @@ export async function createGoogleAuthChallenge(opts: {
   challengeStore.set(challengeId, challenge);
 
   // Send real OTP to verified Google email via project's transactional email service
-  const emailResult = await sendGoogleAuthOtpEmail({
+  await sendGoogleAuthOtpEmail({
     toEmail: challenge.email,
     otp: challenge.otp,
     name: challenge.name,
@@ -267,7 +316,7 @@ export async function createGoogleAuthChallenge(opts: {
   });
 
   logger.info(
-    { challengeId, email: challenge.email, targetRole: challenge.targetRole, devCode: emailResult.devCode },
+    { challengeId, email: challenge.email, targetRole: challenge.targetRole },
     "[GoogleAuth] Google OTP challenge created & email queued"
   );
 
@@ -275,7 +324,6 @@ export async function createGoogleAuthChallenge(opts: {
     challengeId,
     email: challenge.email,
     targetRole: challenge.targetRole,
-    devCode: emailResult.devCode,
   };
 }
 
@@ -382,7 +430,7 @@ export async function resendGoogleAuthOtp(
   challenge.attempts = 0;
   challenge.lastResendAt = now;
 
-  const emailResult = await sendGoogleAuthOtpEmail({
+  await sendGoogleAuthOtpEmail({
     toEmail: challenge.email,
     otp: challenge.otp,
     name: challenge.name,
@@ -392,6 +440,5 @@ export async function resendGoogleAuthOtp(
   return {
     success: true,
     message: `A new OTP has been sent to ${challenge.email}`,
-    devCode: emailResult.devCode,
   };
 }

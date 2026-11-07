@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { Layout } from "@/components/Layout";
-import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ArrowRight, AlertCircle, Loader2, CheckCircle2, RefreshCw } from "lucide-react";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import { GoogleOtpModal } from "@/components/GoogleOtpModal";
+import { apiFetch } from "@/lib/api";
 
 export default function SignInPage() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -18,8 +19,16 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Email verification restrictions state
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
   const searchParams = new URLSearchParams(window.location.search);
   const redirectTarget = searchParams.get("redirect") || searchParams.get("from") || "/account/overview";
+  const isVerifiedParam = searchParams.get("verified") === "true";
+  const isAlreadyVerifiedParam = searchParams.get("alreadyVerified") === "true";
 
   // Google OTP Modal State
   const [otpModalState, setOtpModalState] = useState<{
@@ -40,6 +49,14 @@ export default function SignInPage() {
       setLocation(redirectTarget);
     }
   }, [user, redirectTarget, setLocation]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((c) => (c > 0 ? c - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     // Check if returning from redirect with OTP challenge
@@ -63,6 +80,8 @@ export default function SignInPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setUnverifiedEmail(null);
+    setResendMessage(null);
 
     if (!email.trim()) {
       setErrorMessage("Please enter your email address or User ID.");
@@ -81,8 +100,46 @@ export default function SignInPage() {
     if (result.success) {
       setLocation(redirectTarget);
     } else {
-      setErrorMessage(result.error || "Invalid email or password.");
+      if (result.code === "EMAIL_NOT_VERIFIED" || result.isEmailVerified === false) {
+        setUnverifiedEmail(result.email || email.trim());
+        setErrorMessage(
+          result.error ||
+          "Please verify your email address before logging in. Check your inbox for the verification link."
+        );
+      } else {
+        setErrorMessage(result.error || "Invalid email or password.");
+      }
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const targetEmail = unverifiedEmail || email.trim();
+    if (!targetEmail || resendLoading || resendCooldown > 0) return;
+
+    setResendLoading(true);
+    setResendMessage(null);
+
+    try {
+      const res = await apiFetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        setResendMessage(
+          data.message || "If your account requires verification, a verification email has been sent."
+        );
+        setResendCooldown(60);
+      } else {
+        setErrorMessage(data.error || "Unable to resend verification email. Please try again.");
+      }
+    } catch {
+      setErrorMessage("Unable to connect to server. Please try again.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -107,12 +164,70 @@ export default function SignInPage() {
             </p>
           </div>
 
+          {/* Verified Success Alert Box */}
+          {isVerifiedParam && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-3 text-emerald-900 text-xs md:text-sm animate-fadeIn">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold">Email Verified Successfully!</p>
+                <p className="text-emerald-700 mt-0.5">Please enter your password to sign in to your account.</p>
+              </div>
+            </div>
+          )}
+
+          {isAlreadyVerifiedParam && (
+            <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 flex items-start gap-3 text-blue-900 text-xs md:text-sm animate-fadeIn">
+              <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold">Already Verified</p>
+                <p className="text-blue-700 mt-0.5">Your email is already verified. Please sign in below.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Resend Success Alert Box */}
+          {resendMessage && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-3 text-emerald-900 text-xs md:text-sm animate-fadeIn">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium leading-relaxed">{resendMessage}</p>
+              </div>
+            </div>
+          )}
+
           {/* Error Alert Box */}
           {errorMessage && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3 text-red-800 text-xs md:text-sm animate-fadeIn">
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium leading-relaxed">{errorMessage}</p>
+
+                {/* Resend Verification Email option if unverified */}
+                {unverifiedEmail && (
+                  <div className="mt-3 pt-3 border-t border-red-200">
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendLoading || resendCooldown > 0}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0A1F44] hover:bg-[#2C3E6B] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-60 cursor-pointer shadow-sm"
+                    >
+                      {resendLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Sending...
+                        </>
+                      ) : resendCooldown > 0 ? (
+                        `Resend in ${resendCooldown}s`
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Resend Verification Email
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
                 {errorMessage.includes("Seller Portal") && (
                   <Link
                     href="/seller/login"

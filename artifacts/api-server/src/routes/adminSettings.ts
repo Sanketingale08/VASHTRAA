@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, siteSettingsTable, adminLoginSessionsTable, adminAuditLogsTable, mongoSiteSettings, mongoGeneric, mongoAuditLogs, isMongoDbConnected } from "@workspace/db";
 import { eq, ne, and, isNull, desc, gte, lte, sql } from "drizzle-orm";
 import { requireAdminKey, clearAdminKeyCache, sha256hex } from "../middlewares/isAdmin";
+import bcrypt from "bcryptjs";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { clearAdminNotifPrefCache } from "../lib/adminNotifications";
 import { clearMaintenanceModeCache } from "../middlewares/maintenanceMode";
@@ -83,7 +84,9 @@ async function deleteSetting(key: string) {
     }
   } catch {}
   try {
-    await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, key));
+    if (typeof db?.delete === "function") {
+      await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, key));
+    }
   } catch {}
 }
 
@@ -122,44 +125,64 @@ router.patch("/admin/settings/profile", requireAdminKey, async (req: any, res: a
 
 // ── Change Access Key ─────────────────────────────────────────────────────────
 
-router.post("/admin/settings/change-access-key", requireAdminKey, async (req: any, res: any) => {
+const handleChangeAccessKey = async (req: any, res: any) => {
   try {
     const { currentKey, newKey, confirmKey } = req.body ?? {};
     if (!currentKey || !newKey || !confirmKey) {
-      return res.status(400).json({ error: "All fields are required" });
+      return res.status(400).json({ success: false, error: "All fields are required" });
     }
     if (newKey !== confirmKey) {
-      return res.status(400).json({ error: "New key and confirmation do not match" });
+      return res.status(400).json({ success: false, error: "New key and confirmation do not match" });
     }
-    if (newKey.length < 16) {
-      return res.status(400).json({ error: "New key must be at least 16 characters" });
+    if (newKey.length < 8) {
+      return res.status(400).json({ success: false, error: "New key must be at least 8 characters" });
     }
     if (newKey === currentKey) {
-      return res.status(400).json({ error: "New key must differ from the current key" });
+      return res.status(400).json({ success: false, error: "New key must differ from the current key" });
     }
 
-    // Verify current key
-    const storedHash = await getSetting("admin_key_hash");
-    let currentValid: boolean;
-    if (storedHash) {
-      currentValid = sha256hex(currentKey) === storedHash;
-    } else {
-      currentValid = currentKey === process.env.ADMIN_API_KEY;
-    }
+    // Verify current key against stored hash or fallback
+    let currentValid = false;
+    try {
+      const adminMod = await import("../middlewares/isAdmin");
+      if (typeof adminMod.verifyAdminAccessKey === "function") {
+        currentValid = await adminMod.verifyAdminAccessKey(currentKey);
+      }
+    } catch {}
+
     if (!currentValid) {
-      return res.status(400).json({ error: "Current access key is incorrect" });
+      const storedHash = await getSetting("admin_key_hash");
+      if (storedHash) {
+        currentValid = sha256hex(currentKey) === storedHash || storedHash === currentKey || storedHash === `hash:${currentKey}`;
+      } else {
+        currentValid = currentKey === process.env.ADMIN_API_KEY;
+      }
     }
 
-    await upsertSetting("admin_key_hash", sha256hex(newKey));
-    await upsertSetting("admin_access_key", newKey);
+    if (!currentValid) {
+      return res.status(400).json({ success: false, error: "Current access key is incorrect" });
+    }
+
+    // Hash the new access key using bcrypt (never store plain text)
+    const newHash = await bcrypt.hash(newKey.trim(), 10);
+    await upsertSetting("admin_key_hash", newHash);
+
+    // Clean up any historical plain-text settings from the database
+    await deleteSetting("admin_access_key");
+    await deleteSetting("admin_key");
+
+    // Invalidate the in-memory cache so the new key takes effect immediately
     clearAdminKeyCache();
 
     writeAuditLog({ action: "access_key_changed", module: "Settings", ipAddress: getIp(req) }).catch(() => {});
-    res.json({ ok: true });
+    return res.json({ ok: true, success: true, message: "Access Key updated successfully." });
   } catch (err) {
-    res.status(500).json({ error: "Failed to change access key" });
+    return res.status(500).json({ success: false, error: "Failed to change access key" });
   }
-});
+};
+
+router.post("/admin/settings/change-access-key", requireAdminKey, handleChangeAccessKey);
+router.put("/admin/settings/access-key", requireAdminKey, handleChangeAccessKey);
 
 // ── Record login session ──────────────────────────────────────────────────────
 
@@ -757,13 +780,142 @@ router.post("/admin/settings/payment/test-connection", requireAdminKey, async (_
   }
 });
 
-router.post("/admin/settings/email/test-smtp", requireAdminKey, async (_req: any, res: any) => {
+router.get("/admin/settings/email", requireAdminKey, async (_req: any, res: any) => {
+  try {
+    const { refreshEmailSettingsCache, getCachedEmailConfig } = await import("../lib/transactionalEmail");
+    const cfg = (await refreshEmailSettingsCache().catch(() => null)) || getCachedEmailConfig();
+
+    const [dbHost, dbPort, dbSecure, dbUser, dbPass, dbFrom, dbResend] = await Promise.all([
+      getSetting("smtp_host"),
+      getSetting("smtp_port"),
+      getSetting("smtp_secure"),
+      getSetting("smtp_user"),
+      getSetting("smtp_pass"),
+      getSetting("smtp_from"),
+      getSetting("resend_api_key"),
+    ]);
+
+    const host = dbHost ?? cfg?.smtpHost ?? process.env.SMTP_HOST ?? "";
+    const port = dbPort ? parseInt(dbPort, 10) : (cfg?.smtpPort ?? (parseInt(process.env.SMTP_PORT || "", 10) || 587));
+    const secure = dbSecure !== null && dbSecure !== undefined
+      ? dbSecure === "true"
+      : (cfg?.smtpSecure ?? (process.env.SMTP_SECURE === "true" || port === 465));
+    const user = dbUser ?? cfg?.smtpUser ?? process.env.SMTP_USER ?? process.env.SMTP_USERNAME ?? "";
+    const pass = dbPass ?? cfg?.smtpPass ?? process.env.SMTP_PASS ?? process.env.SMTP_PASSWORD ?? "";
+    const from = dbFrom ?? cfg?.smtpFrom ?? process.env.SMTP_FROM ?? process.env.RESEND_FROM_EMAIL ?? process.env.FROM_EMAIL ?? "";
+    const resendApiKey = dbResend ?? cfg?.resendApiKey ?? process.env.RESEND_API_KEY ?? "";
+
+    res.json({
+      smtpHost: host,
+      smtpPort: port,
+      smtpSecure: secure,
+      smtpUser: user,
+      hasSmtpPass: Boolean(pass && pass.trim() !== "" && !pass.includes("placeholder")),
+      maskedSmtpPass: maskSecret(pass),
+      smtpFrom: from,
+      resendApiKey: resendApiKey ? (resendApiKey.length > 8 ? resendApiKey.slice(0, 4) + "••••••••" + resendApiKey.slice(-4) : "••••••••") : "",
+      hasResendApiKey: Boolean(resendApiKey && resendApiKey.trim() !== "" && !resendApiKey.includes("placeholder")),
+      isConfigured: Boolean(host && user && pass),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch email settings" });
+  }
+});
+
+router.patch("/admin/settings/email", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const body = req.body ?? {};
+    const updates: Promise<void>[] = [];
+    const changedFields: string[] = [];
+
+    if (typeof body.smtpHost === "string") {
+      updates.push(upsertSetting("smtp_host", body.smtpHost.trim()));
+      changedFields.push("smtpHost");
+    }
+    if (typeof body.smtpPort === "number" || typeof body.smtpPort === "string") {
+      const p = parseInt(String(body.smtpPort), 10);
+      if (p > 0 && p < 65536) {
+        updates.push(upsertSetting("smtp_port", String(p)));
+        changedFields.push("smtpPort");
+      }
+    }
+    if (typeof body.smtpSecure === "boolean") {
+      updates.push(upsertSetting("smtp_secure", String(body.smtpSecure)));
+      changedFields.push("smtpSecure");
+    }
+    if (typeof body.smtpUser === "string") {
+      updates.push(upsertSetting("smtp_user", body.smtpUser.trim()));
+      changedFields.push("smtpUser");
+    }
+    if (typeof body.smtpPass === "string" && body.smtpPass.trim() && !body.smtpPass.includes("••••")) {
+      updates.push(upsertSetting("smtp_pass", body.smtpPass.trim()));
+      changedFields.push("smtpPass");
+    }
+    if (typeof body.smtpFrom === "string") {
+      updates.push(upsertSetting("smtp_from", body.smtpFrom.trim()));
+      changedFields.push("smtpFrom");
+    }
+    if (typeof body.resendApiKey === "string" && !body.resendApiKey.includes("••••")) {
+      updates.push(upsertSetting("resend_api_key", body.resendApiKey.trim()));
+      changedFields.push("resendApiKey");
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No valid email settings provided to update" });
+    }
+
+    await Promise.all(updates);
+
+    const { refreshEmailSettingsCache } = await import("../lib/transactionalEmail");
+    await refreshEmailSettingsCache().catch(() => {});
+
+    writeAuditLog({
+      action: "email_settings_updated",
+      module: "Email Settings",
+      details: { fields: changedFields },
+      ipAddress: getIp(req),
+    }).catch(() => {});
+
+    res.json({ ok: true, updated: changedFields });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to update email settings" });
+  }
+});
+
+router.post("/admin/settings/email/test-smtp", requireAdminKey, async (req: any, res: any) => {
   try {
     const { verifySmtpConnection } = await import("../lib/transactionalEmail");
-    const result = await verifySmtpConnection();
+    const body = req.body || {};
+    const overrides = body.host || body.user
+      ? {
+          host: body.host,
+          port: body.port ? parseInt(String(body.port), 10) : undefined,
+          secure: typeof body.secure === "boolean" ? body.secure : undefined,
+          user: body.user,
+          pass: body.pass && !body.pass.includes("••••") ? body.pass : undefined,
+          from: body.from,
+        }
+      : undefined;
+
+    const result = await verifySmtpConnection(overrides);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || "Failed to verify SMTP connection" });
+  }
+});
+
+router.post("/admin/settings/email/send-test", requireAdminKey, async (req: any, res: any) => {
+  try {
+    const { toEmail } = req.body || {};
+    if (!toEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(toEmail).trim())) {
+      return res.status(400).json({ error: "Please enter a valid recipient email address for testing." });
+    }
+
+    const { sendTestEmail } = await import("../lib/transactionalEmail");
+    const result = await sendTestEmail(String(toEmail).trim());
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to send test email" });
   }
 });
 

@@ -1062,3 +1062,5 @@ export function AccountSupportPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountSupportPage;

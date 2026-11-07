@@ -27,11 +27,15 @@ export async function isAuthenticated(req: any, res: any, next: any) {
 
     if (token) {
       if (token === "fake") {
-        req.userId = "user-buyer-1";
-        req.userRole = "customer";
-        req.user = { id: "user-buyer-1", email: "user-buyer-1@vastraa.com", role: "customer" };
-        req.userEmail = "user-buyer-1@vastraa.com";
-        return next();
+        if (process.env.NODE_ENV === "test") {
+          req.userId = "user-buyer-1";
+          req.userRole = "customer";
+          req.user = { id: "user-buyer-1", email: "user-buyer-1@vastraa.com", role: "customer" };
+          req.userEmail = "user-buyer-1@vastraa.com";
+          return next();
+        } else {
+          return res.status(401).json({ error: "Invalid authentication token", code: "INVALID_TOKEN" });
+        }
       }
       // 1. Validate JWT Access Token
       const jwtPayload = verifyAccessToken(token);
@@ -91,35 +95,37 @@ export async function isAuthenticated(req: any, res: any, next: any) {
         }
       } catch {}
 
-      // 3. Check if token is a direct user ID (e.g. Clerk user ID saved in vastraa_auth_token)
-      try {
-        let directUser: any = await mongoUsers.findById(token);
-        if (!directUser && token.startsWith("user_")) {
-          directUser = await mongoUsers.findOne({ clerkId: token });
-        }
-        if (!directUser && (token.startsWith("user_") || token.startsWith("cust_"))) {
-          try {
-            directUser = await mongoUsers.insert({
-              id: token,
-              clerkId: token,
-              name: "Customer",
-              email: `${token}@clerk.vastraa.internal`,
-              role: "customer",
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-          } catch {
-            directUser = await mongoUsers.findById(token);
+      // 3. Check if token is a direct user ID (development / testing fallback only)
+      if (process.env.NODE_ENV !== "production") {
+        try {
+          let directUser: any = await mongoUsers.findById(token);
+          if (!directUser && token.startsWith("user_")) {
+            directUser = await mongoUsers.findOne({ clerkId: token });
           }
-        }
-        if (directUser) {
-          req.userId = directUser.id;
-          req.userRole = directUser.role || "customer";
-          req.user = directUser;
-          req.userEmail = directUser.email;
-          return next();
-        }
-      } catch {}
+          if (!directUser && (token.startsWith("user_") || token.startsWith("cust_"))) {
+            try {
+              directUser = await mongoUsers.insert({
+                id: token,
+                clerkId: token,
+                name: "Customer",
+                email: `${token}@clerk.vastraa.internal`,
+                role: "customer",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            } catch {
+              directUser = await mongoUsers.findById(token);
+            }
+          }
+          if (directUser) {
+            req.userId = directUser.id;
+            req.userRole = directUser.role || "customer";
+            req.user = directUser;
+            req.userEmail = directUser.email;
+            return next();
+          }
+        } catch {}
+      }
 
       // 4. Try Clerk Express middleware auth
       try {

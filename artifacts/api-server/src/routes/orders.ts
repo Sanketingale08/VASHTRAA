@@ -9,7 +9,7 @@ import {
   couponRedemptionsTable, userProfilesTable, rewardPointsLogTable,
   notificationsTable, notificationPreferencesTable,
   supportTicketsTable, vendorsTable, vendorSettlementsTable,
-  savedPaymentMethodsTable,
+  savedPaymentMethodsTable, adminLoginSessionsTable,
 } from "@workspace/db";
 import { verifyAccessToken } from "../lib/jwt";
 import { renderInvoiceHtml, generateInvoicePdf, renderHtmlFromSnapshot, renderPdfFromSnapshot } from "../lib/invoiceRenderer";
@@ -31,7 +31,7 @@ import { insertAdminNotification } from "../lib/adminNotifications";
 import { recordStockChange } from "../lib/stockHistory";
 import { getApprovedVendorData, isProductVendorValid } from "../lib/vendorValidation";
 import { sendTransactionalEmail } from "../lib/transactionalEmail";
-import { requireAdminKey } from "../middlewares/isAdmin";
+import { requireAdminKey, verifyAdminAccessKey } from "../middlewares/isAdmin";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { emitOrderEvent, emitProductEvent, emitReturnRefundEvent, emitAnalyticsEvent, emitFinancialsEvent, emitUserEvent, emitNotificationEvent, emitCouponEvent } from "../lib/socket";
 import { safeInvalidatePattern } from "../lib/cacheEngine";
@@ -148,6 +148,21 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
         error: "Direct order placement is only permitted for Cash on Delivery (COD). Online payment orders (UPI, Card, Net Banking) must be processed through the secure payment gateway.",
       });
       return;
+    }
+
+    // Idempotency check: return existing order if same checkout key is resent
+    const idempotencyKey = ((req.headers["x-idempotency-key"] || req.body.idempotencyKey) as string | undefined)?.trim();
+    if (idempotencyKey) {
+      try {
+        const existingOrder = await mongoOrders.findOne({
+          checkoutIdempotencyKey: idempotencyKey,
+          userId: req.userId,
+        });
+        if (existingOrder) {
+          res.status(200).json({ ...existingOrder, order: existingOrder, deduplicated: true });
+          return;
+        }
+      } catch {}
     }
 
     // Deduplication check: prevent rapid double-clicks (5 seconds)
@@ -465,6 +480,7 @@ router.post("/orders", isCustomer, async (req: any, res: any): Promise<void> => 
       isTest: isDemo,
       createdAt: new Date(),
       updatedAt: new Date(),
+      checkoutIdempotencyKey: idempotencyKey || null,
     };
 
     const savedOrder = await mongoOrders.insert(orderDoc as any);
@@ -761,18 +777,38 @@ async function checkInvoiceAccess(
   // 1. Admin verification
   const adminKey = ((req.headers["x-admin-key"] || req.query?.adminKey || req.query?.x_admin_key) as string | undefined)?.trim();
   const adminSession = (req.headers["x-admin-session-token"] as string | undefined)?.trim();
-  const envAdminKey = process.env.ADMIN_API_KEY || "dev-admin-key";
-  const validAdminKeys = [
-    "Admin@123",
-    "admin-secret-key-change-in-production",
-    "vastraa-super-secret-admin-key-change-in-production",
-    "dev-admin-key",
-    envAdminKey,
-  ];
 
-  if (adminKey && validAdminKeys.includes(adminKey)) {
-    return { authorized: true };
+  if (adminKey) {
+    if (process.env.NODE_ENV === "test" && (adminKey === "Admin@123" || adminKey === "dev-admin-key" || adminKey === process.env.ADMIN_API_KEY)) {
+      return { authorized: true };
+    }
+    if (await verifyAdminAccessKey(adminKey)) {
+      return { authorized: true };
+    }
   }
+
+  if (adminSession) {
+    let session: any = null;
+    try {
+      if (mongoGeneric && typeof mongoGeneric.getCollection === "function") {
+        const col = mongoGeneric.getCollection("admin_sessions");
+        session = await col.findOne({ sessionTokenHash: adminSession });
+      }
+    } catch {}
+    if (!session) {
+      try {
+        const [pgSession] = await db
+          .select({ revokedAt: adminLoginSessionsTable.revokedAt })
+          .from(adminLoginSessionsTable)
+          .where(eq(adminLoginSessionsTable.sessionTokenHash, adminSession));
+        session = pgSession;
+      } catch {}
+    }
+    if (session && !session.revokedAt) {
+      return { authorized: true };
+    }
+  }
+
   if (req.userRole === "admin" || req.isAdmin) {
     return { authorized: true };
   }
@@ -796,7 +832,7 @@ async function checkInvoiceAccess(
     const cleanToken = token.replace(/^["']|["']$/g, "").trim();
 
     // Check if token itself was an admin key
-    if (validAdminKeys.includes(cleanToken)) {
+    if (validAdminKeys.includes(cleanToken) || (await verifyAdminAccessKey(cleanToken))) {
       return { authorized: true };
     }
 

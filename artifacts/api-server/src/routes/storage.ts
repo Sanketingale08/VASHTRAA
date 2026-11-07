@@ -102,7 +102,9 @@ async function optionalAuthOrGuest(req: Request, res: Response, next: any) {
   next();
 }
 
-import { requireAdminKey } from "../middlewares/isAdmin";
+import { requireAdminKey, verifyAdminAccessKey } from "../middlewares/isAdmin";
+import { getJwtSecret } from "../lib/jwt";
+import crypto from "crypto";
 
 async function issueUploadUrl(req: Request, res: Response) {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
@@ -525,11 +527,53 @@ async function servePrivateKycFile(req: Request, res: Response) {
       return;
     }
 
-    const adminKey = process.env.ADMIN_API_KEY || "Admin@123";
     const providedAdminKey = (req.headers as any)["x-admin-key"] || req.query.adminKey;
     const auth = getAuth(req as any);
-    const userId = (auth as any)?.sessionClaims?.userId || auth?.userId;
-    const isAdmin = adminKey && providedAdminKey && providedAdminKey === adminKey;
+    let userId = (auth as any)?.sessionClaims?.userId || auth?.userId;
+
+    if (!userId) {
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      let token = "";
+      if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7).trim();
+      } else if (req.cookies?.vastraa_auth_token || req.cookies?.vastraa_seller_token || req.cookies?.seller_token) {
+        token = String(req.cookies.vastraa_auth_token || req.cookies.vastraa_seller_token || req.cookies.seller_token).trim();
+      }
+      if (token) {
+        const payload = verifyAccessToken(token);
+        if (payload?.sub) {
+          userId = payload.sub;
+        }
+      }
+    }
+
+    let isAdmin = false;
+    if (providedAdminKey && typeof providedAdminKey === "string") {
+      isAdmin = await verifyAdminAccessKey(providedAdminKey);
+    }
+
+    // Check signed HMAC download token (for secure admin KYC link clicks)
+    const docToken = req.query.token as string | undefined;
+    const docExpiry = Number(req.query.expires || 0);
+    if (docToken && docExpiry > Date.now()) {
+      try {
+        const expectedToken = crypto
+          .createHmac("sha256", getJwtSecret())
+          .update(`kyc:${filePath}:${docExpiry}`)
+          .digest("hex");
+        const tokBuf = Buffer.from(docToken);
+        const expBuf = Buffer.from(expectedToken);
+        if (tokBuf.length === expBuf.length && crypto.timingSafeEqual(tokBuf, expBuf)) {
+          isAdmin = true;
+        }
+      } catch {}
+    }
+
+    // Explicitly reject unauthenticated and unauthorized requests
+    if (!isAdmin && !userId) {
+      res.status(401).json({ error: "Unauthorized: Access to private document requires authentication or admin credentials" });
+      return;
+    }
 
     const result = await r2StorageService.getPrivateObject(filePath);
     if (!result) {
@@ -537,9 +581,9 @@ async function servePrivateKycFile(req: Request, res: Response) {
       return;
     }
 
-    if (!isAdmin && userId) {
+    if (!isAdmin) {
       const assetRecord = await mongoR2Assets.findByObjectKey(filePath);
-      if (assetRecord && assetRecord.sellerId && assetRecord.sellerId !== userId && assetRecord.sellerId !== "seller") {
+      if (!assetRecord || !assetRecord.sellerId || (assetRecord.sellerId !== userId && assetRecord.sellerId !== "seller")) {
         res.status(403).json({ error: "Forbidden — access to private document denied" });
         return;
       }
@@ -577,8 +621,13 @@ router.get("/admin/storage/signed-url", requireAdminKey, async (req: Request, re
         cleanKey = cleanKey.split("/storage/private/")[1];
       }
 
-      const adminKey = process.env.ADMIN_API_KEY || "Admin@123";
-      const signedUrl = `/api/storage/private/${cleanKey}?adminKey=${encodeURIComponent(adminKey)}`;
+      // Generate a short-lived (5 min) HMAC signed URL to avoid exposing master admin key
+      const expires = Date.now() + 5 * 60 * 1000;
+      const token = crypto
+        .createHmac("sha256", getJwtSecret())
+        .update(`kyc:${cleanKey}:${expires}`)
+        .digest("hex");
+      const signedUrl = `/api/storage/private/${cleanKey}?token=${token}&expires=${expires}`;
       res.json({ signedUrl });
       return;
     }

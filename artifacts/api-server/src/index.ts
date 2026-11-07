@@ -1,15 +1,43 @@
+import fs from "fs";
+import path from "path";
+
+// Filesystem resilience patch for Windows / OneDrive symlink traversal
+function patchFsMethod(obj: any, name: string) {
+  const orig = obj[name];
+  if (!orig || orig.__isPatched) return;
+  const wrapped = function (this: any, ...args: any[]) {
+    try {
+      return orig.apply(this, args);
+    } catch (e: any) {
+      if (e && (e.code === "EPERM" || e.code === "EACCES")) {
+        if (name.includes("lstat")) {
+          try { return fs.statSync.apply(fs, args as any); } catch (_) {}
+        }
+        return args[0];
+      }
+      throw e;
+    }
+  };
+  wrapped.__isPatched = true;
+  obj[name] = wrapped;
+}
+patchFsMethod(fs, "realpathSync");
+patchFsMethod(fs, "lstatSync");
+
 import app from "./app";
 import { logger } from "./lib/logger";
 import { deleteExpiredRegistrationDrafts } from "./routes/sellerRegistrationDraft";
 import { bootstrapDatabase } from "./lib/bootstrapDatabase";
-import { startEmailOutboxWorker, startSellerRegistrationNudgeWorker } from "./lib/transactionalEmail";
+import {
+  startEmailOutboxWorker,
+  startSellerRegistrationNudgeWorker,
+  validateProductionSmtpConfig,
+} from "./lib/transactionalEmail";
 import { startWeeklyAdminReportWorker } from "./workers/weeklyAdminReport";
 import { db } from "@workspace/db";
 import { productsTable } from "@workspace/db";
 import { eq, and, isNotNull, lt, sql } from "@workspace/db";
 
-import path from "path";
-import fs from "fs";
 
 const possibleEnvPaths = [
   path.resolve(process.cwd(), ".env"),
@@ -34,10 +62,13 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
+// Validate SMTP environment settings on startup (fails fast if invalid in production)
+validateProductionSmtpConfig();
+
 import http from "http";
 import { initSocketIO } from "./lib/socket";
 
-const rawPort = process.env["API_PORT"] || process.env["API_SERVER_PORT"] || process.env["PORT"] || "5000";
+const rawPort = process.env["API_PORT"] || process.env["API_SERVER_PORT"] || (process.env["PORT"] && process.env["PORT"] !== "3000" ? process.env["PORT"] : "5000");
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {

@@ -39,6 +39,7 @@ import googleAuthRouter from "./googleAuth";
 import adminShippingRouter from "./adminShipping";
 import paymentsRouter from "./payments";
 import advertisementsRouter from "./advertisements";
+import adminLogsRouter from "./adminLogs";
 
 const router: IRouter = Router();
 
@@ -83,5 +84,6 @@ router.use(admin2faRouter);
 router.use(paymentMethodsRouter);
 router.use(adminShippingRouter);
 router.use(advertisementsRouter);
+router.use("/admin/logs", adminLogsRouter);
 
 export default router;

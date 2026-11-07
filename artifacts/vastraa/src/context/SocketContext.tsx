@@ -31,7 +31,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [lastEvent, setLastEvent] = useState<RealtimeEvent | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("vastraa_auth_token") || localStorage.getItem("clerk_user_id");
+    const token =
+      localStorage.getItem("vastraa_seller_token") ||
+      localStorage.getItem("vastraa_auth_token") ||
+      localStorage.getItem("seller_token") ||
+      localStorage.getItem("clerk_user_id");
     const adminKey =
       sessionStorage.getItem("td_admin_key") ||
       localStorage.getItem("td_admin_key") ||
@@ -81,6 +85,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       "product:created",
       "product:updated",
       "product:deleted",
+      "product:approved",
+      "category:created",
+      "category:updated",
+      "category:deleted",
+      "category:status_changed",
       "inventory:updated",
       "product:status_changed",
       "vendor:registered",

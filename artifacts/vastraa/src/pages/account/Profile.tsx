@@ -652,3 +652,5 @@ export function AccountProfilePage() {
     </DashboardLayout>
   );
 }
+
+export default AccountProfilePage;

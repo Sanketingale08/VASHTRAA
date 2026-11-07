@@ -252,6 +252,11 @@ export async function fetchWeeklyKpis(now: Date): Promise<WeeklyKpis> {
 // ── HTML template ─────────────────────────────────────────────────────────────
 
 function wrapInTemplate(subject: string, body: string): string {
+  const logoUrl =
+    process.env.EMAIL_LOGO_URL ||
+    process.env.LOGO_URL ||
+    `${(process.env.FRONTEND_URL || "https://vastraasaree.com").replace(/\/+$/, "")}/logo.png`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -265,8 +270,17 @@ function wrapInTemplate(subject: string, body: string): string {
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;width:100%;">
           <tr>
-            <td style="background:#7c3aed;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">${APP_NAME}</h1>
+            <td style="background-color:#3B1254;padding:26px 32px 20px;text-align:center;border-bottom:3px solid #C5A265;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <tr>
+                  <td align="center" style="background-color:#FFFFFF;border-radius:10px;padding:10px 24px;border:1px solid #D4AF37;box-shadow:0 4px 14px rgba(0,0,0,0.22);">
+                    <a href="https://vastraasaree.com" target="_blank" style="text-decoration:none;display:inline-block;">
+                      <img src="${logoUrl}" alt="VASTRAA" width="160" style="border:0;display:block;max-height:42px;width:auto;margin:0 auto;" />
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:8px 0 0;font-size:11px;letter-spacing:1.5px;color:#C5A265;text-transform:uppercase;font-weight:600;">The Art of Indian Drape • Weekly Executive Report</p>
             </td>
           </tr>
           <tr>

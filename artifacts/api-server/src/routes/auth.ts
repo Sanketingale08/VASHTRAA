@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Router, Request, Response } from "express";
 import { db, vendorsTable, eq, or, mongoUsers, mongoSessions, mongoSellers } from "@workspace/db";
 import { hashPassword, verifyPassword } from "../lib/passwords";
@@ -11,22 +12,113 @@ import {
   clearRefreshTokenCookie,
   getRefreshTokenFromReq,
 } from "../lib/sessions";
-import { authRateLimiter, refreshRateLimiter, passwordResetLimiter } from "../middlewares/rateLimiter";
+import { authRateLimiter, refreshRateLimiter, passwordResetLimiter, otpRateLimiter } from "../middlewares/rateLimiter";
 import { isCustomer } from "../middlewares/isCustomer";
 import { isSeller } from "../middlewares/isSeller";
 import { writeAuditLog, getIp } from "../lib/auditLog";
 import { checkAccountLockout, recordFailedAttempt, recordSuccessfulLogin } from "../lib/authSecurity";
 import { verifyAccessToken } from "../lib/jwt";
-import { sendAccountWelcomeEmail } from "../lib/transactionalEmail";
+import { sendAccountWelcomeEmail, sendEmailVerificationEmail } from "../lib/transactionalEmail";
+import { logger } from "../lib/logger";
+import {
+  sendCustomerRegistrationCode,
+  verifyCustomerRegistrationCode,
+  consumeCustomerRegistrationCode,
+  isCustomerEmailVerified,
+} from "../lib/customerVerification";
 
 const router = Router();
 
 /**
- * Customer Sign Up Endpoint — Creates a new customer account in MongoDB Atlas users collection.
+ * Returns the sanitized client base URL for email redirects & links.
  */
-router.post("/auth/sign-up", authRateLimiter, async (req: Request, res: Response): Promise<void> => {
+function getClientBaseUrl(req: Request): string {
+  const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+  if (origin && typeof origin === "string" && !origin.includes("undefined")) {
+    return origin.replace(/\/$/, "");
+  }
+  return (process.env.FRONTEND_URL || process.env.APP_URL || process.env.SITE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, "");
+}
+
+/**
+ * POST /api/auth/register/send-otp (and /auth/register/send-otp)
+ * Issues and sends a 6-digit email verification code for customer account registration.
+ */
+const handleSendRegistrationOtp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, id, userId, username, password, confirmPassword } = req.body || {};
+    const { email, name } = req.body || {};
+    if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      res.status(400).json({ success: false, error: "Please enter a valid email address." });
+      return;
+    }
+
+    const result = await sendCustomerRegistrationCode(email.trim(), name);
+    if (!result.delivered) {
+      const isAlreadyExists = result.error?.includes("already exists");
+      res.status(isAlreadyExists ? 409 : 400).json({
+        success: false,
+        error: result.error || "Unable to send the verification code. Please try again.",
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: `Verification code sent successfully to ${email.trim()}. Please check your inbox.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: "Failed to send verification code. Please try again." });
+  }
+};
+
+router.post("/auth/register/send-otp", authRateLimiter, handleSendRegistrationOtp);
+router.post("/api/auth/register/send-otp", authRateLimiter, handleSendRegistrationOtp);
+
+/**
+ * POST /api/auth/register/verify-otp (and /auth/register/verify-otp)
+ * Verifies the 6-digit code submitted by the customer.
+ */
+const handleVerifyRegistrationOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, code } = req.body || {};
+    if (!email || !code) {
+      res.status(400).json({ success: false, error: "Email address and 6-digit verification code are required." });
+      return;
+    }
+
+    const result = verifyCustomerRegistrationCode(String(email), String(code));
+    if (!result.valid) {
+      res.status(400).json({ success: false, error: result.error || "Invalid verification code. Please try again." });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: "Email verified successfully! You can now complete your registration.",
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: "Failed to verify code. Please try again." });
+  }
+};
+
+router.post("/auth/register/verify-otp", authRateLimiter, handleVerifyRegistrationOtp);
+router.post("/api/auth/register/verify-otp", authRateLimiter, handleVerifyRegistrationOtp);
+
+/**
+ * In-memory resend rate limiting: 30s cooldown and max 5 per hour per email address
+ */
+const resendVerificationTracker = new Map<string, { lastSentAt: number; count: number }>();
+const RESEND_COOLDOWN_MS = 30 * 1000;
+const RESEND_MAX_HOURLY = 5;
+
+/**
+ * Customer Sign Up Endpoint — Creates a new customer account in MongoDB Atlas users collection
+ * with isEmailVerified: false, generates a hashed time-limited verification token, and sends
+ * the verification email before allowing login.
+ */
+const handleSignUp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, email, id, userId, username, password, confirmPassword, otp } = req.body || {};
     const rawIdentifier = (email || id || userId || username || "").toString();
 
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -59,14 +151,30 @@ router.post("/auth/sign-up", authRateLimiter, async (req: Request, res: Response
       return;
     }
 
-    // Check if customer user already exists in MongoDB
+    // Optional OTP verification fallback for backward compatibility
+    let isOtpVerified = false;
+    if (otp && isEmail) {
+      const verifyRes = verifyCustomerRegistrationCode(cleanEmail, String(otp));
+      if (!verifyRes.valid) {
+        res.status(400).json({ success: false, error: verifyRes.error || "Invalid verification code." });
+        return;
+      }
+      isOtpVerified = true;
+    }
+
+    // Check if customer user already exists in MongoDB Atlas
     const existingUser = await mongoUsers.findByEmail(cleanEmail, "customer");
     if (existingUser) {
       res.status(400).json({ success: false, error: "A Customer account with this email address already exists. Please log in instead." });
       return;
     }
 
-    // Hash password & store user in MongoDB
+    // Generate secure, unique, time-limited email verification token
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiry
+
+    // Hash password & store user in MongoDB Atlas
     const passwordHash = hashPassword(password);
     let user;
     try {
@@ -75,6 +183,10 @@ router.post("/auth/sign-up", authRateLimiter, async (req: Request, res: Response
         email: cleanEmail,
         passwordHash,
         role: "customer",
+        isEmailVerified: isOtpVerified,
+        emailVerified: isOtpVerified,
+        emailVerificationTokenHash: isOtpVerified ? null : tokenHash,
+        emailVerificationExpires: isOtpVerified ? null : expires,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -90,42 +202,287 @@ router.post("/auth/sign-up", authRateLimiter, async (req: Request, res: Response
       throw insertErr;
     }
 
-    // Create session & JWT access token
-    const { accessToken, refreshToken, session } = await createAuthSession(user.id, user.email, "customer", req);
-    setRefreshTokenCookie(res, "customer", refreshToken, session.id);
+    if (isOtpVerified) {
+      consumeCustomerRegistrationCode(cleanEmail);
+      const { accessToken, refreshToken, session } = await createAuthSession(user.id, user.email, "customer", req);
+      setRefreshTokenCookie(res, "customer", refreshToken, session.id);
 
-    // Send welcome email asynchronously without blocking registration response
-    if (isEmail) {
       void sendAccountWelcomeEmail({
         userId: user.id,
         name: user.name,
         email: user.email,
       });
+
+      res.status(201).json({
+        success: true,
+        token: accessToken,
+        accessToken,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isEmailVerified: true,
+          emailVerified: true,
+        },
+      });
+      return;
     }
 
+    // Send verification email with 15-minute time-limited link
+    if (isEmail) {
+      const clientBaseUrl = getClientBaseUrl(req);
+      const verificationUrl = `${clientBaseUrl}/verify-email?token=${rawToken}`;
+
+      void sendEmailVerificationEmail({
+        toEmail: cleanEmail,
+        name: user.name,
+        verificationUrl,
+      });
+    }
+
+    // Do NOT issue JWT or session tokens before verification
     res.status(201).json({
       success: true,
-      token: accessToken,
-      accessToken,
+      message: "Your account has been created successfully. Please check your email and verify your account before logging in.",
+      requiresVerification: true,
+      email: cleanEmail,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
+        isEmailVerified: false,
       },
     });
   } catch (err: any) {
+    logger.error({ err: err?.message }, "[handleSignUp] Error creating user account");
     res.status(500).json({
       success: false,
       error: err?.message && !err.message.includes("E11000") ? err.message : "Unable to create account. Please try again."
     });
   }
-});
+};
+
+router.post("/auth/sign-up", authRateLimiter, handleSignUp);
+router.post("/api/auth/sign-up", authRateLimiter, handleSignUp);
+
+/**
+ * GET /api/auth/verify-email?token=TOKEN
+ * Validates the time-limited token, marks the email as verified in MongoDB,
+ * removes the verification token fields, and redirects user to login.
+ */
+const handleVerifyEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawToken = (req.query.token || req.body?.token || "").toString().trim();
+    const acceptsHtml = (req.headers.accept || "").includes("text/html");
+    const clientBaseUrl = getClientBaseUrl(req);
+
+    if (!rawToken) {
+      if (acceptsHtml) {
+        res.redirect(`${clientBaseUrl}/verify-email?status=invalid&error=Token+is+required`);
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: "Verification token is required.",
+        code: "TOKEN_REQUIRED",
+      });
+      return;
+    }
+
+    // Hash token using SHA-256 to compare with stored token hash
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    // Match hashed token against MongoDB user record
+    const user = await mongoUsers.findByVerificationTokenHash(tokenHash);
+
+    if (!user) {
+      if (acceptsHtml) {
+        res.redirect(`${clientBaseUrl}/verify-email?status=invalid`);
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: "This verification link is invalid, expired, or has already been used.",
+        code: "INVALID_OR_USED_TOKEN",
+      });
+      return;
+    }
+
+    // Check expiration (15-minute validity)
+    if (user.emailVerificationExpires && new Date() > new Date(user.emailVerificationExpires)) {
+      // Invalidate expired token fields in MongoDB
+      await mongoUsers.update(user.id, {}, ["emailVerificationTokenHash", "emailVerificationExpires"]);
+
+      if (acceptsHtml) {
+        res.redirect(`${clientBaseUrl}/verify-email?status=expired&email=${encodeURIComponent(user.email)}`);
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: "This verification link has expired. Please request a new verification email.",
+        code: "TOKEN_EXPIRED",
+        email: user.email,
+      });
+      return;
+    }
+
+    // Handle already-verified accounts gracefully
+    if (user.isEmailVerified === true) {
+      await mongoUsers.update(user.id, {}, ["emailVerificationTokenHash", "emailVerificationExpires"]);
+
+      if (acceptsHtml) {
+        res.redirect(`${clientBaseUrl}/sign-in?alreadyVerified=true`);
+        return;
+      }
+      res.status(200).json({
+        success: true,
+        message: "Your email address has already been verified. Please log in.",
+        code: "ALREADY_VERIFIED",
+        redirectUrl: "/sign-in",
+      });
+      return;
+    }
+
+    // Mark email as verified and remove token and expiration fields
+    await mongoUsers.verifyUserEmail(user.id);
+
+    writeAuditLog({
+      eventType: "customer_email_verified",
+      role: "customer",
+      userId: user.id,
+      email: user.email,
+      ipAddress: getIp(req),
+      userAgent: req.headers["user-agent"] || "",
+    });
+
+    // Send welcome email after email is successfully verified
+    void sendAccountWelcomeEmail({
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+    });
+
+    if (acceptsHtml) {
+      res.redirect(`${clientBaseUrl}/sign-in?verified=true`);
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Email verified successfully.",
+      redirectUrl: "/sign-in?verified=true",
+    });
+  } catch (err: any) {
+    logger.error({ err: err?.message }, "[handleVerifyEmail] Error during email verification");
+    res.status(500).json({
+      success: false,
+      error: "An unexpected error occurred during email verification. Please try again.",
+    });
+  }
+};
+
+router.get("/auth/verify-email", handleVerifyEmail);
+router.get("/api/auth/verify-email", handleVerifyEmail);
+
+/**
+ * POST /api/auth/resend-verification
+ * Resends verification email with a new secure token, invalidates the previous token,
+ * applies rate limiting, and does not expose user existence.
+ */
+const handleResendVerification = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body || {};
+    if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      res.status(400).json({
+        success: false,
+        error: "Please enter a valid email address.",
+      });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const now = Date.now();
+
+    // Enforce rate limiting: 30s cooldown and 5 per hour per email
+    const tracking = resendVerificationTracker.get(cleanEmail);
+    if (tracking && process.env.NODE_ENV !== "test") {
+      const elapsed = now - tracking.lastSentAt;
+      if (elapsed < RESEND_COOLDOWN_MS) {
+        const waitSec = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
+        res.status(429).json({
+          success: false,
+          error: `Please wait ${waitSec} second${waitSec !== 1 ? "s" : ""} before requesting another verification email.`,
+          retryAfter: waitSec,
+        });
+        return;
+      }
+
+      if (tracking.count >= RESEND_MAX_HOURLY && now - tracking.lastSentAt < 60 * 60 * 1000) {
+        res.status(429).json({
+          success: false,
+          error: "Too many verification requests. Please try again later.",
+        });
+        return;
+      }
+    }
+
+    // Generic success message to prevent account enumeration
+    const genericSuccessMessage = "If your account requires verification, a verification email has been sent.";
+
+    const user = await mongoUsers.findByEmail(cleanEmail, "customer");
+
+    if (!user || user.role !== "customer" || user.isEmailVerified === true) {
+      res.status(200).json({
+        success: true,
+        message: genericSuccessMessage,
+      });
+      return;
+    }
+
+    // Generate new secure token and expire previous one
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15-minute expiry
+
+    await mongoUsers.update(user.id, {
+      emailVerificationTokenHash: tokenHash,
+      emailVerificationExpires: expires,
+    });
+
+    const newCount = (tracking && now - tracking.lastSentAt < 60 * 60 * 1000) ? tracking.count + 1 : 1;
+    resendVerificationTracker.set(cleanEmail, { lastSentAt: now, count: newCount });
+
+    const clientBaseUrl = getClientBaseUrl(req);
+    const verificationUrl = `${clientBaseUrl}/verify-email?token=${rawToken}`;
+
+    await sendEmailVerificationEmail({
+      toEmail: cleanEmail,
+      name: user.name,
+      verificationUrl,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: genericSuccessMessage,
+    });
+  } catch (err: any) {
+    logger.error({ err: err?.message }, "[handleResendVerification] Error resending verification email");
+    res.status(500).json({
+      success: false,
+      error: "Failed to send verification email. Please try again.",
+    });
+  }
+};
+
+router.post("/auth/resend-verification", otpRateLimiter, handleResendVerification);
+router.post("/api/auth/resend-verification", otpRateLimiter, handleResendVerification);
 
 /**
  * Customer Sign In Endpoint — Authenticates customer credentials against MongoDB Atlas users collection.
  */
-router.post("/auth/sign-in", authRateLimiter, async (req: Request, res: Response): Promise<void> => {
+const handleSignIn = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, id, userId, username, password } = req.body || {};
     const rawIdentifier = (email || id || userId || username || "").toString();
@@ -242,6 +599,25 @@ router.post("/auth/sign-in", authRateLimiter, async (req: Request, res: Response
     // Reset failed attempt tracking on successful login
     await recordSuccessfulLogin(cleanEmail, "customer", clientIp, req);
 
+    // Enforce email verification before creating session or issuing JWT tokens
+    if (user.role === "customer" && user.isEmailVerified === false) {
+      writeAuditLog({
+        eventType: "login_rejected_unverified_email",
+        role: "customer",
+        userId: user.id,
+        email: user.email || cleanEmail,
+        ipAddress: clientIp,
+        userAgent: req.headers["user-agent"] || "",
+      });
+      res.status(403).json({
+        success: false,
+        error: "Please verify your email address before logging in. Check your inbox for the verification link.",
+        code: "EMAIL_NOT_VERIFIED",
+        isEmailVerified: false,
+        email: user.email || cleanEmail,
+      });
+      return;
+    }
 
     // Create auth session & JWT access token
     const effectiveEmail = user.email || cleanEmail;
@@ -262,7 +638,10 @@ router.post("/auth/sign-in", authRateLimiter, async (req: Request, res: Response
   } catch (err: any) {
     res.status(500).json({ success: false, error: "Invalid ID or Password." });
   }
-});
+};
+
+router.post("/auth/sign-in", authRateLimiter, handleSignIn);
+router.post("/api/auth/sign-in", authRateLimiter, handleSignIn);
 
 /**
  * Customer Silent Token Refresh Endpoint — Rotates refresh token & issues new JWT access token.

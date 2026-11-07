@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, mongoProducts } from "@workspace/db";
+import { db, mongoProducts, resolveCategoryData } from "@workspace/db";
 import {
   productsTable, productCategoriesTable, productBrandsTable,
 } from "@workspace/db";
@@ -67,8 +67,29 @@ router.post("/admin/products/bulk", requireAdminKey, async (req: any, res: any) 
   try {
     if (action === "approve") {
       await Promise.all(ids.map(async (id) => {
-        const prod = await mongoProducts.update(id, { status: "approved", active: true }).catch(() => null);
-        const p = prod || (await mongoProducts.findById(id).catch(() => null));
+        const existing = await mongoProducts.findById(id).catch(() => null);
+        const resolvedCat = existing ? resolveCategoryData(existing.category, existing.subcategory, existing.subtype) : null;
+        const categoryFields = existing && resolvedCat ? {
+          category: (existing.category || resolvedCat.category) as any,
+          categorySlug: existing.categorySlug || resolvedCat.categorySlug,
+          categoryId: existing.categoryId || resolvedCat.categoryId,
+          categoryName: existing.categoryName || resolvedCat.categoryName,
+          parentCategoryId: existing.parentCategoryId || resolvedCat.parentCategoryId,
+          parentCategoryName: existing.parentCategoryName || resolvedCat.parentCategoryName,
+          mainCategoryId: existing.mainCategoryId || resolvedCat.categoryId,
+          subcategory: existing.subcategory || resolvedCat.subcategory,
+          subcategorySlug: existing.subcategorySlug || resolvedCat.subcategorySlug,
+          subcategoryId: existing.subcategoryId || resolvedCat.subcategoryId,
+          subcategoryName: existing.subcategoryName || resolvedCat.subcategoryName,
+          subtype: existing.subtype || resolvedCat.subtype,
+          subtypeId: existing.subtypeId || resolvedCat.subtypeId,
+        } : {};
+        const prod = await mongoProducts.update(id, {
+          status: "approved",
+          active: true,
+          ...categoryFields,
+        }).catch(() => null);
+        const p = prod || existing;
         const vendorId = p?.vendorId || p?.sellerId;
         if (vendorId && p) {
           insertSellerNotification({
@@ -249,8 +270,10 @@ router.get("/admin/products", requireAdminKey, async (req: any, res: any) => {
       const priceNum = p.price != null && !isNaN(Number(p.price))
         ? Number(p.price)
         : (p.basePrice != null && !isNaN(Number(p.basePrice)) ? Number(p.basePrice) : 0);
+      const canonicalId = p.id || (p._id ? String(p._id) : "") || p.productId;
       return {
         ...p,
+        id: canonicalId,
         price: priceNum,
         basePrice: p.basePrice != null && !isNaN(Number(p.basePrice)) ? Number(p.basePrice) : priceNum,
         stock: p.stock != null && !isNaN(Number(p.stock)) ? Number(p.stock) : 0,
@@ -328,6 +351,14 @@ router.patch("/admin/products/:id", requireAdminKey, async (req: any, res: any) 
   if (!Object.keys(updates).length) {
     return res.status(400).json({ error: "No fields to update" });
   }
+
+  // Business rules: approval implicitly activates; rejection implicitly deactivates
+  if (updates.status === "approved" && updates.active === undefined) {
+    updates.active = true;
+  } else if (updates.status === "rejected" && updates.active === undefined) {
+    updates.active = false;
+  }
+
   try {
     let updated: any = null;
     try {
@@ -342,8 +373,12 @@ router.patch("/admin/products/:id", requireAdminKey, async (req: any, res: any) 
     const mongoUpdated = await mongoProducts.update(id, updates).catch(() => null);
     if (!updated) updated = mongoUpdated || (await mongoProducts.findById(id).catch(() => null));
 
-    globalCache.invalidatePattern(/product/);
-    emitProductEvent("product:updated", { id });
+    globalCache.del(`product:${id}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", { id, ...updates });
+    emitProductEvent("catalog:updated", { action: "update", id });
+
     if (!updated) return res.status(404).json({ error: "Product not found" });
     res.json(updated);
   } catch (err) {
@@ -352,26 +387,156 @@ router.patch("/admin/products/:id", requireAdminKey, async (req: any, res: any) 
   }
 });
 
-// ── Approve product ───────────────────────────────────────────────────────────
-router.post("/admin/products/:id/approve", requireAdminKey, async (req: any, res: any) => {
-  const { remark } = req.body;
+// ── Activate product ──────────────────────────────────────────────────────────
+router.post("/admin/products/:id/activate", requireAdminKey, async (req: any, res: any) => {
   const id = req.params.id;
   try {
     let updated: any = null;
     try {
       const rows = await db
         .update(productsTable)
-        .set({ status: "approved", approvalRemark: remark ?? null, active: true })
+        .set({ active: true })
         .where(eq(productsTable.id, id))
-        .returning({ id: productsTable.id, name: productsTable.name, status: productsTable.status, vendorId: productsTable.vendorId });
+        .returning();
       if (rows && rows.length > 0) updated = rows[0];
     } catch {}
 
-    const mongoUpdated = await mongoProducts.update(id, { status: "approved", approvalRemark: remark ?? null, active: true }).catch(() => null);
+    const mongoUpdated = await mongoProducts.update(id, { active: true }).catch(() => null);
     const existing = await mongoProducts.findById(id).catch(() => null);
-    updated = { ...(existing || {}), ...(mongoUpdated || {}), ...(updated || {}) };
+    updated = { ...(existing || {}), ...(mongoUpdated || {}), ...(updated || {}), active: true };
 
     if (!updated || !updated.id) return res.status(404).json({ error: "Product not found" });
+
+    globalCache.del(`product:${id}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", {
+      id,
+      productId: id,
+      active: true,
+      vendorId: updated.vendorId,
+      sellerId: updated.sellerId || updated.vendorId,
+      ...updated,
+    });
+    emitProductEvent("catalog:updated", { action: "activate", id });
+
+    writeAuditLog({ action: "product_activated", module: "Products", details: { productId: updated.id, productName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
+    res.json({ product: updated, ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to activate product");
+    res.status(500).json({ error: "Failed to activate product" });
+  }
+});
+
+// ── Deactivate product ────────────────────────────────────────────────────────
+router.post("/admin/products/:id/deactivate", requireAdminKey, async (req: any, res: any) => {
+  const id = req.params.id;
+  try {
+    let updated: any = null;
+    try {
+      const rows = await db
+        .update(productsTable)
+        .set({ active: false })
+        .where(eq(productsTable.id, id))
+        .returning();
+      if (rows && rows.length > 0) updated = rows[0];
+    } catch {}
+
+    const mongoUpdated = await mongoProducts.update(id, { active: false }).catch(() => null);
+    const existing = await mongoProducts.findById(id).catch(() => null);
+    updated = { ...(existing || {}), ...(mongoUpdated || {}), ...(updated || {}), active: false };
+
+    if (!updated || !updated.id) return res.status(404).json({ error: "Product not found" });
+
+    globalCache.del(`product:${id}`);
+    safeClearCache();
+    safeInvalidatePattern(/product/);
+    emitProductEvent("product:updated", {
+      id,
+      productId: id,
+      active: false,
+      vendorId: updated.vendorId,
+      sellerId: updated.sellerId || updated.vendorId,
+      ...updated,
+    });
+    emitProductEvent("catalog:updated", { action: "deactivate", id });
+
+    writeAuditLog({ action: "product_deactivated", module: "Products", details: { productId: updated.id, productName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
+    res.json({ product: updated, ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to deactivate product");
+    res.status(500).json({ error: "Failed to deactivate product" });
+  }
+});
+
+// ── Approve product ───────────────────────────────────────────────────────────
+router.post("/admin/products/:id/approve", requireAdminKey, async (req: any, res: any) => {
+  const { remark } = req.body;
+  const id = req.params.id;
+  try {
+    const existing = await mongoProducts.findById(id).catch(() => null);
+    if (!existing || !existing.id) return res.status(404).json({ error: "Product not found" });
+
+    const resolvedCat = resolveCategoryData(
+      existing.category,
+      existing.subcategory,
+      existing.subtype
+    );
+
+    const categoryFields = {
+      category: (existing.category || resolvedCat.category) as any,
+      categorySlug: existing.categorySlug || resolvedCat.categorySlug,
+      categoryId: existing.categoryId || resolvedCat.categoryId,
+      categoryName: existing.categoryName || resolvedCat.categoryName,
+      parentCategoryId: existing.parentCategoryId || resolvedCat.parentCategoryId,
+      parentCategoryName: existing.parentCategoryName || resolvedCat.parentCategoryName,
+      mainCategoryId: existing.mainCategoryId || resolvedCat.categoryId,
+      subcategory: existing.subcategory || resolvedCat.subcategory,
+      subcategorySlug: existing.subcategorySlug || resolvedCat.subcategorySlug,
+      subcategoryId: existing.subcategoryId || resolvedCat.subcategoryId,
+      subcategoryName: existing.subcategoryName || resolvedCat.subcategoryName,
+      subtype: existing.subtype || resolvedCat.subtype,
+      subtypeId: existing.subtypeId || resolvedCat.subtypeId,
+    };
+
+    let updated: any = null;
+    try {
+      const rows = await db
+        .update(productsTable)
+        .set({
+          status: "approved",
+          approvalRemark: remark ?? null,
+          active: true,
+          category: categoryFields.category,
+          subcategory: categoryFields.subcategory,
+        })
+        .where(eq(productsTable.id, id))
+        .returning({ id: productsTable.id, name: productsTable.name, status: productsTable.status });
+      if (rows && rows.length > 0) updated = rows[0];
+    } catch {}
+
+    const mongoUpdated = await mongoProducts.update(id, {
+      status: "approved",
+      approvalRemark: remark ?? null,
+      active: true,
+      ...categoryFields,
+    }).catch(() => null);
+
+    const resolvedVendorId = existing.vendorId || mongoUpdated?.vendorId || existing.sellerId;
+    const resolvedSellerId = existing.sellerId || mongoUpdated?.sellerId || resolvedVendorId;
+    const resolvedVendorName = existing.vendorName || mongoUpdated?.vendorName || "";
+
+    updated = {
+      ...(existing || {}),
+      ...(mongoUpdated || {}),
+      ...(updated || {}),
+      status: "approved",
+      active: true,
+      vendorId: resolvedVendorId,
+      sellerId: resolvedSellerId,
+      vendorName: resolvedVendorName,
+      ...categoryFields,
+    };
 
     globalCache.del(`product:${id}`);
     safeClearCache();
@@ -381,8 +546,8 @@ router.post("/admin/products/:id/approve", requireAdminKey, async (req: any, res
       productId: id,
       status: "approved",
       active: true,
-      vendorId: updated.vendorId,
-      sellerId: updated.sellerId || updated.vendorId,
+      vendorId: resolvedVendorId,
+      sellerId: resolvedSellerId,
       isNewArrival: updated.isNewArrival,
       ...updated,
     });
@@ -391,13 +556,13 @@ router.post("/admin/products/:id/approve", requireAdminKey, async (req: any, res
       productId: id,
       status: "approved",
       active: true,
-      vendorId: updated.vendorId,
-      sellerId: updated.sellerId || updated.vendorId,
+      vendorId: resolvedVendorId,
+      sellerId: resolvedSellerId,
       ...updated,
     });
 
     // Send notification to the product's seller
-    const vendorId = updated.vendorId || updated.sellerId;
+    const vendorId = resolvedVendorId || resolvedSellerId;
     if (vendorId) {
       insertSellerNotification({
         vendorId,
@@ -474,14 +639,15 @@ router.post("/admin/products/:id/reject", requireAdminKey, async (req: any, res:
 router.delete("/admin/products/:id", requireAdminKey, async (req: any, res: any) => {
   try {
     const id = req.params.id;
-    await db.delete(productsTable).where(eq(productsTable.id, id));
-    await mongoProducts.delete(id).catch(() => {});
+    await db.delete(productsTable).where(eq(productsTable.id, id)).catch(() => {});
+    const deleted = await mongoProducts.delete(id);
     globalCache.del(`product:${id}`);
     safeClearCache();
     safeInvalidatePattern(/product/);
     emitProductEvent("product:deleted", { id, productId: id });
+    emitProductEvent("catalog:updated", { action: "delete", ids: [id] });
     writeAuditLog({ action: "product_deleted", module: "Products", details: { productId: id }, ipAddress: getIp(req) }).catch(() => {});
-    res.json({ ok: true });
+    res.json({ ok: true, deleted, id });
   } catch (err) {
     req.log.error({ err }, "Failed to delete product");
     res.status(500).json({ error: "Failed to delete product" });

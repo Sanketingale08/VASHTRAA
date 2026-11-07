@@ -96,6 +96,7 @@ export function SellerGuard({ children }: SellerGuardProps) {
     try {
       localStorage.removeItem("vastraa_seller_authenticated");
       localStorage.removeItem("vastraa_seller_email");
+      localStorage.removeItem("vastraa_seller_token");
       localStorage.removeItem("vastraa_auth_token");
       localStorage.removeItem("clerk_user_id");
       sessionStorage.clear();

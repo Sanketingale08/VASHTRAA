@@ -619,14 +619,22 @@ function OrderActions({
         )}
 
         {canReturn && (
-          <button
-            onClick={() => setActiveForm(activeForm === "return" ? null : "return")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-orange-200 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-          >
-            <RotateCcw size={15} />
-            Request Return
-            {activeForm === "return" ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
+          <>
+            <Link
+              href={`/account/returns?orderId=${order.id}&action=return`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300 rounded-lg transition-colors"
+            >
+              <RotateCcw size={15} />
+              Request Return (7-Day Policy)
+            </Link>
+            <Link
+              href={`/account/returns?orderId=${order.id}&action=exchange`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 rounded-lg transition-colors"
+            >
+              <RefreshCw size={15} />
+              Request Exchange
+            </Link>
+          </>
         )}
 
         {canRefund && (
@@ -1393,3 +1401,5 @@ export function OrderConfirmationPage() {
     </Layout>
   );
 }
+
+export default OrderConfirmationPage;

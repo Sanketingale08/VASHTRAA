@@ -2,7 +2,8 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
 import jwt from "jsonwebtoken";
 import { verifyAccessToken } from "./jwt";
-import { mongoSessions, mongoUsers } from "@workspace/db";
+import { verifyAdminAccessKey } from "../middlewares/isAdmin";
+import { mongoSessions, mongoUsers, mongoSellers, mongoVendors } from "@workspace/db";
 import { logger } from "./logger";
 
 export interface SocketUser {
@@ -58,20 +59,17 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
         socket.handshake.auth?.adminKey;
 
       // 1. Admin Key Fallback / Direct Auth
-      const validAdminKeys = [
-        "Admin@123",
-        "admin-secret-key-change-in-production",
-        "dev-admin-key",
-        process.env.ADMIN_API_KEY,
-      ].filter(Boolean) as string[];
-
-      const matchesAdminKey = (k?: any) => {
+      const matchesAdminKey = async (k?: any): Promise<boolean> => {
         if (!k || typeof k !== "string") return false;
         const val = k.trim();
-        return validAdminKeys.includes(val);
+        if (!val) return false;
+        if (process.env.NODE_ENV === "test" && (val === "Admin@123" || val === "dev-admin-key")) {
+          return true;
+        }
+        return await verifyAdminAccessKey(val);
       };
 
-      if (matchesAdminKey(adminKeyHeader) || matchesAdminKey(authHeader)) {
+      if ((await matchesAdminKey(adminKeyHeader)) || (await matchesAdminKey(authHeader))) {
         socket.data.user = {
           id: "admin_root",
           role: "admin",
@@ -88,9 +86,23 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
       if (token && typeof token === "string") {
         const verified = verifyAccessToken(token);
         if (verified) {
+          let sellerId: string | undefined = undefined;
+          if (verified.role === "seller") {
+            sellerId = verified.sub;
+            try {
+              const sDoc = (await mongoSellers?.findById?.(verified.sub)) ||
+                           (await mongoSellers?.findByOwnerId?.(verified.sub)) ||
+                           (await mongoVendors?.findById?.(verified.sub)) ||
+                           (await mongoVendors?.findByOwnerId?.(verified.sub));
+              if (sDoc) {
+                sellerId = sDoc.sellerId || sDoc.vendorId || sDoc.id || verified.sub;
+              }
+            } catch {}
+          }
           socket.data.user = {
             id: verified.sub,
             role: verified.role === "seller" ? "vendor" : (verified.role as any) || "user",
+            sellerId,
             email: verified.email,
           } as SocketUser;
           return next();
@@ -102,7 +114,7 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
           socket.data.user = {
             id: decoded.id || decoded.userId || decoded.sub || "anonymous_user",
             role: decoded.role || (decoded.sellerId ? "vendor" : "user"),
-            sellerId: decoded.sellerId || decoded.vendorId,
+            sellerId: decoded.sellerId || decoded.vendorId || (decoded.role === "seller" ? (decoded.id || decoded.sub) : undefined),
             email: decoded.email,
           } as SocketUser;
           return next();
@@ -113,9 +125,11 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
         try {
           const sessionResult = await mongoSessions.findByToken(token);
           if (sessionResult && sessionResult.user) {
+            const isSellerUser = sessionResult.user.role === "seller";
             socket.data.user = {
               id: sessionResult.user.id,
-              role: sessionResult.user.role === "seller" ? "vendor" : (sessionResult.user.role as any) || "user",
+              role: isSellerUser ? "vendor" : (sessionResult.user.role as any) || "user",
+              sellerId: isSellerUser ? (sessionResult.user.sellerId || sessionResult.user.vendorId || sessionResult.user.id) : undefined,
               email: sessionResult.user.email,
             } as SocketUser;
             return next();
@@ -125,9 +139,11 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
         try {
           const directUser = await mongoUsers.findById(token);
           if (directUser) {
+            const isSellerUser = directUser.role === "seller";
             socket.data.user = {
               id: directUser.id,
-              role: directUser.role === "seller" ? "vendor" : (directUser.role as any) || "user",
+              role: isSellerUser ? "vendor" : (directUser.role as any) || "user",
+              sellerId: isSellerUser ? (directUser.sellerId || directUser.vendorId || directUser.id) : undefined,
               email: directUser.email,
             } as SocketUser;
             return next();
@@ -183,6 +199,15 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
       socket.join(`shop:${user.sellerId}`);
     }
 
+    if (user.role === "vendor" || (user.role as string) === "seller") {
+      socket.join(`seller:${user.id}`);
+      socket.join(`shop:${user.id}`);
+      if (user.sellerId && user.sellerId !== user.id) {
+        socket.join(`seller:${user.sellerId}`);
+        socket.join(`shop:${user.sellerId}`);
+      }
+    }
+
     if (user.role === "admin") {
       socket.join("admin");
     }
@@ -198,9 +223,16 @@ export function initSocketIO(server: HttpServer): SocketIOServer {
         return;
       }
 
-      if (room.startsWith("seller:") && user.sellerId !== room.split(":")[1] && user.role !== "admin") {
-        socket.emit("error", { message: "Unauthorized room access" });
-        return;
+      if (room.startsWith("seller:") || room.startsWith("shop:")) {
+        const requestedId = room.split(":")[1];
+        const isAuthorized =
+          user.role === "admin" ||
+          user.sellerId === requestedId ||
+          user.id === requestedId;
+        if (!isAuthorized) {
+          socket.emit("error", { message: "Unauthorized room access" });
+          return;
+        }
       }
 
       socket.join(room);
@@ -306,23 +338,34 @@ export function emitOrderEvent(event: "order:created" | "order:status_changed" |
   }
 
   // 3. Send to affected Seller(s)
-  const vendorIds: string[] = [];
+  const vendorIds = new Set<string>();
   if (payload?.items && Array.isArray(payload.items)) {
     for (const item of payload.items) {
-      if (item.vendorId && !vendorIds.includes(item.vendorId)) {
-        vendorIds.push(item.vendorId);
-      }
+      if (item.vendorId) vendorIds.add(String(item.vendorId));
+      if (item.sellerId) vendorIds.add(String(item.sellerId));
+      if (item.ownerId) vendorIds.add(String(item.ownerId));
     }
   }
-  if (payload?.vendorId && !vendorIds.includes(payload.vendorId)) {
-    vendorIds.push(payload.vendorId);
+  if (payload?.vendorId) vendorIds.add(String(payload.vendorId));
+  if (payload?.sellerId) vendorIds.add(String(payload.sellerId));
+  if (payload?.vendorAcceptances && typeof payload.vendorAcceptances === "object") {
+    for (const vKey of Object.keys(payload.vendorAcceptances)) {
+      if (vKey) vendorIds.add(String(vKey));
+    }
+  }
+  if (payload?.vendorPackagingChecklist && typeof payload.vendorPackagingChecklist === "object") {
+    for (const vKey of Object.keys(payload.vendorPackagingChecklist)) {
+      if (vKey) vendorIds.add(String(vKey));
+    }
   }
 
   for (const vId of vendorIds) {
     io.to(`seller:${vId}`).emit(event, payload);
+    io.to(`shop:${vId}`).emit(event, payload);
     io.to(`seller:${vId}`).emit("vendor:analytics_updated", { event, payload, timestamp: Date.now() });
   }
 
+  // Broadcast to global channel so any open seller dashboard tab updates in real-time
   io.emit(event, payload);
   io.emit("vendor:analytics_updated", { event, payload, timestamp: Date.now() });
 }

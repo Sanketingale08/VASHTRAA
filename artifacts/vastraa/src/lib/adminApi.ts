@@ -48,9 +48,9 @@ export function initAdmin2FAInterceptor(): void {
 }
 
 export function adminKey(): string {
-  if (typeof window === "undefined") return "Admin@123";
-  const key = sessionStorage.getItem("td_admin_key") || localStorage.getItem("td_admin_key");
-  return key && key.trim() ? key.trim() : "Admin@123";
+  if (typeof window === "undefined") return "";
+  const key = sessionStorage.getItem("td_admin_key") || localStorage.getItem("td_admin_key") || localStorage.getItem("admin_key");
+  return key && key.trim() ? key.trim() : "";
 }
 
 export function adminSessionToken(): string {
@@ -127,4 +127,6 @@ export function clearAdminSession(): void {
   sessionStorage.removeItem("td_admin_session_token");
   sessionStorage.removeItem("td_admin_session_id");
   sessionStorage.removeItem("td_admin_2fa_pending");
+  localStorage.removeItem("td_admin_key");
+  localStorage.removeItem("admin_key");
 }

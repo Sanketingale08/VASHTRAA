@@ -85,6 +85,12 @@ vi.mock("@workspace/db", () => {
     mongoSellers: {
       findMany: vi.fn(async () => state.mongoSellers),
     },
+    findCategoryDefinition: vi.fn((slug: string) => {
+      if (slug === "paithani") return { id: "cat-paithani-default", slug: "paithani" };
+      if (slug === "designer") return { id: "cat-designer-default", slug: "designer" };
+      return null;
+    }),
+    normalizeCategoryString: (s: string) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
   };
 });
 

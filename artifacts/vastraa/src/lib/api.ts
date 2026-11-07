@@ -22,8 +22,30 @@ export function getApiUrl(path: string): string {
   return path;
 }
 
-export function getStoredToken(): string | null {
-  const token = localStorage.getItem("vastraa_auth_token") || localStorage.getItem("clerk_user_id");
+export function getStoredToken(forSeller?: boolean): string | null {
+  if (typeof window === "undefined") return null;
+
+  const isSeller = forSeller ?? (
+    window.location.pathname.startsWith("/seller") ||
+    localStorage.getItem("vastraa_seller_authenticated") === "true"
+  );
+
+  if (isSeller) {
+    const sellerToken =
+      localStorage.getItem("vastraa_seller_token") ||
+      localStorage.getItem("vastraa_auth_token") ||
+      localStorage.getItem("seller_token");
+    if (sellerToken && typeof sellerToken === "string") {
+      const clean = sellerToken.replace(/^["']|["']$/g, "").trim();
+      if (clean) return clean;
+    }
+  }
+
+  const token =
+    localStorage.getItem("vastraa_auth_token") ||
+    localStorage.getItem("vastraa_seller_token") ||
+    localStorage.getItem("seller_token") ||
+    localStorage.getItem("clerk_user_id");
   if (token && typeof token === "string") {
     const clean = token.replace(/^["']|["']$/g, "").trim();
     if (clean) return clean;
@@ -31,9 +53,9 @@ export function getStoredToken(): string | null {
   return null;
 }
 
-export function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
+export function getAuthHeaders(extraHeaders?: Record<string, string>, forSeller?: boolean): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
-  const token = getStoredToken();
+  const token = getStoredToken(forSeller);
   if (token && !headers["Authorization"] && !headers["authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -105,7 +127,9 @@ async function refreshCustomerToken(): Promise<string | null> {
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? getApiUrl(input) : input;
-  const token = getStoredToken();
+  const urlString = String(url);
+  const isSellerEndpoint = urlString.includes("/seller/") || urlString.includes("/vendors/");
+  const token = getStoredToken(isSellerEndpoint);
   const headers = new Headers(init?.headers);
   if (token && !headers.has("Authorization") && !headers.has("authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -117,7 +141,6 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     headers,
   });
 
-  const urlString = String(url);
   const isRefreshOrAuthRequest =
     urlString.includes("/refresh") ||
     urlString.includes("/login") ||

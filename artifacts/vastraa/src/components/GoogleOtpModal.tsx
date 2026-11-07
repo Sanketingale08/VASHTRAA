@@ -8,7 +8,6 @@ interface GoogleOtpModalProps {
   isOpen: boolean;
   challengeId: string;
   email: string;
-  devCode?: string;
   targetRole: "customer" | "seller";
   onClose: () => void;
   onVerified?: (data: { token: string; user: any; redirectUrl: string }) => void;
@@ -18,7 +17,6 @@ export function GoogleOtpModal({
   isOpen,
   challengeId,
   email,
-  devCode,
   targetRole,
   onClose,
   onVerified,
@@ -30,7 +28,6 @@ export function GoogleOtpModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [activeDevCode, setActiveDevCode] = useState<string | undefined>(devCode);
 
   // 60-second resend cooldown timer
   const [resendCooldown, setResendCooldown] = useState(60);
@@ -40,11 +37,6 @@ export function GoogleOtpModal({
   const [expiryTimeLeft, setExpiryTimeLeft] = useState(600);
 
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Update activeDevCode when prop changes
-  useEffect(() => {
-    setActiveDevCode(devCode);
-  }, [devCode]);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -175,7 +167,6 @@ export function GoogleOtpModal({
         setResendCooldown(60);
         setExpiryTimeLeft(600);
         setOtp("");
-        if (data.devCode) setActiveDevCode(data.devCode);
         setSuccessMessage(data.message || `A new OTP was sent to ${email}`);
       }
     } catch {
@@ -220,25 +211,6 @@ export function GoogleOtpModal({
             {email}
           </p>
         </div>
-
-        {/* Sandbox / Fallback Dev Code Banner */}
-        {activeDevCode && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={15} className="text-amber-600 shrink-0" />
-              <span>
-                Verification Code: <span className="font-mono text-sm font-bold text-[#0A1F44]">{activeDevCode}</span>
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOtp(activeDevCode)}
-              className="px-2.5 py-1 bg-[#0A1F44] text-white text-[11px] font-bold rounded-lg hover:bg-[#2C3E6B] transition-colors cursor-pointer shrink-0"
-            >
-              Auto-fill
-            </button>
-          </div>
-        )}
 
         {/* Notification Banners */}
         {errorMessage && (

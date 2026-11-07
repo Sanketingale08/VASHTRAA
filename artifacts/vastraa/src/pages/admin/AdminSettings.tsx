@@ -16,7 +16,7 @@ const GOLD = "#C7CCD1";
 
 function adminKey() {
   if (typeof window === "undefined") return "";
-  return sessionStorage.getItem("td_admin_key") || localStorage.getItem("td_admin_key") || "Admin@123";
+  return sessionStorage.getItem("td_admin_key") || localStorage.getItem("td_admin_key") || localStorage.getItem("admin_key") || "";
 }
 function sessionToken() {
   if (typeof window === "undefined") return "";
@@ -55,7 +55,7 @@ const SECTIONS = [
   { id: "platform",      label: "Platform Settings",      icon: Globe,       desc: "Name, currency, timezone and support info",  phase: 3 },
   { id: "payment",       label: "Payment Settings",       icon: CreditCard,  desc: "Cashfree integration and payment methods",   phase: 1 },
   { id: "shipping",      label: "Shipping Settings",      icon: Truck,       desc: "Shiprocket multi-seller pickup and delivery configuration", phase: 3 },
-  { id: "email-sms",     label: "Email & SMS Settings",   icon: Mail,        desc: "Providers, OTP and sender configuration",    phase: 4 },
+  { id: "email-sms",     label: "Email & SMS Settings",   icon: Mail,        desc: "Providers, OTP and sender configuration",    phase: 1 },
   { id: "system",        label: "System & Maintenance",   icon: Settings,    desc: "Maintenance mode and system health",         phase: 3 },
   { id: "audit-logs",    label: "Audit Logs",             icon: BookOpen,    desc: "Append-only record of admin actions",        phase: 2 },
 ];
@@ -222,9 +222,11 @@ function ChangeKeyModal({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ currentKey: form.current, newKey: form.newKey, confirmKey: form.confirm }),
       }),
     onSuccess: () => {
-      toast({ title: "Access key updated", description: "Admin access key changed successfully." });
-      // Update sessionStorage with new key so subsequent requests work
+      toast({ title: "Access Key Updated", description: "Admin access key changed successfully." });
+      // Update sessionStorage and localStorage with new key so subsequent requests work seamlessly
       sessionStorage.setItem("td_admin_key", form.newKey);
+      localStorage.setItem("td_admin_key", form.newKey);
+      localStorage.setItem("admin_key", form.newKey);
       onClose();
     },
     onError: (e: Error) => setError(e.message),
@@ -235,7 +237,7 @@ function ChangeKeyModal({ onClose }: { onClose: () => void }) {
     setError("");
     if (!form.current || !form.newKey || !form.confirm) { setError("All fields are required"); return; }
     if (form.newKey !== form.confirm) { setError("New key and confirmation do not match"); return; }
-    if (form.newKey.length < 16) { setError("New key must be at least 16 characters"); return; }
+    if (form.newKey.length < 8) { setError("New key must be at least 8 characters"); return; }
     if (form.newKey === form.current) { setError("New key must differ from the current key"); return; }
     save.mutate();
   }
@@ -261,11 +263,11 @@ function ChangeKeyModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={submit} className="px-6 py-5 flex flex-col gap-4">
           <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 flex gap-2.5">
             <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-800">The new key must be at least 16 characters. You will be signed in with the new key immediately.</p>
+            <p className="text-xs text-amber-800">The new key must be at least 8 characters. You will remain signed in with the new key immediately.</p>
           </div>
           {[
             { id: "current" as const, label: "Current Access Key", placeholder: "Enter current key" },
-            { id: "newKey" as const, label: "New Access Key", placeholder: "Min 16 characters" },
+            { id: "newKey" as const, label: "New Access Key", placeholder: "Min 8 characters" },
             { id: "confirm" as const, label: "Confirm New Access Key", placeholder: "Re-enter new key" },
           ].map(({ id, label, placeholder }) => (
             <Field key={id} label={label}>
@@ -300,14 +302,13 @@ function ChangeKeyModal({ onClose }: { onClose: () => void }) {
 // 6-step flow: (1) confirm key → (2) scan QR → (3) verify TOTP →
 //              (4) email OTP → (5) SMS OTP → (6) success + recovery codes
 function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [accessKeyInput, setAccessKeyInput] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [manualKey, setManualKey] = useState("");
-  const [totpCode, setTotpCode] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
-  const [smsOtp, setSmsOtp] = useState("");
+  const [targetEmail, setTargetEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [cooldownSecs, setCooldownSecs] = useState(0);
@@ -320,10 +321,9 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   // Clean up cooldown timer on unmount
   useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
 
-  // Auto-send OTP on entering steps 4 and 5
+  // Auto-send OTP on entering step 3 (Email OTP)
   useEffect(() => {
-    if (step === 4) void sendEmailOtp();
-    if (step === 5) void sendSmsOtp();
+    if (step === 3) void sendEmailOtp();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -355,34 +355,21 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     } finally { setLoading(false); }
   }
 
-  async function handleVerifyTOTP(e: React.FormEvent) {
-    e.preventDefault();
-    if (totpCode.replace(/\s/g, "").length < 6) { setError("Enter the 6-digit code"); return; }
-    setLoading(true); setError("");
-    try {
-      // Server now sets stage = "totp_verified" and returns { ok, next: "email-otp" }.
-      // No session is issued here — the session is created after the SMS OTP step.
-      await apiFetch("/api/admin/2fa/setup/verify", {
-        method: "POST",
-        body: JSON.stringify({ code: totpCode.replace(/\s/g, "") }),
-      });
-      setStep(4); // triggers auto-send of email OTP via useEffect
-    } catch (err: any) {
-      setError(err.message ?? "Invalid code. Please try again.");
-      setTotpCode("");
-    } finally { setLoading(false); }
-  }
-
   async function sendEmailOtp() {
     setOtpSending(true); setError("");
     try {
-      await apiFetch("/api/admin/2fa/setup/send-email-otp", { method: "POST" });
-      startCooldown(60);
+      const data = await apiFetch("/api/admin/2fa/setup/send-email-otp", { method: "POST" });
+      if (data?.email) {
+        setTargetEmail(data.email);
+      } else if (data?.maskedEmail) {
+        setTargetEmail(data.maskedEmail);
+      }
+      startCooldown(data?.cooldownSeconds || 60);
     } catch (err: any) {
       if (err.secondsRemaining) {
         startCooldown(err.secondsRemaining);
       } else {
-        setError(err.message ?? "Failed to send email code. Check admin email is configured in Settings.");
+        setError(err.message ?? "Failed to send email verification code. Please check your admin email in Settings.");
       }
     } finally { setOtpSending(false); }
   }
@@ -392,53 +379,22 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     if (emailOtp.length < 6) { setError("Enter the 6-digit code"); return; }
     setLoading(true); setError("");
     try {
-      await apiFetch("/api/admin/2fa/setup/verify-email-otp", {
+      const data = await apiFetch("/api/admin/2fa/setup/verify-email-otp", {
         method: "POST",
-        body: JSON.stringify({ otp: emailOtp }),
+        body: JSON.stringify({ otp: emailOtp, activate: true }),
       });
-      setEmailOtp("");
-      setCooldownSecs(0);
-      setStep(5); // triggers auto-send of SMS OTP via useEffect
-    } catch (err: any) {
-      setError(err.message ?? "Invalid code. Please try again.");
-      setEmailOtp("");
-    } finally { setLoading(false); }
-  }
-
-  async function sendSmsOtp() {
-    setOtpSending(true); setError("");
-    try {
-      await apiFetch("/api/admin/2fa/setup/send-sms-otp", { method: "POST" });
-      startCooldown(60);
-    } catch (err: any) {
-      if (err.secondsRemaining) {
-        startCooldown(err.secondsRemaining);
-      } else {
-        setError(err.message ?? "Failed to send SMS code. Check admin mobile is configured in Settings.");
-      }
-    } finally { setOtpSending(false); }
-  }
-
-  async function handleVerifySmsOtp(e: React.FormEvent) {
-    e.preventDefault();
-    if (smsOtp.length < 6) { setError("Enter the 6-digit code"); return; }
-    setLoading(true); setError("");
-    try {
-      const data = await apiFetch("/api/admin/2fa/setup/verify-sms-otp", {
-        method: "POST",
-        body: JSON.stringify({ otp: smsOtp }),
-      });
-      // Persist the verified session now that 2FA is fully enabled.
+      // Persist the verified session now that 2FA is fully enabled
       if (data.tokenHash && data.sessionId) {
         sessionStorage.setItem("td_admin_session_token", data.tokenHash);
         sessionStorage.setItem("td_admin_session_id", data.sessionId);
       }
-      // API returns codes (not recoveryCodes) — use the correct field name.
       setRecoveryCodes(data.codes ?? []);
-      setStep(6);
+      setEmailOtp("");
+      setCooldownSecs(0);
+      setStep(4);
     } catch (err: any) {
-      setError(err.message ?? "Invalid code. Please try again.");
-      setSmsOtp("");
+      setError(err.message ?? "Invalid verification code. Please try again.");
+      setEmailOtp("");
     } finally { setLoading(false); }
   }
 
@@ -468,15 +424,13 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     URL.revokeObjectURL(url);
   }
 
-  const STEP_LABELS = ["Key", "Scan QR", "Verify App", "Email OTP", "SMS OTP"];
-  const canClose = step !== 6;
+  const STEP_LABELS = ["Key", "Scan QR", "Email OTP"];
+  const canClose = step !== 4;
   const titleMap: Record<number, string> = {
     1: "Enable Two-Factor Authentication",
-    2: "Enable Two-Factor Authentication",
-    3: "Enable Two-Factor Authentication",
-    4: "Email Verification",
-    5: "SMS Verification",
-    6: "Two-Factor Authentication Enabled",
+    2: "Scan Authenticator QR Code",
+    3: "Email OTP Verification",
+    4: "Two-Factor Authentication Enabled",
   };
 
   return (
@@ -486,7 +440,7 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            {step === 6
+            {step === 4
               ? <CheckCircle size={16} className="text-green-500" />
               : <Shield size={16} style={{ color: GOLD }} />}
             <h3 className="font-serif font-bold text-base" style={{ color: NAVY }}>
@@ -496,8 +450,8 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           {canClose && <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>}
         </div>
 
-        {/* Step indicator — shown for setup steps 1–5 */}
-        {step >= 1 && step <= 5 && (
+        {/* Step indicator — shown for setup steps 1–3 */}
+        {step >= 1 && step <= 3 && (
           <div className="px-6 pt-4 flex items-center gap-1">
             {STEP_LABELS.map((_, i) => {
               const s = i + 1;
@@ -565,46 +519,27 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                 <div className="bg-gray-50 rounded-lg px-3 py-2 font-mono text-xs text-gray-700 break-all select-all border border-gray-200">{manualKey}</div>
               </div>
               <button onClick={() => setStep(3)}
-                className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors"
+                className="w-full py-2.5 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
                 style={{ background: NAVY, color: "white" }}>
-                I've Scanned the Code →
+                I've Scanned the Code → Continue to Email Verification
               </button>
             </div>
           )}
 
-          {/* Step 3: Verify TOTP */}
+          {/* Step 3: Email OTP */}
           {step === 3 && (
-            <form onSubmit={handleVerifyTOTP} className="space-y-4">
-              <p className="text-sm text-gray-600">Enter the 6-digit code shown in your authenticator app to verify the setup.</p>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Authenticator Code</label>
-                <input type="text" inputMode="numeric" maxLength={6} value={totpCode}
-                  onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
-                  placeholder="000000"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-center text-lg tracking-[0.5em] outline-none focus:border-amber-400 transition"
-                  autoFocus />
-              </div>
-              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => { setStep(2); setError(""); }}
-                  className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
-                <button type="submit" disabled={loading || totpCode.length < 6}
-                  className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                  style={{ background: NAVY, color: "white" }}>
-                  {loading && <RefreshCw size={13} className="animate-spin" />}
-                  {loading ? "Verifying…" : "Verify & Continue"}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Step 4: Email OTP */}
-          {step === 4 && (
             <form onSubmit={handleVerifyEmailOtp} className="space-y-4">
-              <p className="text-sm text-gray-600">
-                <Mail size={14} className="inline mr-1 opacity-60" />
-                A 6-digit verification code has been sent to the configured admin email address.
-              </p>
+              <div className="rounded-xl p-3.5 bg-amber-50/70 border border-amber-200/70 text-xs text-amber-900 flex items-start gap-2.5">
+                <Mail size={16} className="mt-0.5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-semibold text-gray-900 mb-0.5">Verification Code Sent</p>
+                  <p className="text-gray-600">
+                    A 6-digit verification code has been sent to:{" "}
+                    <strong className="text-gray-900">{targetEmail || "your registered admin email"}</strong>
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Email Verification Code</label>
                 <input type="text" inputMode="numeric" maxLength={6} value={emailOtp}
@@ -621,55 +556,20 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                   className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
                   {otpSending
                     ? <><RefreshCw size={12} className="inline animate-spin mr-1" />Sending…</>
-                    : cooldownSecs > 0 ? `Resend in ${cooldownSecs}s` : "Resend Code"}
+                    : cooldownSecs > 0 ? `Resend Code in ${cooldownSecs}s` : "Resend OTP"}
                 </button>
                 <button type="submit" disabled={loading || emailOtp.length < 6}
                   className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                   style={{ background: NAVY, color: "white" }}>
                   {loading && <RefreshCw size={13} className="animate-spin" />}
-                  {loading ? "Verifying…" : "Verify & Continue"}
+                  {loading ? "Activating 2FA…" : "Verify & Activate 2FA"}
                 </button>
               </div>
             </form>
           )}
 
-          {/* Step 5: SMS OTP */}
-          {step === 5 && (
-            <form onSubmit={handleVerifySmsOtp} className="space-y-4">
-              <p className="text-sm text-gray-600">
-                <Smartphone size={14} className="inline mr-1 opacity-60" />
-                A 6-digit verification code has been sent to the configured admin mobile number.
-              </p>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">SMS Verification Code</label>
-                <input type="text" inputMode="numeric" maxLength={6} value={smsOtp}
-                  onChange={(e) => { setSmsOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
-                  placeholder="000000"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono text-center text-lg tracking-[0.5em] outline-none focus:border-amber-400 transition"
-                  autoFocus />
-              </div>
-              {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
-              <div className="flex gap-2 pt-1">
-                <button type="button"
-                  disabled={otpSending || cooldownSecs > 0}
-                  onClick={() => { setError(""); void sendSmsOtp(); }}
-                  className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
-                  {otpSending
-                    ? <><RefreshCw size={12} className="inline animate-spin mr-1" />Sending…</>
-                    : cooldownSecs > 0 ? `Resend in ${cooldownSecs}s` : "Resend Code"}
-                </button>
-                <button type="submit" disabled={loading || smsOtp.length < 6}
-                  className="flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                  style={{ background: NAVY, color: "white" }}>
-                  {loading && <RefreshCw size={13} className="animate-spin" />}
-                  {loading ? "Enabling…" : "Enable 2FA"}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Step 6: Success — shows recovery codes */}
-          {step === 6 && (
+          {/* Step 4: Success — shows recovery codes */}
+          {step === 4 && (
             <div className="space-y-5 py-2">
               <div className="flex flex-col items-center text-center gap-3">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#f0fdf4" }}>
@@ -680,7 +580,7 @@ function TwoFASetupModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                     Two-Factor Authentication Enabled
                   </h4>
                   <p className="text-sm text-gray-600">
-                    Your account is now protected with your authenticator app, email, and SMS.
+                    Your account is now protected with Two-Factor Authentication.
                   </p>
                 </div>
               </div>
@@ -2637,6 +2537,355 @@ function PaymentSettingsSection() {
   );
 }
 
+// ─── Email & SMS Settings ──────────────────────────────────────────────────
+function EmailSmsSettingsSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [form, setForm] = useState({
+    smtpHost: "",
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: "",
+    smtpPass: "",
+    smtpFrom: "",
+    resendApiKey: "",
+  });
+
+  const [showPass, setShowPass] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<any>(null);
+
+  const [testRecipient, setTestRecipient] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-email-settings"],
+    queryFn: () => apiFetch("/api/admin/settings/email"),
+  });
+
+  useEffect(() => {
+    if (data) {
+      setForm({
+        smtpHost: data.smtpHost ?? "",
+        smtpPort: data.smtpPort ?? 587,
+        smtpSecure: Boolean(data.smtpSecure),
+        smtpUser: data.smtpUser ?? "",
+        smtpPass: data.hasSmtpPass ? data.maskedSmtpPass : "",
+        smtpFrom: data.smtpFrom ?? "",
+        resendApiKey: data.hasResendApiKey ? data.resendApiKey : "",
+      });
+    }
+  }, [data]);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: any) =>
+      apiFetch("/api/admin/settings/email", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      toast({ title: "Settings Saved", description: "Email and SMTP configuration updated successfully." });
+      qc.invalidateQueries({ queryKey: ["admin-email-settings"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Save Failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  function handleSave() {
+    const payload: any = {
+      smtpHost: form.smtpHost.trim(),
+      smtpPort: parseInt(String(form.smtpPort), 10) || 587,
+      smtpSecure: form.smtpSecure,
+      smtpUser: form.smtpUser.trim(),
+      smtpFrom: form.smtpFrom.trim(),
+    };
+    if (form.smtpPass && !form.smtpPass.includes("••••")) {
+      payload.smtpPass = form.smtpPass.trim();
+    }
+    if (form.resendApiKey && !form.resendApiKey.includes("••••")) {
+      payload.resendApiKey = form.resendApiKey.trim();
+    }
+    saveMutation.mutate(payload);
+  }
+
+  async function handleTestConnection() {
+    setTestingConnection(true);
+    setConnectionStatus(null);
+    try {
+      const overrides: any = {
+        host: form.smtpHost.trim(),
+        port: parseInt(String(form.smtpPort), 10) || 587,
+        secure: form.smtpSecure,
+        user: form.smtpUser.trim(),
+        from: form.smtpFrom.trim(),
+      };
+      if (form.smtpPass && !form.smtpPass.includes("••••")) {
+        overrides.pass = form.smtpPass.trim();
+      }
+      const res = await apiFetch("/api/admin/settings/email/test-smtp", {
+        method: "POST",
+        body: JSON.stringify(overrides),
+      });
+      setConnectionStatus(res);
+      if (res.success) {
+        toast({ title: "SMTP Connected", description: `Successfully verified connection to ${res.host}:${res.port}` });
+      } else {
+        toast({ title: "SMTP Verification Failed", description: res.error || "Could not connect", variant: "destructive" });
+      }
+    } catch (err: any) {
+      setConnectionStatus({ success: false, error: err.message || "Failed to test connection" });
+      toast({ title: "Test Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setTestingConnection(false);
+    }
+  }
+
+  async function handleSendTestEmail() {
+    if (!testRecipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testRecipient.trim())) {
+      toast({ title: "Invalid Email", description: "Please enter a valid recipient email address for testing.", variant: "destructive" });
+      return;
+    }
+    setSendingTest(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch("/api/admin/settings/email/send-test", {
+        method: "POST",
+        body: JSON.stringify({ toEmail: testRecipient.trim() }),
+      });
+      setTestResult(res);
+      if (res.success) {
+        toast({
+          title: "Test Email Dispatched!",
+          description: `Delivered via ${String(res.transport).toUpperCase()}${res.messageId ? ` (ID: ${res.messageId})` : ""}`,
+        });
+      } else {
+        toast({ title: "Test Email Failed", description: res.error || "Delivery failed", variant: "destructive" });
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, error: err.message || "Failed to send test email" });
+      toast({ title: "Send Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSendingTest(false);
+    }
+  }
+
+  return (
+    <SectionCard id="email-sms">
+      <SectionHeader
+        icon={Mail}
+        title="Email & SMTP Settings"
+        desc="Configure outgoing email delivery (Hostinger / Gmail / Custom SMTP), OTP verification, and order notifications"
+      />
+      <div className="p-6 space-y-6">
+        {/* Connection status banner if tested */}
+        {connectionStatus && (
+          <div
+            className={`p-4 rounded-xl border flex items-start gap-3 ${
+              connectionStatus.success
+                ? "bg-green-50/80 border-green-200 text-green-900"
+                : "bg-red-50/80 border-red-200 text-red-900"
+            }`}
+          >
+            {connectionStatus.success ? (
+              <CheckCircle size={20} className="text-green-600 shrink-0 mt-0.5" />
+            ) : (
+              <XCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            )}
+            <div className="text-sm">
+              <p className="font-semibold">
+                {connectionStatus.success
+                  ? `SMTP Connection Verified (${connectionStatus.host}:${connectionStatus.port})`
+                  : "SMTP Connection Failed"}
+              </p>
+              <p className="text-xs mt-0.5 opacity-90">
+                {connectionStatus.success
+                  ? `Authenticated as ${connectionStatus.user || "user"} • SSL/TLS: ${connectionStatus.secure ? "Enabled" : "Disabled"}`
+                  : connectionStatus.error}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Primary SMTP Configuration */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">Primary SMTP Transport (Hostinger / Gmail / Custom)</h3>
+          <p className="text-xs text-gray-500 mb-4">
+            Used for customer OTP verification codes, order status notifications, and security alerts.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="SMTP Host">
+              <Input
+                placeholder="smtp.hostinger.com or smtp.gmail.com"
+                value={form.smtpHost}
+                onChange={(e) => setForm((f) => ({ ...f, smtpHost: e.target.value }))}
+              />
+              <span className="text-[11px] text-gray-400">Example: smtp.hostinger.com</span>
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Port">
+                <Input
+                  type="number"
+                  placeholder="587"
+                  value={form.smtpPort}
+                  onChange={(e) => {
+                    const port = parseInt(e.target.value, 10) || 587;
+                    setForm((f) => ({
+                      ...f,
+                      smtpPort: port,
+                      smtpSecure: port === 465,
+                    }));
+                  }}
+                />
+                <span className="text-[11px] text-gray-400">587 (STARTTLS) or 465 (SSL)</span>
+              </Field>
+
+              <Field label="SSL / TLS">
+                <label className="flex items-center gap-2 mt-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.smtpSecure}
+                    onChange={(e) => setForm((f) => ({ ...f, smtpSecure: e.target.checked }))}
+                    className="w-4 h-4 text-[#0A1F44] rounded border-gray-300 focus:ring-[#0A1F44]"
+                  />
+                  <span className="text-xs font-medium text-gray-700">Require SSL</span>
+                </label>
+              </Field>
+            </div>
+
+            <Field label="SMTP Username / Email">
+              <Input
+                type="email"
+                placeholder="orders@vastraa.com"
+                value={form.smtpUser}
+                onChange={(e) => setForm((f) => ({ ...f, smtpUser: e.target.value }))}
+              />
+            </Field>
+
+            <Field label="SMTP Password">
+              <div className="relative">
+                <Input
+                  type={showPass ? "text" : "password"}
+                  placeholder={data?.hasSmtpPass ? "•••••••••••• (saved)" : "Enter SMTP account password"}
+                  value={form.smtpPass}
+                  onChange={(e) => setForm((f) => ({ ...f, smtpPass: e.target.value }))}
+                  className="pr-10 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Default 'From' Address">
+              <Input
+                placeholder="VASTRAA <orders@vastraa.com>"
+                value={form.smtpFrom}
+                onChange={(e) => setForm((f) => ({ ...f, smtpFrom: e.target.value }))}
+              />
+              <span className="text-[11px] text-gray-400">Sender display name and reply-to email</span>
+            </Field>
+          </div>
+        </div>
+
+        {/* Fallback / Secondary Resend API Key */}
+        <div className="pt-4 border-t border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">Secondary Fallback (Resend API)</h3>
+          <p className="text-xs text-gray-500 mb-3">Optional fallback if SMTP server is temporarily unreachable.</p>
+          <div className="max-w-md">
+            <Field label="Resend API Key">
+              <div className="relative">
+                <Input
+                  type={showResend ? "text" : "password"}
+                  placeholder={data?.hasResendApiKey ? "•••••••••••• (saved)" : "re_..."}
+                  value={form.resendApiKey}
+                  onChange={(e) => setForm((f) => ({ ...f, resendApiKey: e.target.value }))}
+                  className="pr-10 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResend(!showResend)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showResend ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+          </div>
+        </div>
+
+        {/* Send Test Email Card */}
+        <div className="p-4 rounded-xl bg-gray-50 border border-gray-200/70">
+          <div className="flex items-center gap-2 mb-2">
+            <Mail size={16} className="text-[#0A1F44]" />
+            <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">Send Test Email</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            Send an instant test email to verify that your inbox receives messages from VASTRAA.
+          </p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <input
+              type="email"
+              placeholder="recipient@example.com"
+              value={testRecipient}
+              onChange={(e) => setTestRecipient(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 bg-white"
+            />
+            <button
+              type="button"
+              onClick={handleSendTestEmail}
+              disabled={sendingTest || !testRecipient.trim()}
+              className="px-4 py-2 bg-[#0A1F44] text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-[#2C3E6B] disabled:opacity-50 flex items-center justify-center gap-2 transition-colors cursor-pointer shrink-0"
+            >
+              {sendingTest ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+              Send Test
+            </button>
+          </div>
+
+          {testResult && (
+            <div className={`mt-3 text-xs p-2.5 rounded-lg border ${testResult.success ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+              {testResult.success
+                ? `Success! Dispatched via ${String(testResult.transport).toUpperCase()}${testResult.messageId ? ` (Message ID: ${testResult.messageId})` : ""}`
+                : `Failed: ${testResult.error}`}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={handleTestConnection}
+            disabled={testingConnection}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {testingConnection ? <Loader2 size={16} className="animate-spin" /> : <Activity size={16} className="text-blue-600" />}
+            <span>Test SMTP Connection</span>
+          </button>
+
+          <Btn
+            variant="primary"
+            onClick={handleSave}
+            loading={saveMutation.isPending}
+            className="cursor-pointer"
+          >
+            <Save size={16} />
+            <span>Save Email Settings</span>
+          </Btn>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 // ─── Settings overview grid ───────────────────────────────────────────────────
 function OverviewGrid({ onNavigate }: { onNavigate: (id: string) => void }) {
   return (
@@ -2737,16 +2986,7 @@ export default function AdminSettings() {
           <ShippingSettingsSection />
           <SystemMaintenanceSection />
           <PaymentSettingsSection />
-
-          {/* Phase 4: coming-soon stubs */}
-          {[
-            { id: "email-sms", label: "Email & SMS Settings", icon: Mail, desc: "Providers, OTP and sender configuration", phase: 4 },
-          ].map(({ id, label, icon, desc, phase }) => (
-            <SectionCard key={id} id={id}>
-              <SectionHeader icon={icon} title={label} desc={desc} />
-              <ComingSoonBody phase={phase} />
-            </SectionCard>
-          ))}
+          <EmailSmsSettingsSection />
         </div>
       </AdminLayout>
     </AdminGuard>

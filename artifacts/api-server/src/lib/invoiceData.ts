@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { mongoVendors, mongoSellers, mongoProducts } from "@workspace/db";
 
 // ============================================================================
@@ -35,6 +37,45 @@ export const INVOICE_CONFIG = {
 // ============================================================================
 // INDIAN STATE GST & ISO CODE DICTIONARY
 // ============================================================================
+export function resolveItemImage(imgSrc?: string | null): string | null {
+  if (!imgSrc || typeof imgSrc !== "string") return null;
+  const trimmed = imgSrc.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("data:") || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  try {
+    const cleanPath = trimmed.replace(/^\/+/, "");
+    const candidateDirs = [
+      path.resolve(process.cwd(), "public"),
+      path.resolve(process.cwd(), "..", "vastraa", "public"),
+      path.resolve(process.cwd(), "..", "..", "artifacts", "vastraa", "public"),
+      path.resolve(process.cwd(), "..", "..", "artifacts", "public"),
+      path.resolve(process.cwd(), "artifacts", "api-server", "public"),
+      path.resolve(process.cwd(), "artifacts", "public"),
+    ];
+    for (const dir of candidateDirs) {
+      const full = path.join(dir, cleanPath);
+      if (fs.existsSync(full) && fs.statSync(full).isFile()) {
+        const ext = path.extname(full).toLowerCase().replace(".", "");
+        const mime =
+          ext === "png"
+            ? "image/png"
+            : ext === "jpg" || ext === "jpeg"
+            ? "image/jpeg"
+            : ext === "svg"
+            ? "image/svg+xml"
+            : ext === "webp"
+            ? "image/webp"
+            : "image/png";
+        const buf = fs.readFileSync(full);
+        return `data:${mime};base64,${buf.toString("base64")}`;
+      }
+    }
+  } catch {}
+  return trimmed;
+}
+
 export interface StateCodeInfo {
   name: string;
   code: string; // 2-digit GST state code (e.g. "27")
@@ -289,7 +330,9 @@ export interface InvoiceCalculatedResult {
     cgst: number;
     sgst: number;
     igst: number;
+    tax: number;
     total: number;
+    image?: string | null;
     weight?: string | null;
   }>;
   charges: Array<{
@@ -311,6 +354,7 @@ export interface InvoiceCalculatedResult {
     cgst: number;
     sgst: number;
     igst: number;
+    tax: number;
     items_subtotal: number;
     items_words: string;
     charges: number;
@@ -318,6 +362,8 @@ export interface InvoiceCalculatedResult {
     charges_cgst: number;
     charges_sgst: number;
     charges_igst: number;
+    charges_shipping?: number;
+    charges_platform?: number;
     grand: number;
     words: string;
   };
@@ -502,7 +548,9 @@ export async function buildInvoiceData(
       cgst: toRupees(cgstPaise),
       sgst: toRupees(sgstPaise),
       igst: toRupees(igstPaise),
+      tax: toRupees(gstPaise),
       total: toRupees(sellingTotalPaise),
+      image: resolveItemImage(it.image || (Array.isArray(it.images) ? it.images[0] : null) || it.imageUrl || it.thumbnail),
       weight: it.weight || null,
     };
   });
@@ -603,6 +651,7 @@ export async function buildInvoiceData(
     cgst: toRupees(totalCgstPaise),
     sgst: toRupees(totalSgstPaise),
     igst: toRupees(totalIgstPaise),
+    tax: toRupees(totalCgstPaise + totalSgstPaise + totalIgstPaise),
     items_subtotal: toRupees(totalItemsSubtotalPaise),
     items_words: amountToIndianWords(toRupees(totalItemsSubtotalPaise)),
     charges: toRupees(totalChargesPaise),
@@ -610,6 +659,8 @@ export async function buildInvoiceData(
     charges_cgst: toRupees(totalChargesCgstPaise),
     charges_sgst: toRupees(totalChargesSgstPaise),
     charges_igst: toRupees(totalChargesIgstPaise),
+    charges_shipping: shippingRupees,
+    charges_platform: platformFeeRupees,
     grand: toRupees(grandTotalPaise),
     words: amountToIndianWords(toRupees(grandTotalPaise)),
   };

@@ -19,3 +19,5 @@ export function AccountWishlistPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountWishlistPage;

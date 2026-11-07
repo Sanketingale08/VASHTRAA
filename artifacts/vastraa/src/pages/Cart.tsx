@@ -645,3 +645,5 @@ function RecentlyViewedSection({ products }: { products: any[] }) {
     </section>
   );
 }
+
+export default CartPage;

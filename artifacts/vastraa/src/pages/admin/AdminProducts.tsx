@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Package, CheckCircle, XCircle, Clock, Tag, Layers, Star,
@@ -8,11 +8,14 @@ import {
   Folder, ArrowUpDown, Filter, ShoppingBag, ShieldAlert, AlertCircle
 } from "lucide-react";
 import AdminLayout, { AdminGuard } from "./AdminLayout";
-import { adminHeaders, adminKey, adminFetch } from '@/lib/adminApi';
+import { adminHeaders, adminKey, adminFetch, adminAuthHeaders } from '@/lib/adminApi';
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableRowSkeleton } from "@/components/skeletons";
-import { CATEGORY_DROPDOWN_OPTIONS } from "@/constants/categories";
+import { CATEGORY_DROPDOWN_OPTIONS, CATALOG_CATEGORIES, findCategoryBySlugOrName, getSubcategoriesForCategory } from "@/constants/categories";
+import { isSareeCategory } from "@/constants/categorySpecifications";
+import { CategoriesTab as RedesignedCategoriesTab } from "./CategoriesTab";
+
 
 // ─── constants ───────────────────────────────────────────────────────────────
 const NAVY = "#0D1B36";
@@ -28,7 +31,7 @@ const apiFetch = adminFetch;
 interface Product {
   id: string; name: string; price?: number; originalPrice?: number;
   basePrice?: number;
-  category: string; subcategory?: string;
+  category: string; subcategory?: string; subtype?: string;
   categoryId?: string; categoryName?: string;
   subcategoryId?: string; subcategoryName?: string;
   brand?: string; fabric: string;
@@ -40,6 +43,10 @@ interface Product {
   rejectionReason?: string; approvalRemark?: string;
   featuredOrder?: number; featuredUntil?: string;
   description: string;
+  blouseIncluded?: boolean;
+  blouseImages?: string[];
+  blouseDetails?: { fabric?: string; color?: string; length?: string; design?: string };
+  specifications?: Array<{ key?: string; value?: string; name?: string }>;
 }
 
 // ─── formatting helpers ───────────────────────────────────────────────────────
@@ -68,6 +75,12 @@ interface ProductCategory {
   sellerId?: string | null;
   sellerName?: string | null;
   coverImage?: string | null;
+  bannerImage?: string | null;
+  description?: string | null;
+  displayOrder?: number;
+  subcategoriesCount?: number;
+  subcategories?: any[];
+  subtypesCount?: number;
   status?: "pending" | "approved" | "rejected";
   parentId?: string | null;
   productCount?: number;
@@ -117,7 +130,8 @@ function ToastStack({ toasts }: { toasts: ToastMsg[] }) {
 // ─── confirm dialog ───────────────────────────────────────────────────────────
 function ConfirmDialog({
   open, title, body, danger = true, onConfirm, onCancel,
-}: { open: boolean; title: string; body: string; danger?: boolean; onConfirm: () => void; onCancel: () => void }) {
+}: { open: boolean; title: string; body: string; danger?: boolean; onConfirm: () => void | Promise<void>; onCancel: () => void }) {
+  const [loading, setLoading] = useState(false);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -132,11 +146,22 @@ function ConfirmDialog({
           </div>
         </div>
         <div className="flex gap-2 justify-end">
-          <button onClick={onCancel} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+          <button disabled={loading} onClick={onCancel} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
             Cancel
           </button>
-          <button onClick={onConfirm}
-            className={`px-4 py-2 text-sm rounded-lg font-semibold text-white ${danger ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"}`}>
+          <button
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true);
+              try {
+                await onConfirm();
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className={`px-4 py-2 text-sm rounded-lg font-semibold text-white flex items-center gap-1.5 ${danger ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"} disabled:opacity-50`}
+          >
+            {loading && <RefreshCw size={13} className="animate-spin" />}
             Confirm
           </button>
         </div>
@@ -261,11 +286,51 @@ function ProductModal({ product, onClose, onRefresh, toast }: {
         <div className="p-5 space-y-4">
           {tab === "detail" && (
             <>
+              {/* Category Hierarchy Banner */}
+              <div className="bg-[#0D1B36]/5 border border-[#0D1B36]/10 rounded-xl p-3 text-xs">
+                <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block mb-1">
+                  Category Hierarchy
+                </span>
+                <div className="flex items-center gap-1.5 font-semibold text-[#0D1B36]">
+                  <span>{product.categoryName || product.category || "Main Category"}</span>
+                  <span className="text-gray-400">→</span>
+                  <span>{product.subcategoryName || product.subcategory || "General"}</span>
+                  {product.subtype && (
+                    <>
+                      <span className="text-gray-400">→</span>
+                      <span>{product.subtype}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Product Image Thumbnails */}
+              {Array.isArray(product.images) && product.images.length > 1 && (
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1.5 font-bold">
+                    Main Product Gallery ({product.images.length} photos)
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {product.images.map((imgUrl, idx) => (
+                      <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                        <img
+                          src={getProductImageSrc(imgUrl)}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={replaceProductImageWithFallback}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
                   ["Vendor", product.vendorName || "—"],
                   ["Category", product.categoryName || product.category || "—"],
                   ["Subcategory", product.subcategoryName || product.subcategory || "—"],
+                  ["Subtype", product.subtype || "—"],
                   ["Brand", product.brand || "—"], ["Fabric", product.fabric || "—"],
                   ["Color", product.color || "—"], ["Occasion", product.occasion || "—"],
                   ["Price", getProductDisplayPrice(product)],
@@ -280,6 +345,66 @@ function ProductModal({ product, onClose, onRefresh, toast }: {
                   </div>
                 ))}
               </div>
+
+              {/* Saree Matching Blouse Details & Dedicated Gallery */}
+              {isSareeCategory(product.category) && product.blouseIncluded && (
+                <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                      Matching Blouse Piece (Included)
+                    </span>
+                    <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                      Saree Exclusive
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-amber-950">
+                    <div>Fabric: <strong>{product.blouseDetails?.fabric || "Pure Silk"}</strong></div>
+                    <div>Colour: <strong>{product.blouseDetails?.color || product.color || "Matching"}</strong></div>
+                    <div>Length: <strong>{product.blouseDetails?.length || "0.80 Metre (Unstitched)"}</strong></div>
+                    {product.blouseDetails?.design && (
+                      <div>Design: <strong>{product.blouseDetails.design}</strong></div>
+                    )}
+                  </div>
+                  {Array.isArray(product.blouseImages) && product.blouseImages.length > 0 && (
+                    <div className="pt-2 border-t border-amber-200/60">
+                      <p className="text-[10px] text-amber-800 uppercase tracking-wide mb-1.5 font-bold">
+                        Blouse Piece Photos ({product.blouseImages.length})
+                      </p>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {product.blouseImages.map((bImg, idx) => (
+                          <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-amber-300 shrink-0 shadow-2xs">
+                            <img
+                              src={getProductImageSrc(bImg)}
+                              alt="Blouse"
+                              className="w-full h-full object-cover"
+                              onError={replaceProductImageWithFallback}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Product Specifications */}
+              {Array.isArray(product.specifications) && product.specifications.length > 0 && (
+                <div className="bg-gray-50 rounded-xl p-3.5 space-y-2">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+                    Product Specifications ({product.specifications.length})
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {product.specifications.map((s, idx) => (
+                      <div key={idx} className="p-2 rounded-lg bg-white border border-gray-100">
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">
+                          {s.key || (s as any).name}
+                        </span>
+                        <span className="font-semibold text-gray-800">{s.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {product.description && (
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Description</p>
@@ -344,18 +469,34 @@ function ProductModal({ product, onClose, onRefresh, toast }: {
 
 // ─── products table (shared by Total / Pending / Approved / Rejected tabs) ────
 function ProductsTable({
-  statusFilter, toast,
-}: { statusFilter?: "pending" | "approved" | "rejected"; toast: ReturnType<typeof useToastMsg> }) {
+  statusFilter, toast, initialCategory, initialSubcategory, onClearFilters,
+}: {
+  statusFilter?: "pending" | "approved" | "rejected";
+  toast: ReturnType<typeof useToastMsg>;
+  initialCategory?: string;
+  initialSubcategory?: string;
+  onClearFilters?: () => void;
+}) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory || "all");
+  const [subcategoryFilter, setSubcategoryFilter] = useState(initialSubcategory || "all");
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
-  const [confirm, setConfirm] = useState<{ title: string; body: string; action: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; body: string; danger?: boolean; action: () => void | Promise<void> } | null>(null);
+  const [busyMap, setBusyMap] = useState<Record<string, boolean>>({});
 
-  const qKey = ["admin-products", statusFilter ?? "all", search, categoryFilter, sort, page];
+  useEffect(() => {
+    if (initialCategory !== undefined) setCategoryFilter(initialCategory);
+    if (initialSubcategory !== undefined) setSubcategoryFilter(initialSubcategory);
+  }, [initialCategory, initialSubcategory]);
+
+  const isBusy = (id: string) => Boolean(busyMap[id] || busyMap[`${id}-approve`] || busyMap[`${id}-reject`] || busyMap[`${id}-toggle`] || busyMap[`${id}-delete`] || busyMap[`${id}-feature`]);
+  const setActionBusy = (actionKey: string, busy: boolean) => setBusyMap(prev => ({ ...prev, [actionKey]: busy }));
+
+  const qKey = ["admin-products", statusFilter ?? "all", search, categoryFilter, subcategoryFilter, sort, page];
   const { data, isFetching, refetch } = useQuery({
     queryKey: qKey,
     queryFn: () => {
@@ -363,6 +504,7 @@ function ProductsTable({
         sort, page: String(page), limit: "20",
         ...(search ? { search } : {}),
         ...(categoryFilter && categoryFilter !== "all" ? { category: categoryFilter } : {}),
+        ...(subcategoryFilter && subcategoryFilter !== "all" ? { subcategory: subcategoryFilter } : {}),
         ...(statusFilter ? { status: statusFilter } : {}),
       });
       return apiFetch(`/api/admin/products?${p}`) as Promise<{
@@ -372,30 +514,189 @@ function ProductsTable({
     staleTime: 30000,
   });
 
+  useEffect(() => {
+    const handleRealtime = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail) return;
+      if (
+        detail.name?.startsWith("product:") ||
+        detail.name?.startsWith("category:") ||
+        detail.name?.startsWith("inventory:") ||
+        detail.name === "catalog:updated"
+      ) {
+        qc.invalidateQueries({ queryKey: ["admin-products"] });
+        qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+        qc.invalidateQueries({ queryKey: ["admin-categories"] });
+      }
+    };
+    window.addEventListener("vastraa-realtime-event", handleRealtime);
+    return () => window.removeEventListener("vastraa-realtime-event", handleRealtime);
+  }, [qc]);
+
   const products = data?.products ?? [];
   const totalPages = data?.totalPages ?? 1;
+
+  const updateProductInCache = useCallback((id: string, patch: Partial<Product>) => {
+    qc.setQueriesData({ queryKey: ["admin-products"] }, (old: any) => {
+      if (!old || !Array.isArray(old.products)) return old;
+      return {
+        ...old,
+        products: old.products.map((item: Product) => (item.id === id ? { ...item, ...patch } : item)),
+      };
+    });
+  }, [qc]);
+
+  const removeProductFromCache = useCallback((id: string) => {
+    qc.setQueriesData({ queryKey: ["admin-products"] }, (old: any) => {
+      if (!old || !Array.isArray(old.products)) return old;
+      return {
+        ...old,
+        products: old.products.filter((item: Product) => item.id !== id),
+        total: Math.max(0, (old.total ?? old.products.length) - 1),
+      };
+    });
+  }, [qc]);
 
   const bulkMut = useMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: string }) =>
       apiFetch("/api/admin/products/bulk", { method: "POST", body: JSON.stringify({ ids, action }) }),
-    onSuccess: (_, { action }) => {
-      toast.ok(`Bulk ${action} applied`);
+    onSuccess: (_, { action, ids }) => {
+      toast.ok(`Bulk ${action} applied to ${ids.length} product${ids.length > 1 ? "s" : ""}`);
       setSelected(new Set());
+      if (action === "delete") {
+        ids.forEach(id => removeProductFromCache(id));
+      } else if (action === "approve") {
+        ids.forEach(id => updateProductInCache(id, { status: "approved", active: true }));
+      } else if (action === "reject") {
+        ids.forEach(id => updateProductInCache(id, { status: "rejected", active: false }));
+      } else if (action === "activate") {
+        ids.forEach(id => updateProductInCache(id, { active: true }));
+      } else if (action === "deactivate") {
+        ids.forEach(id => updateProductInCache(id, { active: false }));
+      }
       qc.invalidateQueries({ queryKey: ["admin-products"] });
       qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/products"] });
+      qc.invalidateQueries({ queryKey: ["/api/seller/products"] });
     },
-    onError: (e: any) => toast.err(e.message),
+    onError: (e: any) => toast.err(e.message || "Bulk action failed"),
   });
 
   const patchMut = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Record<string, any> }) =>
       apiFetch(`/api/admin/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: () => {
+    onSuccess: (_, { id, body }) => {
+      updateProductInCache(id, body);
       qc.invalidateQueries({ queryKey: ["admin-products"] });
       qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/products"] });
+      qc.invalidateQueries({ queryKey: ["/api/seller/products"] });
     },
-    onError: (e: any) => toast.err(e.message),
+    onError: (e: any) => toast.err(e.message || "Update failed"),
   });
+
+  async function handleApprove(p: Product) {
+    if (isBusy(p.id)) return;
+    const actionKey = `${p.id}-approve`;
+    setActionBusy(actionKey, true);
+    try {
+      await apiFetch(`/api/admin/products/${p.id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ remark: "Approved by administrator" }),
+      });
+      updateProductInCache(p.id, { status: "approved", active: true });
+      toast.ok(`"${p.name}" approved successfully`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/products"] });
+      qc.invalidateQueries({ queryKey: ["/api/seller/products"] });
+    } catch (err: any) {
+      toast.err(err.message || "Failed to approve product");
+    } finally {
+      setActionBusy(actionKey, false);
+    }
+  }
+
+  function handleReject(p: Product) {
+    if (isBusy(p.id)) return;
+    setConfirm({
+      title: `Reject "${p.name}"?`,
+      body: "This product will be marked as rejected and hidden from customer listings.",
+      danger: true,
+      action: async () => {
+        const actionKey = `${p.id}-reject`;
+        setActionBusy(actionKey, true);
+        try {
+          await apiFetch(`/api/admin/products/${p.id}/reject`, {
+            method: "POST",
+            body: JSON.stringify({ reason: "Does not meet catalog guidelines" }),
+          });
+          updateProductInCache(p.id, { status: "rejected", active: false });
+          toast.ok(`"${p.name}" rejected`);
+          qc.invalidateQueries({ queryKey: ["admin-products"] });
+          qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+          qc.invalidateQueries({ queryKey: ["/api/products"] });
+          qc.invalidateQueries({ queryKey: ["/api/seller/products"] });
+          setConfirm(null);
+        } catch (err: any) {
+          toast.err(err.message || "Failed to reject product");
+        } finally {
+          setActionBusy(actionKey, false);
+        }
+      },
+    });
+  }
+
+  async function handleToggleActive(p: Product) {
+    if (isBusy(p.id)) return;
+    const actionKey = `${p.id}-toggle`;
+    const targetActive = !p.active;
+    setActionBusy(actionKey, true);
+    try {
+      const endpoint = targetActive
+        ? `/api/admin/products/${p.id}/activate`
+        : `/api/admin/products/${p.id}/deactivate`;
+      await apiFetch(endpoint, { method: "POST" });
+      updateProductInCache(p.id, { active: targetActive });
+      toast.ok(targetActive ? `"${p.name}" activated` : `"${p.name}" deactivated`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/products"] });
+      qc.invalidateQueries({ queryKey: ["/api/seller/products"] });
+    } catch (err: any) {
+      toast.err(err.message || "Failed to update product visibility");
+    } finally {
+      setActionBusy(actionKey, false);
+    }
+  }
+
+  function handleDelete(p: Product) {
+    if (isBusy(p.id)) return;
+    setConfirm({
+      title: `Delete "${p.name}"?`,
+      body: "This product will be permanently deleted from MongoDB and removed from all portals. This action cannot be undone.",
+      danger: true,
+      action: async () => {
+        const actionKey = `${p.id}-delete`;
+        setActionBusy(actionKey, true);
+        try {
+          await apiFetch(`/api/admin/products/${p.id}`, { method: "DELETE" });
+          removeProductFromCache(p.id);
+          toast.ok(`"${p.name}" deleted successfully`);
+          setSelected(s => { const n = new Set(s); n.delete(p.id); return n; });
+          qc.invalidateQueries({ queryKey: ["admin-products"] });
+          qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+          qc.invalidateQueries({ queryKey: ["/api/products"] });
+          qc.invalidateQueries({ queryKey: ["/api/seller/products"] });
+          setConfirm(null);
+        } catch (err: any) {
+          toast.err(err.message || "Failed to delete product");
+        } finally {
+          setActionBusy(actionKey, false);
+        }
+      },
+    });
+  }
 
   function toggleSelect(id: string) {
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -408,8 +709,14 @@ function ProductsTable({
     if (!selected.size) return;
     setConfirm({
       title: `${label} ${selected.size} product${selected.size > 1 ? "s" : ""}?`,
-      body: `This will ${action} all selected products.`,
-      action: () => { bulkMut.mutate({ ids: [...selected], action }); setConfirm(null); },
+      body: action === "delete"
+        ? "This will permanently delete all selected products from MongoDB. This cannot be undone."
+        : `This will ${action} all selected products across portals.`,
+      danger: action === "delete" || action === "reject",
+      action: async () => {
+        await bulkMut.mutateAsync({ ids: [...selected], action });
+        setConfirm(null);
+      },
     });
   }
 
@@ -441,34 +748,66 @@ function ProductsTable({
         <button onClick={() => refetch()} className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50">
           <RefreshCw size={14} className={`text-gray-500 ${isFetching ? "animate-spin" : ""}`} />
         </button>
+        {(categoryFilter !== "all" || subcategoryFilter !== "all") && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-xl text-xs font-semibold">
+            <span>Filter: <strong>{categoryFilter}</strong>{subcategoryFilter !== "all" ? ` > ${subcategoryFilter}` : ""}</span>
+            <button
+              onClick={() => {
+                setCategoryFilter("all");
+                setSubcategoryFilter("all");
+                onClearFilters?.();
+              }}
+              className="p-0.5 hover:bg-purple-200 rounded-full text-purple-700"
+              title="Clear Filter"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* bulk action bar */}
       {selected.size > 0 && (
         <div className="flex flex-wrap gap-2 items-center bg-[#0D1B36]/5 border border-[#0D1B36]/10 rounded-xl px-4 py-2.5">
           <span className="text-xs font-semibold text-gray-700 mr-2">{selected.size} selected</span>
-          {!statusFilter || statusFilter === "pending" ? (
-            <button onClick={() => quickAction("approve", "Approve")}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
-              ✓ Approve
-            </button>
-          ) : null}
-          {!statusFilter || statusFilter === "pending" || statusFilter === "approved" ? (
-            <button onClick={() => quickAction("reject", "Reject")}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 text-red-700 hover:bg-red-200">
-              ✕ Reject
-            </button>
-          ) : null}
-          <button onClick={() => quickAction("activate", "Activate")}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">
+          <button
+            onClick={() => quickAction("approve", "Approve")}
+            disabled={bulkMut.isPending}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {bulkMut.isPending ? <RefreshCw size={11} className="animate-spin" /> : <CheckCircle size={12} />}
+            Approve
+          </button>
+          <button
+            onClick={() => quickAction("reject", "Reject")}
+            disabled={bulkMut.isPending}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 text-red-700 hover:bg-red-200 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {bulkMut.isPending ? <RefreshCw size={11} className="animate-spin" /> : <XCircle size={12} />}
+            Reject
+          </button>
+          <button
+            onClick={() => quickAction("activate", "Activate")}
+            disabled={bulkMut.isPending}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {bulkMut.isPending ? <RefreshCw size={11} className="animate-spin" /> : <ToggleRight size={13} />}
             Activate
           </button>
-          <button onClick={() => quickAction("deactivate", "Deactivate")}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
+          <button
+            onClick={() => quickAction("deactivate", "Deactivate")}
+            disabled={bulkMut.isPending}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {bulkMut.isPending ? <RefreshCw size={11} className="animate-spin" /> : <ToggleLeft size={13} />}
             Deactivate
           </button>
-          <button onClick={() => quickAction("delete", "Delete")}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 text-red-700 hover:bg-red-200">
+          <button
+            onClick={() => quickAction("delete", "Delete")}
+            disabled={bulkMut.isPending}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {bulkMut.isPending ? <RefreshCw size={11} className="animate-spin" /> : <Trash2 size={12} />}
             Delete
           </button>
         </div>
@@ -547,7 +886,7 @@ function ProductsTable({
                     <td className="px-4 py-3 hidden lg:table-cell text-gray-600">{p.stock}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => setViewProduct(p)} title="View"
+                        <button onClick={() => setViewProduct(p)} title="View Details"
                           className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
                           <Eye size={14} />
                         </button>
@@ -562,37 +901,73 @@ function ProductsTable({
                             },
                           });
                         }} title={p.isFeatured ? "Unfeature" : "Feature"}
-                          className={`p-1.5 rounded-lg hover:bg-gray-100 ${p.isFeatured ? "text-amber-500" : "text-gray-400"}`}>
+                          disabled={isBusy(p.id)}
+                          className={`p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 ${p.isFeatured ? "text-amber-500" : "text-gray-400"}`}>
                           <Star size={14} />
                         </button>
-                        <button onClick={() => {
-                          setConfirm({
-                            title: `${p.active ? "Deactivate" : "Activate"} product?`,
-                            body: p.active ? "Product will be hidden from customers." : "Product will be visible to customers.",
-                            danger: p.active,
-                            action: async () => {
-                              await patchMut.mutateAsync({ id: p.id, body: { active: !p.active } });
-                              toast.ok(p.active ? "Deactivated" : "Activated");
-                              setConfirm(null);
-                            },
-                          } as any);
-                        }} title={p.active ? "Deactivate" : "Activate"}
-                          className={`p-1.5 rounded-lg hover:bg-gray-100 ${p.active ? "text-emerald-500" : "text-gray-400"}`}>
-                          {p.active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+
+                        {/* 1. ✓ Approve Action */}
+                        {p.status !== "approved" && (
+                          <button
+                            onClick={() => handleApprove(p)}
+                            disabled={isBusy(p.id)}
+                            title="✓ Approve Product"
+                            className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 disabled:opacity-40 transition-colors"
+                          >
+                            {busyMap[`${p.id}-approve`] ? (
+                              <RefreshCw size={14} className="animate-spin text-emerald-600" />
+                            ) : (
+                              <CheckCircle size={14} />
+                            )}
+                          </button>
+                        )}
+
+                        {/* 2. ✕ Reject Action */}
+                        {p.status !== "rejected" && (
+                          <button
+                            onClick={() => handleReject(p)}
+                            disabled={isBusy(p.id)}
+                            title="✕ Reject Product"
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 hover:text-red-600 disabled:opacity-40 transition-colors"
+                          >
+                            {busyMap[`${p.id}-reject`] ? (
+                              <RefreshCw size={14} className="animate-spin text-red-500" />
+                            ) : (
+                              <XCircle size={14} />
+                            )}
+                          </button>
+                        )}
+
+                        {/* 3 & 4. Activate / Deactivate Toggle Action */}
+                        <button
+                          onClick={() => handleToggleActive(p)}
+                          disabled={isBusy(p.id)}
+                          title={p.active ? "Deactivate (Hide from storefront)" : "Activate (Show on storefront)"}
+                          className={`p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition-colors ${
+                            p.active ? "text-emerald-500 hover:text-emerald-600" : "text-gray-400 hover:text-gray-600"
+                          }`}
+                        >
+                          {busyMap[`${p.id}-toggle`] ? (
+                            <RefreshCw size={14} className="animate-spin text-gray-500" />
+                          ) : p.active ? (
+                            <ToggleRight size={15} />
+                          ) : (
+                            <ToggleLeft size={15} />
+                          )}
                         </button>
-                        <button onClick={() => setConfirm({
-                          title: "Delete product?",
-                          body: "This is permanent and cannot be undone.",
-                          action: async () => {
-                            await apiFetch(`/api/admin/products/${p.id}`, { method: "DELETE" });
-                            toast.ok("Product deleted");
-                            qc.invalidateQueries({ queryKey: ["admin-products"] });
-                            qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
-                            setConfirm(null);
-                          },
-                        })} title="Delete"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500">
-                          <Trash2 size={14} />
+
+                        {/* 5. Delete Action */}
+                        <button
+                          onClick={() => handleDelete(p)}
+                          disabled={isBusy(p.id)}
+                          title="Delete Product"
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 disabled:opacity-40 transition-colors"
+                        >
+                          {busyMap[`${p.id}-delete`] ? (
+                            <RefreshCw size={14} className="animate-spin text-red-500" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -623,43 +998,78 @@ function ProductsTable({
 
       {viewProduct && (
         <ProductModal product={viewProduct} onClose={() => setViewProduct(null)}
-          onRefresh={() => qc.invalidateQueries({ queryKey: ["admin-products"] })} toast={toast} />
+          onRefresh={() => {
+            qc.invalidateQueries({ queryKey: ["admin-products"] });
+            qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
+          }} toast={toast} />
       )}
       {confirm && (
-        <ConfirmDialog open title={confirm.title} body={confirm.body}
+        <ConfirmDialog open title={confirm.title} body={confirm.body} danger={confirm.danger ?? true}
           onConfirm={confirm.action} onCancel={() => setConfirm(null)} />
       )}
     </div>
   );
 }
 
-// ─── category detail & cover upload modal ──────────────────────────────────────
+// ─── category detail & media modal ───────────────────────────────────────────
 function CategoryDetailModal({
-  category, onClose, onRefresh, toast,
+  category, onClose, onRefresh, toast, initialTab = "cover",
 }: {
   category: ProductCategory;
   onClose: () => void;
+
   onRefresh: () => void;
   toast: ReturnType<typeof useToastMsg>;
+  initialTab?: "cover" | "subcategories" | "products" | "assign" | "status";
 }) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"cover" | "products" | "status">("cover");
+  const [tab, setTab] = useState<"cover" | "subcategories" | "products" | "assign" | "status">(initialTab);
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [urlInput, setUrlInput] = useState(category.coverImage ?? "");
+  const [bannerUrlInput, setBannerUrlInput] = useState(category.bannerImage ?? "");
   const [currentCover, setCurrentCover] = useState<string | null>(category.coverImage ?? null);
+  const [currentBanner, setCurrentBanner] = useState<string | null>(category.bannerImage ?? null);
+  const [displayOrder, setDisplayOrder] = useState<number>(category.displayOrder ?? 99);
+  const [description, setDescription] = useState<string>(category.description ?? "");
+  const [assignSearch, setAssignSearch] = useState("");
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
 
   // Associated products query
-  const { data: catProductsData, isLoading: isLoadingProducts } = useQuery({
+  const { data: catProductsData, isLoading: isLoadingProducts, refetch: refetchCatProducts } = useQuery({
     queryKey: ["admin-category-products", category.id],
     queryFn: () => apiFetch(`/api/admin/categories/${category.id}/products`) as Promise<{
       category: ProductCategory;
       products: Product[];
       total: number;
     }>,
-    enabled: tab === "products",
+    enabled: tab === "products" || tab === "assign",
   });
+
+  // All products query for assignment
+  const { data: allProductsData, isLoading: isLoadingAllProducts } = useQuery({
+    queryKey: ["admin-all-products-for-assign"],
+    queryFn: () => apiFetch(`/api/products?limit=200`) as Promise<{
+      products: Product[];
+    }>,
+    enabled: tab === "assign",
+  });
+
+  // Find authoritative subcategories from catalog and dynamically registered subcategories
+  const catalogDef = findCategoryBySlugOrName(category.slug);
+  const subcategoriesList = useMemo(() => {
+    const staticSubs = catalogDef?.subcategories || [];
+    const dbSubs = category.subcategories || [];
+    const merged = [...staticSubs];
+    for (const sub of dbSubs) {
+      if (!merged.some((s: any) => s.id === sub.id || s.slug === sub.slug || s.name.toLowerCase() === sub.name.toLowerCase())) {
+        merged.push(sub);
+      }
+    }
+    return merged;
+  }, [catalogDef, category.subcategories]);
 
   async function uploadCoverImage(imageDataUrlOrUrl: string) {
     setIsUploading(true);
@@ -669,7 +1079,7 @@ function CategoryDetailModal({
         body: JSON.stringify({ coverImage: imageDataUrlOrUrl }),
       });
       setCurrentCover(imageDataUrlOrUrl);
-      toast.ok("Cover image updated successfully!");
+      toast.ok("Thumbnail cover image updated successfully!");
       qc.invalidateQueries({ queryKey: ["admin-categories"] });
       qc.invalidateQueries({ queryKey: ["admin-categories-stats"] });
       qc.invalidateQueries({ queryKey: ["/api/categories"] });
@@ -681,49 +1091,175 @@ function CategoryDetailModal({
     }
   }
 
-  function handleFileSelect(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toast.err("Please upload an image file (JPG, PNG, WebP, GIF).");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.err("Image size should be under 5MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = e => {
-      const result = e.target?.result as string;
-      if (result) uploadCoverImage(result);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  }
-
-  async function removeCover() {
+  async function uploadBannerImage(imageDataUrlOrUrl: string) {
     setIsUploading(true);
     try {
-      await apiFetch(`/api/admin/categories/${category.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ coverImage: null }),
+      await apiFetch(`/api/admin/categories/${category.id}/banner-image`, {
+        method: "POST",
+        body: JSON.stringify({ bannerImage: imageDataUrlOrUrl }),
       });
-      setCurrentCover(null);
-      setUrlInput("");
-      toast.ok("Cover image removed.");
+      setCurrentBanner(imageDataUrlOrUrl);
+      toast.ok("Category banner image updated successfully!");
       qc.invalidateQueries({ queryKey: ["admin-categories"] });
       qc.invalidateQueries({ queryKey: ["admin-categories-stats"] });
       qc.invalidateQueries({ queryKey: ["/api/categories"] });
       onRefresh();
     } catch (e: any) {
-      toast.err(e.message);
+      toast.err(e.message || "Failed to upload banner image");
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  const [subUploadingId, setSubUploadingId] = useState<string | null>(null);
+
+  async function handleFileSelect(file: File, isBanner = false) {
+    if (!file.type.startsWith("image/")) {
+      toast.err("Please upload an image file (JPG, PNG, WebP).");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.err("Image size should be under 10MB.");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const catParam = encodeURIComponent(category.slug || category.name || "category");
+      const res = await fetch(`/api/admin/upload/category-image?category=${catParam}`, {
+        method: "POST",
+        headers: adminAuthHeaders({
+          "Content-Type": file.type || "image/jpeg",
+          "x-category-id": String(category.id || category.slug || "category"),
+        }),
+        credentials: "include",
+        body: buffer,
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to upload image");
+      }
+      const data = await res.json();
+      const uploadedUrl = data.url || data.publicUrl;
+      if (!uploadedUrl) {
+        throw new Error("No URL returned from upload");
+      }
+      if (isBanner) {
+        await uploadBannerImage(uploadedUrl);
+      } else {
+        await uploadCoverImage(uploadedUrl);
+      }
+    } catch (e: any) {
+      toast.err(e.message || "Failed to upload image");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function handleSubcategoryFileSelect(sub: any, file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.err("Please upload an image file (JPG, PNG, WebP).");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.err("Image size should be under 10MB.");
+      return;
+    }
+    setSubUploadingId(sub.id);
+    try {
+      const buffer = await file.arrayBuffer();
+      const catParam = encodeURIComponent(sub.slug || sub.name || "subcategory");
+      const res = await fetch(`/api/admin/upload/category-image?category=${catParam}`, {
+        method: "POST",
+        headers: adminAuthHeaders({
+          "Content-Type": file.type || "image/jpeg",
+          "x-category-id": String(sub.id || sub.slug || "subcategory"),
+          "x-subcategory-id": String(sub.id || sub.slug || "subcategory"),
+        }),
+        credentials: "include",
+        body: buffer,
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to upload image");
+      }
+      const data = await res.json();
+      const uploadedUrl = data.url || data.publicUrl;
+      if (!uploadedUrl) {
+        throw new Error("No URL returned from upload");
+      }
+
+      await apiFetch(`/api/admin/categories/${sub.id}/cover-image`, {
+        method: "POST",
+        body: JSON.stringify({ coverImage: uploadedUrl }),
+      });
+
+      toast.ok(`Image updated for subcategory "${sub.name}"!`);
+      qc.invalidateQueries({ queryKey: ["admin-categories"] });
+      qc.invalidateQueries({ queryKey: ["admin-categories-stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      onRefresh();
+    } catch (e: any) {
+      toast.err(e.message || "Failed to upload subcategory image");
+    } finally {
+      setSubUploadingId(null);
+    }
+  }
+
+  async function handleRemoveSubcategoryImage(sub: any) {
+    setSubUploadingId(sub.id);
+    try {
+      await apiFetch(`/api/admin/categories/${sub.id}/cover-image`, {
+        method: "DELETE",
+      });
+      toast.ok(`Image removed for subcategory "${sub.name}"!`);
+      qc.invalidateQueries({ queryKey: ["admin-categories"] });
+      qc.invalidateQueries({ queryKey: ["admin-categories-stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      onRefresh();
+    } catch (e: any) {
+      toast.err(e.message || "Failed to remove subcategory image");
+    } finally {
+      setSubUploadingId(null);
+    }
+  }
+
+  async function handleAssignProducts() {
+    if (!selectedProductIds.length) {
+      toast.err("Select at least one product to assign.");
+      return;
+    }
+    try {
+      await apiFetch(`/api/admin/categories/${category.id}/assign-products`, {
+        method: "POST",
+        body: JSON.stringify({ productIds: selectedProductIds }),
+      });
+      toast.ok(`Assigned ${selectedProductIds.length} products to ${category.name}!`);
+      setSelectedProductIds([]);
+      refetchCatProducts();
+      qc.invalidateQueries({ queryKey: ["admin-categories"] });
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      onRefresh();
+    } catch (e: any) {
+      toast.err(e.message || "Failed to assign products");
+    }
+  }
+
+  async function saveDetails() {
+    try {
+      await apiFetch(`/api/admin/categories/${category.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          displayOrder: Number(displayOrder) || 99,
+          description: description.trim(),
+        }),
+      });
+      toast.ok("Category settings updated successfully!");
+      qc.invalidateQueries({ queryKey: ["admin-categories"] });
+      qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      onRefresh();
+    } catch (e: any) {
+      toast.err(e.message || "Failed to save category details");
     }
   }
 
@@ -745,22 +1281,29 @@ function CategoryDetailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#0D1B36]/10 text-[#0D1B36] flex items-center justify-center font-bold">
               <Folder size={20} />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-base">{category.name}</h2>
-              <p className="text-xs text-gray-500">
-                Slug: <code className="bg-gray-100 px-1 py-0.5 rounded">{category.slug}</code> · Type:{" "}
-                <span className="capitalize font-semibold text-gray-700">{category.type || "custom"}</span>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-gray-900 text-base">{category.name}</h2>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                  Order #{category.displayOrder ?? 99}
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${category.active ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
+                  {category.active ? "Storefront Visible" : "Hidden"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Slug: <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-700">/{category.slug}</code> · {category.productCount ?? 0} active products
               </p>
             </div>
           </div>
@@ -770,20 +1313,30 @@ function CategoryDetailModal({
         </div>
 
         {/* Sub Navigation */}
-        <div className="border-b border-gray-100 px-6 flex gap-2 pt-2 bg-white">
+        <div className="border-b border-gray-100 px-6 flex gap-2 pt-2 bg-white overflow-x-auto">
           <button
             onClick={() => setTab("cover")}
-            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 whitespace-nowrap ${
               tab === "cover"
                 ? "text-[#0D1B36] border-[#0D1B36] bg-gray-50/80"
                 : "text-gray-500 border-transparent hover:text-gray-700"
             }`}
           >
-            🖼️ Cover Image & Media
+            🖼️ Images & Banner
+          </button>
+          <button
+            onClick={() => setTab("subcategories")}
+            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 whitespace-nowrap ${
+              tab === "subcategories"
+                ? "text-[#0D1B36] border-[#0D1B36] bg-gray-50/80"
+                : "text-gray-500 border-transparent hover:text-gray-700"
+            }`}
+          >
+            🌿 Subcategories & Subtypes ({subcategoriesList.length})
           </button>
           <button
             onClick={() => setTab("products")}
-            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 whitespace-nowrap ${
               tab === "products"
                 ? "text-[#0D1B36] border-[#0D1B36] bg-gray-50/80"
                 : "text-gray-500 border-transparent hover:text-gray-700"
@@ -792,114 +1345,280 @@ function CategoryDetailModal({
             🛍️ Associated Products ({category.productCount ?? 0})
           </button>
           <button
+            onClick={() => setTab("assign")}
+            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 whitespace-nowrap ${
+              tab === "assign"
+                ? "text-[#0D1B36] border-[#0D1B36] bg-gray-50/80"
+                : "text-gray-500 border-transparent hover:text-gray-700"
+            }`}
+          >
+            🎯 Assign Products
+          </button>
+          <button
             onClick={() => setTab("status")}
-            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+            className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 whitespace-nowrap ${
               tab === "status"
                 ? "text-[#0D1B36] border-[#0D1B36] bg-gray-50/80"
                 : "text-gray-500 border-transparent hover:text-gray-700"
             }`}
           >
-            ⚙️ Verification & Status
+            ⚙️ Display Order & Status
           </button>
         </div>
 
         {/* Body Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
+          {/* TAB 1: COVER & BANNER IMAGES */}
           {tab === "cover" && (
-            <div className="space-y-4">
-              <p className="text-xs text-gray-500">
-                Upload or change the high-resolution banner image displayed for this category on the public shop & seller dashboard.
-              </p>
+            <div className="space-y-6">
+              {/* Category Thumbnail / Cover */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-xs uppercase tracking-wide">Category Thumbnail / Card Image</h3>
+                    <p className="text-xs text-gray-500">Displayed in storefront category cards, homepage showcase, and search dropdowns.</p>
+                  </div>
+                  {currentCover && (
+                    <button
+                      onClick={() => {
+                        apiFetch(`/api/admin/categories/${category.id}`, {
+                          method: "PATCH",
+                          body: JSON.stringify({ coverImage: null }),
+                        }).then(() => {
+                          setCurrentCover(null);
+                          setUrlInput("");
+                          toast.ok("Cover image removed.");
+                          onRefresh();
+                        });
+                      }}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700"
+                    >
+                      Remove Cover
+                    </button>
+                  )}
+                </div>
 
-              {/* Current Preview */}
-              {currentCover ? (
-                <div className="relative rounded-2xl border border-gray-200 overflow-hidden bg-gray-50 group">
-                  <img
-                    src={getProductImageSrc(currentCover)}
-                    alt={category.name}
-                    className="w-full h-48 object-cover"
-                    onError={replaceProductImageWithFallback}
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-xs">
+                <div className="flex gap-4 items-center">
+                  <div className="w-24 h-24 rounded-full border-2 border-purple-200 overflow-hidden shrink-0 relative group bg-white shadow-xs flex items-center justify-center">
+                    {currentCover ? (
+                      <img
+                        src={getProductImageSrc(currentCover)}
+                        alt={category.name}
+                        className="w-full h-full object-cover object-center"
+                        onError={replaceProductImageWithFallback}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-purple-300 bg-purple-50">
+                        <ImageIcon size={24} />
+                        <span className="text-[10px] text-gray-400 mt-1">No cover</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={urlInput}
+                        onChange={e => setUrlInput(e.target.value)}
+                        placeholder="Paste image URL (e.g. /images/hero-paithani-1.png)"
+                        className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/50"
+                      />
+                      <button
+                        onClick={() => { if (urlInput.trim()) uploadCoverImage(urlInput.trim()); }}
+                        disabled={isUploading || !urlInput.trim()}
+                        className="px-4 py-2 rounded-xl bg-[#0D1B36] text-white text-xs font-semibold hover:bg-[#0D1B36]/90 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1.5 rounded-xl bg-white text-gray-900 text-xs font-semibold shadow hover:bg-gray-100 flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
                     >
-                      <Upload size={14} /> Replace
+                      <Upload size={13} /> Upload File (PNG/JPG/WebP)
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0], false); }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Landing Banner */}
+              <div className="space-y-3 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-xs uppercase tracking-wide">Category Landing Page Banner</h3>
+                    <p className="text-xs text-gray-500">Displayed at the top of the dedicated category landing page ({`/${category.slug}`}).</p>
+                  </div>
+                  {currentBanner && (
+                    <button
+                      onClick={() => {
+                        apiFetch(`/api/admin/categories/${category.id}`, {
+                          method: "PATCH",
+                          body: JSON.stringify({ bannerImage: null }),
+                        }).then(() => {
+                          setCurrentBanner(null);
+                          setBannerUrlInput("");
+                          toast.ok("Banner image removed.");
+                          onRefresh();
+                        });
+                      }}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700"
+                    >
+                      Remove Banner
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="w-full h-32 rounded-2xl bg-gray-100 border border-gray-200 overflow-hidden relative">
+                    {currentBanner ? (
+                      <img src={getProductImageSrc(currentBanner)} alt="Banner" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                        <ImageIcon size={24} />
+                        <span className="text-xs mt-1">No banner image set (uses default luxury gradient)</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={bannerUrlInput}
+                      onChange={e => setBannerUrlInput(e.target.value)}
+                      placeholder="Paste banner image URL (e.g. /images/hero-paithani-banner.png)"
+                      className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/50"
+                    />
+                    <button
+                      onClick={() => { if (bannerUrlInput.trim()) uploadBannerImage(bannerUrlInput.trim()); }}
+                      disabled={isUploading || !bannerUrlInput.trim()}
+                      className="px-4 py-2 rounded-xl bg-[#0D1B36] text-white text-xs font-semibold hover:bg-[#0D1B36]/90 disabled:opacity-50"
+                    >
+                      Save Banner
                     </button>
                     <button
-                      onClick={removeCover}
-                      className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-semibold shadow hover:bg-red-700 flex items-center gap-1.5"
+                      onClick={() => bannerInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
                     >
-                      <Trash2 size={14} /> Remove
+                      <Upload size={13} /> Browse
                     </button>
                   </div>
-                  <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md backdrop-blur-xs">
-                    Active Cover Image
-                  </span>
-                </div>
-              ) : (
-                <div
-                  onDragOver={e => {
-                    e.preventDefault();
-                    setDragOver(true);
-                  }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
-                    dragOver
-                      ? "border-[#0D1B36] bg-[#0D1B36]/5 scale-[0.99]"
-                      : "border-gray-200 hover:border-gray-400 bg-gray-50/50"
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400">
-                    <Upload size={22} className="text-[#0D1B36]" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">
-                      Drag & drop cover image here, or <span className="text-[#0D1B36] underline">browse</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">Supports PNG, JPG, WebP up to 5MB</p>
-                  </div>
-                </div>
-              )}
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={e => {
-                  if (e.target.files?.[0]) handleFileSelect(e.target.files[0]);
-                }}
-              />
-
-              {/* URL Direct Upload Input */}
-              <div className="pt-2 border-t border-gray-100 space-y-2">
-                <label className="block text-xs font-semibold text-gray-600">Or paste image URL:</label>
-                <div className="flex gap-2">
                   <input
-                    type="url"
-                    value={urlInput}
-                    onChange={e => setUrlInput(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/50"
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0], true); }}
                   />
-                  <button
-                    onClick={() => {
-                      if (urlInput.trim()) uploadCoverImage(urlInput.trim());
-                    }}
-                    disabled={isUploading || !urlInput.trim()}
-                    className="px-4 py-2 rounded-xl bg-[#0D1B36] text-white text-xs font-semibold hover:bg-[#0D1B36]/90 disabled:opacity-50"
-                  >
-                    Save URL
-                  </button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* TAB 2: SUBCATEGORIES & SUBTYPES */}
+          {tab === "subcategories" && (
+            <div className="space-y-4">
+              <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-3 text-xs text-purple-900">
+                <span className="font-bold">Authoritative Saree Taxonomy</span>: Sellers select subcategories and subtypes via dependent dropdowns when listing products under <strong>{category.name}</strong>.
+              </div>
+
+              {subcategoriesList.length === 0 ? (
+                <div className="py-10 text-center text-gray-400 text-xs">
+                  No subcategories registered for this category yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {subcategoriesList.map((sub, idx) => (
+                    <div key={sub.id || idx} className="bg-gray-50 border border-gray-200/80 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {/* Circular Subcategory Image */}
+                          <div className="w-10 h-10 rounded-full border border-purple-200 overflow-hidden bg-white shrink-0 flex items-center justify-center shadow-2xs">
+                            {sub.coverImage || (sub as any).image ? (
+                              <img
+                                src={getProductImageSrc(sub.coverImage || (sub as any).image)}
+                                alt={sub.name}
+                                className="w-full h-full object-cover object-center"
+                                onError={replaceProductImageWithFallback}
+                              />
+                            ) : (
+                              <ImageIcon size={16} className="text-purple-300" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-[#0D1B36] text-white text-[10px] flex items-center justify-center font-bold">
+                                {idx + 1}
+                              </span>
+                              <span className="font-bold text-gray-900 text-xs">{sub.name}</span>
+                              <code className="text-[10px] text-gray-400 bg-white px-1.5 py-0.5 rounded border border-gray-200">
+                                {sub.slug}
+                              </code>
+                            </div>
+                            <span className="text-[11px] font-semibold text-gray-500">
+                              {sub.subtypes?.length || 0} Subtypes
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Image Actions */}
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-gray-200 hover:bg-purple-50 hover:text-purple-700 text-gray-700 flex items-center gap-1 shadow-2xs transition-colors">
+                            <Upload size={12} />
+                            <span>{sub.coverImage || (sub as any).image ? "Change Image" : "Upload Image"}</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              disabled={subUploadingId === sub.id}
+                              onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                  handleSubcategoryFileSelect(sub, e.target.files[0]);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                          </label>
+                          {(sub.coverImage || (sub as any).image) && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSubcategoryImage(sub)}
+                              disabled={subUploadingId === sub.id}
+                              className="p-1 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                              title="Remove Subcategory Image"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Subtypes Chips */}
+                      {sub.subtypes && sub.subtypes.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1 pl-13">
+                          {sub.subtypes.map((st: string, sIdx: number) => (
+                            <span
+                              key={sIdx}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white text-gray-700 border border-gray-200/90 shadow-2xs"
+                            >
+                              {st}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: ASSOCIATED PRODUCTS */}
           {tab === "products" && (
             <div className="space-y-3">
               {isLoadingProducts ? (
@@ -911,7 +1630,7 @@ function CategoryDetailModal({
                   <p className="text-xs text-gray-400 mt-1">Sellers have not listed any items under "{category.name}" yet.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 max-h-[340px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
                   {catProductsData.products.map(p => (
                     <div key={p.id} className="flex gap-3 bg-gray-50 border border-gray-200/60 rounded-xl p-2.5 items-center">
                       <div className="w-12 h-12 rounded-lg bg-gray-200 overflow-hidden shrink-0">
@@ -924,8 +1643,11 @@ function CategoryDetailModal({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-gray-900 truncate">{p.name}</p>
-                        <p className="text-[11px] text-gray-500 truncate">{p.vendorName || "System"}</p>
-                        <p className="text-xs font-semibold text-emerald-600 mt-0.5">{getProductDisplayPrice(p)}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{p.vendorName || "Artisan / Seller"}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs font-semibold text-emerald-600">{getProductDisplayPrice(p)}</span>
+                          <span className="text-[10px] font-medium text-gray-400">Stock: {p.stock ?? 0}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -934,41 +1656,129 @@ function CategoryDetailModal({
             </div>
           )}
 
+          {/* TAB 4: ASSIGN PRODUCTS */}
+          {tab === "assign" && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={assignSearch}
+                    onChange={e => setAssignSearch(e.target.value)}
+                    placeholder="Search catalog products to reassign to this category..."
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40"
+                  />
+                </div>
+                <button
+                  onClick={handleAssignProducts}
+                  disabled={!selectedProductIds.length}
+                  className="px-4 py-2 rounded-xl bg-purple-700 text-white text-xs font-semibold hover:bg-purple-800 disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <CheckCircle size={14} /> Assign Selected ({selectedProductIds.length})
+                </button>
+              </div>
+
+              {isLoadingAllProducts ? (
+                <div className="py-10 text-center text-xs text-gray-400">Loading catalog products...</div>
+              ) : (
+                <div className="max-h-[320px] overflow-y-auto space-y-1.5 border border-gray-100 rounded-xl p-2 bg-gray-50/50">
+                  {(allProductsData?.products || [])
+                    .filter(p => !assignSearch || p.name.toLowerCase().includes(assignSearch.toLowerCase()) || (p.category && p.category.toLowerCase().includes(assignSearch.toLowerCase())))
+                    .map(p => {
+                      const isSelected = selectedProductIds.includes(p.id);
+                      const isCurrentCat = p.category === category.slug || p.categoryId === category.id;
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            setSelectedProductIds(prev =>
+                              prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id]
+                            );
+                          }}
+                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors border ${
+                            isSelected ? "bg-purple-50 border-purple-200" : isCurrentCat ? "bg-emerald-50/50 border-emerald-100" : "bg-white border-gray-100 hover:bg-gray-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="rounded text-purple-700"
+                          />
+                          <div className="w-9 h-9 rounded-md bg-gray-200 overflow-hidden shrink-0">
+                            <img src={getProductImageSrc(p.images?.[0])} alt="" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-gray-900 truncate">{p.name}</p>
+                            <p className="text-[10px] text-gray-400">
+                              Current: <span className="font-medium text-gray-600 capitalize">{p.category || "Unassigned"}</span> · {getProductDisplayPrice(p)}
+                            </p>
+                          </div>
+                          {isCurrentCat && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                              Already in this category
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: DISPLAY ORDER & STATUS */}
           {tab === "status" && (
             <div className="space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 flex items-start gap-3">
-                <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="font-bold">Seller Custom Category Governance</p>
-                  <p className="mt-0.5">
-                    Unverified or rejected custom categories created by sellers remain hidden from public customer navigation until approved by an admin.
-                  </p>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Display Order (1–12)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={displayOrder}
+                    onChange={e => setDisplayOrder(parseInt(e.target.value) || 1)}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Controls the sequence across navigation, storefront showcase, and seller forms.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Approval & Storefront Visibility</label>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => updateStatus("approved")}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1 ${category.status === "approved" || !category.status ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"}`}
+                    >
+                      <CheckCircle2 size={14} /> Approved
+                    </button>
+                    <button
+                      onClick={() => updateStatus("rejected")}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1 ${category.status === "rejected" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-700 border-red-200 hover:bg-red-50"}`}
+                    >
+                      <XCircle size={14} /> Rejected
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Category Origin</span>
-                  <p className="text-sm font-semibold text-gray-800 capitalize mt-0.5">{category.createdBy || "System"}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Seller / Shop Name</span>
-                  <p className="text-sm font-semibold text-gray-800 truncate mt-0.5">{category.sellerName || "System Admin"}</p>
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">SEO & Storefront Description</label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Heritage overview displayed on category landing page..."
+                  className="w-full text-xs border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40"
+                />
               </div>
 
-              <div className="pt-2 border-t border-gray-100 flex gap-3">
+              <div className="pt-2 flex justify-end">
                 <button
-                  onClick={() => updateStatus("approved")}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                  onClick={saveDetails}
+                  className="px-5 py-2.5 rounded-xl bg-[#0D1B36] text-white text-xs font-semibold hover:bg-[#0D1B36]/90 transition-all shadow-sm"
                 >
-                  <CheckCircle2 size={15} /> Approve Category
-                </button>
-                <button
-                  onClick={() => updateStatus("rejected")}
-                  className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <XCircle size={15} /> Reject Category
+                  Save Settings & Order
                 </button>
               </div>
             </div>
@@ -980,552 +1790,37 @@ function CategoryDetailModal({
 }
 
 // ─── categories tab main component ───────────────────────────────────────────
-function CategoriesTab({ toast }: { toast: ReturnType<typeof useToastMsg> }) {
+function CategoriesTab({
+  toast,
+  onNavigateProducts,
+}: {
+  toast: ReturnType<typeof useToastMsg>;
+  onNavigateProducts?: (categorySlug: string, subcategorySlug?: string) => void;
+}) {
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [sort, setSort] = useState<string>("newest");
-
-  // Modals
-  const [viewDetailModal, setViewDetailModal] = useState<ProductCategory | null>(null);
-  const [formModal, setFormModal] = useState<Partial<ProductCategory> | null>(null);
-  const [formName, setFormName] = useState("");
-  const [formType, setFormType] = useState<string>("system");
-  const [formParent, setFormParent] = useState("");
-  const [formCover, setFormCover] = useState("");
-  const [formActive, setFormActive] = useState(true);
-  const [confirm, setConfirm] = useState<{ id: string; name: string } | null>(null);
-
-  // Fetch list of categories with query params
-  const { data, isFetching, refetch } = useQuery({
-    queryKey: ["admin-categories", statusFilter, typeFilter, search, sort],
-    queryFn: () => {
-      const p = new URLSearchParams({
-        ...(search ? { search } : {}),
-        ...(statusFilter !== "all" ? { status: statusFilter } : {}),
-        ...(typeFilter !== "all" ? { type: typeFilter } : {}),
-        ...(sort ? { sort } : {}),
-      });
-      return apiFetch(`/api/admin/categories?${p}`) as Promise<{
-        categories: ProductCategory[];
-        stats?: {
-          total: number;
-          pending: number;
-          approved: number;
-          rejected: number;
-          activePublic: number;
-          noCover: number;
-        };
-      }>;
-    },
-    staleTime: 15000,
-  });
-
-  const categories = data?.categories ?? [];
-  const stats = data?.stats;
-
-  function openCreate() {
-    setFormModal({});
-    setFormName("");
-    setFormType("system");
-    setFormParent("");
-    setFormCover("");
-    setFormActive(true);
-  }
-
-  function openEdit(c: ProductCategory) {
-    setFormModal(c);
-    setFormName(c.name);
-    setFormType(c.type || "system");
-    setFormParent(c.parentId ?? "");
-    setFormCover(c.coverImage ?? "");
-    setFormActive(c.active ?? true);
-  }
-
-  async function saveCategory() {
-    if (!formName.trim()) {
-      toast.err("Category name is required");
-      return;
-    }
-    try {
-      if (formModal?.id) {
-        await apiFetch(`/api/admin/categories/${formModal.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: formName.trim(),
-            type: formType,
-            parentId: formParent || null,
-            coverImage: formCover.trim() || null,
-            active: formActive,
-          }),
-        });
-        toast.ok("Category updated successfully");
-      } else {
-        await apiFetch("/api/admin/categories", {
-          method: "POST",
-          body: JSON.stringify({
-            name: formName.trim(),
-            type: formType,
-            parentId: formParent || null,
-            coverImage: formCover.trim() || null,
-          }),
-        });
-        toast.ok("Category created successfully");
-      }
-      setFormModal(null);
-      qc.invalidateQueries({ queryKey: ["admin-categories"] });
-      qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
-      qc.invalidateQueries({ queryKey: ["/api/categories"] });
-    } catch (e: any) {
-      toast.err(e.message || "Failed to save category");
-    }
-  }
-
-  async function updateStatus(c: ProductCategory, newStatus: "approved" | "rejected") {
-    try {
-      await apiFetch(`/api/admin/categories/${c.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      });
-      toast.ok(`Category "${c.name}" ${newStatus}`);
-      qc.invalidateQueries({ queryKey: ["admin-categories"] });
-      qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
-      qc.invalidateQueries({ queryKey: ["/api/categories"] });
-    } catch (e: any) {
-      toast.err(e.message);
-    }
-  }
-
-  async function toggleActive(c: ProductCategory) {
-    try {
-      await apiFetch(`/api/admin/categories/${c.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ active: !c.active }),
-      });
-      toast.ok(c.active ? `"${c.name}" deactivated` : `"${c.name}" activated`);
-      qc.invalidateQueries({ queryKey: ["admin-categories"] });
-      qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
-      qc.invalidateQueries({ queryKey: ["/api/categories"] });
-    } catch (e: any) {
-      toast.err(e.message);
-    }
-  }
-
-  async function deleteCat(id: string) {
-    try {
-      await apiFetch(`/api/admin/categories/${id}`, { method: "DELETE" });
-      toast.ok("Category deleted");
-      qc.invalidateQueries({ queryKey: ["admin-categories"] });
-      qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
-      qc.invalidateQueries({ queryKey: ["/api/categories"] });
-    } catch (e: any) {
-      toast.err(e.message);
-    }
-    setConfirm(null);
-  }
-
-  const parentCats = categories.filter(c => !c.parentId);
+  const [detailModal, setDetailModal] = useState<ProductCategory | null>(null);
+  const [modalTab, setModalTab] = useState<"cover" | "subcategories" | "products" | "assign" | "status">("cover");
 
   return (
-    <div className="space-y-6">
-      {/* ── 1. Category Overview & Real-Time Statistics ───────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard
-          label="Total Categories"
-          value={stats?.total ?? categories.length}
-          icon={Folder}
-          iconBg="rgba(13,27,54,0.08)"
-          iconColor={NAVY}
-          active={statusFilter === "all"}
-          onClick={() => setStatusFilter("all")}
-        />
-        <KpiCard
-          label="Pending Verification"
-          value={stats?.pending ?? 0}
-          icon={Clock}
-          iconBg="rgba(245,158,11,0.1)"
-          iconColor="#D97706"
-          active={statusFilter === "pending"}
-          onClick={() => setStatusFilter("pending")}
-        />
-        <KpiCard
-          label="Approved"
-          value={stats?.approved ?? 0}
-          icon={CheckCircle}
-          iconBg="rgba(16,185,129,0.1)"
-          iconColor="#10B981"
-          active={statusFilter === "approved"}
-          onClick={() => setStatusFilter("approved")}
-        />
-        <KpiCard
-          label="Rejected"
-          value={stats?.rejected ?? 0}
-          icon={XCircle}
-          iconBg="rgba(239,68,68,0.1)"
-          iconColor="#EF4444"
-          active={statusFilter === "rejected"}
-          onClick={() => setStatusFilter("rejected")}
-        />
-        <KpiCard
-          label="Active Public"
-          value={stats?.activePublic ?? 0}
-          icon={Layers}
-          iconBg="rgba(59,130,246,0.1)"
-          iconColor="#3B82F6"
-        />
-        <KpiCard
-          label="No Cover Image"
-          value={stats?.noCover ?? 0}
-          icon={ImageIcon}
-          iconBg="rgba(139,92,246,0.1)"
-          iconColor="#8B5CF6"
-        />
-      </div>
-
-      {/* ── 2. Toolbar (Search, Filter, Sort, Add) ────────────────────────── */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-2 items-center flex-1 min-w-[280px]">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[180px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search category or seller shop..."
-              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40 bg-white"
-          >
-            <option value="all">All Verification Statuses</option>
-            <option value="pending">⏳ Pending Approval</option>
-            <option value="approved">✓ Approved</option>
-            <option value="rejected">✕ Rejected</option>
-          </select>
-
-          {/* Type Filter */}
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40 bg-white"
-          >
-            <option value="all">All Category Types</option>
-            <option value="system">🏢 System Categories</option>
-            <option value="seller_custom">🛍️ Seller Custom Categories</option>
-          </select>
-
-          {/* Sort */}
-          <select
-            value={sort}
-            onChange={e => setSort(e.target.value)}
-            className="text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40 bg-white"
-          >
-            <option value="newest">Newest First</option>
-            <option value="name_asc">Name (A–Z)</option>
-            <option value="products_desc">Most Products</option>
-          </select>
-
-          <button onClick={() => refetch()} className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-500">
-            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
-          </button>
-        </div>
-
-        {/* Add Category Button */}
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all shadow-sm hover:opacity-90"
-          style={{ background: NAVY }}
-        >
-          <Plus size={15} /> Add Category
-        </button>
-      </div>
-
-      {/* ── 3. Category Management Table ─────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/80 text-gray-500 uppercase tracking-wider font-bold">
-                <th className="px-4 py-3 text-left w-16">Cover</th>
-                <th className="px-4 py-3 text-left">Category Name / Slug</th>
-                <th className="px-4 py-3 text-left">Type</th>
-                <th className="px-4 py-3 text-center">Products</th>
-                <th className="px-4 py-3 text-left">Created By / Seller</th>
-                <th className="px-4 py-3 text-left">Verification Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isFetching && !categories.length ? (
-                <TableRowSkeleton columns={7} rows={6} />
-              ) : categories.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-16 text-center">
-                    <Folder size={40} className="mx-auto mb-3 text-gray-300" />
-                    <p className="text-gray-700 font-bold text-sm">No categories matching criteria</p>
-                    <p className="text-gray-400 text-xs mt-1">Try clearing filters or click "+ Add Category" to create one.</p>
-                  </td>
-                </tr>
-              ) :
-                categories.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50/70 transition-colors">
-                    {/* Cover Thumbnail */}
-                    <td className="px-4 py-3">
-                      <div
-                        onClick={() => setViewDetailModal(c)}
-                        className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden cursor-pointer relative group shrink-0"
-                      >
-                        {c.coverImage ? (
-                          <img
-                            src={getProductImageSrc(c.coverImage)}
-                            alt={c.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            onError={replaceProductImageWithFallback}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-50 hover:bg-gray-100">
-                            <ImageIcon size={16} />
-                            <span className="text-[9px] text-gray-400 font-semibold mt-0.5">+ Cover</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Category Name & Slug */}
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm">{c.name}</p>
-                        <p className="text-[11px] text-gray-400 font-mono">/{c.slug}</p>
-                      </div>
-                    </td>
-
-                    {/* Type Badge */}
-                    <td className="px-4 py-3">
-                      {c.type === "seller_custom" || c.type === "custom" || c.createdBy === "seller" ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                          <User size={12} /> Seller Custom
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                          <Folder size={12} /> System
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Product Count Badge */}
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gray-100 text-gray-700">
-                        {c.productCount ?? 0} items
-                      </span>
-                    </td>
-
-                    {/* Seller / Admin Creator */}
-                    <td className="px-4 py-3">
-                      <span className="text-gray-700 font-medium">
-                        {c.sellerName ? (
-                          <span className="font-semibold text-gray-800">{c.sellerName}</span>
-                        ) : c.createdBy === "seller" ? (
-                          <span className="text-gray-600">Seller</span>
-                        ) : (
-                          <span className="text-gray-500 font-semibold">Admin / System</span>
-                        )}
-                      </span>
-                    </td>
-
-                    {/* Status Badge & Active Switch */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={c.status || (c.active ? "approved" : "pending")} />
-                        {!c.active && (
-                          <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                            Inactive
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Action Buttons */}
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Quick Approve / Reject for Pending */}
-                        {(c.status === "pending" || (!c.status && c.createdBy === "seller")) && (
-                          <>
-                            <button
-                              onClick={() => updateStatus(c, "approved")}
-                              title="Approve Category"
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-bold"
-                            >
-                              <CheckCircle2 size={15} />
-                            </button>
-                            <button
-                              onClick={() => updateStatus(c, "rejected")}
-                              title="Reject Category"
-                              className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-bold"
-                            >
-                              <XCircle size={15} />
-                            </button>
-                          </>
-                        )}
-
-                        {/* Cover upload & Detail modal */}
-                        <button
-                          onClick={() => setViewDetailModal(c)}
-                          title="Manage Cover & Details"
-                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                        >
-                          <ImageIcon size={15} />
-                        </button>
-
-                        {/* Edit */}
-                        <button
-                          onClick={() => openEdit(c)}
-                          title="Edit Category"
-                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-
-                        {/* Toggle Active */}
-                        <button
-                          onClick={() => toggleActive(c)}
-                          title={c.active ? "Deactivate" : "Activate"}
-                          className={`p-1.5 rounded-lg hover:bg-gray-100 ${c.active ? "text-emerald-500" : "text-gray-400"}`}
-                        >
-                          {c.active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                        </button>
-
-                        {/* Delete */}
-                        <button
-                          onClick={() => setConfirm({ id: c.id, name: c.name })}
-                          title="Delete Category"
-                          className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      {/* ── 4. Create / Edit Category Modal ─────────────────────────────── */}
-      {formModal !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-bold text-gray-900 text-sm">{formModal.id ? "Edit Category" : "New Category"}</h3>
-              <button onClick={() => setFormModal(null)} className="text-gray-400 hover:text-gray-600">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-gray-600 mb-1">Category Name *</label>
-                <input
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  placeholder="e.g. Designer Sarees"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-gray-600 mb-1">Category Type</label>
-                <select
-                  value={formType}
-                  onChange={e => setFormType(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40 bg-white"
-                >
-                  <option value="system">🏢 System Category</option>
-                  <option value="seller_custom">🛍️ Seller Custom Category</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-gray-600 mb-1">Parent Category (optional)</label>
-                <select
-                  value={formParent}
-                  onChange={e => setFormParent(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40 bg-white"
-                >
-                  <option value="">None (top-level)</option>
-                  {parentCats
-                    .filter(c => c.id !== formModal.id)
-                    .map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-gray-600 mb-1">Cover Image URL (optional)</label>
-                <input
-                  value={formCover}
-                  onChange={e => setFormCover(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C7CCD1]/40"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="activeCheck"
-                  checked={formActive}
-                  onChange={e => setFormActive(e.target.checked)}
-                  className="rounded text-[#0D1B36]"
-                />
-                <label htmlFor="activeCheck" className="font-semibold text-gray-700 cursor-pointer">
-                  Active & Visible in Portal
-                </label>
-              </div>
-            </div>
-
-            <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
-              <button onClick={() => setFormModal(null)} className="px-4 py-2 text-xs rounded-xl border border-gray-200 text-gray-600">
-                Cancel
-              </button>
-              <button onClick={saveCategory} className="px-4 py-2 text-xs rounded-xl font-semibold text-white shadow-sm" style={{ background: NAVY }}>
-                {formModal.id ? "Save Changes" : "Create Category"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 5. Detail & Cover Upload Modal ─────────────────────────────── */}
-      {viewDetailModal && (
+    <>
+      <RedesignedCategoriesTab
+        toast={toast}
+        onNavigateProducts={onNavigateProducts}
+        onOpenMediaModal={(cat, tab) => {
+          setDetailModal(cat as any);
+          setModalTab(tab);
+        }}
+      />
+      {detailModal && (
         <CategoryDetailModal
-          category={viewDetailModal}
-          onClose={() => setViewDetailModal(null)}
+          category={detailModal}
+          initialTab={modalTab}
+          onClose={() => setDetailModal(null)}
           onRefresh={() => qc.invalidateQueries({ queryKey: ["admin-categories"] })}
           toast={toast}
         />
       )}
-
-      {/* ── 6. Confirm Delete Dialog ───────────────────────────────────── */}
-      {confirm && (
-        <ConfirmDialog
-          open
-          title={`Delete "${confirm.name}"?`}
-          body="This action is permanent and will remove the category from the database."
-          onConfirm={() => deleteCat(confirm.id)}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-    </div>
+    </>
   );
 }
 
@@ -1818,7 +2113,25 @@ type TabKey = "all" | "pending" | "approved" | "rejected" | "categories" | "bran
 
 function AdminProductsContent() {
   const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const [navCategory, setNavCategory] = useState<string>("all");
+  const [navSubcategory, setNavSubcategory] = useState<string>("all");
   const toast = useToastMsg();
+
+  const handleNavigateProducts = useCallback((catSlug: string, subSlug?: string) => {
+    setNavCategory(catSlug);
+    setNavSubcategory(subSlug || "all");
+    setActiveTab("all");
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("category", catSlug);
+      if (subSlug) {
+        url.searchParams.set("subcategory", subSlug);
+      } else {
+        url.searchParams.delete("subcategory");
+      }
+      window.history.pushState({}, "", url.toString());
+    } catch {}
+  }, []);
 
   const { data: stats, isLoading: isStatsLoading, isError: isStatsError, refetch: refetchStats, isFetching: isStatsFetching } = useQuery({
     queryKey: ["admin-products-stats"],
@@ -1899,11 +2212,21 @@ function AdminProductsContent() {
 
       {/* tab content */}
       <div>
-        {activeTab === "all"        && <ProductsTable toast={toast} />}
+        {activeTab === "all"        && (
+          <ProductsTable
+            toast={toast}
+            initialCategory={navCategory}
+            initialSubcategory={navSubcategory}
+            onClearFilters={() => {
+              setNavCategory("all");
+              setNavSubcategory("all");
+            }}
+          />
+        )}
         {activeTab === "pending"    && <ProductsTable statusFilter="pending"  toast={toast} />}
         {activeTab === "approved"   && <ProductsTable statusFilter="approved" toast={toast} />}
         {activeTab === "rejected"   && <ProductsTable statusFilter="rejected" toast={toast} />}
-        {activeTab === "categories" && <CategoriesTab toast={toast} />}
+        {activeTab === "categories" && <CategoriesTab toast={toast} onNavigateProducts={handleNavigateProducts} />}
         {activeTab === "brands"     && <BrandsTab toast={toast} />}
         {activeTab === "featured"   && <FeaturedTab toast={toast} />}
       </div>

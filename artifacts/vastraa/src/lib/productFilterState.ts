@@ -1,9 +1,15 @@
+import { getBudgetById } from "@/constants/budget";
+
 export interface ProductFilters {
   collection?: string;
   subcategory?: string;
+  subtype?: string;
   fabric: string[];
   color: string[];
   brand: string[];
+  size: string[];
+  sleeveLength: string[];
+  neckStyle: string[];
   pattern: string[];
   occasion: string[];
   gender: string[];
@@ -26,9 +32,13 @@ export interface ProductFilters {
 export const DEFAULT_PRODUCT_FILTERS: ProductFilters = {
   collection: undefined,
   subcategory: undefined,
+  subtype: undefined,
   fabric: [],
   color: [],
   brand: [],
+  size: [],
+  sleeveLength: [],
+  neckStyle: [],
   pattern: [],
   occasion: [],
   gender: [],
@@ -55,10 +65,19 @@ export function parseArrayParam(param: string | null): string[] {
 
 export function parseFiltersFromParams(params: URLSearchParams): ProductFilters {
   const rawMin = params.get("minPrice");
-  const minPrice = rawMin !== null && rawMin !== "" && !isNaN(Number(rawMin)) ? Number(rawMin) : undefined;
+  let minPrice = rawMin !== null && rawMin !== "" && !isNaN(Number(rawMin)) ? Number(rawMin) : undefined;
 
   const rawMax = params.get("maxPrice");
-  const maxPrice = rawMax !== null && rawMax !== "" && !isNaN(Number(rawMax)) ? Number(rawMax) : undefined;
+  let maxPrice = rawMax !== null && rawMax !== "" && !isNaN(Number(rawMax)) ? Number(rawMax) : undefined;
+
+  const budgetParam = params.get("budget");
+  if (minPrice === undefined && maxPrice === undefined && budgetParam) {
+    const matched = getBudgetById(budgetParam);
+    if (matched) {
+      minPrice = matched.min;
+      maxPrice = matched.max;
+    }
+  }
 
   const rawRating = params.get("minRating");
   const minRating = rawRating ? Number(rawRating) : undefined;
@@ -72,9 +91,13 @@ export function parseFiltersFromParams(params: URLSearchParams): ProductFilters 
   return {
     collection: params.get("collection") || undefined,
     subcategory: params.get("subcategory") || undefined,
+    subtype: params.get("subtype") || undefined,
     fabric: parseArrayParam(params.get("fabric")),
     color: parseArrayParam(params.get("color")),
     brand: parseArrayParam(params.get("brand")),
+    size: parseArrayParam(params.get("size")),
+    sleeveLength: parseArrayParam(params.get("sleeveLength") || params.get("sleeve")),
+    neckStyle: parseArrayParam(params.get("neckStyle") || params.get("neck")),
     pattern: parseArrayParam(params.get("pattern")),
     occasion: parseArrayParam(params.get("occasion")),
     gender: parseArrayParam(params.get("gender")),
@@ -99,9 +122,13 @@ export function countFilterItems(f: ProductFilters): number {
   return [
     f.collection,
     f.subcategory,
+    f.subtype,
     f.fabric.length > 0,
     f.color.length > 0,
     f.brand.length > 0,
+    f.size.length > 0,
+    f.sleeveLength.length > 0,
+    f.neckStyle.length > 0,
     f.pattern.length > 0,
     f.occasion.length > 0,
     f.gender.length > 0,

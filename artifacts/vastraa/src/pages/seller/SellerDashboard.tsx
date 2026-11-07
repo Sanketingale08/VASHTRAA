@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { LayoutDashboard, Package, PackageCheck, ShoppingBag, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark, LogOut, ChevronDown, Menu, X } from "lucide-react";
+import { LayoutDashboard, Package, PackageCheck, ShoppingBag, RotateCcw, User, TrendingUp, Store, ArrowRight, Star, IndianRupee, AlertCircle, HelpCircle, CreditCard, Users, Bell, Landmark, LogOut, ChevronDown, Menu, X } from "lucide-react";
 import { useClerk } from "@clerk/react";
 import { useSellerContext } from "@/components/SellerGuard";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
@@ -29,6 +29,7 @@ const NAV_LINKS = [
   { href: "/seller/products", label: "My Products", icon: Package, group: "/seller/products" },
   { href: "/seller/inventory", label: "Inventory", icon: PackageCheck, group: "/seller/inventory" },
   { href: "/seller/orders", label: "Orders", icon: ShoppingBag, group: "/seller/orders" },
+  { href: "/seller/returns", label: "Returns & Exchanges", icon: RotateCcw, group: "/seller/returns" },
   { href: "/seller/customers", label: "Customers", icon: Users, group: "/seller/customers" },
   { href: "/seller/notifications", label: "Notifications", icon: Bell, group: "/seller/notifications" },
   { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },

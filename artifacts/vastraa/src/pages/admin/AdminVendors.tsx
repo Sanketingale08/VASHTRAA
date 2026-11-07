@@ -15,11 +15,13 @@ const PAGE_SIZE = 15;
 interface Vendor {
   id: string;
   name: string;
+  shopName?: string;
   location: string;
   status: string;
   statusReason?: string | null;
   gstin: string | null;
   contactEmail: string | null;
+  email?: string | null;
   rating: number;
   sareesCount: number;
   revenue: number;
@@ -29,6 +31,8 @@ interface Vendor {
   vendorId: string | null;
   createdAt?: string | null;
   termsAcceptedAt?: string | null;
+  bankVerified?: boolean;
+  bankVerificationStatus?: string | null;
 }
 
 function fmt(n: number) {
@@ -90,7 +94,7 @@ function VendorsContent() {
         setVendors(d.vendors ?? []);
         setError("");
       })
-      .catch((err) => setError(getFriendlyErrorMessage(err, "Vendors")))
+      .catch((err) => setError(getFriendlyErrorMessage(err, "Sellers")))
       .finally(() => setLoading(false));
   }
 
@@ -113,6 +117,7 @@ function VendorsContent() {
       v = v.filter(
         (x) =>
           x.name.toLowerCase().includes(q) ||
+          (x.shopName ?? "").toLowerCase().includes(q) ||
           (x.contactEmail ?? "").toLowerCase().includes(q) ||
           (x.gstin ?? "").toLowerCase().includes(q) ||
           x.location.toLowerCase().includes(q) ||
@@ -131,7 +136,7 @@ function VendorsContent() {
 
     let payload = bodyObj;
     if (action === "reject" && !payload) {
-      const reason = window.prompt("Optional reason for rejecting this vendor application:");
+      const reason = window.prompt("Optional reason for rejecting this seller application:");
       if (reason === null) return; // User cancelled prompt
       payload = { reason: reason.trim() };
     }
@@ -148,10 +153,10 @@ function VendorsContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? `Failed to ${action} vendor`);
+        setError(data.error ?? `Failed to ${action} seller`);
         return;
       }
-      // Optimistic local update for instant feedback, including the generated Vendor ID.
+      // Optimistic local update for instant feedback, including the generated Seller ID.
       setVendors((prev) =>
         prev.map((v) => (v.id === id ? {
           ...v,
@@ -181,8 +186,8 @@ function VendorsContent() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-serif font-bold" style={{ color: NAVY }}>Vendor Management</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{vendors.length} vendors on the platform</p>
+          <h1 className="text-xl font-serif font-bold" style={{ color: NAVY }}>Seller Management</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{vendors.length} sellers on the platform</p>
         </div>
         <button
           onClick={loadVendors}
@@ -225,7 +230,7 @@ function VendorsContent() {
         {error && (
           <div className="p-4">
             <AdminErrorState
-              title="Unable to load vendors"
+              title="Unable to load sellers"
               message={error}
               onRetry={loadVendors}
               compact
@@ -235,8 +240,8 @@ function VendorsContent() {
 
         {!loading && !error && pageVendors.length === 0 ? (
           <AdminEmptyState
-            title="No vendors found"
-            message={search || statusTab !== "all" ? "No vendors match your search filter." : "There are currently no registered vendors in the system."}
+            title="No sellers found"
+            message={search || statusTab !== "all" ? "No sellers match your search filter." : "There are currently no registered sellers in the system."}
           />
         ) : (
           <div className="overflow-x-auto scrollbar-thin">
@@ -244,22 +249,23 @@ function VendorsContent() {
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Shop & Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Vendor ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Seller & Shop</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Seller ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Account Status</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Reg. Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Bank Status</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Location</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">GSTIN</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Products</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Orders</th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Revenue</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Product Count</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Total Orders</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Seller Earnings</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Rating</th>
                   <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
-                  <TableRowSkeleton columns={12} rows={8} />
+                  <TableRowSkeleton columns={13} rows={8} />
                 ) :
                   pageVendors.map((v, idx) => {
                   const regDate = v.createdAt || v.termsAcceptedAt;
@@ -277,12 +283,15 @@ function VendorsContent() {
                             style={{ color: NAVY }}
                             onClick={() => setLocation(`/admin/vendors/${v.id}`)}
                           >
-                            {v.name}
+                            {v.shopName || v.name}
                           </button>
                           {v.featured && (
                             <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#fef9ec", color: "#b45309" }}>⭐</span>
                           )}
                         </div>
+                        {v.name && v.shopName && v.name !== v.shopName && (
+                          <div className="text-xs text-gray-600 font-medium">{v.name}</div>
+                        )}
                         {v.contactEmail && (
                           <div className="text-xs text-gray-400 mt-0.5">{v.contactEmail}</div>
                         )}
@@ -301,6 +310,21 @@ function VendorsContent() {
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-gray-500 hidden md:table-cell">{dateStr}</td>
+                      <td className="px-4 py-3.5 hidden lg:table-cell">
+                        {v.bankVerified ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                            <CheckCircle size={10} /> Verified
+                          </span>
+                        ) : v.bankVerificationStatus === "pending" ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                            <Clock size={10} /> Pending
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                            Unverified
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5 text-xs text-gray-500 hidden md:table-cell">{v.location}</td>
                       <td className="px-4 py-3.5 text-xs text-gray-400 font-mono hidden lg:table-cell">
                         {v.gstin ?? "—"}
@@ -314,6 +338,7 @@ function VendorsContent() {
                       <td className="px-4 py-3.5 text-right text-xs font-semibold hidden lg:table-cell" style={{ color: NAVY }}>
                         {v.revenue > 0 ? fmt(v.revenue) : "—"}
                       </td>
+
                       <td className="px-4 py-3.5 text-right hidden sm:table-cell">
                         <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
                           <Star size={11} fill="currentColor" /> {v.rating.toFixed(1)}
@@ -448,7 +473,7 @@ export default function AdminVendors() {
   return (
     <AdminGuard>
       <AdminLayout>
-        <AdminErrorBoundary sectionName="Vendors">
+        <AdminErrorBoundary sectionName="Sellers">
           <VendorsContent />
         </AdminErrorBoundary>
       </AdminLayout>

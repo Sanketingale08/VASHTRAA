@@ -621,3 +621,5 @@ export function AddressBookPage() {
       </DashboardLayout>
   );
 }
+
+export default AddressBookPage;

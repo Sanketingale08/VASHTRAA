@@ -93,110 +93,164 @@ export async function connectToMongoDB(): Promise<{ client: MongoClient; db: Db 
   }
 }
 
+async function safeCreateIndex(
+  col: Collection,
+  keys: any,
+  options: import("mongodb").CreateIndexesOptions = {}
+): Promise<void> {
+  try {
+    await col.createIndex(keys, { background: true, ...options });
+  } catch (err: any) {
+    if (err?.code === 11000 || err?.codeName === "DuplicateKey") {
+      console.warn(
+        `[MongoDB Index Deferred] Unique index on ${col.collectionName} (${JSON.stringify(keys)}) deferred due to existing duplicate records in legacy data.`
+      );
+    } else {
+      console.warn(`[MongoDB Index Warning] ${col.collectionName}:`, err?.message || err);
+    }
+  }
+}
+
 export async function ensureMongoIndexes(db: Db): Promise<void> {
   try {
-    await db.collection("users").createIndexes([
-      { key: { email: 1 }, background: true },
-      { key: { id: 1 }, background: true },
-    ]);
+    // 1. Users
+    const usersCol = db.collection("users");
+    await safeCreateIndex(usersCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(usersCol, { email: 1 }, { sparse: true });
+    await safeCreateIndex(usersCol, { clerkId: 1 }, { sparse: true });
 
-    await db.collection("sellers").createIndexes([
-      { key: { id: 1 }, background: true },
-      { key: { vendorId: 1 }, background: true },
-      { key: { ownerId: 1 }, background: true },
-      { key: { email: 1 }, background: true },
-      { key: { status: 1 }, background: true },
-      { key: { vendorId: 1, ownerId: 1 }, background: true },
-      { key: { status: 1, createdAt: -1 }, background: true },
-    ]);
+    // 2. Sellers / Vendors
+    const sellersCol = db.collection("sellers");
+    await safeCreateIndex(sellersCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(sellersCol, { vendorId: 1 }, { sparse: true });
+    await safeCreateIndex(sellersCol, { email: 1 }, { sparse: true });
+    await safeCreateIndex(sellersCol, { ownerId: 1 }, { sparse: true });
+    await safeCreateIndex(sellersCol, { status: 1 });
+    await safeCreateIndex(sellersCol, { vendorId: 1, ownerId: 1 });
+    await safeCreateIndex(sellersCol, { status: 1, createdAt: -1 });
 
-    await db.collection("products").createIndexes([
-      { key: { id: 1 }, background: true },
-      { key: { productId: 1 }, background: true },
-      { key: { vendorId: 1 }, background: true },
-      { key: { sellerId: 1 }, background: true },
-      { key: { status: 1 }, background: true },
-      { key: { active: 1, status: 1 }, background: true },
-      { key: { status: 1, active: 1, category: 1, createdAt: -1 }, background: true },
-      { key: { status: 1, active: 1, subcategory: 1, createdAt: -1 }, background: true },
-      { key: { status: 1, active: 1, price: 1 }, background: true },
-      { key: { status: 1, active: 1, isBestSeller: 1 }, background: true },
-      { key: { status: 1, active: 1, isNewArrival: 1 }, background: true },
-      { key: { status: 1, active: 1, isFeatured: 1 }, background: true },
-      { key: { vendorId: 1, createdAt: -1 }, background: true },
-      { key: { sellerId: 1, createdAt: -1 }, background: true },
-      { key: { slug: 1 }, background: true },
-      { key: { category: 1 }, background: true },
-      { key: { createdAt: -1 }, background: true },
-    ]);
+    // 3. Products
+    const productsCol = db.collection("products");
+    await safeCreateIndex(productsCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(productsCol, { productId: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(
+      productsCol,
+      { vendorId: 1, sku: 1 },
+      { unique: true, sparse: true, partialFilterExpression: { sku: { $exists: true, $type: "string", $ne: "" } } }
+    );
+    await safeCreateIndex(productsCol, { idempotencyKey: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(productsCol, { submitFingerprint: 1, vendorId: 1 }, { sparse: true });
+    await safeCreateIndex(productsCol, { vendorId: 1, createdAt: -1 });
+    await safeCreateIndex(productsCol, { sellerId: 1, createdAt: -1 });
+    await safeCreateIndex(productsCol, { status: 1, active: 1, category: 1, createdAt: -1 });
+    await safeCreateIndex(productsCol, { status: 1, active: 1, subcategory: 1, createdAt: -1 });
+    await safeCreateIndex(productsCol, { status: 1, active: 1, price: 1 });
+    await safeCreateIndex(productsCol, { slug: 1 });
+    await safeCreateIndex(productsCol, { category: 1 });
+    await safeCreateIndex(productsCol, { createdAt: -1 });
 
-    await db.collection("orders").createIndexes([
-      { key: { id: 1 }, background: true },
-      { key: { orderId: 1 }, background: true },
-      { key: { displayId: 1 }, background: true },
-      { key: { userId: 1 }, background: true },
-      { key: { vendorId: 1 }, background: true },
-      { key: { userId: 1, vendorId: 1 }, background: true },
-      { key: { userId: 1, createdAt: -1 }, background: true },
-      { key: { vendorId: 1, createdAt: -1 }, background: true },
-      { key: { status: 1 }, background: true },
-      { key: { status: 1, createdAt: -1 }, background: true },
-      { key: { cashfreeOrderId: 1 }, background: true },
-      { key: { cashfreePaymentSessionId: 1 }, background: true },
-      { key: { createdAt: -1 }, background: true },
-    ]);
+    // 4. Orders
+    const ordersCol = db.collection("orders");
+    await safeCreateIndex(ordersCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(ordersCol, { orderId: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(ordersCol, { displayId: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(ordersCol, { checkoutIdempotencyKey: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(ordersCol, { cashfreeOrderId: 1 }, { sparse: true });
+    await safeCreateIndex(ordersCol, { userId: 1, createdAt: -1 });
+    await safeCreateIndex(ordersCol, { vendorId: 1, createdAt: -1 });
+    await safeCreateIndex(ordersCol, { status: 1, createdAt: -1 });
+    await safeCreateIndex(ordersCol, { createdAt: -1 });
 
-    await db.collection("product_categories").createIndexes([
-      { key: { id: 1 }, background: true },
-      { key: { slug: 1 }, background: true },
-      { key: { active: 1, sortOrder: 1 }, background: true },
-      { key: { parentId: 1, active: 1, sortOrder: 1 }, background: true },
-      { key: { sellerId: 1, status: 1 }, background: true },
-    ]);
+    // 5. Product Categories
+    const categoriesCol = db.collection("product_categories");
+    await safeCreateIndex(categoriesCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(categoriesCol, { slug: 1 }, { sparse: true });
+    await safeCreateIndex(
+      categoriesCol,
+      { parentId: 1, slug: 1 },
+      { unique: true, sparse: true, partialFilterExpression: { parentId: { $exists: true, $ne: null } } }
+    );
+    await safeCreateIndex(categoriesCol, { active: 1, sortOrder: 1 });
+    await safeCreateIndex(categoriesCol, { parentId: 1, active: 1, sortOrder: 1 });
 
-    await db.collection("vendor_settlements").createIndexes([
-      { key: { id: 1 }, background: true },
-      { key: { vendorId: 1 }, background: true },
-      { key: { vendorId: 1, createdAt: -1 }, background: true },
-      { key: { orderId: 1 }, background: true },
-      { key: { status: 1 }, background: true },
-      { key: { type: 1 }, background: true },
-      { key: { cashfreeTransferId: 1 }, background: true },
-      { key: { createdAt: -1 }, background: true },
-    ]);
+    // 6. Vendor Settlements
+    const settlementsCol = db.collection("vendor_settlements");
+    await safeCreateIndex(settlementsCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(
+      settlementsCol,
+      { orderId: 1, vendorId: 1, type: 1 },
+      { unique: true, sparse: true, partialFilterExpression: { orderId: { $exists: true, $ne: null }, vendorId: { $exists: true, $ne: null } } }
+    );
+    await safeCreateIndex(settlementsCol, { vendorId: 1, createdAt: -1 });
+    await safeCreateIndex(settlementsCol, { orderId: 1 });
+    await safeCreateIndex(settlementsCol, { status: 1 });
 
-    await db.collection("support_tickets").createIndexes([
-      { key: { id: 1 }, background: true },
-      { key: { userId: 1 }, background: true },
-      { key: { vendorId: 1 }, background: true },
-      { key: { status: 1 }, background: true },
-      { key: { assignedTo: 1 }, background: true },
-      { key: { createdAt: -1 }, background: true },
-    ]);
+    // 7. Shipments
+    const shipmentsCol = db.collection("shipments");
+    await safeCreateIndex(shipmentsCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(
+      shipmentsCol,
+      { orderId: 1, vendorId: 1 },
+      { unique: true, sparse: true, partialFilterExpression: { orderId: { $exists: true, $ne: null }, vendorId: { $exists: true, $ne: null } } }
+    );
+    await safeCreateIndex(shipmentsCol, { shiprocketShipmentId: 1 }, { sparse: true });
+    await safeCreateIndex(shipmentsCol, { awbNumber: 1 }, { sparse: true });
 
-    await db.collection("reviews").createIndexes([
-      { key: { productId: 1 }, background: true },
-      { key: { userId: 1 }, background: true },
-      { key: { productId: 1, rating: -1 }, background: true },
-    ]);
+    // 8. R2 Assets (Images & Documents)
+    const r2Col = db.collection("r2_assets");
+    await safeCreateIndex(r2Col, { objectKey: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(r2Col, { contentHash: 1, sellerId: 1 }, { sparse: true });
+    await safeCreateIndex(r2Col, { sellerId: 1, assetType: 1, createdAt: -1 });
 
-    await db.collection("notifications").createIndexes([
-      { key: { userId: 1 }, background: true },
-      { key: { vendorId: 1 }, background: true },
-      { key: { userId: 1, read: 1, createdAt: -1 }, background: true },
-      { key: { vendorId: 1, read: 1, createdAt: -1 }, background: true },
-      { key: { read: 1 }, background: true },
-    ]);
+    // 9. Email Outbox (Transactional Notifications)
+    const emailCol = db.collection("email_outbox");
+    await safeCreateIndex(emailCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(emailCol, { idempotencyKey: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(emailCol, { status: 1, createdAt: -1 });
 
-    await db.collection("r2_assets").createIndexes([
-      { key: { objectKey: 1 }, background: true },
-      { key: { sellerId: 1, assetType: 1, createdAt: -1 }, background: true },
-    ]);
+    // 10. Coupons
+    const couponsCol = db.collection("coupons");
+    await safeCreateIndex(couponsCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(couponsCol, { code: 1 }, { unique: true, sparse: true });
 
-    await db.collection("stock_history").createIndexes([
-      { key: { productId: 1, createdAt: -1 }, background: true },
-      { key: { vendorId: 1, createdAt: -1 }, background: true },
-    ]);
+    // 11. Customer Reviews
+    const reviewsCol = db.collection("reviews");
+    await safeCreateIndex(reviewsCol, { productId: 1, userId: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(reviewsCol, { productId: 1, rating: -1 });
+
+    // 12. Processed Webhooks (Cashfree & Payouts Idempotency)
+    const webhooksCol = db.collection("processed_webhooks");
+    await safeCreateIndex(webhooksCol, { eventId: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(webhooksCol, { createdAt: 1 }, { expireAfterSeconds: 86400 * 30 }); // 30-day TTL
+
+    // 13. Notifications & Support Tickets
+    const notifCol = db.collection("notifications");
+    await safeCreateIndex(notifCol, { userId: 1, read: 1, createdAt: -1 });
+    await safeCreateIndex(notifCol, { vendorId: 1, read: 1, createdAt: -1 });
+
+    const supportCol = db.collection("support_tickets");
+    await safeCreateIndex(supportCol, { id: 1 }, { unique: true, sparse: true });
+    await safeCreateIndex(supportCol, { userId: 1, status: 1 });
+
+    // 14. Audit Logs (Permanent Business Action Trail for Admin & Seller)
+    const auditLogsCol = db.collection("audit_logs");
+    await safeCreateIndex(auditLogsCol, { timestamp: -1 });
+    await safeCreateIndex(auditLogsCol, { "actor.role": 1, timestamp: -1 });
+    await safeCreateIndex(auditLogsCol, { "actor.id": 1, timestamp: -1 });
+    await safeCreateIndex(auditLogsCol, { action: 1, timestamp: -1 });
+    await safeCreateIndex(auditLogsCol, { "resource.type": 1, "resource.id": 1 });
+    await safeCreateIndex(auditLogsCol, { requestId: 1 });
+    await safeCreateIndex(auditLogsCol, { result: 1 });
+
+    // 15. Application & Operational Logs (Errors, Exceptions, Third-Party API Traces)
+    const appLogsCol = db.collection("application_logs");
+    await safeCreateIndex(appLogsCol, { timestamp: -1 });
+    await safeCreateIndex(appLogsCol, { level: 1, timestamp: -1 });
+    await safeCreateIndex(appLogsCol, { service: 1, timestamp: -1 });
+    await safeCreateIndex(appLogsCol, { requestId: 1 });
+    await safeCreateIndex(appLogsCol, { "thirdParty.provider": 1, timestamp: -1 });
+    // 60-day auto-retention policy
+    await safeCreateIndex(appLogsCol, { createdAt: 1 }, { expireAfterSeconds: 60 * 24 * 60 * 60 });
   } catch (err: any) {
     console.warn("[MongoDB] Index setup warning:", err?.message || err);
   }

@@ -205,23 +205,23 @@ export function InvoiceDocumentsModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 10 }}
           transition={{ duration: 0.2 }}
           className={cn(
-            "relative w-full bg-white dark:bg-[#1E2329] rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col transition-all duration-300",
-            previewingDoc ? "max-w-5xl h-[92vh]" : "max-w-2xl max-h-[90vh]"
+            "relative w-full bg-white dark:bg-[#1E2329] rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col transition-all duration-300",
+            previewingDoc ? "max-w-5xl h-[95vh] sm:h-[92vh]" : "max-w-2xl max-h-[92vh] sm:max-h-[90vh]"
           )}
         >
           {previewingDoc ? (
             /* ── Interactive Live Invoice Preview Viewer ── */
             <div className="flex flex-col h-full bg-[#E2E8F0] dark:bg-[#15191E]">
               {/* Preview Header Toolbar */}
-              <div className="px-5 py-3.5 bg-[#0A1F44] text-white flex flex-wrap items-center justify-between gap-3 shadow-md shrink-0 border-b border-[#0A1F44]/50">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 bg-[#0A1F44] text-white flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shadow-md shrink-0 border-b border-[#0A1F44]/50">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <button
                     onClick={() => setPreviewingDoc(null)}
                     className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition flex items-center gap-1.5 text-xs font-semibold"
@@ -249,10 +249,10 @@ export function InvoiceDocumentsModal({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <button
                     onClick={handlePrintIframe}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition border border-white/20"
+                    className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition border border-white/20 min-h-[34px] sm:min-h-0"
                     title="Print document or save as PDF"
                   >
                     <Printer size={13} />
@@ -261,7 +261,7 @@ export function InvoiceDocumentsModal({
 
                   <button
                     onClick={() => handleOpenInNewTab(previewingDoc)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition border border-white/20"
+                    className="inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition border border-white/20 min-h-[34px] sm:min-h-0"
                     title="Open preview in a new browser tab"
                   >
                     <ExternalLink size={13} />
@@ -271,16 +271,16 @@ export function InvoiceDocumentsModal({
                   <button
                     onClick={() => handleDownload(previewingDoc)}
                     disabled={downloadingId === previewingDoc.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#B8912A] hover:bg-[#A37E20] text-white text-xs font-bold transition shadow-sm disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#B8912A] hover:bg-[#A37E20] text-white text-xs font-bold transition shadow-sm disabled:opacity-50 min-h-[34px] sm:min-h-0"
                     title="Download official A4 PDF"
                   >
                     <Download size={13} className={downloadingId === previewingDoc.id ? "animate-bounce" : ""} />
-                    <span>{downloadingId === previewingDoc.id ? "Downloading…" : "Download PDF"}</span>
+                    <span>{downloadingId === previewingDoc.id ? "PDF…" : "Download PDF"}</span>
                   </button>
 
                   <button
                     onClick={() => setPreviewingDoc(null)}
-                    className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition ml-1"
+                    className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition ml-0.5 sm:ml-1"
                     title="Close preview"
                   >
                     <X size={18} />

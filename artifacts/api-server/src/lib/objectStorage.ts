@@ -530,5 +530,75 @@ export class ObjectStorageService {
 
     return { publicRelPath, objectKey: relativeImagePath, fileName, size: data.length };
   }
+
+  /**
+   * Uploads public category or subcategory image to R2 with MongoDB Atlas & local disk fallback.
+   */
+  async uploadPublicCategoryImage(
+    data: Buffer,
+    ext: string,
+    contentType: string,
+    categoryIdentifier: string = "category"
+  ): Promise<{ publicRelPath: string; objectKey: string; fileName: string; size: number }> {
+    const cleanId = categoryIdentifier.toLowerCase().replace(/[^a-z0-9_-]/g, "_").slice(0, 50);
+    const imageId = `${cleanId}_${Date.now()}_${randomUUID().slice(0, 6)}`;
+    const fileName = `${imageId}.${ext}`;
+    const relativeImagePath = `categories/${fileName}`;
+
+    const accountId = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_GLOBAL_API_KEY;
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+
+    if (accountId && accessKeyId && secretAccessKey) {
+      try {
+        const client = getR2Client();
+        const command = new PutObjectCommand({
+          Bucket: this.publicBucket,
+          Key: relativeImagePath,
+          Body: data,
+          ContentType: contentType,
+        });
+        await client.send(command);
+      } catch (err: any) {
+        console.error("[ObjectStorage] Cloudflare R2 category upload notice:", err?.message || err);
+      }
+    }
+
+    const publicRelPath = this.publicDomain
+      ? `${this.publicDomain}/${relativeImagePath}`
+      : `/api/storage/public-objects/${relativeImagePath}`;
+
+    try {
+      await mongoR2Assets.saveAsset({
+        objectKey: relativeImagePath,
+        bucket: this.publicBucket,
+        publicUrl: publicRelPath,
+        sellerId: "admin",
+        assetType: "category_image",
+        fileName,
+        contentType,
+        size: data.length,
+        status: "uploaded",
+        bufferBase64: data.toString("base64"),
+      });
+    } catch (dbErr: any) {
+      console.warn("[ObjectStorage] MongoDB asset save notice:", dbErr?.message || dbErr);
+    }
+
+    this.saveFileToLocalUploads(relativeImagePath, data);
+
+    return { publicRelPath, objectKey: relativeImagePath, fileName, size: data.length };
+  }
+}
+
+export const objectStorage = new ObjectStorageService();
+
+export async function uploadPublicCategoryImage(
+  data: Buffer,
+  ext: string,
+  contentType: string,
+  categoryIdentifier: string
+) {
+  return objectStorage.uploadPublicCategoryImage(data, ext, contentType, categoryIdentifier);
 }
 

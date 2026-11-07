@@ -33,6 +33,19 @@ describe("Google Social Auth & OTP Flow Unit Tests", () => {
     expect(url).toContain("dev_google_code_");
   });
 
+  it("activates development fallback URL when GOOGLE_OAUTH_DEV_FALLBACK is true even with valid credentials", () => {
+    process.env.GOOGLE_CLIENT_ID = "754673999695-nc31fv68478c9lhvs0eif0jh5dle7b7d.apps.googleusercontent.com";
+    process.env.GOOGLE_CLIENT_SECRET = "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";
+    process.env.GOOGLE_OAUTH_DEV_FALLBACK = "true";
+
+    const url = getGoogleOAuthUrl("http://localhost:5000/google-callback", "state_fallback");
+    expect(url).toBeDefined();
+    expect(url).toContain("code=");
+    expect(url).toContain("dev_google_code_");
+
+    delete process.env.GOOGLE_OAUTH_DEV_FALLBACK;
+  });
+
   it("creates Google OTP challenge for customer signup", async () => {
     const challenge = await createGoogleAuthChallenge({
       email: "customer.signup@example.com",

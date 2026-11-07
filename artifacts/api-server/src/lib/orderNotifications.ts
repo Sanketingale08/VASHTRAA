@@ -196,36 +196,56 @@ export async function insertOrderStatusNotification(
   const { title, body } = buildNotifContent(type, itemName, extra);
 
   const id = crypto.randomUUID();
-  let inserted = false;
+  const notifDoc = {
+    id,
+    userId,
+    type,
+    title,
+    body,
+    read: false,
+    isRead: false,
+    metadata: { orderId },
+    createdAt: new Date(),
+  };
+
+  // 1. Always persist to MongoDB (the primary source for notification bell & lists)
   try {
-    if (!opts.tx && typeof mongoNotifications !== "undefined" && mongoNotifications?.create) {
-      await mongoNotifications.create({
+    if (typeof mongoNotifications !== "undefined") {
+      if (typeof (mongoNotifications as any).insert === "function") {
+        await (mongoNotifications as any).insert(notifDoc);
+      } else if (typeof (mongoNotifications as any).create === "function") {
+        await (mongoNotifications as any).create(notifDoc);
+      }
+    }
+  } catch {}
+
+  // 2. Also persist to relational notificationsTable
+  try {
+    const client = opts.tx ?? db;
+    if (client && typeof client.insert === "function") {
+      await client.insert(notificationsTable).values({
         id,
         userId,
         type,
         title,
         body,
-        read: false,
-        isRead: false,
         metadata: { orderId },
-        createdAt: new Date(),
       });
-      inserted = true;
     }
   } catch {}
 
-  if (!inserted) {
-    try {
-      const client = opts.tx ?? db;
-      await client.insert(notificationsTable).values({
-        userId,
-        type,
-        title,
-        body,
-        metadata: { orderId },
-      });
-    } catch {}
-  }
+  // 3. Emit real-time notification events to customer bell via socket
+  try {
+    const { emitNotificationEvent, emitUserEvent } = await import("./socket");
+    emitNotificationEvent({
+      recipientRole: "user",
+      recipientId: userId,
+      title,
+      message: body,
+      data: { id, orderId, type },
+    });
+    emitUserEvent(userId, "notification:new", notifDoc);
+  } catch {}
 
   // 2. Transactional / notification email: gated strictly by emailOrderUpdates
   if (EMAIL_TYPES.has(type) && wantsEmailOrderUpdates) {

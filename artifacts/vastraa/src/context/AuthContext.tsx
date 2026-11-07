@@ -26,8 +26,22 @@ interface AuthContextType {
   isSignedIn: boolean;
   isLoading: boolean;
   isLoaded: boolean;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; user?: AuthUser; error?: string }>;
-  signUp: (name: string, email: string, password: string, confirmPassword: string) => Promise<{ success: boolean; user?: AuthUser; error?: string }>;
+  signIn: (email: string, password: string) => Promise<{
+    success: boolean;
+    user?: AuthUser;
+    error?: string;
+    code?: string;
+    isEmailVerified?: boolean;
+    email?: string;
+  }>;
+  signUp: (name: string, email: string, password: string, confirmPassword: string, otp?: string) => Promise<{
+    success: boolean;
+    user?: AuthUser;
+    error?: string;
+    message?: string;
+    requiresVerification?: boolean;
+    email?: string;
+  }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUserLocally: (updated: Partial<AuthUser>) => void;
@@ -159,7 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!res.ok || !data.success) {
         setIsLoading(false);
-        return { success: false, error: data.error || data.message || "Invalid email or password." };
+        return {
+          success: false,
+          error: data.error || data.message || "Invalid email or password.",
+          code: data.code,
+          isEmailVerified: data.isEmailVerified,
+          email: data.email || email.trim(),
+        };
       }
 
       if (data.token) {
@@ -175,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (name: string, email: string, password: string, confirmPassword: string) => {
+  const signUp = async (name: string, email: string, password: string, confirmPassword: string, otp?: string) => {
     setIsLoading(true);
     try {
       // Clean previous session keys to ensure fresh account isolation
@@ -188,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await apiFetch("/api/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, confirmPassword }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, confirmPassword, otp: otp?.trim() }),
       });
 
       let data: any = {};
@@ -205,10 +225,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.token) {
         localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        await loadUser();
       }
-      await loadUser();
       setIsLoading(false);
-      return { success: true, user: data.user };
+      return {
+        success: true,
+        user: data.user,
+        message: data.message,
+        requiresVerification: Boolean(data.requiresVerification),
+        email: data.email || email.trim(),
+      };
     } catch (err: any) {
       console.error("[AuthContext] Sign up error:", err);
       setIsLoading(false);

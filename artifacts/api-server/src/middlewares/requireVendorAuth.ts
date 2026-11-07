@@ -18,8 +18,10 @@ export async function requireVendorAuth(req: any, res: any, next: any) {
 
   if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
     token = authHeader.substring(7).trim();
-  } else if (req.cookies?.vastraa_auth_token || req.cookies?.seller_token || req.cookies?.token) {
-    token = String(req.cookies.vastraa_auth_token || req.cookies.seller_token || req.cookies.token).trim();
+  } else if (req.headers?.["x-seller-token"]) {
+    token = String(req.headers["x-seller-token"]).trim();
+  } else if (req.cookies?.vastraa_seller_token || req.cookies?.vastraa_auth_token || req.cookies?.seller_token || req.cookies?.token) {
+    token = String(req.cookies.vastraa_seller_token || req.cookies.vastraa_auth_token || req.cookies.seller_token || req.cookies.token).trim();
   }
 
   if (token) {

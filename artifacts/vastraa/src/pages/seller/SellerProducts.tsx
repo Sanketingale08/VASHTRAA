@@ -197,7 +197,7 @@ export default function SellerProducts() {
     const handleRealtimeEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail) return;
-      if (["inventory:updated", "product:updated", "product:created", "catalog:updated"].includes(detail.name)) {
+      if (["inventory:updated", "product:updated", "product:created", "product:approved", "catalog:updated", "category:updated"].includes(detail.name)) {
         fetchProducts();
       }
     };

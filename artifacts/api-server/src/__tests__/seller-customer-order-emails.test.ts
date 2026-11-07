@@ -1,4 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// Mock nodemailer to isolate unit tests from outbound SMTP network calls
+const sendMailMock = vi.hoisted(() => vi.fn().mockResolvedValue({ messageId: "msg_test_mock_123" }));
+const verifyMock = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+
+vi.mock("nodemailer", () => ({
+  default: {
+    createTransport: vi.fn(() => ({
+      sendMail: sendMailMock,
+      verify: verifyMock,
+    })),
+  },
+}));
+
 import {
   sendTransactionalEmail,
   sendSellerNewOrderEmail,

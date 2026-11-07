@@ -553,3 +553,5 @@ export function AccountOverviewPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountOverviewPage;

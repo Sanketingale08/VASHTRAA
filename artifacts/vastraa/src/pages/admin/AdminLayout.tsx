@@ -56,8 +56,8 @@ function RealtimeDateClock() {
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Vendors", href: "/admin/vendors", icon: Users },
-  { label: "Vendor Analytics", href: "/admin/vendor-analytics", icon: BarChart3 },
+  { label: "Sellers", href: "/admin/vendors", icon: Users },
+  { label: "Seller Analytics", href: "/admin/vendor-analytics", icon: BarChart3 },
   { label: "Business Intelligence", href: "/admin/business-intelligence", icon: LineChart },
   { label: "Financial Management", href: "/admin/financial", icon: Receipt },
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
@@ -70,6 +70,7 @@ const NAV_ITEMS = [
   { label: "Advertisements", href: "/admin/advertisements", icon: Image },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Reports", href: "/admin/reports", icon: BarChart2 },
+  { label: "Audit & Logs", href: "/admin/logs", icon: Shield },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

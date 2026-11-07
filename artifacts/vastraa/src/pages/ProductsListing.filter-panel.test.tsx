@@ -203,7 +203,7 @@ describe("Filter Panel Behavior on Paithani and Designer Pages", () => {
     fireEvent.click(screen.getByRole("button", { name: /^filter$/i }));
 
     // Find and check a fabric filter (e.g. Pure Silk)
-    const pureSilkCheckbox = screen.getByRole("checkbox", { name: /pure silk/i });
+    const pureSilkCheckbox = screen.getAllByRole("checkbox", { name: /pure silk/i })[1];
     fireEvent.click(pureSilkCheckbox);
     expect(pureSilkCheckbox).toBeChecked();
 
@@ -224,7 +224,7 @@ describe("Filter Panel Behavior on Paithani and Designer Pages", () => {
     fireEvent.click(screen.getByRole("button", { name: /^filter$/i }));
 
     // Select Pure Silk
-    const pureSilkCheckbox = screen.getByRole("checkbox", { name: /pure silk/i });
+    const pureSilkCheckbox = screen.getAllByRole("checkbox", { name: /pure silk/i })[1];
     fireEvent.click(pureSilkCheckbox);
 
     // Mock response after filter application

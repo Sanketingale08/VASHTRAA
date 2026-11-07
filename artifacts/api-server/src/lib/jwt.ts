@@ -15,7 +15,20 @@ export interface JwtPayload {
   exp: number;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "vastraa-production-jwt-secret-2026-key-v1";
+const runtimeRandomSecret = crypto.randomBytes(64).toString("hex");
+
+export function getJwtSecret(): string {
+  const envSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+  if (envSecret && envSecret.trim().length >= 32) {
+    return envSecret.trim();
+  }
+  if (process.env.NODE_ENV === "production") {
+    logger.error("[JWT] CRITICAL SECURITY ALERT: JWT_SECRET or SESSION_SECRET must be configured with >=32 characters in production. Utilizing cryptographically randomized ephemeral key for process lifetime to prevent static key forgery.");
+    return runtimeRandomSecret;
+  }
+  return envSecret?.trim() || "dev-vastraa-insecure-jwt-secret-do-not-use-in-prod";
+}
+
 const JWT_ISSUER = "vastraa-auth";
 const JWT_AUDIENCE = "vastraa-portal";
 const ACCESS_TOKEN_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
@@ -66,7 +79,7 @@ export function signAccessToken(payload: {
   const signatureInput = `${encodedHeader}.${encodedPayload}`;
 
   const signature = crypto
-    .createHmac("sha256", JWT_SECRET)
+    .createHmac("sha256", getJwtSecret())
     .update(signatureInput)
     .digest();
   const encodedSignature = base64UrlEncode(signature);
@@ -89,11 +102,13 @@ export function verifyAccessToken(token: string): JwtPayload | null {
   try {
     const signatureInput = `${encodedHeader}.${encodedPayload}`;
     const expectedSignature = base64UrlEncode(
-      crypto.createHmac("sha256", JWT_SECRET).update(signatureInput).digest()
+      crypto.createHmac("sha256", getJwtSecret()).update(signatureInput).digest()
     );
 
     // Constant-time signature comparison to prevent timing attacks
-    if (!crypto.timingSafeEqual(Buffer.from(encodedSignature), Buffer.from(expectedSignature))) {
+    const sigBuf = Buffer.from(encodedSignature);
+    const expBuf = Buffer.from(expectedSignature);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       logger.warn("[JWT] Signature verification failed");
       return null;
     }

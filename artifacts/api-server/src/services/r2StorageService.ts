@@ -6,7 +6,7 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
 import { mongoR2Assets } from "@workspace/db";
 
 export interface PresignedUploadRequest {
@@ -95,8 +95,14 @@ export class R2StorageService {
 
   validateFileMetadata(contentType: string, size: number): { ok: boolean; error?: string } {
     const normType = (contentType || "").toLowerCase().split(";")[0].trim();
-    const isAllowed = ALLOWED_MIME_TYPES.has(normType) || normType === "image/jpg" || normType === "image/jfif" || normType.startsWith("image/");
-    if (!isAllowed) {
+    const SAFE_IMAGE_TYPES = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/jpg",
+      "image/jfif",
+    ]);
+    if (!SAFE_IMAGE_TYPES.has(normType) || normType.includes("svg") || normType.includes("html") || normType.includes("xml")) {
       return {
         ok: false,
         error: "Invalid file format. Allowed image formats: JPG, PNG, WEBP.",
@@ -184,6 +190,21 @@ export class R2StorageService {
     contentType: string;
     size: number;
   }): Promise<PresignedUploadResult> {
+    const normType = (contentType || "").toLowerCase().split(";")[0].trim();
+    const ALLOWED_KYC_TYPES = new Set([
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/jpg",
+    ]);
+    if (!ALLOWED_KYC_TYPES.has(normType) || normType.includes("svg") || normType.includes("html") || normType.includes("xml")) {
+      throw new Error("Invalid KYC document format. Allowed formats: PDF, JPG, PNG, WEBP.");
+    }
+    if (size > 15 * 1024 * 1024) {
+      throw new Error("KYC document file size exceeds 15MB limit.");
+    }
+
     const objectKey = this.generateKycObjectKey(sellerId, docType, fileName, contentType);
 
     const command = new PutObjectCommand({
@@ -350,13 +371,24 @@ export class R2StorageService {
     sellerId: string,
     productId?: string,
     fileName?: string
-  ): Promise<{ objectKey: string; publicUrl: string }> {
+  ): Promise<{ objectKey: string; publicUrl: string; deduplicated?: boolean }> {
     const normContentType = (contentType || "image/jpeg").toLowerCase().split(";")[0].trim();
     const effectiveContentType = normContentType === "image/jpg" ? "image/jpeg" : normContentType;
 
     const validation = this.validateFileMetadata(effectiveContentType, data.length);
     if (!validation.ok) {
       throw new Error(validation.error);
+    }
+
+    // 1. Content Hash Deduplication
+    const contentHash = createHash("sha256").update(data).digest("hex");
+    const existingAsset = await mongoR2Assets.findByContentHash(contentHash, sellerId).catch(() => null);
+    if (existingAsset && existingAsset.objectKey && existingAsset.publicUrl) {
+      return {
+        objectKey: existingAsset.objectKey,
+        publicUrl: existingAsset.publicUrl,
+        deduplicated: true,
+      };
     }
 
     const objectKey = this.generateUniqueObjectKey(sellerId, productId, fileName, effectiveContentType);
@@ -369,6 +401,7 @@ export class R2StorageService {
         ContentType: effectiveContentType,
         Metadata: {
           sellerid: sellerId,
+          contenthash: contentHash,
           filename: encodeURIComponent(fileName || "image"),
         },
       });
@@ -391,6 +424,7 @@ export class R2StorageService {
       contentType: effectiveContentType,
       size: data.length,
       status: "uploaded",
+      contentHash,
       bufferBase64: data.toString("base64"),
     }).catch(() => {});
 

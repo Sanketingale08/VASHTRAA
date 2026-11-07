@@ -2,6 +2,7 @@ import { pool, db, siteSettingsTable, vendorsTable, productsTable, productCatego
 import { logger } from "./logger";
 import { clearAdminKeyCache } from "../middlewares/isAdmin";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 /**
  * Bootstraps MongoDB Atlas database objects and fallback PostgreSQL sequences.
@@ -22,11 +23,12 @@ export async function bootstrapDatabase(): Promise<void> {
     await getNextSequenceValue("product_id");
     logger.info("MongoDB sequence counters verified/created (order_id, product_id)");
 
-    // 3. Set Super Admin access key hash, key, email, profile & platform defaults in MongoDB site_settings
-    const adminKeyHash = crypto.createHash("sha256").update("Admin@123").digest("hex");
+    // 3. Set Super Admin access key hash, email, profile & platform defaults in MongoDB site_settings
+    // Access keys are ALWAYS hashed with bcrypt and never stored in plain text.
+    const initialAdminKey = process.env.ADMIN_API_KEY || "Admin@123";
+    const adminKeyHash = bcrypt.hashSync(initialAdminKey, 10);
     const defaultSettings: Record<string, string> = {
       admin_key_hash: adminKeyHash,
-      admin_access_key: "Admin@123",
       admin_name: "Super Admin",
       admin_email: "admin@vastraa.com",
       admin_mobile: "+91 98765 43210",
@@ -48,6 +50,10 @@ export async function bootstrapDatabase(): Promise<void> {
       }
     }
 
+    // Ensure no legacy plaintext keys remain in MongoDB site_settings
+    await mongoSiteSettings.delete("admin_access_key").catch(() => {});
+    await mongoSiteSettings.delete("admin_key").catch(() => {});
+
     // 4. Fallback PostgreSQL sequences & settings
     try {
       await pool.query(`
@@ -65,6 +71,19 @@ export async function bootstrapDatabase(): Promise<void> {
           .values({ key: k, value: v })
           .onConflictDoNothing();
       }
+
+      await db
+        .insert(productCategoriesTable)
+        .values({
+          id: "cat-tops-default" as any,
+          name: "Women's Tops",
+          slug: "tops",
+          type: "main",
+          createdBy: "system",
+          status: "approved",
+          active: true,
+        })
+        .onConflictDoNothing();
     } catch (pgErr) {
       logger.warn({ err: pgErr }, "PostgreSQL fallback bootstrap warning (ignored as MongoDB is primary)");
     }

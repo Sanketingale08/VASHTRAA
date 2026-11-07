@@ -52,7 +52,22 @@ vi.mock("@workspace/api-client-react", async () => {
   };
 });
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Home from "./Home";
+
+const testQueryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false, gcTime: 0 },
+  },
+});
+
+function renderWithClient(ui: React.ReactElement) {
+  return render(
+    <QueryClientProvider client={testQueryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
 
 describe("Home — Shop By Budget and Category Navigation", () => {
   beforeEach(() => {
@@ -60,87 +75,80 @@ describe("Home — Shop By Budget and Category Navigation", () => {
     mockSearchStr = "";
   });
 
-  it("ensures 'Showing Paithani Sarees Under ₹1,000' section is completely removed", () => {
-    render(<Home />);
+  it("renders the clean Shop By Budget section without removed elements", () => {
+    renderWithClient(<Home />);
 
-    // Unwanted section heading must not exist
-    expect(screen.queryByText(/Showing Paithani Sarees Under ₹1,000/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Showing.*Sarees Under/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Clear Budget/i)).not.toBeInTheDocument();
+    // Eyebrow and main heading are present
+    expect(screen.getByText(/SHOP BY BUDGET/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Explore Collections by Price/i })).toBeInTheDocument();
 
-    // The main Shop By Budget section must remain visible
-    expect(screen.getByText(/Shop By Budget/i)).toBeInTheDocument();
-    expect(screen.getByText(/Explore Saree Collections by Price/i)).toBeInTheDocument();
+    // Removed elements must NOT be present
+    expect(screen.queryByText(/Find your perfect style at a price that feels right/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /VIEW ALL COLLECTIONS/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Paithani$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Designer$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^All Sarees$/i })).not.toBeInTheDocument();
   });
 
-  it("navigates to /paithani?category=paithani with selected budget when budget card is clicked under Paithani", () => {
-    render(<Home />);
+  it("displays the official budget cards in the Shop by Budget section without Under ₹500", () => {
+    renderWithClient(<Home />);
 
-    // Click "Under ₹1,000" card
-    const under1000Card = screen.getByRole("heading", { name: "Under ₹1,000" });
-    fireEvent.click(under1000Card.closest(".cursor-pointer")!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/paithani?category=paithani&minPrice=0&maxPrice=1000");
+    expect(screen.queryByRole("heading", { name: "Under ₹500" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Budget Finds")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "₹500–₹1,000" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "₹1,000–₹2,000" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "₹2,000–₹5,000" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "₹5,000+" })).toBeInTheDocument();
   });
 
-  it("navigates to /paithani?category=paithani&minPrice=2000&maxPrice=5000 for mid-range budget", () => {
-    render(<Home />);
+  it("ensures Under ₹500 budget card is removed from Explore Collections by Price", () => {
+    renderWithClient(<Home />);
 
-    const midCard = screen.getByRole("heading", { name: "₹2,000 – ₹5,000" });
-    fireEvent.click(midCard.closest(".cursor-pointer")!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/paithani?category=paithani&minPrice=2000&maxPrice=5000");
+    expect(screen.queryByRole("heading", { name: "Under ₹500" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Budget Finds")).not.toBeInTheDocument();
   });
 
-  it("navigates to /paithani?category=paithani&minPrice=5000 for premium budget", () => {
-    render(<Home />);
+  it("navigates to /shop-by-budget with budget=500-1000 for everyday favorites", () => {
+    renderWithClient(<Home />);
 
-    const premiumCard = screen.getByRole("heading", { name: "Premium (₹5,000+)" });
-    fireEvent.click(premiumCard.closest(".cursor-pointer")!);
+    const card = screen.getByRole("heading", { name: "₹500–₹1,000" });
+    fireEvent.click(card.closest('[role="button"]') || card.closest(".cursor-pointer")!);
 
-    expect(mockNavigate).toHaveBeenCalledWith("/paithani?category=paithani&minPrice=5000");
+    expect(mockNavigate).toHaveBeenCalled();
+    const targetUrl = mockNavigate.mock.calls[0][0];
+    expect(targetUrl).toBe("/shop-by-budget?budget=500-1000&minPrice=500&maxPrice=999");
   });
 
-  it("navigates to /designer?category=designer with budget when Designer category is active", () => {
-    render(<Home />);
+  it("navigates to /shop-by-budget with budget=1000-2000 for festive collection", () => {
+    renderWithClient(<Home />);
 
-    // Click Designer button
-    const designerBtn = screen.getByRole("button", { name: "Designer" });
-    fireEvent.click(designerBtn);
+    const card = screen.getByRole("heading", { name: "₹1,000–₹2,000" });
+    fireEvent.click(card.closest('[role="button"]') || card.closest(".cursor-pointer")!);
 
-    // Click "Under ₹2,000" card
-    const under2000Card = screen.getByRole("heading", { name: "Under ₹2,000" });
-    fireEvent.click(under2000Card.closest(".cursor-pointer")!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/designer?category=designer&minPrice=0&maxPrice=2000");
+    expect(mockNavigate).toHaveBeenCalled();
+    const targetUrl = mockNavigate.mock.calls[0][0];
+    expect(targetUrl).toBe("/shop-by-budget?budget=1000-2000&minPrice=1000&maxPrice=1999");
   });
 
-  it("navigates to /designer?category=designer&minPrice=5000 for premium budget under Designer", () => {
-    render(<Home />);
+  it("navigates to /shop-by-budget with budget=2000-5000 for mid-range budget", () => {
+    renderWithClient(<Home />);
 
-    // Click Designer button
-    const designerBtn = screen.getByRole("button", { name: "Designer" });
-    fireEvent.click(designerBtn);
+    const midCard = screen.getByRole("heading", { name: "₹2,000–₹5,000" });
+    fireEvent.click(midCard.closest('[role="button"]') || midCard.closest(".cursor-pointer")!);
 
-    // Click "Premium (₹5,000+)" card
-    const premiumCard = screen.getByRole("heading", { name: "Premium (₹5,000+)" });
-    fireEvent.click(premiumCard.closest(".cursor-pointer")!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/designer?category=designer&minPrice=5000");
+    expect(mockNavigate).toHaveBeenCalled();
+    const targetUrl = mockNavigate.mock.calls[0][0];
+    expect(targetUrl).toBe("/shop-by-budget?budget=2000-5000&minPrice=2000&maxPrice=4999");
   });
 
-  it("updates the View All in Catalog link based on selected category", () => {
-    render(<Home />);
+  it("navigates to /shop-by-budget with budget=5000-above for luxury budget", () => {
+    renderWithClient(<Home />);
 
-    // Initially Paithani is selected
-    const viewAllLink = screen.getByRole("link", { name: /View All Paithani in Catalog/i });
-    expect(viewAllLink).toHaveAttribute("href", "/paithani?category=paithani");
+    const premiumCard = screen.getByRole("heading", { name: "₹5,000+" });
+    fireEvent.click(premiumCard.closest('[role="button"]') || premiumCard.closest(".cursor-pointer")!);
 
-    // Switch to Designer
-    const designerBtn = screen.getByRole("button", { name: "Designer" });
-    fireEvent.click(designerBtn);
-
-    const viewAllDesignerLink = screen.getByRole("link", { name: /View All Designer in Catalog/i });
-    expect(viewAllDesignerLink).toHaveAttribute("href", "/designer?category=designer");
+    expect(mockNavigate).toHaveBeenCalled();
+    const targetUrl = mockNavigate.mock.calls[0][0];
+    expect(targetUrl).toBe("/shop-by-budget?budget=5000-above&minPrice=5000");
   });
 });

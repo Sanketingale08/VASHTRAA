@@ -2833,3 +2833,5 @@ export function CheckoutPage() {
     </Layout>
   );
 }
+
+export default CheckoutPage;

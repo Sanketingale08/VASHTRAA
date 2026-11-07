@@ -30,7 +30,7 @@ router.get("/auth/google/url", async (req: Request, res: Response): Promise<void
     res.status(200).json({ success: true, url, state });
   } catch (err: any) {
     logger.error({ err }, "[GoogleAuth API] Error generating OAuth URL");
-    res.status(500).json({ success: false, error: "Unable to initialize Google Login." });
+    res.status(500).json({ success: false, error: err?.message || "Unable to initialize Google Login." });
   }
 });
 

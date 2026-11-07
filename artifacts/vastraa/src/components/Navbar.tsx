@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, Store, Loader2, Sparkles, Star } from "lucide-react";
+import { Search, Heart, ShoppingBag, User, Menu, X, ArrowRight, LogIn, LogOut, ClipboardList, LayoutDashboard, Store, Loader2, Sparkles, Star, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUser, useClerk } from "@clerk/react";
 import { useAuth } from "@/context/AuthContext";
@@ -8,6 +8,8 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { SearchSuggestionsSkeleton } from "@/components/skeletons";
+import { useQuery } from "@tanstack/react-query";
+import { CATALOG_CATEGORIES, isMainCatalogCategory } from "@/constants/categories";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -43,9 +45,12 @@ export function Navbar() {
   const [suggestions, setSuggestions] = useState<SearchSuggestionsData | null>(null);
   const [searchError, setSearchError] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [categoriesMenuOpen, setCategoriesMenuOpen] = useState(false);
+  const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const categoriesContainerRef = useRef<HTMLDivElement>(null);
 
   const { user: customUser, isSignedIn: isCustomSignedIn, signOut: customSignOut } = useAuth();
   const { user: clerkUser, isSignedIn: isClerkSignedIn } = useUser();
@@ -139,6 +144,56 @@ export function Navbar() {
   }, [userMenuOpen]);
 
   useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoriesContainerRef.current && !categoriesContainerRef.current.contains(e.target as Node)) {
+        setCategoriesMenuOpen(false);
+      }
+    };
+    if (categoriesMenuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [categoriesMenuOpen]);
+
+  // Database-driven categories for navbar
+  const { data: dbCategoriesData } = useQuery<{ categories: any[] }>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`${basePath}/api/categories`);
+        if (!res.ok) return { categories: [] };
+        return res.json();
+      } catch {
+        return { categories: [] };
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  const activeDbCategories = (dbCategoriesData?.categories || []).filter(
+    (c: any) => c.active !== false && isMainCatalogCategory(c)
+  );
+
+  const seenSlugs = new Set<string>();
+  const displayCategories = (activeDbCategories.length > 0 ? activeDbCategories : CATALOG_CATEGORIES)
+    .filter((c: any) => {
+      if (!c || c.active === false || !isMainCatalogCategory(c)) return false;
+      const key = (c.slug || c.id || c.name || "").toLowerCase().trim();
+      if (!key || seenSlugs.has(key)) return false;
+      seenSlugs.add(key);
+      return true;
+    })
+    .map((c: any) => {
+      const fallback = CATALOG_CATEGORIES.find((cat) => cat.slug === c.slug || cat.id === c.id);
+      return {
+        id: c.id || fallback?.id || c.slug,
+        name: c.name || fallback?.name,
+        slug: c.slug || fallback?.slug,
+        image: c.image || c.coverImage || fallback?.coverImage || "/images/product-1.png",
+        description: c.description || fallback?.description,
+        productCount: typeof c.productCount === "number" ? c.productCount : undefined,
+      };
+    });
+
+  useEffect(() => {
     if (mobileMenuOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -158,7 +213,6 @@ export function Navbar() {
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/new-arrivals", label: "New Arrivals" },
-    { href: "/about", label: "About Us" },
     { href: "/contact", label: "Contact" },
   ];
 
@@ -193,11 +247,13 @@ export function Navbar() {
 
   return (
     <>
-      {/* ── Main navbar ──────────────────────────────────────────────── */}
-      <nav className={cn(
-        "sticky top-0 left-0 right-0 w-full z-50 transition-all duration-300 ease-in-out backdrop-blur-md border-b",
-        navBg
-      )}>
+      {/* ── Main navbar (Fixed at top of screen) ───────────────────────── */}
+      <nav
+        className={cn(
+          "fixed top-0 left-0 right-0 w-full z-50 transition-all duration-300 ease-in-out backdrop-blur-md border-b",
+          navBg
+        )}
+      >
         <div className="container mx-auto px-3 sm:px-4 lg:px-8">
           <div className={cn(
             "flex items-center gap-2 xs:gap-3 sm:gap-4 transition-all duration-300 ease-in-out",
@@ -231,9 +287,114 @@ export function Navbar() {
 
             {/* ── Desktop nav (centred) ── */}
             <div className="hidden lg:flex flex-1 items-center justify-center gap-1">
-              {navLinks.map(({ href, label }) => {
-                const active =
-                  href === "/" ? location === "/" : location.startsWith(href) && href !== "#";
+              <Link
+                href="/"
+                className={cn(
+                  "relative px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest transition-colors rounded-sm",
+                  location === "/"
+                    ? "text-[#C7CCD1]"
+                    : "text-[#0A1F44]/75 hover:text-[#0A1F44]",
+                  "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C7CCD1] after:rounded-full after:transition-opacity",
+                  location === "/" ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-40"
+                )}
+              >
+                Home
+              </Link>
+
+              {/* Categories Dropdown / Mega-Menu */}
+              <div
+                ref={categoriesContainerRef}
+                className="relative"
+                onMouseEnter={() => setCategoriesMenuOpen(true)}
+                onMouseLeave={() => setCategoriesMenuOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => setCategoriesMenuOpen(!categoriesMenuOpen)}
+                  className={cn(
+                    "relative px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest transition-colors rounded-sm flex items-center gap-1 cursor-pointer",
+                    categoriesMenuOpen || displayCategories.some((c) => location.startsWith(`/${c.slug}`) || location === `/category/${c.slug}`)
+                      ? "text-[#0A1F44] font-bold"
+                      : "text-[#0A1F44]/75 hover:text-[#0A1F44]",
+                    "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C7CCD1] after:rounded-full after:transition-opacity",
+                    categoriesMenuOpen || displayCategories.some((c) => location.startsWith(`/${c.slug}`) || location === `/category/${c.slug}`)
+                      ? "after:opacity-100"
+                      : "after:opacity-0 hover:after:opacity-40"
+                  )}
+                >
+                  <span>Categories</span>
+                  <ChevronDown size={13} className={cn("transition-transform duration-200", categoriesMenuOpen && "rotate-180")} />
+                </button>
+
+                {/* Mega Menu Dropdown */}
+                {categoriesMenuOpen && (
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-[720px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-[60] animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+                      <div>
+                        <h3 className="font-serif text-base font-bold text-[#0A1F44]">Women's Fashion Categories</h3>
+                        <p className="text-[11px] text-gray-500">Explore handcrafted sarees, kurtis, kurta sets, and designer dresses</p>
+                      </div>
+                      <Link
+                        href="/products"
+                        onClick={() => setCategoriesMenuOpen(false)}
+                        className="text-xs font-bold text-[#0A1F44] hover:underline flex items-center gap-1"
+                      >
+                        All Products <ArrowRight size={12} />
+                      </Link>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                      {displayCategories.map((cat) => {
+                        const targetUrl = `/${cat.slug}`;
+                        const isCurrent = location === targetUrl || location === `/category/${cat.slug}`;
+                        return (
+                          <Link
+                            key={cat.id || cat.slug}
+                            href={targetUrl}
+                            onClick={() => setCategoriesMenuOpen(false)}
+                            className={cn(
+                              "flex items-center gap-3 p-2.5 rounded-xl transition-all border text-left group",
+                              isCurrent
+                                ? "bg-[#0A1F44]/5 border-[#0A1F44]/30"
+                                : "hover:bg-[#F4F5F7] border-transparent hover:border-gray-200"
+                            )}
+                          >
+                            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-gray-100 border border-gray-200 shadow-2xs">
+                              {cat.image ? (
+                                <img
+                                  src={getProductImageSrc(cat.image)}
+                                  alt={cat.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                  onError={replaceProductImageWithFallback}
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-[#0A1F44]/10 flex items-center justify-center text-xs font-bold text-[#0A1F44]">
+                                  {cat.name.slice(0, 2)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-gray-800 group-hover:text-[#0A1F44] truncate transition-colors">
+                                  {cat.name}
+                                </span>
+                                {typeof cat.productCount === "number" && cat.productCount > 0 && (
+                                  <span className="text-[10px] text-gray-400 font-mono ml-1 shrink-0">
+                                    {cat.productCount}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {navLinks.slice(1).map(({ href, label }) => {
+                const active = location.startsWith(href) && href !== "#";
                 return (
                   <Link
                     key={label}
@@ -242,9 +403,7 @@ export function Navbar() {
                       "relative px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest transition-colors rounded-sm",
                       active
                         ? "text-[#C7CCD1]"
-                        : isDark || isDesignerDark
-                          ? "text-[#F4F5F7]/80 hover:text-[#C7CCD1]"
-                          : "text-[#0A1F44]/75 hover:text-[#0A1F44]",
+                        : "text-[#0A1F44]/75 hover:text-[#0A1F44]",
                       "after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[2px] after:bg-[#C7CCD1] after:rounded-full after:transition-opacity",
                       active ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-40"
                     )}
@@ -598,9 +757,21 @@ export function Navbar() {
         </div>
       </nav>
 
+      {/* ── Navbar spacer: reserves exact height in document flow to prevent content overlap ── */}
+      <div
+        aria-hidden="true"
+        data-testid="navbar-spacer"
+        className={cn(
+          "w-full transition-all duration-300 ease-in-out pointer-events-none invisible",
+          isScrolled
+            ? "h-[54px] xs:h-[58px] sm:h-[66px] md:h-[72px]"
+            : "h-[64px] sm:h-[76px] md:h-[96px]"
+        )}
+      />
+
       {/* ── Mobile drawer overlay ─────────────────────────────────────── */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
+        <div className="fixed inset-0 z-[60] lg:hidden flex">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -623,8 +794,79 @@ export function Navbar() {
 
             {/* Nav links */}
             <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1 scroll-touch scrollbar-thin">
-              {navLinks.map(({ href, label }) => {
-                const active = href === "/" ? location === "/" : location.startsWith(href) && href !== "#";
+              <Link
+                href="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center px-3 py-3 rounded-lg text-sm font-semibold uppercase tracking-widest transition-colors",
+                  location === "/"
+                    ? "bg-[#C7CCD1]/20 text-[#C7CCD1]"
+                    : "hover:bg-white/10 text-[#F4F5F7]/80 hover:text-[#F4F5F7]"
+                )}
+              >
+                Home
+              </Link>
+
+              {/* Expandable Categories in Mobile Drawer */}
+              <div className="py-1">
+                <button
+                  type="button"
+                  onClick={() => setMobileCategoriesOpen(!mobileCategoriesOpen)}
+                  className="w-full flex items-center justify-between px-3 py-3 rounded-lg text-sm font-semibold uppercase tracking-widest text-[#F4F5F7]/80 hover:text-[#F4F5F7] hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    Categories ({displayCategories.length})
+                  </span>
+                  <ChevronDown size={16} className={cn("transition-transform duration-200 text-[#C7CCD1]", mobileCategoriesOpen && "rotate-180")} />
+                </button>
+
+                {mobileCategoriesOpen && (
+                  <div className="pl-2 pr-1 py-1 space-y-1 max-h-72 overflow-y-auto scrollbar-thin">
+                    {displayCategories.map((cat) => {
+                      const targetUrl = `/${cat.slug}`;
+                      const isCurrent = location === targetUrl || location === `/category/${cat.slug}`;
+                      return (
+                        <div key={cat.id || cat.slug} className="space-y-0.5">
+                          <Link
+                            href={targetUrl}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={cn(
+                              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors",
+                              isCurrent
+                                ? "bg-[#C7CCD1]/20 text-[#C7CCD1] font-bold"
+                                : "text-[#F4F5F7]/85 hover:text-white hover:bg-white/5"
+                            )}
+                          >
+                            <div className="w-7 h-7 rounded-md overflow-hidden shrink-0 bg-white/10 border border-white/15">
+                              {cat.image ? (
+                                <img
+                                  src={getProductImageSrc(cat.image)}
+                                  alt={cat.name}
+                                  className="w-full h-full object-cover"
+                                  onError={replaceProductImageWithFallback}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-[#C7CCD1]">
+                                  {cat.name.slice(0, 2)}
+                                </div>
+                              )}
+                            </div>
+                            <span className="truncate flex-1">{cat.name}</span>
+                            {typeof cat.productCount === "number" && cat.productCount > 0 && (
+                              <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded-full font-mono text-[#C7CCD1] shrink-0">
+                                {cat.productCount}
+                              </span>
+                            )}
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {navLinks.slice(1).map(({ href, label }) => {
+                const active = location.startsWith(href) && href !== "#";
                 return (
                   <Link
                     key={label}

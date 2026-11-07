@@ -220,6 +220,7 @@ export function ChangeEmailModal({ onClose, onSuccess }: Props) {
                 <p className="text-xs text-gray-500">Code sent to your new email</p>
                 <p className="text-xs font-semibold text-[#0A1F44] mt-0.5">{newEmail.trim()}</p>
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 text-center">Enter 6-Digit Code</label>
                 <input

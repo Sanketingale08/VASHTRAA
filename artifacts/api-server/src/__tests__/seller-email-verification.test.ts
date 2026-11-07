@@ -5,20 +5,24 @@ import {
   isSellerEmailVerified,
   consumeSellerEmailVerification,
 } from "../lib/sellerVerification";
-import {
-  sendSellerVerificationEmail,
-  getSmtpTransporter,
-  getSenderAddress,
-} from "../lib/transactionalEmail";
+import * as transactionalEmail from "../lib/transactionalEmail";
+import { sendSellerVerificationEmail } from "../lib/transactionalEmail";
 import nodemailer from "nodemailer";
 import { mongoSellers, mongoUsers } from "@workspace/db";
 
 describe("Seller Email Verification System — Complete 10-Point Flow", () => {
   const originalEnv = { ...process.env };
+  let lastDispatchedSellerOtp = "";
 
   beforeEach(() => {
     vi.restoreAllMocks();
     process.env = { ...originalEnv };
+    lastDispatchedSellerOtp = "";
+
+    vi.spyOn(transactionalEmail, "sendSellerVerificationEmail").mockImplementation(async (opts) => {
+      lastDispatchedSellerOtp = opts.code;
+      return { delivered: true };
+    });
   });
 
   afterEach(() => {
@@ -31,8 +35,9 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
     const res = await sendSellerVerificationCode(validEmail);
 
     expect(res.delivered).toBe(true);
-    expect(res.devCode).toBeDefined();
-    expect(res.devCode).toMatch(/^[0-9]{6}$/);
+    // In production, devCode is not returned in API/service responses
+    expect((res as any).devCode).toBeUndefined();
+    expect(lastDispatchedSellerOtp).toMatch(/^[0-9]{6}$/);
     expect(res.error).toBeUndefined();
   });
 
@@ -78,6 +83,8 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
     process.env.SMTP_PASS = "supersecretpassword";
     delete process.env.RESEND_API_KEY;
 
+    vi.spyOn(transactionalEmail, "sendSellerVerificationEmail").mockRestore();
+
     // Spy on nodemailer.createTransport and mock a sendMail rejection (e.g. 535 Auth failed)
     const mockSendMail = vi.fn().mockRejectedValueOnce(
       new Error("535 5.7.8 Authentication credentials invalid")
@@ -101,6 +108,8 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
   it("5. Handles SMTP timeout or provider failure gracefully without crashing or false success", async () => {
     process.env.SMTP_HOST = "smtp.slow-provider.local";
     delete process.env.RESEND_API_KEY;
+
+    vi.spyOn(transactionalEmail, "sendSellerVerificationEmail").mockRestore();
 
     const timeoutErr: any = new Error("Connection timed out after 10000ms");
     timeoutErr.code = "ETIMEDOUT";
@@ -134,7 +143,7 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
   it("7. Validates correct 6-digit code, rejects incorrect code, and locks after max attempts", async () => {
     const email = "testattempts@example.com";
     const sendRes = await sendSellerVerificationCode(email);
-    const correctCode = sendRes.devCode!;
+    const correctCode = lastDispatchedSellerOtp;
 
     // Try bad code (attempt 1)
     const bad1 = verifySellerEmailCode(email, "999999");
@@ -156,7 +165,7 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
   it("8. Rejects expired verification codes after 5-minute validity window", async () => {
     const email = "expiredcode@example.com";
     const sendRes = await sendSellerVerificationCode(email);
-    const code = sendRes.devCode!;
+    const code = lastDispatchedSellerOtp;
 
     // Advance clock by 6 minutes (beyond 5 min expiration)
     const realNow = Date.now;
@@ -181,7 +190,7 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
     try {
       // First request
       const res1 = await sendSellerVerificationCode(email);
-      const code1 = res1.devCode!;
+      const code1 = lastDispatchedSellerOtp;
 
       // Advance time by 31 seconds past cooldown
       timeShift += 31 * 1000;
@@ -189,7 +198,7 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
       // Resend a new code
       const res2 = await sendSellerVerificationCode(email);
       expect(res2.delivered).toBe(true);
-      const code2 = res2.devCode!;
+      const code2 = lastDispatchedSellerOtp;
 
       // Verify that code1 is now invalid (overwritten by code2)
       const tryOld = verifySellerEmailCode(email, code1);
@@ -207,7 +216,7 @@ describe("Seller Email Verification System — Complete 10-Point Flow", () => {
   it("10. Confirms verified status allows registration, then consumption clears status", async () => {
     const email = "completeshopreg@example.com";
     const sendRes = await sendSellerVerificationCode(email);
-    const code = sendRes.devCode!;
+    const code = lastDispatchedSellerOtp;
 
     // Not verified before verification
     expect(isSellerEmailVerified(email)).toBe(false);

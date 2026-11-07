@@ -1,4 +1,4 @@
-import { db, productsTable, eq, mongoProducts, mongoSellers, mongoProductCategories } from "@workspace/db";
+import { db, productsTable, eq, mongoProducts, mongoSellers, mongoProductCategories, CATALOG_CATEGORIES, PRESERVED_SAREE_CATEGORIES, findCategoryDefinition, findSubcategoryDefinition } from "@workspace/db";
 import type { Product } from "@workspace/db";
 import type { Filter } from "mongodb";
 import { calculateVastraaFinancials, toPaise, toRupees } from "./pricingEngine";
@@ -18,10 +18,62 @@ export const COLOR_MAP: Record<string, string[]> = {
   mint: ["mint", "green", "#1abc9c", "#00b894"],
 };
 
-export const CATEGORIES = ["paithani", "designer", "bridal", "party"];
-export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"];
-export const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"];
-export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"];
+export const CATEGORIES = [
+  "paithani",
+  "designer",
+  "gadwal",
+  "banarasi",
+  "kanjivaram",
+  "chanderi",
+  "bandhani",
+  "mysore-silk",
+  "ikat",
+  "cotton",
+  "silk",
+  "other-traditional",
+];
+export const FABRICS = [
+  "silk",
+  "cotton",
+  "georgette",
+  "net",
+  "chiffon",
+  "tissue",
+  "organza",
+  "crepe",
+  "satin",
+  "tussar",
+  "muga",
+  "khadi",
+  "velvet",
+];
+export const OCCASIONS = [
+  "bridal",
+  "wedding",
+  "festival",
+  "festive",
+  "casual",
+  "party",
+  "formal",
+  "puja",
+];
+export const COLORS = [
+  "red",
+  "maroon",
+  "blue",
+  "green",
+  "yellow",
+  "pink",
+  "purple",
+  "cream",
+  "gold",
+  "black",
+  "orange",
+  "mint",
+  "wine",
+  "peach",
+  "silver",
+];
 
 /**
  * Helper to build all category/subcategory identifiers for a given category filter query.
@@ -35,16 +87,120 @@ export async function getMatchingCategoryIdentifiers(targetFilter: string): Prom
   matchingSet.add(targetLower);
   matchingSet.add(targetSlug);
 
+  // Dynamic authoritative catalog resolution for all saree categories
+  if (targetSlug === "all-sarees" || targetSlug === "sarees" || targetSlug === "saree") {
+    const sareeCat = CATALOG_CATEGORIES.find((c) => c.slug === "sarees");
+    const sareeCategories = sareeCat ? [sareeCat, ...PRESERVED_SAREE_CATEGORIES] : PRESERVED_SAREE_CATEGORIES;
+    for (const cat of sareeCategories) {
+      if (cat.id) matchingSet.add(cat.id.toLowerCase());
+      if (cat.slug) matchingSet.add(cat.slug.toLowerCase());
+      if (cat.name) matchingSet.add(cat.name.toLowerCase());
+      if (cat.slug) matchingSet.add(`${cat.slug}-sarees`);
+      for (const sub of (cat.subcategories || [])) {
+        if (sub.id) matchingSet.add(sub.id.toLowerCase());
+        if (sub.slug) matchingSet.add(sub.slug.toLowerCase());
+        if (sub.name) matchingSet.add(sub.name.toLowerCase());
+        if (cat.slug && sub.slug) matchingSet.add(`${cat.slug}-${sub.slug}`);
+        for (const st of sub.subtypes || []) {
+          if (st) matchingSet.add(st.toLowerCase());
+        }
+      }
+    }
+  } else {
+    const catDef = findCategoryDefinition(targetFilter);
+    if (catDef) {
+      if (catDef.id) matchingSet.add(catDef.id.toLowerCase());
+      if (catDef.slug) matchingSet.add(catDef.slug.toLowerCase());
+      if (catDef.name) {
+        matchingSet.add(catDef.name.toLowerCase());
+      }
+      if (catDef.slug) {
+        matchingSet.add(`${catDef.slug}-sarees`);
+        matchingSet.add(`${catDef.slug} sarees`);
+        matchingSet.add(`${catDef.slug}-saree`);
+      }
+      for (const sub of (catDef.subcategories || [])) {
+        if (sub.id) matchingSet.add(sub.id.toLowerCase());
+        if (sub.slug) matchingSet.add(sub.slug.toLowerCase());
+        if (sub.name) matchingSet.add(sub.name.toLowerCase());
+        if (catDef.slug && sub.slug) matchingSet.add(`${catDef.slug}-${sub.slug}`);
+        for (const st of sub.subtypes || []) {
+          if (st) matchingSet.add(st.toLowerCase());
+        }
+      }
+    }
+  }
+
   // Pre-populate canonical hierarchy identifiers
-  if (targetSlug === "paithani" || targetSlug === "paithani-sarees" || targetSlug.includes("paithani")) {
+  if (targetSlug === "sarees" || targetSlug === "saree") {
+    [
+      "sarees", "saree", "sari", "saris", "cat-sarees-default",
+      "paithani", "designer", "gadwal", "banarasi", "kanjivaram",
+      "chanderi", "bandhani", "mysore-silk", "ikat", "cotton", "silk", "other-traditional",
+      "cat-paithani-default", "cat-designer-default", "cat-gadwal-default", "cat-banarasi-default",
+      "cat-kanjivaram-default", "cat-chanderi-default", "cat-bandhani-default", "cat-mysore-silk-default",
+      "cat-ikat-default", "cat-cotton-default", "cat-silk-default", "cat-other-traditional-default",
+      "bridal", "wedding-paithani-main", "western-paithani-main", "bollywood", "contemporary-silk-main", "party"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "kurtis" || targetSlug === "kurti") {
+    [
+      "kurtis", "kurti", "kurta", "kurtas", "cat-kurtis-default",
+      "straight-kurti", "a-line-kurti", "anarkali-kurti", "angrakha-kurti", "flared-kurti",
+      "asymmetrical-kurti", "kaftan-kurti", "short-kurti", "long-kurti", "high-low-kurti",
+      "pakistani-style-kurti", "shirt-style-kurti", "front-slit-kurti", "jacket-style-kurti", "cape-style-kurti"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "kurta-sets" || targetSlug === "kurta-set") {
+    [
+      "kurta-sets", "kurta-set", "kurta sets", "kurti set", "kurti-sets", "cat-kurta-sets-default",
+      "kurti-with-palazzo", "kurti-with-straight-pants", "kurti-with-cigarette-pants",
+      "kurti-with-sharara", "kurti-with-gharara", "kurti-with-dhoti-pants", "kurti-with-skirt",
+      "kurti-with-dupatta", "2-piece-kurta-set", "3-piece-kurta-set"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "ethnic-dresses" || targetSlug === "ethnic-dress") {
+    [
+      "ethnic-dresses", "ethnic-dress", "ethnic dresses", "cat-ethnic-dresses-default",
+      "anarkali-gown", "ethnic-maxi-dress", "ethnic-midi-dress", "ethnic-a-line-dress",
+      "indo-western-dress", "floor-length-ethnic-gown", "jacket-style-ethnic-dress",
+      "kaftan-dress", "festive-ethnic-dress", "party-wear-ethnic-dress"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "western-dresses" || targetSlug === "western-dress") {
+    [
+      "western-dresses", "western-dress", "western dresses", "cat-western-dresses-default",
+      "a-line-dress", "fit-and-flare-dress", "bodycon-dress", "maxi-dress", "midi-dress",
+      "mini-dress", "shirt-dress", "wrap-dress", "skater-dress", "tiered-dress",
+      "slip-dress", "co-ord-dress", "denim-dress", "floral-dress", "ruffle-dress", "one-piece-party-dress"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "winter-wear" || targetSlug === "winter" || targetSlug === "winterwear") {
+    [
+      "winter-wear", "winter", "winterwear", "winter wear", "cat-winter-wear-default",
+      "winter-dresses", "sweater-dresses", "woolen-dresses", "winter-ethnic-wear",
+      "winter-western-wear", "velvet-dresses", "winter-party-wear", "winter-co-ord-sets",
+      "winter-jackets-coats", "winter-casual-wear"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "tops" || targetSlug === "top" || targetSlug === "ladies-tops" || targetSlug === "womens-tops" || targetSlug === "girls-tops" || targetSlug === "ladies-and-girls-tops") {
+    [
+      "tops", "top", "ladies-tops", "womens-tops", "girls-tops", "ladies and girls tops", "ladies & girls tops", "cat-tops-default",
+      // Women's Tops
+      "casual-tops", "crop-tops", "peplum-tops", "tunic-tops", "shirt-style-tops", "blouse-tops",
+      "tank-tops", "sleeveless-tops", "off-shoulder-tops", "one-shoulder-tops", "halter-neck-tops",
+      "cold-shoulder-tops", "wrap-tops", "ruffle-tops", "tie-up-tops", "printed-tops", "embroidered-tops",
+      "lace-tops", "party-wear-tops", "formal-tops", "long-tops", "short-tops", "high-low-tops", "basic-solid-tops",
+      // Girls' Tops
+      "girls-casual-tops", "girls-printed-tops", "girls-graphic-tops", "girls-crop-tops", "girls-ruffle-tops",
+      "girls-peplum-tops", "girls-party-wear-tops", "girls-embroidered-tops", "girls-sleeveless-tops",
+      "girls-full-sleeve-tops", "girls-off-shoulder-tops", "girls-tunic-tops", "girls-basic-solid-tops",
+      // Seasonal Tops
+      "winter-tops", "sweatshirt-tops", "sweater-tops", "thermal-tops", "full-sleeve-tops"
+    ].forEach(id => matchingSet.add(id));
+  } else if (targetSlug === "paithani" || targetSlug === "paithani-sarees" || targetSlug.includes("paithani")) {
     [
       "paithani", "paithani-sarees", "paithani sarees", "paithani saree", "paithani-saree",
       "cat-paithani-default", "cat-paithani-sarees",
+      "bridal", "cat-bridal-default", "bridal-paithani", "cat-bridal-paithani", "cat-bridal-paithani-sub", "bridal paithani",
+      "weddings", "wedding", "wedding-paithani", "cat-wedding-paithani", "cat-wedding-paithani-main", "wedding-paithani-main", "wedding paithani",
+      "western", "western-paithani", "cat-western-paithani", "cat-western-paithani-main", "western-paithani-main", "western paithani",
       "festival-paithani", "cat-festival-paithani", "festival paithani",
-      "wedding-paithani", "cat-wedding-paithani", "cat-wedding-paithani-main", "wedding paithani",
-      "western-paithani", "cat-western-paithani", "cat-western-paithani-main", "western paithani",
-      "royal-festival", "bridal-paithani", "cat-bridal-paithani", "cat-bridal-paithani-sub", "bridal paithani",
-      "traditional-yeola", "cat-traditional-yeola", "traditional yeola",
+      "royal-festival", "traditional-yeola", "cat-traditional-yeola", "traditional yeola",
       "pure-silk-handloom", "cat-pure-silk-handloom", "pure silk handloom",
       "royal-zari-border", "cat-royal-zari-border", "royal zari border",
       "bridal-wedding-paithani", "cat-bridal-wedding-paithani",
@@ -59,11 +215,12 @@ export async function getMatchingCategoryIdentifiers(targetFilter: string): Prom
       "designer", "designer-sarees", "designer sarees", "designer saree", "designer-saree",
       "cat-designer-default", "cat-designer-sarees",
       "bollywood", "bollywood-sarees", "cat-bollywood-sarees", "cat-bollywood-default", "bollywood sarees", "bollywood saree",
+      "contemporary-silk", "contemporary-silk-main", "cat-contemporary-silk", "cat-contemporary-silk-main", "cat-contemporary-silk-bollywood", "contemporary silk", "contemporary saree", "contemporary",
+      "party", "party-wear", "cat-party-wear", "cat-party-default", "party wear", "cocktail",
       "bollywood-party-wear", "cat-bollywood-party-wear",
       "celebrity-designer", "cat-celebrity-designer",
       "bollywood-bridal", "cat-bollywood-bridal",
       "designer-bridal", "cat-designer-bridal",
-      "contemporary-silk", "cat-contemporary-silk", "cat-contemporary-silk-main", "cat-contemporary-silk-bollywood", "contemporary silk", "contemporary saree", "contemporary",
       "wedding-designer-sarees", "cat-wedding-designer-sarees", "wedding designer sarees",
       "bollywood-fashion", "contemporary-fashion", "reception-collections", "wedding-designer",
       "fusion-silk", "cat-fusion-silk",
@@ -71,43 +228,7 @@ export async function getMatchingCategoryIdentifiers(targetFilter: string): Prom
       "art-silk", "cat-art-silk",
       "bridal-designer", "cat-bridal-designer",
       "wedding-silk", "cat-wedding-silk",
-      "royal-trousseau", "cat-royal-trousseau",
-      "party-wear", "cat-party-wear", "party wear", "party"
-    ].forEach(id => matchingSet.add(id));
-  } else if (targetSlug === "all-sarees" || targetSlug === "sarees" || targetSlug === "saree") {
-    [
-      "paithani", "paithani-sarees", "paithani sarees", "paithani saree", "paithani-saree",
-      "cat-paithani-default", "cat-paithani-sarees",
-      "festival-paithani", "cat-festival-paithani", "festival paithani",
-      "wedding-paithani", "cat-wedding-paithani", "cat-wedding-paithani-main", "wedding paithani",
-      "western-paithani", "cat-western-paithani", "cat-western-paithani-main", "western paithani",
-      "royal-festival", "bridal-paithani", "cat-bridal-paithani", "cat-bridal-paithani-sub", "bridal paithani",
-      "traditional-yeola", "cat-traditional-yeola", "traditional yeola",
-      "pure-silk-handloom", "cat-pure-silk-handloom", "pure silk handloom",
-      "royal-zari-border", "cat-royal-zari-border", "royal zari border",
-      "bridal-wedding-paithani", "cat-bridal-wedding-paithani",
-      "indo-western-fusion", "cat-indo-western-fusion",
-      "contemporary-drape", "cat-contemporary-drape",
-      "cocktail-paithani", "cat-cocktail-paithani",
-      "modern-paithani", "cat-modern-paithani",
-      "heritage-weaving", "yeola", "yeola-paithani", "yeola paithani",
-      "designer", "designer-sarees", "designer sarees", "designer saree", "designer-saree",
-      "cat-designer-default", "cat-designer-sarees",
-      "bollywood", "bollywood-sarees", "cat-bollywood-sarees", "cat-bollywood-default", "bollywood sarees", "bollywood saree",
-      "bollywood-party-wear", "cat-bollywood-party-wear",
-      "celebrity-designer", "cat-celebrity-designer",
-      "bollywood-bridal", "cat-bollywood-bridal",
-      "designer-bridal", "cat-designer-bridal",
-      "contemporary-silk", "cat-contemporary-silk", "cat-contemporary-silk-main", "cat-contemporary-silk-bollywood", "contemporary silk", "contemporary saree", "contemporary",
-      "wedding-designer-sarees", "cat-wedding-designer-sarees", "wedding designer sarees",
-      "bollywood-fashion", "contemporary-fashion", "reception-collections", "wedding-designer",
-      "fusion-silk", "cat-fusion-silk",
-      "digital-print-silk", "cat-digital-print-silk",
-      "art-silk", "cat-art-silk",
-      "bridal-designer", "cat-bridal-designer",
-      "wedding-silk", "cat-wedding-silk",
-      "royal-trousseau", "cat-royal-trousseau",
-      "party-wear", "cat-party-wear", "party wear", "party"
+      "royal-trousseau", "cat-royal-trousseau"
     ].forEach(id => matchingSet.add(id));
   }
 
@@ -393,6 +514,9 @@ export interface SearchOptions {
   fabric?: string | string[];
   color?: string | string[];
   brand?: string | string[];
+  size?: string | string[];
+  sleeveLength?: string | string[];
+  neckStyle?: string | string[];
   pattern?: string | string[];
   occasion?: string | string[];
   gender?: string | string[];
@@ -400,6 +524,13 @@ export interface SearchOptions {
   sareeStyle?: string | string[];
   packOf?: string | string[];
   countryOfOrigin?: string | string[];
+  subtype?: string | string[];
+  weavingTechnique?: string | string[];
+  workType?: string | string[];
+  borderType?: string | string[];
+  palluDesign?: string | string[];
+  sareeLength?: string | string[];
+  origin?: string | string[];
   vendorId?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -734,9 +865,7 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
     const filterSlug = filterCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
     if (filterSlug === "all-sarees" || filterSlug === "sarees" || filterSlug === "saree") {
-      const paithaniSet = await getMatchingCategoryIdentifiers("paithani");
-      const designerSet = await getMatchingCategoryIdentifiers("designer");
-      allProducts = allProducts.filter(p => isProductPaithani(p, paithaniSet) || isProductDesigner(p, designerSet));
+      // In Vastraa saree portal, all-sarees displays all active saree products across all 12 categories
     } else if (filterSlug === "paithani-sarees" || filterCat === "paithani sarees" || filterSlug === "paithani" || filterSlug === "paithani-saree") {
       const matchingIdentifiers = await getMatchingCategoryIdentifiers("paithani");
       allProducts = allProducts.filter(p => isProductPaithani(p, matchingIdentifiers));
@@ -784,16 +913,34 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
       allProducts = allProducts.filter(p => {
         const pCat = (p.category || "").toLowerCase().trim();
         const pCatSlug = pCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        const pCatId = String((p as any).categoryId || "").toLowerCase().trim();
+        const pCatName = String((p as any).categoryName || "").toLowerCase().trim();
+        const pCatNameSlug = pCatName.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        const pParentId = String((p as any).parentCategoryId || "").toLowerCase().trim();
+        const pParentName = String((p as any).parentCategoryName || "").toLowerCase().trim();
+        const pParentSlug = pParentName.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
         const pSubcat = (p.subcategory || "").toLowerCase().trim();
         const pSubcatSlug = pSubcat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        const pSubId = String((p as any).subcategoryId || "").toLowerCase().trim();
+        const pSubName = String((p as any).subcategoryName || "").toLowerCase().trim();
+        const pSubNameSlug = pSubName.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
         const pChildCat = ((p as any).childCategory || "").toLowerCase().trim();
         const pChildCatSlug = pChildCat.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
         if (
           (pCat && matchingIdentifiers.has(pCat)) ||
           (pCatSlug && matchingIdentifiers.has(pCatSlug)) ||
+          (pCatId && matchingIdentifiers.has(pCatId)) ||
+          (pCatName && matchingIdentifiers.has(pCatName)) ||
+          (pCatNameSlug && matchingIdentifiers.has(pCatNameSlug)) ||
+          (pParentId && matchingIdentifiers.has(pParentId)) ||
+          (pParentName && matchingIdentifiers.has(pParentName)) ||
+          (pParentSlug && matchingIdentifiers.has(pParentSlug)) ||
           (pSubcat && matchingIdentifiers.has(pSubcat)) ||
           (pSubcatSlug && matchingIdentifiers.has(pSubcatSlug)) ||
+          (pSubId && matchingIdentifiers.has(pSubId)) ||
+          (pSubName && matchingIdentifiers.has(pSubName)) ||
+          (pSubNameSlug && matchingIdentifiers.has(pSubNameSlug)) ||
           (pChildCat && matchingIdentifiers.has(pChildCat)) ||
           (pChildCatSlug && matchingIdentifiers.has(pChildCatSlug))
         ) {
@@ -806,6 +953,9 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
         if (pSubcat && (pSubcat === filterCat || pSubcatSlug === filterSlug || pSubcat.includes(filterCat) || filterCat.includes(pSubcat))) {
           return true;
         }
+        if (pCatName && (pCatName === filterCat || pCatNameSlug === filterSlug || pCatName.includes(filterCat) || filterCat.includes(pCatName))) {
+          return true;
+        }
         return false;
       });
     }
@@ -816,6 +966,63 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
     const subFilter = String(options.subcategory).toLowerCase().trim();
     const subSlug = subFilter.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+    const subAliases: Record<string, string[]> = {
+      "bridal": ["bridal", "bridal-paithani", "bridal paithani", "cat-bridal-paithani", "bridal-wedding-paithani", "cat-bridal-default"],
+      "bridal-paithani": ["bridal", "bridal-paithani", "bridal paithani", "cat-bridal-paithani", "bridal-wedding-paithani", "cat-bridal-default"],
+      "wedding-paithani": ["wedding", "weddings", "wedding-paithani", "wedding paithani", "cat-wedding-paithani", "cat-wedding-paithani-main", "wedding-paithani-main", "traditional-yeola", "yeola"],
+      "wedding-paithani-main": ["wedding", "weddings", "wedding-paithani", "wedding paithani", "cat-wedding-paithani", "cat-wedding-paithani-main", "wedding-paithani-main", "traditional-yeola", "yeola"],
+      "weddings": ["wedding", "weddings", "wedding-paithani", "wedding paithani", "cat-wedding-paithani", "cat-wedding-paithani-main", "wedding-paithani-main", "traditional-yeola", "yeola"],
+      "western": ["western", "western-paithani", "western-paithani-main", "western paithani", "cat-western-paithani", "cat-western-paithani-main", "indo-western-fusion", "cocktail-paithani"],
+      "western-paithani": ["western", "western-paithani", "western-paithani-main", "western paithani", "cat-western-paithani", "cat-western-paithani-main", "indo-western-fusion", "cocktail-paithani"],
+      "western-paithani-main": ["western", "western-paithani", "western-paithani-main", "western paithani", "cat-western-paithani", "cat-western-paithani-main", "indo-western-fusion", "cocktail-paithani"],
+      "festival-paithani": ["festival", "festive", "festival-paithani", "festival paithani", "cat-festival-paithani", "royal-festival"],
+      "contemporary-silk": ["contemporary", "contemporary-silk", "contemporary-silk-main", "contemporary silk", "cat-contemporary-silk", "cat-contemporary-silk-main", "modern-paithani", "fusion-silk"],
+      "contemporary-silk-main": ["contemporary", "contemporary-silk", "contemporary-silk-main", "contemporary silk", "cat-contemporary-silk", "cat-contemporary-silk-main", "modern-paithani", "fusion-silk"],
+      "bollywood": ["bollywood", "bollywood-sarees", "bollywood sarees", "cat-bollywood-sarees", "cat-bollywood-default", "bollywood-party-wear", "celebrity-designer"],
+      "party": ["party", "party-wear", "party wear", "cat-party-wear", "cat-party-default", "cocktail-paithani", "cocktail"],
+      "party-wear": ["party", "party-wear", "party wear", "cat-party-wear", "cat-party-default", "cocktail-paithani", "cocktail"],
+      "wedding-designer-sarees": ["wedding", "wedding-designer-sarees", "wedding designer", "cat-wedding-designer-sarees", "reception-collections"],
+      "womens-tops": [
+        "womens-tops", "women-tops", "women tops", "women's tops", "womens tops",
+        "casual-tops", "crop-tops", "peplum-tops", "tunic-tops", "shirt-style-tops", "blouse-tops",
+        "tank-tops", "sleeveless-tops", "off-shoulder-tops", "one-shoulder-tops", "halter-neck-tops",
+        "cold-shoulder-tops", "wrap-tops", "ruffle-tops", "tie-up-tops", "printed-tops", "embroidered-tops",
+        "lace-tops", "party-wear-tops", "formal-tops", "long-tops", "short-tops", "high-low-tops", "basic-solid-tops"
+      ],
+      "girls-tops": [
+        "girls-tops", "girl-tops", "girls tops", "girls' tops",
+        "girls-casual-tops", "girls-printed-tops", "girls-graphic-tops", "girls-crop-tops", "girls-ruffle-tops",
+        "girls-peplum-tops", "girls-party-wear-tops", "girls-embroidered-tops", "girls-sleeveless-tops",
+        "girls-full-sleeve-tops", "girls-off-shoulder-tops", "girls-tunic-tops", "girls-basic-solid-tops"
+      ],
+      "seasonal-tops": [
+        "seasonal-tops", "seasonal tops",
+        "winter-tops", "sweatshirt-tops", "sweater-tops", "thermal-tops", "full-sleeve-tops"
+      ],
+    };
+
+    const targetAliases = new Set<string>([subFilter, subSlug]);
+    for (const [key, aliases] of Object.entries(subAliases)) {
+      if (key === subSlug || aliases.includes(subFilter) || aliases.includes(subSlug)) {
+        aliases.forEach(a => targetAliases.add(a));
+      }
+    }
+
+    try {
+      const subDef = findSubcategoryDefinition(subSlug) || findSubcategoryDefinition(subFilter);
+      if (subDef) {
+        if (subDef.id) targetAliases.add(subDef.id.toLowerCase().trim());
+        if (subDef.slug) targetAliases.add(subDef.slug.toLowerCase().trim());
+        if (subDef.name) targetAliases.add(subDef.name.toLowerCase().trim());
+        if (subDef.subtypes) {
+          subDef.subtypes.forEach(st => {
+            targetAliases.add(st.toLowerCase().trim());
+            targetAliases.add(st.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+          });
+        }
+      }
+    } catch {}
+
     allProducts = allProducts.filter(p => {
       const pSub = String(p.subcategory || "").toLowerCase().trim();
       const pSubSlug = pSub.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -825,19 +1032,30 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
       const pChild = String((p as any).childCategory || "").toLowerCase().trim();
       const pChildSlug = pChild.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+      const productValues = [pSub, pSubSlug, pSubName, pSubNameSlug, pSubId, pChild, pChildSlug].filter(Boolean);
+
+      // Check direct or alias match
+      for (const val of productValues) {
+        if (targetAliases.has(val)) return true;
+      }
+
+      // Check bidirectional containment
       return (
         pSub === subFilter ||
         pSubSlug === subSlug ||
-        pSub.includes(subFilter) ||
-        pSubSlug.includes(subSlug) ||
+        (pSub && (pSub.includes(subFilter) || subFilter.includes(pSub))) ||
+        (pSubSlug && (pSubSlug.includes(subSlug) || subSlug.includes(pSubSlug))) ||
         pSubName === subFilter ||
         pSubNameSlug === subSlug ||
+        (pSubName && (pSubName.includes(subFilter) || subFilter.includes(pSubName))) ||
         pSubId === subFilter ||
+        pSubId === subSlug ||
         pChild === subFilter ||
         pChildSlug === subSlug
       );
     });
   }
+
 
   // Collection Filter
   if (options.collection && options.collection !== "all") {
@@ -975,11 +1193,133 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
     });
   }
 
-  const selectedOrigins = parseArrayParam(options.countryOfOrigin);
+  const selectedOrigins = parseArrayParam(options.countryOfOrigin || (options as any).origin);
   if (selectedOrigins.length > 0) {
     allProducts = allProducts.filter(p => {
-      const pOrigin = ((p as any).countryOfOrigin || "India").toLowerCase().trim();
+      const pOrigin = String((p as any).origin || (p as any).countryOfOrigin || "India").toLowerCase().trim();
       return selectedOrigins.some(ori => pOrigin === ori || pOrigin.includes(ori));
+    });
+  }
+
+  const selectedSubtypes = parseArrayParam(options.subtype);
+  if (selectedSubtypes.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pSubtype = String((p as any).subtype || (p as any).childCategory || "").toLowerCase().trim();
+      return selectedSubtypes.some(st => pSubtype === st || pSubtype.includes(st) || st.includes(pSubtype));
+    });
+  }
+
+  const selectedWeaves = parseArrayParam(options.weavingTechnique);
+  if (selectedWeaves.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pWeave = String((p as any).weavingTechnique || "").toLowerCase().trim();
+      return selectedWeaves.some(w => pWeave === w || pWeave.includes(w) || w.includes(pWeave));
+    });
+  }
+
+  const selectedWorks = parseArrayParam(options.workType);
+  if (selectedWorks.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pWork = String((p as any).workType || (p as any).designPattern || "").toLowerCase().trim();
+      return selectedWorks.some(wt => pWork === wt || pWork.includes(wt) || wt.includes(pWork));
+    });
+  }
+
+  const selectedBorders = parseArrayParam(options.borderType);
+  if (selectedBorders.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pBorder = String((p as any).borderType || "").toLowerCase().trim();
+      return selectedBorders.some(bt => pBorder === bt || pBorder.includes(bt) || bt.includes(pBorder));
+    });
+  }
+
+  const selectedPallus = parseArrayParam(options.palluDesign);
+  if (selectedPallus.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pPallu = String((p as any).palluDesign || "").toLowerCase().trim();
+      return selectedPallus.some(pd => pPallu === pd || pPallu.includes(pd) || pd.includes(pPallu));
+    });
+  }
+
+  const selectedLengths = parseArrayParam(options.sareeLength);
+  if (selectedLengths.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pLen = String((p as any).sareeLength || "").toLowerCase().trim();
+      return selectedLengths.some(sl => pLen === sl || pLen.includes(sl) || sl.includes(pLen));
+    });
+  }
+
+  // Size Filter (e.g. XS, S, M, L, XL, XXL, 3XL, 2-3Y, 3-4Y...)
+  const selectedSizes = parseArrayParam((options as any).size);
+  if (selectedSizes.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pSizes: string[] = [];
+      if (Array.isArray((p as any).sizes)) {
+        (p as any).sizes.forEach((s: any) => pSizes.push(String(s).toLowerCase().trim()));
+      }
+      if ((p as any).size) {
+        pSizes.push(String((p as any).size).toLowerCase().trim());
+      }
+      if (Array.isArray(p.variants)) {
+        for (const v of p.variants) {
+          if (Array.isArray(v.attributes)) {
+            for (const a of v.attributes) {
+              if (String(a.name || "").toLowerCase().trim() === "size") {
+                pSizes.push(String(a.value || "").toLowerCase().trim());
+              }
+            }
+          }
+        }
+      }
+      return selectedSizes.some(sz => pSizes.some(ps => ps === sz || ps.includes(sz) || sz.includes(ps)));
+    });
+  }
+
+  // Sleeve Length Filter
+  const selectedSleeveLengths = parseArrayParam((options as any).sleeveLength || (options as any).sleeve);
+  if (selectedSleeveLengths.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pSleeve = String((p as any).sleeveLength || (p as any).weavingTechnique || "").toLowerCase().trim();
+      let varSleeves: string[] = [];
+      if (Array.isArray(p.variants)) {
+        for (const v of p.variants) {
+          if (Array.isArray(v.attributes)) {
+            for (const a of v.attributes) {
+              if (String(a.name || "").toLowerCase().includes("sleeve")) {
+                varSleeves.push(String(a.value || "").toLowerCase().trim());
+              }
+            }
+          }
+        }
+      }
+      return selectedSleeveLengths.some(sl =>
+        pSleeve === sl || pSleeve.includes(sl) || sl.includes(pSleeve) ||
+        varSleeves.some(vs => vs === sl || vs.includes(sl) || sl.includes(vs))
+      );
+    });
+  }
+
+  // Neck Style Filter
+  const selectedNeckStyles = parseArrayParam((options as any).neckStyle || (options as any).neck);
+  if (selectedNeckStyles.length > 0) {
+    allProducts = allProducts.filter(p => {
+      const pNeck = String((p as any).neckStyle || (p as any).neckType || (p as any).borderType || "").toLowerCase().trim();
+      let varNecks: string[] = [];
+      if (Array.isArray(p.variants)) {
+        for (const v of p.variants) {
+          if (Array.isArray(v.attributes)) {
+            for (const a of v.attributes) {
+              if (String(a.name || "").toLowerCase().includes("neck")) {
+                varNecks.push(String(a.value || "").toLowerCase().trim());
+              }
+            }
+          }
+        }
+      }
+      return selectedNeckStyles.some(ns =>
+        pNeck === ns || pNeck.includes(ns) || ns.includes(pNeck) ||
+        varNecks.some(vn => vn === ns || vn.includes(ns) || ns.includes(vn))
+      );
     });
   }
 
@@ -1066,22 +1406,40 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
     scoredProducts = allProducts.map(p => ({ product: p, score: 0 }));
   }
 
+  // Helper to ensure 100% stable, deterministic sorting (secondary _id / id tiebreaker)
+  const tieBreak = (a: ScoredProduct, b: ScoredProduct): number => {
+    const aId = String((a.product as any)._id || a.product.id || "");
+    const bId = String((b.product as any)._id || b.product.id || "");
+    return bId.localeCompare(aId);
+  };
+
   // 6. Sort by Relevance Score or Sort Option
   if (trimmedSearch && (!sort || sort === "relevance" || sort === "rating_desc")) {
     scoredProducts.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
-      return b.product.rating - a.product.rating;
+      const rateDiff = (b.product.rating ?? 0) - (a.product.rating ?? 0);
+      if (rateDiff !== 0) return rateDiff;
+      return tieBreak(a, b);
     });
   } else {
     switch (sort) {
       case "price_asc":
-        scoredProducts.sort((a, b) => (getEffectiveSellingPrice(a.product) ?? 0) - (getEffectiveSellingPrice(b.product) ?? 0));
+        scoredProducts.sort((a, b) => {
+          const diff = (getEffectiveSellingPrice(a.product) ?? 0) - (getEffectiveSellingPrice(b.product) ?? 0);
+          return diff !== 0 ? diff : tieBreak(a, b);
+        });
         break;
       case "price_desc":
-        scoredProducts.sort((a, b) => (getEffectiveSellingPrice(b.product) ?? 0) - (getEffectiveSellingPrice(a.product) ?? 0));
+        scoredProducts.sort((a, b) => {
+          const diff = (getEffectiveSellingPrice(b.product) ?? 0) - (getEffectiveSellingPrice(a.product) ?? 0);
+          return diff !== 0 ? diff : tieBreak(a, b);
+        });
         break;
       case "rating_desc":
-        scoredProducts.sort((a, b) => b.product.rating - a.product.rating);
+        scoredProducts.sort((a, b) => {
+          const diff = (b.product.rating ?? 0) - (a.product.rating ?? 0);
+          return diff !== 0 ? diff : tieBreak(a, b);
+        });
         break;
       case "newest":
         scoredProducts.sort((a, b) => {
@@ -1090,11 +1448,17 @@ export async function searchProducts(options: SearchOptions): Promise<SearchResu
           if (bNew !== aNew) return bNew - aNew;
           const aTime = a.product.createdAt ? new Date(a.product.createdAt).getTime() : 0;
           const bTime = b.product.createdAt ? new Date(b.product.createdAt).getTime() : 0;
-          return bTime - aTime;
+          const timeDiff = bTime - aTime;
+          return timeDiff !== 0 ? timeDiff : tieBreak(a, b);
         });
         break;
       default:
-        scoredProducts.sort((a, b) => (b.score !== a.score ? b.score - a.score : b.product.rating - a.product.rating));
+        scoredProducts.sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          const rateDiff = (b.product.rating ?? 0) - (a.product.rating ?? 0);
+          if (rateDiff !== 0) return rateDiff;
+          return tieBreak(a, b);
+        });
     }
   }
 
@@ -1197,17 +1561,38 @@ export async function getProductFacets(options: SearchOptions) {
   const packOfMap: Record<string, number> = {};
   const originsMap: Record<string, number> = {};
   const subcategoriesMap: Record<string, number> = {};
+  const sizesMap: Record<string, number> = {};
+  const sleeveLengthsMap: Record<string, number> = {};
+  const neckStylesMap: Record<string, number> = {};
 
   let minFoundPrice = Infinity;
   let maxFoundPrice = 0;
 
   for (const p of products) {
-    const sub = p.subcategory || (p as any).subcategoryName;
-    if (sub) {
-      subcategoriesMap[sub] = (subcategoriesMap[sub] || 0) + 1;
-      const subSlug = String(sub).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      if (subSlug && subSlug !== sub) {
-        subcategoriesMap[subSlug] = (subcategoriesMap[subSlug] || 0) + 1;
+    const subNames = [p.subcategory, (p as any).subcategoryName, (p as any).childCategory].filter(Boolean);
+    const countedKeys = new Set<string>();
+    for (const sub of subNames) {
+      const rawStr = String(sub).trim();
+      const subSlug = rawStr.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      
+      const keysToCount = [rawStr, rawStr.toLowerCase(), subSlug];
+      if (subSlug === "bridal" || subSlug === "bridal-paithani") {
+        keysToCount.push("bridal", "Bridal", "bridal-paithani", "Bridal Paithani");
+      } else if (subSlug === "wedding" || subSlug === "wedding-paithani") {
+        keysToCount.push("wedding", "Wedding", "wedding-paithani", "Wedding Paithani");
+      } else if (subSlug === "festival" || subSlug === "festival-paithani") {
+        keysToCount.push("festival", "Festival", "festival-paithani", "Festival Paithani");
+      } else if (subSlug === "contemporary" || subSlug === "contemporary-silk") {
+        keysToCount.push("contemporary", "Contemporary", "contemporary-silk", "Contemporary Silk");
+      } else if (subSlug === "bollywood" || subSlug === "bollywood-sarees") {
+        keysToCount.push("bollywood", "Bollywood", "bollywood-sarees", "Bollywood Sarees");
+      }
+      
+      for (const k of keysToCount) {
+        if (!countedKeys.has(k)) {
+          countedKeys.add(k);
+          subcategoriesMap[k] = (subcategoriesMap[k] || 0) + 1;
+        }
       }
     }
     if (p.fabric) fabricsMap[p.fabric] = (fabricsMap[p.fabric] || 0) + 1;
@@ -1220,6 +1605,32 @@ export async function getProductFacets(options: SearchOptions) {
     if ((p as any).sareeStyle) sareeStylesMap[(p as any).sareeStyle] = (sareeStylesMap[(p as any).sareeStyle] || 0) + 1;
     if ((p as any).packOf) packOfMap[(p as any).packOf] = (packOfMap[(p as any).packOf] || 0) + 1;
     if ((p as any).countryOfOrigin) originsMap[(p as any).countryOfOrigin] = (originsMap[(p as any).countryOfOrigin] || 0) + 1;
+
+    // Size facet collection
+    if ((p as any).sizes && Array.isArray((p as any).sizes)) {
+      for (const sz of (p as any).sizes) sizesMap[String(sz)] = (sizesMap[String(sz)] || 0) + 1;
+    } else if ((p as any).size) {
+      sizesMap[String((p as any).size)] = (sizesMap[String((p as any).size)] || 0) + 1;
+    }
+    if (Array.isArray(p.variants)) {
+      for (const v of p.variants) {
+        if (Array.isArray(v.attributes)) {
+          for (const a of v.attributes) {
+            const an = String(a.name || "").toLowerCase().trim();
+            if (an === "size" && a.value) {
+              sizesMap[String(a.value)] = (sizesMap[String(a.value)] || 0) + 1;
+            } else if (an.includes("sleeve") && a.value) {
+              sleeveLengthsMap[String(a.value)] = (sleeveLengthsMap[String(a.value)] || 0) + 1;
+            } else if (an.includes("neck") && a.value) {
+              neckStylesMap[String(a.value)] = (neckStylesMap[String(a.value)] || 0) + 1;
+            }
+          }
+        }
+      }
+    }
+    if ((p as any).sleeveLength) sleeveLengthsMap[String((p as any).sleeveLength)] = (sleeveLengthsMap[String((p as any).sleeveLength)] || 0) + 1;
+    if ((p as any).neckStyle) neckStylesMap[String((p as any).neckStyle)] = (neckStylesMap[String((p as any).neckStyle)] || 0) + 1;
+    if ((p as any).neckType) neckStylesMap[String((p as any).neckType)] = (neckStylesMap[String((p as any).neckType)] || 0) + 1;
 
     if (p.price < minFoundPrice) minFoundPrice = p.price;
     if (p.price > maxFoundPrice) maxFoundPrice = p.price;
@@ -1237,6 +1648,9 @@ export async function getProductFacets(options: SearchOptions) {
     sareeStyle: sareeStylesMap,
     packOf: packOfMap,
     countryOfOrigin: originsMap,
+    size: sizesMap,
+    sleeveLength: sleeveLengthsMap,
+    neckStyle: neckStylesMap,
     minPrice: minFoundPrice === Infinity ? 0 : minFoundPrice,
     maxPrice: maxFoundPrice,
     totalCount: products.length,

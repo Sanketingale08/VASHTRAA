@@ -211,7 +211,7 @@ function AnalyticsContent() {
         setError("");
         setLastUpdated(new Date());
       })
-      .catch((err) => setError(getFriendlyErrorMessage(err, "Vendor analytics")))
+      .catch((err) => setError(getFriendlyErrorMessage(err, "Seller analytics")))
       .finally(() => {
         inFlightRef.current = false;
         setLoading(false);
@@ -282,16 +282,16 @@ function AnalyticsContent() {
       const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
       doc.setFontSize(16);
       doc.setTextColor(13, 27, 54);
-      doc.text("Vendor Analytics Report", 14, 14);
+      doc.text("Seller Analytics Report", 14, 14);
       doc.setFontSize(9);
       doc.setTextColor(120, 120, 120);
-      doc.text(`Generated ${new Date().toLocaleString("en-IN")} — ${data.pagination?.total ?? data.total ?? 0} vendors matched`, 14, 20);
+      doc.text(`Generated ${new Date().toLocaleString("en-IN")} — ${data.pagination?.total ?? data.total ?? 0} sellers matched`, 14, 20);
 
       autoTable(doc, {
         startY: 26,
         head: [["Shop", "Status", "Verification", "Products", "Orders", "Gross Revenue", "Commission (18%)", "Seller Earnings", "Rating", "Performance"]],
         body: data.vendors.map((v) => [
-          v.name || v.shopName || "Vendor",
+          v.name || v.shopName || "Seller",
           v.status,
           v.kycVerified ? "KYC Verified" : v.kycResubmissionRequested ? "Resubmission" : "Pending",
           `${v.activeProducts ?? 0}/${v.totalProducts ?? 0}`,
@@ -305,7 +305,7 @@ function AnalyticsContent() {
         styles: { fontSize: 8 },
         headStyles: { fillColor: [13, 27, 54], textColor: [255, 255, 255] },
       });
-      doc.save(`vendor-analytics-${Date.now()}.pdf`);
+      doc.save(`seller-analytics-${Date.now()}.pdf`);
     } finally {
       setExporting(null);
     }
@@ -316,7 +316,7 @@ function AnalyticsContent() {
     setExporting("excel");
     try {
       const rows = data.vendors.map((v) => ({
-        Shop: v.name || v.shopName || "Vendor",
+        Shop: v.name || v.shopName || "Seller",
         Status: v.status,
         Location: v.location,
         Email: v.contactEmail ?? "",
@@ -340,8 +340,8 @@ function AnalyticsContent() {
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Vendor Analytics");
-      XLSX.writeFile(wb, `vendor-analytics-${Date.now()}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, "Seller Analytics");
+      XLSX.writeFile(wb, `seller-analytics-${Date.now()}.xlsx`);
     } finally {
       setExporting(null);
     }
@@ -357,7 +357,7 @@ function AnalyticsContent() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-serif font-bold flex items-center gap-2" style={{ color: NAVY }}>
-              <BarChart3 size={20} style={{ color: GOLD }} /> Vendor Analytics
+              <BarChart3 size={20} style={{ color: GOLD }} /> Seller Analytics
             </h1>
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1.5 shadow-xs transition-colors ${
               isConnected
@@ -369,7 +369,7 @@ function AnalyticsContent() {
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-            <span>{pagination ? `${pagination.total} vendors matched` : "Loading…"}</span>
+            <span>{pagination ? `${pagination.total} sellers matched` : "Loading…"}</span>
             {lastUpdated && (
               <>
                 <span>·</span>
@@ -518,7 +518,7 @@ function AnalyticsContent() {
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Landmark size={14} className="text-gray-400" /> Vendor Settlements
+              <Landmark size={14} className="text-gray-400" /> Seller Settlements
             </h3>
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Auto-synced
@@ -637,12 +637,12 @@ function AnalyticsContent() {
           </div>
         )}
 
-        {loading && <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Loading real-time vendor analytics…</div>}
+        {loading && <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Loading real-time seller analytics…</div>}
 
         {error && (
           <div className="p-4">
             <AdminErrorState
-              title="Unable to load vendor analytics"
+              title="Unable to load seller analytics"
               message={error}
               onRetry={() => load(true)}
               compact
@@ -652,8 +652,8 @@ function AnalyticsContent() {
 
         {!loading && !error && vendors.length === 0 && (
           <AdminEmptyState
-            title="No vendor analytics available"
-            message={search || status !== "all" || verification !== "all" ? "No vendors match your search or filters." : "No vendor records found."}
+            title="No seller analytics available"
+            message={search || status !== "all" || verification !== "all" ? "No sellers match your search or filters." : "No seller records found."}
           />
         )}
 
@@ -678,7 +678,7 @@ function AnalyticsContent() {
                 {vendors.map((v) => (
                   <tr key={v.id} className="hover:bg-gray-50/80 transition-colors cursor-pointer" onClick={() => setLocation(`/admin/vendor-analytics/${v.id}`)}>
                     <td className="px-4 py-3.5">
-                      <div className="font-bold text-sm" style={{ color: NAVY }}>{v.name || v.shopName || "Vendor"}</div>
+                      <div className="font-bold text-sm" style={{ color: NAVY }}>{v.name || v.shopName || "Seller"}</div>
                       {v.contactEmail && <div className="text-xs text-gray-400 mt-0.5">{v.contactEmail}</div>}
                     </td>
                     <td className="px-4 py-3.5"><StatusBadge status={v.status} /></td>
@@ -733,7 +733,7 @@ function AnalyticsContent() {
         {pagination && pagination.totalPages > 1 && (
           <div className="px-5 py-3.5 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
             <span className="text-xs text-gray-500">
-              Page <span className="font-bold text-gray-800">{pagination.page}</span> of <span className="font-bold text-gray-800">{pagination.totalPages}</span> · <span className="font-bold text-gray-800">{pagination.total}</span> total vendors
+              Page <span className="font-bold text-gray-800">{pagination.page}</span> of <span className="font-bold text-gray-800">{pagination.totalPages}</span> · <span className="font-bold text-gray-800">{pagination.total}</span> total sellers
             </span>
             <div className="flex items-center gap-1">
               <button disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="p-1.5 rounded-lg disabled:opacity-30 hover:bg-gray-100 border border-gray-200 bg-white transition-colors">
@@ -754,7 +754,7 @@ export default function AdminVendorAnalytics() {
   return (
     <AdminGuard>
       <AdminLayout>
-        <AdminErrorBoundary sectionName="Vendor Analytics">
+        <AdminErrorBoundary sectionName="Seller Analytics">
           <AnalyticsContent />
         </AdminErrorBoundary>
       </AdminLayout>

@@ -1,4 +1,4 @@
-import { db, adminAuditLogsTable, mongoGeneric } from "@workspace/db";
+import { db, adminAuditLogsTable, mongoGeneric, mongoLogs } from "@workspace/db";
 
 export interface AuditLogParams {
   action?: string;
@@ -77,15 +77,42 @@ export async function writeAuditLog(params: AuditLogParams): Promise<void> {
       try {
         await mongoGeneric.getCollection("admin_audit_logs").insertOne(doc as any);
       } catch {
-        await db.insert(adminAuditLogsTable).values({
-          actor: doc.actor,
-          action: doc.action,
-          module: doc.module,
-          details: doc.details,
-          ipAddress: doc.ipAddress,
-          status: doc.status as any,
-        });
+        try {
+          await db.insert(adminAuditLogsTable).values({
+            actor: doc.actor,
+            action: doc.action,
+            module: doc.module,
+            details: doc.details,
+            ipAddress: doc.ipAddress,
+            status: doc.status as any,
+          });
+        } catch {}
       }
+
+      // Also persist to dedicated, centralized audit_logs collection
+      try {
+        await mongoLogs.insertAuditLog({
+          timestamp: new Date().toISOString(),
+          service: "vastraa-backend",
+          environment: process.env.NODE_ENV || "development",
+          actor: {
+            id: String(params.userId || params.actor || "system"),
+            role: (params.role as any) || "system",
+            email: params.email || undefined,
+            ip: params.ipAddress || undefined,
+            userAgent: params.userAgent || undefined,
+          },
+          action: params.action || params.eventType || "AUDIT_EVENT",
+          resource: {
+            type: ((params.module || "system").toLowerCase() as any),
+            id: String(params.details?.id || params.userId || "resource_unknown"),
+          },
+          result: params.status === "failure" ? "failure" : "success",
+          requestId: (params.metadata?.requestId as string) || "req_audit",
+          message: `${params.actor || params.role || "User"} executed ${params.action || params.eventType || "action"}`,
+          metadata: details,
+        });
+      } catch {}
     })();
 
     const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1000));

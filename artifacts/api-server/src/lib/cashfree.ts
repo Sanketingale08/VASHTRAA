@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { db, siteSettingsTable, mongoSiteSettings } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { LoggerService } from "../services/loggerService";
 
 export interface CashfreeConfig {
   appId: string;
@@ -184,6 +185,7 @@ export async function createCashfreePgOrder(input: CreatePgOrderInput): Promise<
     order_note: input.orderNote || `Order ${input.orderId}`,
   };
 
+  const startTime = Date.now();
   try {
     const response = await fetch(`${baseUrl}/orders`, {
       method: "POST",
@@ -197,6 +199,17 @@ export async function createCashfreePgOrder(input: CreatePgOrderInput): Promise<
     });
 
     const body: any = await response.json().catch(() => ({}));
+    const durationMs = Date.now() - startTime;
+
+    LoggerService.logThirdParty({
+      provider: "cashfree",
+      endpoint: "/orders",
+      method: "POST",
+      statusCode: response.status,
+      durationMs,
+      success: response.ok,
+      metadata: { orderId: input.orderId, amount: input.orderAmount },
+    }).catch(() => {});
 
     if (!response.ok) {
       logger.error({ status: response.status, body, orderId: input.orderId }, "Cashfree PG create order failed");

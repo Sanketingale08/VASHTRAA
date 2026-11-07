@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mongoUsers, mongoVendors, mongoSellers } from "@workspace/db";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import {
@@ -6,6 +6,7 @@ import {
   validateResetToken,
   performPasswordReset,
 } from "../lib/passwordReset";
+import * as transactionalEmail from "../lib/transactionalEmail";
 
 describe("Password Reset & Forgot Password Complete Test Suite", () => {
   const customerEmail = "customer.test@example.com";
@@ -14,6 +15,8 @@ describe("Password Reset & Forgot Password Complete Test Suite", () => {
   const newPassword = "NewSecurePassword456";
 
   beforeEach(async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(transactionalEmail, "sendPasswordResetEmail").mockResolvedValue({ delivered: true });
     // Setup clean test accounts in database
     const initialHash = hashPassword(initialPassword);
 

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { LoggerService } from "../loggerService";
 
 export interface ShiprocketCredentials {
   email?: string;
@@ -117,6 +118,7 @@ export async function shiprocketApiRequest<T = any>(
     });
   };
 
+  const startTime = Date.now();
   try {
     let res: Response;
     try {
@@ -132,23 +134,61 @@ export async function shiprocketApiRequest<T = any>(
       clearTokenCache();
       auth = await getShiprocketAuthToken();
       if (!auth.token) {
+        LoggerService.logThirdParty({
+          provider: "shiprocket",
+          endpoint,
+          method,
+          statusCode: 401,
+          durationMs: Date.now() - startTime,
+          success: false,
+          error: "Re-authentication failed after 401 response",
+        }).catch(() => {});
         return { success: false, statusCode: 401, error: "Re-authentication failed after 401 response" };
       }
       res = await doRequest(auth.token);
     }
 
     const data = (await res.json().catch(() => null)) as any;
+    const durationMs = Date.now() - startTime;
+
     if (!res.ok) {
       const errMsg =
         data?.message ||
         (Array.isArray(data?.errors) ? data.errors.join(", ") : null) ||
         (typeof data?.errors === "object" ? JSON.stringify(data.errors) : null) ||
         `Shiprocket request failed with status ${res.status}`;
+      LoggerService.logThirdParty({
+        provider: "shiprocket",
+        endpoint,
+        method,
+        statusCode: res.status,
+        durationMs,
+        success: false,
+        error: errMsg,
+      }).catch(() => {});
       return { success: false, statusCode: res.status, error: errMsg, data };
     }
 
+    LoggerService.logThirdParty({
+      provider: "shiprocket",
+      endpoint,
+      method,
+      statusCode: res.status,
+      durationMs,
+      success: true,
+    }).catch(() => {});
+
     return { success: true, statusCode: res.status, data };
   } catch (err: any) {
+    LoggerService.logThirdParty({
+      provider: "shiprocket",
+      endpoint,
+      method,
+      statusCode: 500,
+      durationMs: Date.now() - startTime,
+      success: false,
+      error: `Shiprocket API network error: ${err?.message || err}`,
+    }).catch(() => {});
     return { success: false, error: `Shiprocket API network error: ${err?.message || err}` };
   }
 }

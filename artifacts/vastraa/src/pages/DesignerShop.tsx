@@ -8,8 +8,7 @@ export default function DesignerShop() {
       title="Designer Sarees"
       subtitle="Haute Couture & Contemporary Elegance"
       description="Modern silhouettes, Bollywood glamour, and artisan embellishments curated for celebrations, galas, and festive moments."
-      heroBanner="/images/hero-designer-shop-banner.jpg"
-      badgeLabel="Haute Couture Collection"
+      hideHero={true}
     />
   );
 }

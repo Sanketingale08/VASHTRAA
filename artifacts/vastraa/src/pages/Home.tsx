@@ -9,6 +9,11 @@ import {
   CheckCircle,
   ArrowRight,
   X,
+  Check,
+  Clock,
+  Trash2,
+  Eye,
+  Sparkles,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
@@ -17,10 +22,15 @@ import { ProductSection } from "@/components/ProductSection";
 import { QuickViewModal } from "@/components/QuickViewModal";
 import { useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { PriceRangeCards } from "@/components/PriceRangeCards";
+import { BUDGET_RANGES, getBudgetById, getBudgetByPrice } from "@/constants/budget";
 import { AdvertisementCarousel } from "@/components/AdvertisementCarousel";
 import type { ProductSummary } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
-import { isPaithaniProduct, isDesignerProduct } from "@/constants/categories";
+import {
+  isCategoryProduct,
+  CATALOG_CATEGORIES,
+  isMainCatalogCategory,
+} from "@/constants/categories";
 
 const GOLD = "#C7CCD1";
 const MAROON = "#0A1F44";
@@ -28,11 +38,6 @@ const IVORY = "#F4F5F7";
 const CREAM = "#E5E8EC";
 const NAVY_DARK = "#0B0C10";
 const ROYAL_ACCENT = "#2C3E6B";
-
-const PAITHANI_DESIGNER_TABS = [
-  { label: "Paithani", category: "paithani" as const },
-  { label: "Designer", category: "designer" as const },
-];
 
 function SectionTitle({
   children,
@@ -83,16 +88,20 @@ const testimonials = [
 
 function RecentlyViewedSkeleton() {
   return (
-    <section className="py-12 md:py-16 bg-white dark:bg-[#0B0C10]" role="status" aria-busy="true">
+    <section className="py-12 md:py-16 bg-white dark:bg-[#0B0C10] border-t border-b border-gray-100 dark:border-gray-800/60" role="status" aria-busy="true">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
+        <div className="flex justify-center mb-4">
+          <div className="w-36 h-6 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+        </div>
         <SectionTitle subtitle="Pick up where you left off">
           Recently Viewed Products
         </SectionTitle>
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-32 h-10 rounded-full bg-gray-200 animate-pulse" />
-          <div className="w-32 h-10 rounded-full bg-gray-200 animate-pulse" />
+        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mb-8">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="w-24 sm:w-28 h-9 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+          ))}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5 lg:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <ProductCardSkeleton key={i} />
           ))}
@@ -111,8 +120,7 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
     }
   });
 
-  const [selectedCategory, setSelectedCategory] = useState<"paithani" | "designer">("paithani");
-  const userSelectedTabRef = useRef(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   useEffect(() => {
     function loadIds() {
@@ -134,8 +142,16 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
     };
   }, []);
 
+  const handleClearHistory = () => {
+    try {
+      localStorage.removeItem("twirl_recently_viewed");
+      setIds([]);
+      setSelectedCategory("all");
+    } catch {}
+  };
+
   const hasIds = ids.length > 0;
-  const recentlyViewedParams = { ids: hasIds ? ids.join(",") : undefined, limit: 16 };
+  const recentlyViewedParams = { ids: hasIds ? ids.join(",") : undefined, limit: 20 };
   const { data: recentData, isLoading: isRecentLoading } = useListProducts(recentlyViewedParams, {
     query: {
       enabled: hasIds,
@@ -143,123 +159,292 @@ function RecentlyViewedSection({ onQuickView }: { onQuickView: (p: ProductSummar
     },
   });
 
-  const categoryCatalogParams = { category: selectedCategory, limit: 8 };
-  const { data: categoryData, isLoading: isCategoryLoading } = useListProducts(categoryCatalogParams, {
+  const fallbackParams = selectedCategory === "all"
+    ? { limit: 8 }
+    : { category: selectedCategory as any, limit: 8 };
+
+  const { data: fallbackData, isLoading: isFallbackLoading } = useListProducts(fallbackParams, {
     query: {
-      queryKey: getListProductsQueryKey(categoryCatalogParams),
+      enabled: !hasIds,
+      queryKey: getListProductsQueryKey(fallbackParams),
     },
   });
 
-  // Automatically sync tab with category of latest viewed product on mount/update if user hasn't toggled
-  useEffect(() => {
-    if (userSelectedTabRef.current || !hasIds || !recentData?.products?.length) return;
-    const latestProduct = recentData.products.find((p) => p.id === ids[0]);
-    if (latestProduct) {
-      if (isDesignerProduct(latestProduct) && selectedCategory !== "designer") {
-        setSelectedCategory("designer");
-      } else if (isPaithaniProduct(latestProduct) && selectedCategory !== "paithani") {
-        setSelectedCategory("paithani");
-      }
+  // Category Tabs encompassing all categories
+  const categoryTabs = useMemo(() => {
+    return [
+      { id: "all", name: "All Categories", shortName: "All", slug: "all" },
+      ...CATALOG_CATEGORIES.map((c) => ({
+        id: c.id,
+        name: c.name,
+        shortName: c.name,
+        slug: c.slug,
+      })),
+    ];
+  }, []);
+
+  const currentCategoryItem = useMemo(() => {
+    if (selectedCategory === "all") {
+      return { id: "all", name: "All Categories", shortName: "All", slug: "all" };
     }
-  }, [recentData?.products, ids, hasIds, selectedCategory]);
+    return categoryTabs.find((c) => c.slug === selectedCategory) || categoryTabs[0];
+  }, [selectedCategory, categoryTabs]);
 
-  const categoryRecentlyViewed = useMemo(() => {
+  // All viewed products sorted in reverse chronological order
+  const allViewedProducts = useMemo(() => {
     if (!recentData?.products || !hasIds) return [];
-    return recentData.products
-      .filter((p) => (selectedCategory === "paithani" ? isPaithaniProduct(p) : isDesignerProduct(p)))
-      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-  }, [recentData?.products, ids, hasIds, selectedCategory]);
+    return [...recentData.products].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  }, [recentData?.products, ids, hasIds]);
 
-  const hasRecentlyViewedForCategory = categoryRecentlyViewed.length > 0;
-  const productsToDisplay = hasRecentlyViewedForCategory
-    ? categoryRecentlyViewed
-    : (categoryData?.products ?? []);
+  // Count viewed products for every category
+  const viewedCountByCategory = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: allViewedProducts.length,
+    };
+    if (!allViewedProducts.length) return counts;
+    for (const cat of CATALOG_CATEGORIES) {
+      counts[cat.slug] = allViewedProducts.filter((p) => isCategoryProduct(p, cat.slug)).length;
+    }
+    return counts;
+  }, [allViewedProducts]);
 
-  const isLoading = hasIds ? isRecentLoading : isCategoryLoading;
+  // Filter recently viewed products for the active tab
+  const categoryRecentlyViewed = useMemo(() => {
+    if (selectedCategory === "all") return allViewedProducts;
+    return allViewedProducts.filter((p) => isCategoryProduct(p, selectedCategory));
+  }, [allViewedProducts, selectedCategory]);
+
+  const productsToDisplay = hasIds
+    ? categoryRecentlyViewed.slice(0, 8)
+    : (fallbackData?.products?.slice(0, 8) ?? []);
+
+  const isLoading = hasIds ? isRecentLoading : isFallbackLoading;
+
+  const categoryShopUrl = useMemo(() => {
+    if (selectedCategory === "all") return "/products";
+    return `/${selectedCategory}`;
+  }, [selectedCategory]);
+
+  const subtitle = useMemo(() => {
+    if (hasIds) {
+      if (selectedCategory === "all") {
+        return "Pick up right where you left off across all your viewed styles";
+      }
+      return `Pick up where you left off with your viewed ${currentCategoryItem.shortName}`;
+    }
+    if (selectedCategory === "all") {
+      return "Handcrafted luxury and contemporary pieces curated for you";
+    }
+    return `Explore handcrafted ${currentCategoryItem.shortName} and discover your style`;
+  }, [hasIds, selectedCategory, currentCategoryItem.shortName]);
 
   return (
-    <section className="py-12 md:py-16 bg-white dark:bg-[#0B0C10]">
+    <section className="py-12 md:py-16 bg-white dark:bg-[#0B0C10] border-t border-b border-gray-100 dark:border-gray-800/60" aria-label="Recently Viewed Products">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
-        <SectionTitle
-          subtitle={
-            hasRecentlyViewedForCategory
-              ? `Pick up where you left off with your viewed ${selectedCategory === "paithani" ? "Paithani" : "Designer"} sarees`
-              : `Explore handcrafted ${selectedCategory === "paithani" ? "Paithani" : "Designer"} sarees`
-          }
-        >
+        {/* Eyebrow & Optional Clear History Action */}
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-[#0A1F44]/5 dark:bg-[#0A1F44]/25 text-[#0A1F44] dark:text-[#C7CCD1] border border-[#0A1F44]/15 dark:border-gray-800">
+            <Clock className="w-3.5 h-3.5 text-[#0A1F44] dark:text-[#D4AF37]" />
+            <span>{hasIds ? "Your Browsing History" : "Featured For You"}</span>
+            {hasIds && allViewedProducts.length > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            )}
+          </div>
+
+          {hasIds && (
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              aria-label="Clear recently viewed history"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400 transition-colors px-3 py-1 rounded-full hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer border border-transparent hover:border-rose-200 dark:hover:border-rose-900/40"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear History</span>
+            </button>
+          )}
+        </div>
+
+        <SectionTitle subtitle={subtitle}>
           Recently Viewed Products
         </SectionTitle>
 
-        {/* 2 Options: Paithani and Designer */}
-        <div className="flex items-center justify-center gap-2.5 sm:gap-3 mb-8" role="tablist" aria-label="Recently viewed categories">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedCategory === "paithani"}
-            onClick={() => {
-              userSelectedTabRef.current = true;
-              setSelectedCategory("paithani");
-            }}
-            className={cn(
-              "px-6 sm:px-8 py-2.5 rounded-full text-xs sm:text-sm font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border flex items-center justify-center min-w-[120px] sm:min-w-[140px]",
-              selectedCategory === "paithani"
-                ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-md ring-2 ring-[#0A1F44]/20 font-bold"
-                : "bg-white text-[#0A1F44] border-[#C7CCD1]/60 hover:border-[#0A1F44] hover:bg-gray-50 font-medium"
-            )}
+        {/* Dynamic Category Tabs across All Categories */}
+        <div className="mb-8">
+          <div
+            className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar pb-2 sm:pb-0 sm:flex-wrap sm:justify-center px-1"
+            role="tablist"
+            aria-label="Recently viewed categories"
           >
-            Paithani
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedCategory === "designer"}
-            onClick={() => {
-              userSelectedTabRef.current = true;
-              setSelectedCategory("designer");
-            }}
-            className={cn(
-              "px-6 sm:px-8 py-2.5 rounded-full text-xs sm:text-sm font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border flex items-center justify-center min-w-[120px] sm:min-w-[140px]",
-              selectedCategory === "designer"
-                ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-md ring-2 ring-[#0A1F44]/20 font-bold"
-                : "bg-white text-[#0A1F44] border-[#C7CCD1]/60 hover:border-[#0A1F44] hover:bg-gray-50 font-medium"
-            )}
-          >
-            Designer
-          </button>
+            {categoryTabs.map((cat) => {
+              const isSelected = selectedCategory === cat.slug;
+              const count = viewedCountByCategory[cat.slug] || 0;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => setSelectedCategory(cat.slug)}
+                  className={cn(
+                    "px-4 sm:px-5 py-2 rounded-full text-xs sm:text-sm tracking-wide transition-all duration-200 cursor-pointer border flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap",
+                    isSelected
+                      ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-md ring-2 ring-[#0A1F44]/20 font-bold dark:bg-[#2C3E6B] dark:border-[#2C3E6B]"
+                      : "bg-white dark:bg-[#1E2329] text-[#0A1F44] dark:text-[#E5E8EC] border-gray-200 dark:border-gray-700/80 hover:border-[#0A1F44] dark:hover:border-[#C7CCD1] hover:bg-gray-50 dark:hover:bg-gray-800 font-medium"
+                  )}
+                >
+                  <span>{cat.shortName}</span>
+                  {hasIds && count > 0 && (
+                    <span
+                      className={cn(
+                        "px-1.5 py-0.2 rounded-full text-[10px] font-bold leading-tight transition-colors",
+                        isSelected
+                          ? "bg-white/20 text-white"
+                          : "bg-gray-100 dark:bg-gray-800 text-[#0A1F44] dark:text-[#D4AF37]"
+                      )}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Product Cards Grid or Skeletons or Empty State */}
         {isLoading && productsToDisplay.length === 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5 lg:gap-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <ProductCardSkeleton key={i} />
             ))}
           </div>
         ) : productsToDisplay.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {productsToDisplay.slice(0, 8).map((p, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5 lg:gap-6">
+            {productsToDisplay.map((p, i) => (
               <ProductCard key={p.id} product={p} index={i} onQuickView={onQuickView} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            <p className="text-sm">No {selectedCategory === "paithani" ? "Paithani" : "Designer"} sarees viewed yet.</p>
+          <div className="text-center py-12 px-4 bg-gray-50/80 dark:bg-[#1E2329]/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 max-w-lg mx-auto">
+            <div className="w-12 h-12 rounded-full bg-[#0A1F44]/5 dark:bg-[#0A1F44]/20 flex items-center justify-center mx-auto mb-3 text-[#0A1F44] dark:text-[#D4AF37]">
+              <Eye className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            </div>
+            <h3 className="font-serif text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+              No {currentCategoryItem.shortName} viewed yet
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-4">
+              Explore our handcrafted {currentCategoryItem.shortName.toLowerCase()} and add pieces to your personal browsing list.
+            </p>
             <Link
-              href={selectedCategory === "paithani" ? "/paithani" : "/designer"}
-              className="inline-block mt-3 text-xs font-bold uppercase tracking-wider text-[#0A1F44] underline hover:text-[#2C3E6B]"
+              href={categoryShopUrl}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-full bg-[#0A1F44] text-white hover:bg-[#2C3E6B] transition-colors shadow-sm"
             >
-              Explore {selectedCategory === "paithani" ? "Paithani" : "Designer"} Collection →
+              <span>Explore {currentCategoryItem.shortName} Collection</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         )}
 
-        <div className="mt-6 md:mt-8 flex justify-end">
+        {/* Bottom Catalog Action Link */}
+        <div className="mt-8 flex justify-center sm:justify-end">
           <Link
-            href={selectedCategory === "paithani" ? "/paithani/shop" : "/designer/shop"}
-            className="inline-flex items-center gap-1 font-bold text-xs md:text-sm uppercase tracking-wider px-5 py-2.5 rounded-md border border-[#0A1F44] text-[#0A1F44] bg-white transition-all duration-300 hover:shadow-md hover:bg-[#0A1F44] hover:text-white"
+            href={categoryShopUrl}
+            className="inline-flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-wider px-6 py-3 rounded-lg border border-[#0A1F44] text-[#0A1F44] bg-white dark:bg-[#1E2329] dark:text-[#E5E8EC] dark:border-gray-700 transition-all duration-300 hover:shadow-md hover:bg-[#0A1F44] hover:text-white dark:hover:bg-[#2C3E6B] group"
           >
-            View All {selectedCategory === "paithani" ? "Paithani" : "Designer"} Sarees →
+            <span>
+              {selectedCategory === "all"
+                ? "Explore Complete Catalog"
+                : `View All ${currentCategoryItem.shortName}`}
+            </span>
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SareeCategoriesShowcaseSection() {
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const { data: dbCategoriesData } = useQuery<{ categories: any[] }>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`${basePath}/api/categories`);
+        if (!res.ok) return { categories: [] };
+        return res.json();
+      } catch {
+        return { categories: [] };
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  // Official main categories (sarees, kurtis, kurta-sets, ethnic-dresses, western-dresses, winter-wear, tops)
+  const officialOrder = ["sarees", "kurtis", "kurta-sets", "ethnic-dresses", "western-dresses", "winter-wear", "tops"];
+  const dbCategories = dbCategoriesData?.categories || [];
+
+  const displayCategories = officialOrder
+    .map((slug) => {
+      const fallback = CATALOG_CATEGORIES.find((cat) => cat.slug === slug);
+      if (!fallback) return null;
+      const dbMatch = dbCategories.find((c: any) => c.slug === slug || c.id === fallback.id);
+      // Respect admin-controlled visibility: if explicitly marked inactive in DB, hide it
+      if (dbMatch && dbMatch.active === false) return null;
+      return {
+        id: dbMatch?.id || fallback.id,
+        name: dbMatch?.name || fallback.name,
+        slug: fallback.slug,
+        image: dbMatch?.coverImage || dbMatch?.image || fallback.coverImage || "/images/product-4.png",
+        description: dbMatch?.description || fallback.description,
+        displayOrder: typeof dbMatch?.displayOrder === "number" ? dbMatch.displayOrder : fallback.displayOrder,
+        productCount: typeof dbMatch?.productCount === "number" ? dbMatch.productCount : undefined,
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null)
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+
+  return (
+    <section className="py-6 sm:py-8 md:py-10 bg-gradient-to-b from-[#F4F5F7]/80 to-white" aria-label="Explore by Category">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+        <h1 className="sr-only">Explore by Category</h1>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3.5 sm:gap-4 md:gap-5">
+          {displayCategories.map((cat, idx) => {
+            const href = `/${cat.slug}`;
+            return (
+              <motion.div
+                key={cat.id || cat.slug}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.35, delay: idx * 0.05 }}
+              >
+                <Link
+                  href={href}
+                  className="group flex flex-col h-full bg-white hover:bg-[#F4F5F7]/80 rounded-2xl p-3 border border-[#C7CCD1]/40 hover:border-[#0A1F44]/40 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 text-center"
+                >
+                  <div className="relative aspect-[4/5] w-full rounded-xl overflow-hidden bg-gray-100 mb-3 shadow-2xs">
+                    <img
+                      src={getProductImageSrc(cat.image)}
+                      alt={cat.name}
+                      onError={replaceProductImageWithFallback}
+                      className="w-full h-full object-cover object-top group-hover:scale-108 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-40 group-hover:opacity-20 transition-opacity" />
+                    {typeof cat.productCount === "number" && cat.productCount > 0 && (
+                      <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0A1F44]/80 text-white backdrop-blur-xs shadow-xs">
+                        {cat.productCount} {cat.productCount === 1 ? "item" : "items"}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-serif text-xs sm:text-sm md:text-base font-bold text-[#0A1F44] group-hover:text-[#2C3E6B] transition-colors line-clamp-1">
+                    {cat.name}
+                  </h3>
+                </Link>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -272,200 +457,40 @@ export default function Home() {
   const searchParams = React.useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const [, navigate] = useLocation();
 
-  const [selectedCategory, setSelectedCategory] = useState<"paithani" | "designer" | "all">(() => {
-    const cat = searchParams.get("category")?.toLowerCase();
-    if (cat === "designer") return "designer";
-    if (cat === "all" || cat === "all-sarees" || cat === "sarees") return "all";
-    return "paithani";
-  });
+  const handleBudgetSelect = (min?: number, max?: number, budgetId?: string) => {
+    const budget = budgetId
+      ? getBudgetById(budgetId)
+      : getBudgetByPrice(min, max) || (min !== undefined || max !== undefined ? null : BUDGET_RANGES[0]);
 
-  const handleBudgetSelect = (min?: number, max?: number) => {
     const params = new URLSearchParams();
-    if (selectedCategory === "designer") {
-      params.set("category", "designer");
-      if (min !== undefined) params.set("minPrice", String(min));
-      if (max !== undefined) params.set("maxPrice", String(max));
-      const qs = params.toString();
-      navigate(`/designer?${qs}`);
-    } else if (selectedCategory === "all") {
-      params.set("category", "all-sarees");
-      if (min !== undefined) params.set("minPrice", String(min));
-      if (max !== undefined) params.set("maxPrice", String(max));
-      const qs = params.toString();
-      navigate(`/products?${qs}`);
+    if (budget) {
+      params.set("budget", budget.id);
+      if (budget.min !== undefined) params.set("minPrice", String(budget.min));
+      if (budget.max !== undefined) params.set("maxPrice", String(budget.max));
     } else {
-      // paithani (default)
-      params.set("category", "paithani");
       if (min !== undefined) params.set("minPrice", String(min));
       if (max !== undefined) params.set("maxPrice", String(max));
-      const qs = params.toString();
-      navigate(`/paithani?${qs}`);
     }
+
+    const qs = params.toString();
+    navigate(`/shop-by-budget${qs ? `?${qs}` : ""}`);
   };
-
-  const catalogLink = React.useMemo(() => {
-    if (selectedCategory === "designer") {
-      return "/designer?category=designer";
-    }
-    if (selectedCategory === "all") {
-      return "/products?category=all-sarees";
-    }
-    return "/paithani?category=paithani";
-  }, [selectedCategory]);
-
-  const categoryLabel = selectedCategory === "paithani" ? "Paithani" : selectedCategory === "designer" ? "Designer" : "All Saree";
 
   return (
     <Layout>
-      {/* ── 1. MAIN HERO: ARTISAN HANDLOOM COLLECTION (CARD LAYOUT) ── */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 pb-2 sm:pt-6 sm:pb-4 md:pt-8 md:pb-6">
-        <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#031535] via-[#07224F] to-[#02102B] text-white border border-[#D4AF37]/30 shadow-2xl shadow-[#031535]/25 px-6 sm:px-10 md:px-12 lg:px-14 py-8 sm:py-10 md:py-12 lg:py-14">
-          {/* Top golden luxury accent line */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E2C799]/50 to-transparent pointer-events-none" />
+      {/* ── 1. WOMEN'S FASHION CATEGORIES SHOWCASE ── */}
+      <SareeCategoriesShowcaseSection />
 
-          {/* Subtle background mandala / lotus ornaments */}
-          <div className="absolute -left-16 -bottom-16 opacity-15 pointer-events-none text-[#D4AF37]">
-            <svg width="340" height="340" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.8">
-              <circle cx="50" cy="50" r="45" strokeDasharray="2 2" />
-              <circle cx="50" cy="50" r="35" />
-              <path d="M50 5 C55 25, 75 25, 75 50 C75 75, 55 75, 50 95 C45 75, 25 75, 25 50 C25 25, 45 25, 50 5 Z" />
-              <path d="M5 50 C25 55, 25 75, 50 75 C75 75, 75 55, 95 50 C75 45, 75 25, 50 25 C25 25, 25 45, 5 50 Z" />
-            </svg>
-          </div>
-          <div className="absolute -right-20 -top-20 opacity-10 pointer-events-none text-[#D4AF37]">
-            <svg width="360" height="360" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.8">
-              <circle cx="50" cy="50" r="40" />
-              <path d="M50 10 C60 30, 80 30, 80 50 C80 70, 60 70, 50 90 C40 70, 20 70, 20 50 C20 30, 40 30, 50 10 Z" />
-            </svg>
-          </div>
-
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-            {/* Saree showcase image (Fixed Left Side) */}
-            <div className="lg:col-span-5 flex justify-center items-center relative py-4 lg:py-0">
-              {/* Golden radial ambient aura glow */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 rounded-full bg-[radial-gradient(circle,rgba(226,199,153,0.25)_0%,rgba(212,175,55,0.08)_50%,transparent_75%)] blur-2xl sm:blur-3xl" />
-              </div>
-
-              {/* Decorative concentric rings backdrop */}
-              <div className="absolute w-56 h-56 sm:w-72 sm:h-72 md:w-80 md:h-80 rounded-full border border-[#E2C799]/30 pointer-events-none flex items-center justify-center">
-                <div className="w-44 h-44 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-full border border-[#E2C799]/20 border-dashed" />
-              </div>
-
-              {/* Floating saree image */}
-              <div className="relative z-10 w-56 sm:w-72 md:w-80 lg:w-96 max-h-[340px] sm:max-h-[400px] flex items-center justify-center py-2">
-                <img
-                  src="/images/artisan-handloom-saree.png"
-                  alt="Authentic Paithani & Designer Saree"
-                  className="w-auto h-auto max-w-full max-h-[300px] sm:max-h-[360px] md:max-h-[400px] object-contain filter drop-shadow-[0_20px_35px_rgba(0,0,0,0.7)] hover:scale-105 transition-transform duration-500 select-none"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/images/product-1.png";
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Text content & CTA Buttons (Right Side) */}
-            <div className="lg:col-span-7 text-center lg:text-left flex flex-col justify-center items-center lg:items-start">
-              {/* Eyebrow / Label */}
-              <div className="inline-flex items-center gap-2 mb-3.5 px-3.5 py-1.5 rounded-full bg-white/5 border border-[#E2C799]/30 backdrop-blur-xs text-[#E2C799]">
-                <svg className="w-3.5 h-3.5 fill-current text-[#E2C799] shrink-0" viewBox="0 0 24 24">
-                  <path d="M12 3c-1.5 3-4 5-7 5 3 2 4.5 5 5 8 1-3 2.5-6 5.5-8-3 0-5.5-2-7-5z" />
-                  <path d="M12 11c-1 2-2.5 3.5-4.5 4 2 1.5 3 3.5 3.5 5 1-1.5 2-3.5 4-5-2-.5-3.5-2-4.5-4z" opacity="0.7" />
-                </svg>
-                <span className="text-xs uppercase tracking-[0.22em] font-bold text-[#E2C799]">
-                  ARTISAN HANDLOOM COLLECTION
-                </span>
-              </div>
-
-              {/* Main Heading (H1) */}
-              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 sm:mb-5 leading-[1.15] tracking-tight">
-                Authentic Paithani &amp; Designer Sarees
-              </h1>
-
-              {/* Description */}
-              <p className="text-sm sm:text-base md:text-lg text-gray-200/90 leading-relaxed max-w-xl mb-7 sm:mb-8 font-light">
-                Handcrafted by master artisans from Maharashtra, our sarees feature vibrant silk fabrics adorned with traditional peacock, muniya, and floral motifs, making them perfect for special occasions.
-              </p>
-
-              {/* Primary & Secondary CTA Buttons */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4 w-full sm:w-auto">
-                <Link
-                  href="/paithani"
-                  className="inline-flex items-center justify-center gap-2.5 bg-[#FCE3B4] hover:bg-[#fbd89a] text-[#031535] font-bold px-7 py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm uppercase tracking-wider transition-all duration-200 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 group whitespace-nowrap active:scale-[0.98] cursor-pointer"
-                >
-                  <span>SHOP PAITHANI SAREES</span>
-                  <ArrowRight size={16} className="transition-transform group-hover:translate-x-1 text-[#031535]" />
-                </Link>
-                <Link
-                  href="/designer"
-                  className="inline-flex items-center justify-center gap-2.5 bg-white/10 hover:bg-white/20 text-white border border-[#FCE3B4]/60 hover:border-[#FCE3B4] font-bold px-7 py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm uppercase tracking-wider transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 group whitespace-nowrap backdrop-blur-xs active:scale-[0.98] cursor-pointer"
-                >
-                  <span>SHOP DESIGNER SAREES</span>
-                  <ArrowRight size={16} className="transition-transform group-hover:translate-x-1 text-[#FCE3B4]" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 2. SHOP BY BUDGET (MYNTRA-STYLE PRICE CARDS & CATEGORY FILTER) ── */}
-      <section className="max-w-7xl mx-auto px-4 md:px-8 my-12">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-2">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C7CCD1]">Shop By Budget</p>
-            <h2 className="font-serif text-2xl md:text-3xl font-bold text-[#0A1F44]">Explore Saree Collections by Price</h2>
-          </div>
-          <Link
-            href={catalogLink}
-            className="text-xs font-bold text-[#0A1F44] uppercase tracking-wider hover:underline flex items-center gap-1"
-          >
-            View All {selectedCategory === "all" ? "Sarees" : selectedCategory === "paithani" ? "Paithani" : "Designer"} in Catalog <ArrowRight size={13} />
-          </Link>
+      {/* ── 2. SHOP BY BUDGET ── */}
+      <section className="max-w-7xl mx-auto px-4 md:px-8 my-12" aria-labelledby="shop-by-budget-heading">
+        <div className="mb-6">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C7CCD1]">SHOP BY BUDGET</p>
+          <h2 id="shop-by-budget-heading" className="font-serif text-2xl md:text-3xl font-bold text-[#0A1F44]">
+            Explore Collections by Price
+          </h2>
         </div>
 
-        {/* Category Selection Buttons */}
-        <div className="flex items-center gap-2.5 sm:gap-3 mb-6 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("paithani")}
-            className={cn(
-              "px-5 sm:px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border flex items-center justify-center min-w-[110px]",
-              selectedCategory === "paithani"
-                ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-md ring-2 ring-[#0A1F44]/20 font-bold"
-                : "bg-white text-[#0A1F44] border-[#C7CCD1]/50 hover:border-[#0A1F44] hover:bg-gray-50 font-medium"
-            )}
-          >
-            Paithani
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("designer")}
-            className={cn(
-              "px-5 sm:px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border flex items-center justify-center min-w-[110px]",
-              selectedCategory === "designer"
-                ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-md ring-2 ring-[#0A1F44]/20 font-bold"
-                : "bg-white text-[#0A1F44] border-[#C7CCD1]/50 hover:border-[#0A1F44] hover:bg-gray-50 font-medium"
-            )}
-          >
-            Designer
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("all")}
-            className={cn(
-              "px-5 sm:px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border flex items-center justify-center min-w-[110px]",
-              selectedCategory === "all"
-                ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-md ring-2 ring-[#0A1F44]/20 font-bold"
-                : "bg-white text-[#0A1F44] border-[#C7CCD1]/50 hover:border-[#0A1F44] hover:bg-gray-50 font-medium"
-            )}
-          >
-            All Sarees
-          </button>
-        </div>
-
-        {/* Interactive Price Cards */}
+        {/* Display only the budget cards */}
         <PriceRangeCards
           variant="home"
           onSelect={handleBudgetSelect}

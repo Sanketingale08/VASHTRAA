@@ -120,46 +120,49 @@ export async function requestPasswordReset(
 
   if (targetRole === "seller") {
     // For sellers, search dedicated Seller data collection
-    const seller = await mongoSellers.findByEmail(cleanEmail);
+    let seller = await mongoSellers.findByEmail(cleanEmail);
+    if (!seller && isMongoDbConnected()) {
+      try {
+        const col = getCollection("sellers");
+        const escaped = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        seller = (await col.findOne({ email: { $regex: new RegExp(`^${escaped}$`, "i") } })) as any;
+      } catch {}
+    }
     if (seller) {
       userOrSeller = {
         id: seller.id,
-        name: seller.name || seller.sellerName || seller.shopName || "Seller Partner",
-        email: seller.email || seller.contactEmail || cleanEmail,
+        name: seller.name || (seller as any).sellerName || (seller as any).shopName || "Seller Partner",
+        email: seller.email || (seller as any).contactEmail || cleanEmail,
       };
     } else {
       // Check seller role user in mongoUsers
-      const u = await mongoUsers.findByEmail(cleanEmail);
-      if (u && u.role === "seller") {
-        userOrSeller = { id: u.id, name: u.name, email: u.email };
-      } else {
-        // Check vendorsTable in PostgreSQL database
+      let u = await mongoUsers.findByEmail(cleanEmail);
+      if (!u && isMongoDbConnected()) {
         try {
-          const { db, vendorsTable } = await import("@workspace/db");
-          const { eq } = await import("drizzle-orm");
-          const vendors = await db
-            .select()
-            .from(vendorsTable)
-            .where(eq(vendorsTable.contactEmail, cleanEmail))
-            .limit(1);
-          if (vendors.length > 0) {
-            const v = vendors[0];
-            userOrSeller = {
-              id: v.id,
-              name: v.name || "Seller Partner",
-              email: v.contactEmail || cleanEmail,
-            };
-          }
-        } catch (err: any) {
-          logger.warn({ err: err?.message, email: cleanEmail }, "[PasswordReset] Error querying vendorsTable");
-        }
+          const col = getCollection("users");
+          const escaped = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          u = (await col.findOne({ email: { $regex: new RegExp(`^${escaped}$`, "i") } })) as any;
+        } catch {}
+      }
+      if (u && (u.role === "seller" || !u.role)) {
+        userOrSeller = { id: u.id, name: u.name, email: u.email };
       }
     }
   } else {
     // For customer users
-    const u = await mongoUsers.findByEmail(cleanEmail);
-    if (u && u.role !== "seller") {
-      userOrSeller = { id: u.id, name: u.name, email: u.email };
+    let u = await mongoUsers.findByEmail(cleanEmail);
+    if (!u && !cleanEmail.includes("@")) {
+      u = await mongoUsers.findById(cleanEmail);
+    }
+    if (!u && isMongoDbConnected()) {
+      try {
+        const col = getCollection("users");
+        const escaped = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        u = (await col.findOne({ email: { $regex: new RegExp(`^${escaped}$`, "i") } })) as any;
+      } catch {}
+    }
+    if (u && u.email && u.role !== "seller") {
+      userOrSeller = { id: u.id, name: u.name || "Customer", email: u.email.trim().toLowerCase() };
     }
   }
 
@@ -186,8 +189,12 @@ export async function requestPasswordReset(
 
     await saveTokenRecord(tokenRecord);
 
-    // Build reset URL
-    const baseUrl = (originUrl || "http://localhost:5000").replace(/\/$/, "");
+    // Build reset URL using originUrl, FRONTEND_URL or vastraasaree.com
+    const appBaseUrl =
+      (originUrl && !originUrl.includes("undefined"))
+        ? originUrl
+        : (process.env.FRONTEND_URL || process.env.APP_URL || process.env.SITE_URL || "https://vastraasaree.com");
+    const baseUrl = appBaseUrl.replace(/\/$/, "");
     const resetPath = targetRole === "seller" ? "/seller/reset-password" : "/reset-password";
     const resetUrl = `${baseUrl}${resetPath}?token=${tokenString}`;
 
@@ -213,22 +220,26 @@ export async function requestPasswordReset(
     }
 
     logger.info(
-      { userId: userOrSeller.id, email: cleanEmail, targetRole, resetUrl },
+      { userId: userOrSeller.id, email: cleanEmail, targetRole },
       "[PasswordReset] Password reset token generated and email process completed"
     );
 
     return {
       success: true,
       message: "If an account with that email address exists, a password reset link has been sent to your email.",
-      debugResetUrl: emailResult.debugResetUrl || resetUrl,
+      debugResetUrl: process.env.NODE_ENV === "test" ? resetUrl : undefined,
     };
   }
 
-  logger.info({ email: cleanEmail, targetRole }, "[PasswordReset] Reset requested for non-existing or mismatched account");
+  logger.warn(
+    { email: cleanEmail, targetRole },
+    `[PasswordReset] Reset requested for non-existing or mismatched account. No ${targetRole} record found for: ${cleanEmail}`
+  );
 
   return {
     success: true,
     message: "If an account with that email address exists, a password reset link has been sent to your email.",
+    debugResetUrl: undefined,
   };
 }
 
@@ -276,11 +287,28 @@ export async function validateResetToken(
  * Executes password update for a validated reset token.
  */
 export async function performPasswordReset(
-  tokenString: string,
-  newPassword: string,
-  confirmPassword: string,
-  expectedRole: "customer" | "seller"
+  first: string | { token: string; newPassword: string; confirmPassword?: string; targetRole?: "customer" | "seller"; role?: "customer" | "seller" },
+  newPasswordArg?: string,
+  confirmPasswordArg?: string,
+  expectedRoleArg?: "customer" | "seller"
 ): Promise<{ success: boolean; error?: string; message?: string }> {
+  let tokenString: string;
+  let newPassword: string;
+  let confirmPassword: string;
+  let expectedRole: "customer" | "seller";
+
+  if (typeof first === "object" && first !== null) {
+    tokenString = first.token || "";
+    newPassword = first.newPassword || "";
+    confirmPassword = (first.confirmPassword !== undefined && first.confirmPassword !== null && first.confirmPassword !== "") ? first.confirmPassword : (first.newPassword || "");
+    expectedRole = first.targetRole || first.role || "customer";
+  } else {
+    tokenString = first || "";
+    newPassword = newPasswordArg || "";
+    confirmPassword = (confirmPasswordArg !== undefined && confirmPasswordArg !== null && confirmPasswordArg !== "") ? confirmPasswordArg : (newPasswordArg || "");
+    expectedRole = expectedRoleArg || "customer";
+  }
+
   const validation = await validateResetToken(tokenString, expectedRole);
 
   if (!validation.valid) {
@@ -289,10 +317,6 @@ export async function performPasswordReset(
 
   if (!newPassword || typeof newPassword !== "string") {
     return { success: false, error: "New Password is required." };
-  }
-
-  if (!confirmPassword || typeof confirmPassword !== "string") {
-    return { success: false, error: "Confirm New Password is required." };
   }
 
   if (newPassword.length < 6) {

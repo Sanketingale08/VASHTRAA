@@ -1176,3 +1176,5 @@ export function AccountPaymentMethodsPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountPaymentMethodsPage;

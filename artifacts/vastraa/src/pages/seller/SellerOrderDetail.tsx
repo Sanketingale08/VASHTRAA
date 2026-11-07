@@ -206,7 +206,7 @@ export default function SellerOrderDetail() {
       const customEvent = e as CustomEvent;
       const detail = customEvent.detail;
       if (!detail) return;
-      if (["order:status_changed", "order:cancelled", "order:tracking_updated"].includes(detail.name)) {
+      if (["order:created", "order:status_changed", "order:cancelled", "order:tracking_updated", "payment:status_updated"].includes(detail.name)) {
         fetchOrder();
       }
     };

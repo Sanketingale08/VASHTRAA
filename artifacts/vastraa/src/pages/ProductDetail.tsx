@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
+import { isSareeCategory } from "@/constants/categorySpecifications";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductDetailsSkeleton } from "@/components/skeletons";
 import { useWishlist } from "@/context/WishlistContext";
@@ -1249,14 +1250,20 @@ export default function ProductDetail() {
     if ((product as any).gender) {
       addRow("Gender / Target", (product as any).gender);
     }
-    if ((product as any).sareeType) {
-      addRow("Saree Type", (product as any).sareeType);
-    }
-    if ((product as any).sareeStyle) {
-      addRow("Saree Style", (product as any).sareeStyle);
-    }
-    if ((product as any).blouseIncluded !== undefined && (product as any).blouseIncluded !== null) {
-      addRow("Blouse Piece", (product as any).blouseIncluded ? "Included / Unstitched" : "Not Included");
+    if (isSareeCategory(product.category)) {
+      if ((product as any).sareeType) {
+        addRow("Saree Type", (product as any).sareeType);
+      }
+      if ((product as any).sareeStyle) {
+        addRow("Saree Style", (product as any).sareeStyle);
+      }
+      if ((product as any).blouseIncluded === true) {
+        addRow("Blouse Piece", "Included / Unstitched");
+        const bDet = (product as any).blouseDetails;
+        if (bDet?.fabric) addRow("Blouse Fabric", bDet.fabric);
+        if (bDet?.length) addRow("Blouse Length", bDet.length);
+        if (bDet?.design) addRow("Blouse Design", bDet.design);
+      }
     }
     if ((product as any).packOf) {
       addRow("Pack Of", (product as any).packOf);
@@ -1514,6 +1521,38 @@ export default function ProductDetail() {
                     </table>
                   </div>
                 </div>
+
+                {/* Matching Blouse Piece Gallery (Sarees Only) */}
+                {isSareeCategory(product.category) && (product as any).blouseIncluded && Array.isArray((product as any).blouseImages) && (product as any).blouseImages.length > 0 && (
+                  <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                        Matching Unstitched Blouse Piece Photography
+                      </span>
+                      <span className="text-[10px] bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">
+                        {(product as any).blouseImages.length} Photos
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-900/80">
+                      Authentic close-up photos of the unstitched matching blouse piece included with this saree:
+                    </p>
+                    <div className="flex gap-2.5 overflow-x-auto pb-1">
+                      {(product as any).blouseImages.map((bImg: string, idx: number) => (
+                        <div
+                          key={idx}
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-amber-300 shrink-0 shadow-2xs"
+                        >
+                          <img
+                            src={getProductImageSrc(bImg)}
+                            alt={`Blouse detail ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                            onError={replaceProductImageWithFallback}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Variant Selector */}
                 {variantAttrGroups.length > 0 && (

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useDeferredValue, useEffect, useRef } from "react";
+import React, { useState, useCallback, useDeferredValue, useEffect, useRef, useMemo } from "react";
 import { useSearch, useLocation, Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { useListProducts, useListVendors } from "@workspace/api-client-react";
@@ -13,7 +13,19 @@ import {
   Search, X, RotateCcw, Star, Home, ChevronRight, ChevronDown, SlidersHorizontal, Check, AlertCircle
 } from "lucide-react";
 import { PriceRangeCards } from "@/components/PriceRangeCards";
-import { getSubcategoriesForCategory } from "@/constants/categories";
+import { getBudgetByPrice } from "@/constants/budget";
+import {
+  getSubcategoriesForCategory,
+  findCategoryBySlugOrName,
+  getSubtypesForSubcategory,
+  PRESERVED_SAREE_CATEGORIES,
+  WOMENS_TOPS_SIZES,
+  GIRLS_TOPS_SIZES,
+  TOPS_NECK_TYPES,
+  TOPS_SLEEVE_LENGTHS,
+} from "@/constants/categories";
+import { CircularCategoryNav, CircularCategoryItem } from "@/components/CircularCategoryNav";
+import { getCategoryOrSubcategoryImage } from "@/constants/categoryImages";
 
 const MotionDiv = motion.div as any;
 const MotionAside = motion.aside as any;
@@ -22,6 +34,7 @@ const MotionSpan = motion.span as any;
 export interface ProductsListingProps {
   heroBanner?: string;
   category?: string;
+  subcategory?: string;
   title?: string;
   subtitle?: string;
   description?: string;
@@ -49,7 +62,10 @@ import {
 export type { ProductFilters };
 export { DEFAULT_PRODUCT_FILTERS, parseArrayParam, parseFiltersFromParams, countFilterItems, validateFilterValues };
 
-const FABRIC_OPTIONS = ["Pure Silk", "Silk", "Paithani Silk", "Art Silk", "Cotton", "Chiffon", "Georgette", "Organza", "Banarasi Silk", "Linen", "Other"];
+const FABRIC_OPTIONS = [
+  "Cotton", "Rayon", "Silk", "Chiffon", "Georgette", "Crepe", "Polyester", "Denim",
+  "Satin", "Linen", "Velvet", "Lycra", "Pure Silk", "Paithani Silk", "Art Silk", "Organza", "Fleece", "Woolen", "Other"
+];
 
 const COLOR_OPTIONS = [
   { value: "red", label: "Red", hex: "#c0392b" },
@@ -173,13 +189,14 @@ function useIsDesktop() {
 
 export function ProductsListing({
   category,
+  subcategory,
   title,
   subtitle,
   description,
   heroBanner,
   badgeLabel,
   headerContent,
-  hideHero = false,
+  hideHero = true,
   limit: limitProp,
   topBannerImage,
   inGridBanner,
@@ -206,8 +223,20 @@ export function ProductsListing({
 
   // Independent Filter States (Hidden by default, separate pending vs applied)
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [appliedFilters, setAppliedFilters] = useState<ProductFilters>(() => parseFiltersFromParams(initParams));
-  const [pendingFilters, setPendingFilters] = useState<ProductFilters>(() => parseFiltersFromParams(initParams));
+  const [appliedFilters, setAppliedFilters] = useState<ProductFilters>(() => {
+    const parsed = parseFiltersFromParams(initParams);
+    if (!parsed.subcategory && subcategory) {
+      parsed.subcategory = subcategory;
+    }
+    return parsed;
+  });
+  const [pendingFilters, setPendingFilters] = useState<ProductFilters>(() => {
+    const parsed = parseFiltersFromParams(initParams);
+    if (!parsed.subcategory && subcategory) {
+      parsed.subcategory = subcategory;
+    }
+    return parsed;
+  });
   const [isApplyingFilters, setIsApplyingFilters] = useState(false);
   const [filterError, setFilterError] = useState<string | null>(null);
 
@@ -288,6 +317,8 @@ export function ProductsListing({
   const resetAllAppliedFilters = useCallback(() => {
     setAppliedFilters({ ...DEFAULT_PRODUCT_FILTERS });
     setPendingFilters({ ...DEFAULT_PRODUCT_FILTERS });
+    setSearch("");
+    setQuickChip("all");
     setPage(1);
   }, []);
 
@@ -297,9 +328,13 @@ export function ProductsListing({
     if (search) params.set("search", search);
     if (appliedFilters.collection) params.set("collection", appliedFilters.collection);
     if (appliedFilters.subcategory) params.set("subcategory", appliedFilters.subcategory);
+    if (appliedFilters.subtype) params.set("subtype", appliedFilters.subtype);
     if (appliedFilters.fabric.length > 0) params.set("fabric", appliedFilters.fabric.join(","));
     if (appliedFilters.color.length > 0) params.set("color", appliedFilters.color.join(","));
     if (appliedFilters.brand.length > 0) params.set("brand", appliedFilters.brand.join(","));
+    if (appliedFilters.size.length > 0) params.set("size", appliedFilters.size.join(","));
+    if (appliedFilters.sleeveLength.length > 0) params.set("sleeveLength", appliedFilters.sleeveLength.join(","));
+    if (appliedFilters.neckStyle.length > 0) params.set("neckStyle", appliedFilters.neckStyle.join(","));
     if (appliedFilters.pattern.length > 0) params.set("pattern", appliedFilters.pattern.join(","));
     if (appliedFilters.occasion.length > 0) params.set("occasion", appliedFilters.occasion.join(","));
     if (appliedFilters.gender.length > 0) params.set("gender", appliedFilters.gender.join(","));
@@ -362,8 +397,9 @@ export function ProductsListing({
   // Query Facets based on APPLIED filters only (prevents API calls on unconfirmed changes)
   const facetQueryKey = [
     "/api/products/facets",
-    filteredCategory, appliedFilters.subcategory, deferredSearch, appliedFilters.collection,
+    filteredCategory, appliedFilters.subcategory, appliedFilters.subtype, deferredSearch, appliedFilters.collection,
     appliedFilters.fabric.join(","), appliedFilters.color.join(","), appliedFilters.brand.join(","),
+    appliedFilters.size.join(","), appliedFilters.sleeveLength.join(","), appliedFilters.neckStyle.join(","),
     appliedFilters.pattern.join(","), appliedFilters.occasion.join(","), appliedFilters.gender.join(","),
     appliedFilters.sareeType.join(","), appliedFilters.sareeStyle.join(","),
     appliedFilters.packOf.join(","), appliedFilters.countryOfOrigin.join(","),
@@ -379,11 +415,15 @@ export function ProductsListing({
       const qParams = new URLSearchParams();
       if (filteredCategory) qParams.set("category", filteredCategory);
       if (appliedFilters.subcategory) qParams.set("subcategory", appliedFilters.subcategory);
+      if (appliedFilters.subtype) qParams.set("subtype", appliedFilters.subtype);
       if (deferredSearch) qParams.set("search", deferredSearch);
       if (appliedFilters.collection) qParams.set("collection", appliedFilters.collection);
       if (appliedFilters.fabric.length > 0) qParams.set("fabric", appliedFilters.fabric.join(","));
       if (appliedFilters.color.length > 0) qParams.set("color", appliedFilters.color.join(","));
       if (appliedFilters.brand.length > 0) qParams.set("brand", appliedFilters.brand.join(","));
+      if (appliedFilters.size.length > 0) qParams.set("size", appliedFilters.size.join(","));
+      if (appliedFilters.sleeveLength.length > 0) qParams.set("sleeveLength", appliedFilters.sleeveLength.join(","));
+      if (appliedFilters.neckStyle.length > 0) qParams.set("neckStyle", appliedFilters.neckStyle.join(","));
       if (appliedFilters.pattern.length > 0) qParams.set("pattern", appliedFilters.pattern.join(","));
       if (appliedFilters.occasion.length > 0) qParams.set("occasion", appliedFilters.occasion.join(","));
       if (appliedFilters.gender.length > 0) qParams.set("gender", appliedFilters.gender.join(","));
@@ -420,6 +460,7 @@ export function ProductsListing({
   const productParams: ListProductsParams = {
     ...(filteredCategory && { category: filteredCategory as any }),
     ...(appliedFilters.subcategory && { subcategory: appliedFilters.subcategory }),
+    ...(appliedFilters.subtype && { subtype: appliedFilters.subtype } as any),
     sort,
     page,
     limit: limitProp ?? (isDesignerCategory ? 24 : 12),
@@ -428,6 +469,9 @@ export function ProductsListing({
     ...(appliedFilters.fabric.length > 0 && { fabric: appliedFilters.fabric.join(",") }),
     ...(appliedFilters.color.length > 0 && { color: appliedFilters.color.join(",") }),
     ...(appliedFilters.brand.length > 0 && { brand: appliedFilters.brand.join(",") }),
+    ...(appliedFilters.size.length > 0 && { size: appliedFilters.size.join(",") } as any),
+    ...(appliedFilters.sleeveLength.length > 0 && { sleeveLength: appliedFilters.sleeveLength.join(",") } as any),
+    ...(appliedFilters.neckStyle.length > 0 && { neckStyle: appliedFilters.neckStyle.join(",") } as any),
     ...(appliedFilters.pattern.length > 0 && { pattern: appliedFilters.pattern.join(",") }),
     ...(appliedFilters.occasion.length > 0 && { occasion: appliedFilters.occasion.join(",") }),
     ...(appliedFilters.gender.length > 0 && { gender: appliedFilters.gender.join(",") }),
@@ -448,8 +492,28 @@ export function ProductsListing({
     ...(appliedFilters.hasOffer && { offers: "true" }),
   };
 
-  const { data, isLoading, isError } = useListProducts(productParams);
+  const { data, isLoading, isError, error, refetch } = useListProducts(productParams);
   const { data: vendors } = useListVendors();
+
+  const { data: dbCategoriesData } = useQuery<{ categories: any[] }>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      try {
+        const res = await apiFetch("/api/categories");
+        if (!res.ok) return { categories: [] };
+        return res.json();
+      } catch {
+        return { categories: [] };
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (isError && error) {
+      console.error("[ProductsListing] Error fetching products:", error);
+    }
+  }, [isError, error]);
 
   // Real-time synchronization: refresh product list and facets whenever products or inventory update
   useEffect(() => {
@@ -460,12 +524,14 @@ export function ProductsListing({
       if (
         eventName.startsWith("product:") ||
         eventName.startsWith("inventory:") ||
+        eventName.startsWith("category:") ||
         eventName === "catalog:updated" ||
         eventName === "seller:product:updated" ||
         eventName === "admin:product:updated"
       ) {
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
         queryClient.invalidateQueries({ queryKey: ["/api/products/facets"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
         const productId = detail.data?.productId || detail.data?.id || detail.data?.payload?.id;
         if (productId) {
           queryClient.invalidateQueries({ queryKey: [`/api/products/${productId}`] });
@@ -493,30 +559,304 @@ export function ProductsListing({
   const totalProducts = displayedData?.total ?? 0;
   const totalPages = displayedData?.totalPages ?? 1;
 
-  const displayTitle = filteredCategory === "paithani" ? "Paithani Sarees" : filteredCategory === "designer" ? "Designer Sarees" : (title || "Sarees");
-  const availableCollections = filteredCategory === "designer" ? DESIGNER_COLLECTIONS : PAITHANI_COLLECTIONS;
-  const availableSubcategories = filteredCategory ? getSubcategoriesForCategory(filteredCategory) : [];
+  const matchedCategoryDef = filteredCategory ? findCategoryBySlugOrName(filteredCategory) : undefined;
+  const displayTitle = title || matchedCategoryDef?.name || (filteredCategory === "paithani" ? "Paithani Sarees" : filteredCategory === "designer" ? "Designer Sarees" : "Sarees");
+  const displayDescription = description || matchedCategoryDef?.description || (filteredCategory === "paithani" ? "Explore authentic handwoven Paithani silk sarees crafted with pure zari and timeless motifs." : filteredCategory === "designer" ? "Contemporary and designer sarees curated for parties, weddings, and modern celebrations." : "Explore our curated collection of authentic sarees.");
+  const displaySubtitle = subtitle || (matchedCategoryDef ? `${matchedCategoryDef.subcategories.length} Handcrafted Varieties` : undefined);
+  const heroBgImage = heroBanner || matchedCategoryDef?.bannerImage || matchedCategoryDef?.coverImage;
+
+  const availableCollections = filteredCategory === "designer" ? DESIGNER_COLLECTIONS : filteredCategory === "paithani" ? PAITHANI_COLLECTIONS : [];
+  const availableSubcategories = filteredCategory ? getSubcategoriesForCategory(filteredCategory, dbCategoriesData?.categories) : [];
+  const activeSubcategory = pendingFilters.subcategory || appliedFilters.subcategory;
+  const availableSubtypes = (filteredCategory && activeSubcategory) ? getSubtypesForSubcategory(filteredCategory, activeSubcategory) : [];
+
+  // Determine if current category belongs to Saree domain
+  const isSareeCategory = useMemo(() => {
+    if (!filteredCategory) return false;
+    const norm = filteredCategory.toLowerCase();
+    return norm === "sarees" || norm === "saree" || PRESERVED_SAREE_CATEGORIES.some(c => c.slug === norm || c.id === norm);
+  }, [filteredCategory]);
+
+  const isSareesMainPage = filteredCategory === "sarees" || pathname === "/sarees";
+
+  // Determine if current category belongs to Tops domain
+  const isTopsCategory = useMemo(() => {
+    if (!filteredCategory) return false;
+    const norm = filteredCategory.toLowerCase();
+    return (
+      norm === "tops" ||
+      norm === "top" ||
+      norm === "ladies-tops" ||
+      norm === "womens-tops" ||
+      norm === "girls-tops" ||
+      norm === "ladies-and-girls-tops" ||
+      norm === "cat-tops-default"
+    );
+  }, [filteredCategory]);
+
+  const groupedSubcategories = useMemo(() => {
+    if (!availableSubcategories || availableSubcategories.length === 0) return null;
+    const hasGroup = availableSubcategories.some((sc) => Boolean((sc as any).group));
+    if (!hasGroup) return null;
+    const groups: Record<string, typeof availableSubcategories> = {};
+    for (const sc of availableSubcategories) {
+      const g = (sc as any).group || "Other";
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(sc);
+    }
+    return groups;
+  }, [availableSubcategories]);
+
+  // Build Circular Category Navigation Config:
+  const circularNavConfig = useMemo(() => {
+    // 1. MAIN SAREES PAGE (No specific subcategory active):
+    // Show all 12 Saree Categories as circular image cards
+    if (isSareesMainPage && (!appliedFilters.subcategory || appliedFilters.subcategory === "all")) {
+      const dbSareesCat = dbCategoriesData?.categories?.find((c: any) => c.slug === "sarees" || c.id === "sarees");
+      const items: CircularCategoryItem[] = PRESERVED_SAREE_CATEGORIES.map((cat) => {
+        const dbCat = dbCategoriesData?.categories?.find(
+          (c: any) => c.slug === cat.slug || c.id === cat.id || c.name?.toLowerCase() === cat.name.toLowerCase()
+        );
+        const resolvedImg = dbCat?.coverImage || cat.coverImage || getCategoryOrSubcategoryImage(cat.slug);
+        return {
+          id: cat.id,
+          name: cat.name.replace(/ Sarees$/i, ""),
+          slug: cat.slug,
+          image: resolvedImg,
+          fallbackImage: "/images/hero-paithani-1.png",
+          route: `/${cat.slug}`,
+        };
+      });
+
+      return {
+        items,
+        exploreAllLabel: "Explore All",
+        exploreAllImage: dbSareesCat?.coverImage || "/images/artisan-handloom-saree.png",
+        activeSlug: null,
+        parentCategoryName: undefined,
+        onBackToParent: undefined,
+        onSelect: (item: CircularCategoryItem) => {
+          navigate(item.route || `/${item.slug}`);
+        },
+        onExploreAll: () => {
+          removeAppliedFilter((prev) => ({ ...prev, subcategory: undefined, subtype: undefined }));
+          setPage(1);
+        },
+      };
+    }
+
+    // 2. MAIN SAREES PAGE WITH A SPECIFIC SAREE WEAVE ACTIVE (e.g. /sarees?subcategory=paithani)
+    if (isSareesMainPage && appliedFilters.subcategory) {
+      const matchedSaree = PRESERVED_SAREE_CATEGORIES.find(
+        (c) => c.slug === appliedFilters.subcategory || c.name.toLowerCase() === appliedFilters.subcategory?.toLowerCase()
+      );
+      if (matchedSaree) {
+        const dbParent = dbCategoriesData?.categories?.find(
+          (c: any) => c.slug === matchedSaree.slug || c.id === matchedSaree.id
+        );
+        const items: CircularCategoryItem[] = (matchedSaree.subcategories || []).map((sc) => {
+          const dbSub = dbParent?.subcategories?.find(
+            (s: any) => s.slug === sc.slug || s.id === sc.id || s.name?.toLowerCase() === sc.name?.toLowerCase()
+          ) || dbCategoriesData?.categories?.find(
+            (c: any) => c.parentId && (c.slug === sc.slug || c.id === sc.id || c.name?.toLowerCase() === sc.name?.toLowerCase())
+          );
+          const resolvedImg = dbSub?.coverImage || (sc as any).coverImage || (sc as any).image || getCategoryOrSubcategoryImage(sc.slug, matchedSaree.slug);
+          return {
+            id: sc.id || sc.slug,
+            name: sc.name,
+            slug: sc.slug,
+            image: resolvedImg,
+            fallbackImage: dbParent?.coverImage || matchedSaree.coverImage,
+            route: sc.route,
+            subtypes: sc.subtypes,
+          };
+        });
+
+        return {
+          items,
+          exploreAllLabel: `All ${matchedSaree.name.replace(/ Sarees$/i, "")}`,
+          exploreAllImage: dbParent?.coverImage || matchedSaree.coverImage,
+          activeSlug: appliedFilters.subtype || null,
+          parentCategoryName: "Sarees",
+          onBackToParent: () => {
+            removeAppliedFilter((prev) => ({ ...prev, subcategory: undefined, subtype: undefined }));
+            setPage(1);
+          },
+          onSelect: (item: CircularCategoryItem) => {
+            setAppliedFilters((prev) => {
+              const updated = {
+                ...prev,
+                subtype: prev.subtype === item.slug ? undefined : item.slug,
+              };
+              setPendingFilters(updated);
+              return updated;
+            });
+            setPage(1);
+          },
+          onExploreAll: () => {
+            removeAppliedFilter((prev) => ({ ...prev, subtype: undefined }));
+            setPage(1);
+          },
+        };
+      }
+    }
+
+    // 3. ANY SPECIFIC SAREE CATEGORY OR OTHER PRODUCT CATEGORY (e.g. /paithani, /designer, /gadwal, /kurtis, etc.)
+    if (availableSubcategories.length > 0) {
+      const dbParent = dbCategoriesData?.categories?.find(
+        (c: any) => c.slug === filteredCategory || c.id === filteredCategory || c.id === matchedCategoryDef?.id
+      );
+      const parentName = dbParent?.name || matchedCategoryDef?.name || displayTitle;
+      const cleanParentName = parentName.replace(/ Sarees$/i, "");
+
+      const items: CircularCategoryItem[] = availableSubcategories.map((sc) => {
+        const dbSub = dbParent?.subcategories?.find(
+          (s: any) => s.slug === sc.slug || s.id === sc.id || s.name?.toLowerCase() === sc.name?.toLowerCase()
+        ) || dbCategoriesData?.categories?.find(
+          (c: any) => c.parentId && (c.slug === sc.slug || c.id === sc.id || c.name?.toLowerCase() === sc.name?.toLowerCase())
+        );
+        const resolvedImg = dbSub?.coverImage || (sc as any).coverImage || (sc as any).image || getCategoryOrSubcategoryImage(sc.slug, filteredCategory);
+        return {
+          id: sc.id || sc.slug,
+          name: sc.name,
+          slug: sc.slug,
+          image: resolvedImg,
+          fallbackImage: dbParent?.coverImage || matchedCategoryDef?.coverImage || "/images/hero-paithani-1.png",
+          route: sc.route,
+          subtypes: sc.subtypes,
+        };
+      });
+
+      return {
+        items,
+        exploreAllLabel: `All ${cleanParentName}`,
+        exploreAllImage: dbParent?.coverImage || matchedCategoryDef?.coverImage || getCategoryOrSubcategoryImage(filteredCategory),
+        activeSlug: appliedFilters.subcategory || null,
+        parentCategoryName: isSareeCategory && !isSareesMainPage ? "Sarees" : undefined,
+        onBackToParent: isSareeCategory && !isSareesMainPage ? () => navigate("/sarees") : undefined,
+        onSelect: (item: CircularCategoryItem) => {
+          const isSelected = appliedFilters.subcategory?.toLowerCase() === item.slug.toLowerCase() ||
+            appliedFilters.subcategory?.toLowerCase() === item.name.toLowerCase();
+          setAppliedFilters((prev) => {
+            const updated = {
+              ...prev,
+              subcategory: isSelected ? undefined : item.slug,
+              subtype: undefined,
+            };
+            setPendingFilters(updated);
+            return updated;
+          });
+          setPage(1);
+          if (gridTopRef.current && typeof gridTopRef.current.scrollIntoView === "function") {
+            gridTopRef.current.scrollIntoView({ behavior: "smooth" });
+          }
+        },
+        onExploreAll: () => {
+          removeAppliedFilter((prev) => ({ ...prev, subcategory: undefined, subtype: undefined }));
+          setPage(1);
+        },
+      };
+    }
+
+    return null;
+  }, [
+    isSareesMainPage,
+    isSareeCategory,
+    appliedFilters.subcategory,
+    appliedFilters.subtype,
+    availableSubcategories,
+    matchedCategoryDef,
+    displayTitle,
+    filteredCategory,
+    dbCategoriesData?.categories,
+    navigate,
+    removeAppliedFilter,
+  ]);
 
   // Filter Panel Inner Content (Accordion sections bound to pendingFilters)
   const filterSidebarSections = (
     <div className="space-y-1 divide-y divide-[#C7CCD1]/10">
-      {/* 0. SUBCATEGORY FILTERS */}
+      {/* 0A. SUBCATEGORY FILTERS */}
       {availableSubcategories.length > 0 && (
         <FilterAccordionSection title="Subcategory" activeCount={pendingFilters.subcategory ? 1 : 0} defaultOpen={true}>
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {groupedSubcategories ? (
+              Object.entries(groupedSubcategories).map(([groupTitle, subs]) => (
+                <div key={groupTitle} className="space-y-1 mb-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#0A1F44]/70 pt-1 pb-0.5 border-b border-[#C7CCD1]/20">
+                    {groupTitle}
+                  </div>
+                  {subs.map((sc) => {
+                    const isSelected = pendingFilters.subcategory?.toLowerCase() === sc.slug || pendingFilters.subcategory?.toLowerCase() === sc.name.toLowerCase();
+                    const count = facets?.subcategory?.[sc.name] ?? facets?.subcategory?.[sc.slug];
+                    return (
+                      <label key={sc.id || sc.slug} className="flex items-center justify-between gap-3 cursor-pointer group py-0.5">
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              updatePendingFilter("subcategory", isSelected ? undefined : sc.slug);
+                              if (isSelected) updatePendingFilter("subtype", undefined);
+                            }}
+                            className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
+                          />
+                          <span className="text-xs group-hover:text-[#0A1F44] transition-colors">{sc.name}</span>
+                        </div>
+                        {count !== undefined && <span className="text-[11px] font-mono text-gray-400">({count})</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              ))
+            ) : (
+              availableSubcategories.map((sc) => {
+                const isSelected = pendingFilters.subcategory?.toLowerCase() === sc.slug || pendingFilters.subcategory?.toLowerCase() === sc.name.toLowerCase();
+                const count = facets?.subcategory?.[sc.name] ?? facets?.subcategory?.[sc.slug];
+                return (
+                  <label key={sc.id || sc.slug} className="flex items-center justify-between gap-3 cursor-pointer group py-0.5">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          updatePendingFilter("subcategory", isSelected ? undefined : sc.slug);
+                          if (isSelected) updatePendingFilter("subtype", undefined);
+                        }}
+                        className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
+                      />
+                      <span className="text-xs group-hover:text-[#0A1F44] transition-colors">{sc.name}</span>
+                    </div>
+                    {count !== undefined && <span className="text-[11px] font-mono text-gray-400">({count})</span>}
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </FilterAccordionSection>
+      )}
+
+      {/* 0B. SUBTYPE / VARIANT FILTERS */}
+      {availableSubtypes.length > 0 && (
+        <FilterAccordionSection
+          title={isSareeCategory ? "Subtype / Weave" : "Variants / Styles"}
+          activeCount={pendingFilters.subtype ? 1 : 0}
+          defaultOpen={true}
+        >
           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-            {availableSubcategories.map((sc) => {
-              const isSelected = pendingFilters.subcategory?.toLowerCase() === sc.slug || pendingFilters.subcategory?.toLowerCase() === sc.name.toLowerCase();
-              const count = facets?.subcategory?.[sc.name] ?? facets?.subcategory?.[sc.slug];
+            {availableSubtypes.map((st) => {
+              const isSelected = pendingFilters.subtype?.toLowerCase() === st.toLowerCase();
+              const count = facets?.subtype?.[st] ?? facets?.subtype?.[st.toLowerCase()];
               return (
-                <label key={sc.id || sc.slug} className="flex items-center justify-between gap-3 cursor-pointer group py-0.5">
+                <label key={st} className="flex items-center justify-between gap-3 cursor-pointer group py-0.5">
                   <div className="flex items-center gap-2.5">
                     <input
                       type="checkbox"
                       checked={isSelected}
-                      onChange={() => updatePendingFilter("subcategory", isSelected ? undefined : sc.slug)}
+                      onChange={() => updatePendingFilter("subtype", isSelected ? undefined : st)}
                       className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
                     />
-                    <span className="text-xs group-hover:text-[#0A1F44] transition-colors">{sc.name}</span>
+                    <span className="text-xs group-hover:text-[#0A1F44] transition-colors">{st}</span>
                   </div>
                   {count !== undefined && <span className="text-[11px] font-mono text-gray-400">({count})</span>}
                 </label>
@@ -527,28 +867,30 @@ export function ProductsListing({
       )}
 
       {/* 1. COLLECTION FILTERS */}
-      <FilterAccordionSection title="Collection Filters" activeCount={pendingFilters.collection ? 1 : 0} defaultOpen={true}>
-        <div className="space-y-1.5">
-          {availableCollections.map((c) => {
-            const isSelected = pendingFilters.collection === c.slug;
-            return (
-              <label key={c.slug} className="flex items-start gap-2.5 cursor-pointer group py-1">
-                <input
-                  type="radio"
-                  name="collectionFilter"
-                  checked={isSelected}
-                  onChange={() => updatePendingFilter("collection", isSelected ? undefined : c.slug)}
-                  className="accent-[#0A1F44] rounded-full w-3.5 h-3.5 mt-0.5 cursor-pointer"
-                />
-                <div>
-                  <span className="text-xs font-semibold text-[#0A1F44] block group-hover:text-[#2C3E6B]">{c.title}</span>
-                  <span className="text-[10px] text-gray-400 block">{c.tag}</span>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      </FilterAccordionSection>
+      {availableCollections.length > 0 && (
+        <FilterAccordionSection title="Collection Filters" activeCount={pendingFilters.collection ? 1 : 0} defaultOpen={true}>
+          <div className="space-y-1.5">
+            {availableCollections.map((c) => {
+              const isSelected = pendingFilters.collection === c.slug;
+              return (
+                <label key={c.slug} className="flex items-start gap-2.5 cursor-pointer group py-1">
+                  <input
+                    type="radio"
+                    name="collectionFilter"
+                    checked={isSelected}
+                    onChange={() => updatePendingFilter("collection", isSelected ? undefined : c.slug)}
+                    className="accent-[#0A1F44] rounded-full w-3.5 h-3.5 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-[#0A1F44] block group-hover:text-[#2C3E6B]">{c.title}</span>
+                    <span className="text-[10px] text-gray-400 block">{c.tag}</span>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </FilterAccordionSection>
+      )}
 
       {/* 2. FABRIC */}
       <FilterAccordionSection title="Fabric" activeCount={pendingFilters.fabric.length} defaultOpen={true}>
@@ -707,6 +1049,117 @@ export function ProductsListing({
         </div>
       </FilterAccordionSection>
 
+      {/* 5B. SIZE */}
+      <FilterAccordionSection title="Size" activeCount={pendingFilters.size.length} defaultOpen={isTopsCategory}>
+        <div className="space-y-3">
+          {/* Women's Sizes */}
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">
+              Women's Sizes
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {WOMENS_TOPS_SIZES.map((sz) => {
+                const isSelected = pendingFilters.size.includes(sz.toLowerCase());
+                const count = facets?.size?.[sz] ?? facets?.size?.[sz.toLowerCase()];
+                return (
+                  <button
+                    key={sz}
+                    type="button"
+                    onClick={() => updatePendingFilter("size", toggleArrayItem(pendingFilters.size, sz))}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-semibold rounded border transition-all cursor-pointer",
+                      isSelected
+                        ? "bg-[#0A1F44] text-white border-[#0A1F44]"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-[#0A1F44]"
+                    )}
+                  >
+                    {sz}
+                    {count !== undefined && <span className="text-[10px] opacity-75 ml-1">({count})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Girls' Sizes */}
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">
+              Girls' Sizes (Age)
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {GIRLS_TOPS_SIZES.map((sz) => {
+                const isSelected = pendingFilters.size.includes(sz.toLowerCase());
+                const count = facets?.size?.[sz] ?? facets?.size?.[sz.toLowerCase()];
+                return (
+                  <button
+                    key={sz}
+                    type="button"
+                    onClick={() => updatePendingFilter("size", toggleArrayItem(pendingFilters.size, sz))}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-semibold rounded border transition-all cursor-pointer",
+                      isSelected
+                        ? "bg-[#0A1F44] text-white border-[#0A1F44]"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-[#0A1F44]"
+                    )}
+                  >
+                    {sz}
+                    {count !== undefined && <span className="text-[10px] opacity-75 ml-1">({count})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </FilterAccordionSection>
+
+      {/* 5C. SLEEVE LENGTH */}
+      <FilterAccordionSection title="Sleeve Length" activeCount={pendingFilters.sleeveLength.length}>
+        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          {TOPS_SLEEVE_LENGTHS.map((sl) => {
+            const isChecked = pendingFilters.sleeveLength.includes(sl.toLowerCase());
+            const count = facets?.sleeveLength?.[sl] ?? facets?.sleeveLength?.[sl.toLowerCase()];
+            return (
+              <label key={sl} className="flex items-center justify-between gap-3 cursor-pointer group py-0.5">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => updatePendingFilter("sleeveLength", toggleArrayItem(pendingFilters.sleeveLength, sl))}
+                    className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs group-hover:text-[#0A1F44] transition-colors">{sl}</span>
+                </div>
+                {count !== undefined && <span className="text-[11px] font-mono text-gray-400">({count})</span>}
+              </label>
+            );
+          })}
+        </div>
+      </FilterAccordionSection>
+
+      {/* 5D. NECK STYLE */}
+      <FilterAccordionSection title="Neck Style" activeCount={pendingFilters.neckStyle.length}>
+        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          {TOPS_NECK_TYPES.map((nk) => {
+            const isChecked = pendingFilters.neckStyle.includes(nk.toLowerCase());
+            const count = facets?.neckStyle?.[nk] ?? facets?.neckStyle?.[nk.toLowerCase()];
+            return (
+              <label key={nk} className="flex items-center justify-between gap-3 cursor-pointer group py-0.5">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => updatePendingFilter("neckStyle", toggleArrayItem(pendingFilters.neckStyle, nk))}
+                    className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs group-hover:text-[#0A1F44] transition-colors">{nk}</span>
+                </div>
+                {count !== undefined && <span className="text-[11px] font-mono text-gray-400">({count})</span>}
+              </label>
+            );
+          })}
+        </div>
+      </FilterAccordionSection>
+
       {/* 6. PATTERN */}
       <FilterAccordionSection title="Pattern" activeCount={pendingFilters.pattern.length}>
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
@@ -801,39 +1254,42 @@ export function ProductsListing({
         </div>
       </FilterAccordionSection>
 
-      {/* 10. SAREE TYPE */}
-      <FilterAccordionSection title="Saree Type" activeCount={pendingFilters.sareeType.length}>
-        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-          {SAREE_TYPE_OPTIONS.map((st) => (
-            <label key={st} className="flex items-center gap-2.5 cursor-pointer group py-0.5">
-              <input
-                type="checkbox"
-                checked={pendingFilters.sareeType.includes(st.toLowerCase())}
-                onChange={() => updatePendingFilter("sareeType", toggleArrayItem(pendingFilters.sareeType, st))}
-                className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
-              />
-              <span className="text-xs group-hover:text-[#0A1F44]">{st}</span>
-            </label>
-          ))}
-        </div>
-      </FilterAccordionSection>
+      {/* 10. SAREE TYPE & 11. SAREE STYLE (Only for Saree categories) */}
+      {isSareeCategory && (
+        <>
+          <FilterAccordionSection title="Saree Type" activeCount={pendingFilters.sareeType.length}>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              {SAREE_TYPE_OPTIONS.map((st) => (
+                <label key={st} className="flex items-center gap-2.5 cursor-pointer group py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={pendingFilters.sareeType.includes(st.toLowerCase())}
+                    onChange={() => updatePendingFilter("sareeType", toggleArrayItem(pendingFilters.sareeType, st))}
+                    className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs group-hover:text-[#0A1F44]">{st}</span>
+                </label>
+              ))}
+            </div>
+          </FilterAccordionSection>
 
-      {/* 11. SAREE STYLE */}
-      <FilterAccordionSection title="Saree Style" activeCount={pendingFilters.sareeStyle.length}>
-        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-          {SAREE_STYLE_OPTIONS.map((ss) => (
-            <label key={ss} className="flex items-center gap-2.5 cursor-pointer group py-0.5">
-              <input
-                type="checkbox"
-                checked={pendingFilters.sareeStyle.includes(ss.toLowerCase())}
-                onChange={() => updatePendingFilter("sareeStyle", toggleArrayItem(pendingFilters.sareeStyle, ss))}
-                className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
-              />
-              <span className="text-xs group-hover:text-[#0A1F44]">{ss}</span>
-            </label>
-          ))}
-        </div>
-      </FilterAccordionSection>
+          <FilterAccordionSection title="Saree Style" activeCount={pendingFilters.sareeStyle.length}>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              {SAREE_STYLE_OPTIONS.map((ss) => (
+                <label key={ss} className="flex items-center gap-2.5 cursor-pointer group py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={pendingFilters.sareeStyle.includes(ss.toLowerCase())}
+                    onChange={() => updatePendingFilter("sareeStyle", toggleArrayItem(pendingFilters.sareeStyle, ss))}
+                    className="accent-[#0A1F44] rounded w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs group-hover:text-[#0A1F44]">{ss}</span>
+                </label>
+              ))}
+            </div>
+          </FilterAccordionSection>
+        </>
+      )}
 
       {/* 12. PACK OF */}
       <FilterAccordionSection title="Pack Of" activeCount={pendingFilters.packOf.length}>
@@ -913,31 +1369,33 @@ export function ProductsListing({
         </label>
       </FilterAccordionSection>
 
-      {/* 17. BLOUSE INCLUDED */}
-      <FilterAccordionSection title="Blouse Included" activeCount={pendingFilters.blouseIncluded !== undefined ? 1 : 0}>
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-2.5 cursor-pointer group py-0.5">
-            <input
-              type="radio"
-              name="blouseFilter"
-              checked={pendingFilters.blouseIncluded === true}
-              onChange={() => updatePendingFilter("blouseIncluded", pendingFilters.blouseIncluded === true ? undefined : true)}
-              className="accent-[#0A1F44] w-3.5 h-3.5 cursor-pointer"
-            />
-            <span className="text-xs group-hover:text-[#0A1F44]">Yes (Includes Blouse)</span>
-          </label>
-          <label className="flex items-center gap-2.5 cursor-pointer group py-0.5">
-            <input
-              type="radio"
-              name="blouseFilter"
-              checked={pendingFilters.blouseIncluded === false}
-              onChange={() => updatePendingFilter("blouseIncluded", pendingFilters.blouseIncluded === false ? undefined : false)}
-              className="accent-[#0A1F44] w-3.5 h-3.5 cursor-pointer"
-            />
-            <span className="text-xs group-hover:text-[#0A1F44]">No (Saree Only)</span>
-          </label>
-        </div>
-      </FilterAccordionSection>
+      {/* 17. BLOUSE INCLUDED (Saree only) */}
+      {isSareeCategory && (
+        <FilterAccordionSection title="Blouse Included" activeCount={pendingFilters.blouseIncluded !== undefined ? 1 : 0}>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2.5 cursor-pointer group py-0.5">
+              <input
+                type="radio"
+                name="blouseFilter"
+                checked={pendingFilters.blouseIncluded === true}
+                onChange={() => updatePendingFilter("blouseIncluded", pendingFilters.blouseIncluded === true ? undefined : true)}
+                className="accent-[#0A1F44] w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="text-xs group-hover:text-[#0A1F44]">Yes (Includes Blouse)</span>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer group py-0.5">
+              <input
+                type="radio"
+                name="blouseFilter"
+                checked={pendingFilters.blouseIncluded === false}
+                onChange={() => updatePendingFilter("blouseIncluded", pendingFilters.blouseIncluded === false ? undefined : false)}
+                className="accent-[#0A1F44] w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="text-xs group-hover:text-[#0A1F44]">No (Saree Only)</span>
+            </label>
+          </div>
+        </FilterAccordionSection>
+      )}
 
       {/* 18. AVAILABILITY */}
       <FilterAccordionSection title="Availability" activeCount={pendingFilters.availability ? 1 : 0}>
@@ -985,7 +1443,7 @@ export function ProductsListing({
         </div>
 
         {/* Top Graphic Banner */}
-        {resolvedTopBanner && (
+        {resolvedTopBanner && !hideHero && (
           <div
             data-testid="top-category-banner"
             className="w-full bg-[#03132B] border-b border-[#C7CCD1]/20 overflow-hidden shadow-xs"
@@ -1006,11 +1464,11 @@ export function ProductsListing({
         {/* Hero Header Section */}
         {!hideHero && (
           <div className="bg-[#0A1F44] text-white border-b border-[#C7CCD1]/20 py-8 sm:py-10 relative overflow-hidden">
-            {heroBanner && (
+            {heroBgImage && (
               <>
                 <div
                   className="absolute inset-0 bg-cover bg-right sm:bg-center bg-no-repeat opacity-40 mix-blend-luminosity scale-105"
-                  style={{ backgroundImage: `url('${heroBanner}')` }}
+                  style={{ backgroundImage: `url('${heroBgImage}')` }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-[#0A1F44] via-[#0A1F44]/90 to-transparent pointer-events-none" />
               </>
@@ -1025,14 +1483,14 @@ export function ProductsListing({
                 <h1 className="font-serif text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
                   {displayTitle}
                 </h1>
-                {subtitle && (
+                {displaySubtitle && (
                   <p className="text-xs sm:text-sm uppercase tracking-[0.2em] font-bold text-[#C7CCD1] mb-2">
-                    {subtitle}
+                    {displaySubtitle}
                   </p>
                 )}
-                {description && (
+                {displayDescription && (
                   <p className="text-xs sm:text-sm text-gray-300 leading-relaxed font-light max-w-2xl">
-                    {description}
+                    {displayDescription}
                   </p>
                 )}
               </div>
@@ -1045,12 +1503,153 @@ export function ProductsListing({
 
         {/* Main Area */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ref={gridTopRef}>
+          {/* Category Title & Subtitle when hero section is hidden */}
+          {hideHero && (
+            <div className="mb-6">
+              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#0A1F44] tracking-tight">
+                {displayTitle}
+              </h1>
+              {displaySubtitle && (
+                <p className="text-xs sm:text-sm font-medium text-gray-600 mt-1">
+                  {displaySubtitle}
+                </p>
+              )}
+              {displayDescription && displayDescription !== displaySubtitle && (
+                <p className="text-xs text-gray-500 mt-1 max-w-3xl leading-relaxed font-light">
+                  {displayDescription}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Tops Subcategory Navigation (clean pills & group tabs, no misleading images) */}
+          {isTopsCategory ? (
+            <div className="mb-6 bg-white rounded-2xl border border-[#C7CCD1]/30 p-4 shadow-xs">
+              <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-[#C7CCD1]/20">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mr-1">
+                  Collection:
+                </span>
+                {[
+                  { label: "All Tops", subcategory: undefined },
+                  { label: "Women's Tops", subcategory: "womens-tops" },
+                  { label: "Girls' Tops", subcategory: "girls-tops" },
+                  { label: "Seasonal Tops", subcategory: "seasonal-tops" },
+                ].map((grp) => {
+                  const isActive =
+                    (!grp.subcategory && !appliedFilters.subcategory) ||
+                    (grp.subcategory && appliedFilters.subcategory === grp.subcategory) ||
+                    (grp.subcategory === "womens-tops" &&
+                      availableSubcategories.some(
+                        (s) => (s as any).group === "Women's Tops" && s.slug === appliedFilters.subcategory
+                      )) ||
+                    (grp.subcategory === "girls-tops" &&
+                      availableSubcategories.some(
+                        (s) => (s as any).group === "Girls' Tops" && s.slug === appliedFilters.subcategory
+                      )) ||
+                    (grp.subcategory === "seasonal-tops" &&
+                      availableSubcategories.some(
+                        (s) => (s as any).group === "Seasonal Tops" && s.slug === appliedFilters.subcategory
+                      ));
+                  return (
+                    <button
+                      key={grp.label}
+                      type="button"
+                      onClick={() => {
+                        setAppliedFilters((prev) => {
+                          const updated = {
+                            ...prev,
+                            subcategory: grp.subcategory,
+                            subtype: undefined,
+                          };
+                          setPendingFilters(updated);
+                          return updated;
+                        });
+                        setPage(1);
+                        navigate(grp.subcategory ? `/tops/${grp.subcategory}` : "/tops");
+                      }}
+                      className={cn(
+                        "px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer",
+                        isActive
+                          ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-xs"
+                          : "bg-[#F4F5F7] text-[#0A1F44] border-transparent hover:border-[#0A1F44]/30 hover:bg-[#E5E8EC]"
+                      )}
+                    >
+                      {grp.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Subcategories Horizontal Scroll */}
+              <div className="flex items-center gap-2 overflow-x-auto pt-3 pb-1 no-scrollbar">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 shrink-0">
+                  Styles:
+                </span>
+                {availableSubcategories
+                  .filter((sc) => {
+                    if (!appliedFilters.subcategory || appliedFilters.subcategory === "all") return true;
+                    if (appliedFilters.subcategory === "womens-tops") return (sc as any).group === "Women's Tops";
+                    if (appliedFilters.subcategory === "girls-tops") return (sc as any).group === "Girls' Tops";
+                    if (appliedFilters.subcategory === "seasonal-tops") return (sc as any).group === "Seasonal Tops";
+                    const currentSub = availableSubcategories.find((s) => s.slug === appliedFilters.subcategory);
+                    return !currentSub?.group || (sc as any).group === currentSub.group;
+                  })
+                  .map((sc) => {
+                    const isSelected = appliedFilters.subcategory === sc.slug;
+                    return (
+                      <button
+                        key={sc.id || sc.slug}
+                        type="button"
+                        onClick={() => {
+                          const newSub = isSelected ? undefined : sc.slug;
+                          setAppliedFilters((prev) => {
+                            const updated = {
+                              ...prev,
+                              subcategory: newSub,
+                              subtype: undefined,
+                            };
+                            setPendingFilters(updated);
+                            return updated;
+                          });
+                          setPage(1);
+                          navigate(newSub ? `/tops/${newSub}` : "/tops");
+                        }}
+                        className={cn(
+                          "px-3 py-1 text-xs font-medium rounded-full border whitespace-nowrap transition-all cursor-pointer shrink-0",
+                          isSelected
+                            ? "bg-[#0A1F44] text-white border-[#0A1F44] font-bold shadow-2xs"
+                            : "bg-white text-gray-700 border-gray-200 hover:border-[#0A1F44] hover:text-[#0A1F44]"
+                        )}
+                      >
+                        {sc.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          ) : (
+            /* Circular Category Cards Navigation */
+            circularNavConfig && circularNavConfig.items.length > 0 && (
+              <CircularCategoryNav
+                items={circularNavConfig.items}
+                activeSlug={circularNavConfig.activeSlug}
+                onSelect={circularNavConfig.onSelect}
+                exploreAllLabel={circularNavConfig.exploreAllLabel}
+                exploreAllImage={circularNavConfig.exploreAllImage}
+                onExploreAll={circularNavConfig.onExploreAll}
+                parentCategoryName={circularNavConfig.parentCategoryName}
+                parentCategorySlug={filteredCategory}
+                onBackToParent={circularNavConfig.onBackToParent}
+              />
+            )
+          )}
+
           {/* Controls Header Bar: Count, Sort & Filters */}
           <div className="flex items-center justify-between gap-2.5 mb-4">
             <div className="flex items-center gap-2">
               <p className="text-xs sm:text-sm font-medium text-[#3D1A1A]/70">
                 {isLoading ? (
-                  "Loading sarees…"
+                  isTopsCategory ? "Loading tops…" : "Loading products…"
                 ) : (
                   <span>
                     Showing <strong className="text-[#0A1F44]">{products.length}</strong> of <strong className="text-[#0A1F44]">{totalProducts}</strong>
@@ -1120,18 +1719,29 @@ export function ProductsListing({
 
           {/* Error Banner if request failed */}
           {isError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-6 text-sm flex items-center justify-between">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-6 text-sm flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <AlertCircle size={16} />
-                <span>Failed to load products with the applied filters. Please check your connection or reset filters.</span>
+                <AlertCircle size={16} className="shrink-0" />
+                <span>Failed to load products. Please check your connection or try again.</span>
               </div>
-              <button
-                type="button"
-                onClick={resetAllAppliedFilters}
-                className="text-xs font-bold underline hover:no-underline text-rose-800 cursor-pointer"
-              >
-                Reset Filters
-              </button>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="text-xs font-bold underline hover:no-underline text-rose-800 cursor-pointer"
+                >
+                  Retry
+                </button>
+                {hasAppliedFilters && (
+                  <button
+                    type="button"
+                    onClick={resetAllAppliedFilters}
+                    className="text-xs font-bold underline hover:no-underline text-rose-800 cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1156,10 +1766,22 @@ export function ProductsListing({
                       onRemove={() => removeAppliedFilter((prev) => ({ ...prev, collection: undefined }))}
                     />
                   )}
-                  {appliedFilters.subcategory && (
+                  {appliedFilters.subcategory && (() => {
+                    const matchedSub = availableSubcategories.find(
+                      (s) => s.slug === appliedFilters.subcategory || s.name.toLowerCase() === appliedFilters.subcategory?.toLowerCase()
+                    );
+                    const displayName = matchedSub?.name || appliedFilters.subcategory;
+                    return (
+                      <FilterChip
+                        label={`Subcategory: ${displayName}`}
+                        onRemove={() => removeAppliedFilter((prev) => ({ ...prev, subcategory: undefined, subtype: undefined }))}
+                      />
+                    );
+                  })()}
+                  {appliedFilters.subtype && (
                     <FilterChip
-                      label={`Subcategory: ${appliedFilters.subcategory}`}
-                      onRemove={() => removeAppliedFilter((prev) => ({ ...prev, subcategory: undefined }))}
+                      label={`${isSareeCategory ? "Subtype" : "Variant"}: ${appliedFilters.subtype}`}
+                      onRemove={() => removeAppliedFilter((prev) => ({ ...prev, subtype: undefined }))}
                     />
                   )}
                   {appliedFilters.fabric.map((f) => (
@@ -1181,6 +1803,27 @@ export function ProductsListing({
                       key={b}
                       label={`Brand: ${b}`}
                       onRemove={() => removeAppliedFilter((prev) => ({ ...prev, brand: prev.brand.filter((x) => x !== b) }))}
+                    />
+                  ))}
+                  {appliedFilters.size.map((sz) => (
+                    <FilterChip
+                      key={sz}
+                      label={`Size: ${sz.toUpperCase()}`}
+                      onRemove={() => removeAppliedFilter((prev) => ({ ...prev, size: prev.size.filter((x) => x !== sz) }))}
+                    />
+                  ))}
+                  {appliedFilters.sleeveLength.map((sl) => (
+                    <FilterChip
+                      key={sl}
+                      label={`Sleeve: ${sl}`}
+                      onRemove={() => removeAppliedFilter((prev) => ({ ...prev, sleeveLength: prev.sleeveLength.filter((x) => x !== sl) }))}
+                    />
+                  ))}
+                  {appliedFilters.neckStyle.map((nk) => (
+                    <FilterChip
+                      key={nk}
+                      label={`Neck: ${nk}`}
+                      onRemove={() => removeAppliedFilter((prev) => ({ ...prev, neckStyle: prev.neckStyle.filter((x) => x !== nk) }))}
                     />
                   ))}
                   {appliedFilters.pattern.map((p) => (
@@ -1235,7 +1878,15 @@ export function ProductsListing({
                   {(appliedFilters.minPrice !== undefined || appliedFilters.maxPrice !== undefined) && (
                     <FilterChip
                       label={`Price: ${appliedFilters.minPrice !== undefined ? formatPrice(appliedFilters.minPrice) : "₹0"} – ${appliedFilters.maxPrice !== undefined ? formatPrice(appliedFilters.maxPrice) : "Any"}`}
-                      onRemove={() => removeAppliedFilter((prev) => ({ ...prev, minPrice: undefined, maxPrice: undefined }))}
+                      onRemove={() => {
+                        removeAppliedFilter((prev) => ({ ...prev, minPrice: undefined, maxPrice: undefined }));
+                        const curParams = new URLSearchParams(window.location.search);
+                        curParams.delete("budget");
+                        curParams.delete("minPrice");
+                        curParams.delete("maxPrice");
+                        const qs = curParams.toString();
+                        navigate(`${pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+                      }}
                     />
                   )}
                   {appliedFilters.minRating !== undefined && (
@@ -1461,17 +2112,51 @@ export function ProductsListing({
                       : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
                   )}
                 />
+              ) : isError && products.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-rose-200/60 p-8 sm:p-12 text-center my-4 shadow-xs">
+                  <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                    <AlertCircle size={28} />
+                  </div>
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#0A1F44] mb-2">
+                    Unable to Load Products
+                  </h3>
+                  <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">
+                    We encountered an issue fetching products from the server. Please check your connection and try again.
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => refetch()}
+                      className="bg-[#0A1F44] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#2C3E6B] transition-colors shadow-sm cursor-pointer"
+                    >
+                      Try Again
+                    </button>
+                    {hasAppliedFilters && (
+                      <button
+                        type="button"
+                        onClick={resetAllAppliedFilters}
+                        className="bg-white text-[#0A1F44] border border-[#C7CCD1] px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-colors shadow-xs cursor-pointer"
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+                </div>
               ) : products.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-[#C7CCD1]/30 p-8 sm:p-12 text-center my-4 shadow-xs">
                   <div className="w-16 h-16 bg-[#F4F5F7] rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
-                    🪡
+                    {isTopsCategory ? "👚" : "🪡"}
                   </div>
                   <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#0A1F44] mb-2">
-                    {hasAppliedFilters ? "No Sarees Found" : "No products available at the moment."}
+                    {hasAppliedFilters
+                      ? isTopsCategory ? "No Tops Found" : "No Products Found"
+                      : isTopsCategory ? "No Tops Available Yet" : "No products available at the moment."}
                   </h3>
                   <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">
                     {hasAppliedFilters
                       ? "We couldn't find any products matching your active filters. Try resetting your filters."
+                      : isTopsCategory
+                      ? "Please check back soon as our sellers add new styles and varieties to the collection."
                       : "Please check back soon for authentic handcrafted sarees from registered artisans."}
                   </p>
                   {hasAppliedFilters && (
@@ -1603,3 +2288,5 @@ function FilterChip({ label, onRemove }: FilterChipProps) {
     </MotionSpan>
   );
 }
+
+export default ProductsListing;

@@ -541,7 +541,6 @@ export default function SellerRegister() {
 
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailCode, setEmailCode] = useState("");
-  const [devCode, setDevCode] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
@@ -747,7 +746,6 @@ export default function SellerRegister() {
         return;
       }
       setEmailOtpSent(true);
-      if (json.devCode) setDevCode(json.devCode);
       setResendCooldown(30);
       setApiSuccess(json.message || `Verification code sent successfully to ${data.email.trim()}. Please check your inbox and spam folder.`);
     } catch (err: any) {
@@ -771,7 +769,6 @@ export default function SellerRegister() {
         if (match) setResendCooldown(parseInt(match[1], 10));
         return;
       }
-      if (json.devCode) setDevCode(json.devCode);
       setResendCooldown(30);
       setApiSuccess(json.message || `New verification code sent successfully to ${data.email.trim()}. Please check your inbox.`);
     } catch (err: any) {
@@ -1007,28 +1004,10 @@ export default function SellerRegister() {
                       A 6-digit verification code was sent to <strong>{data.email}</strong>
                     </div>
 
-                    {devCode && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center justify-between shadow-xs">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle size={15} className="text-amber-600 shrink-0" />
-                          <span>
-                            Code: <span className="font-mono text-sm font-bold">{devCode}</span> <span className="text-[11px] text-amber-700 font-medium">(Resend Sandbox Mode)</span>
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setEmailCode(devCode)}
-                          className="px-2.5 py-1 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 transition-colors shrink-0 ml-2 shadow-xs cursor-pointer"
-                        >
-                          Quick Fill
-                        </button>
-                      </div>
-                    )}
-
                     <OTPBox value={emailCode} onChange={setEmailCode} />
 
                     <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
-                      <button type="button" onClick={() => { setEmailOtpSent(false); setDevCode(""); setApiErr(""); setApiSuccess(""); setEmailCode(""); }}
+                      <button type="button" onClick={() => { setEmailOtpSent(false); setApiErr(""); setApiSuccess(""); setEmailCode(""); }}
                         className="underline hover:text-gray-700">
                         ← Change email
                       </button>

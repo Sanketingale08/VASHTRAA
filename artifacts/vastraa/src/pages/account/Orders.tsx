@@ -9,3 +9,5 @@ export function AccountOrdersPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountOrdersPage;

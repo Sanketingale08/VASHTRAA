@@ -17,11 +17,17 @@ export const emailOutboxTable = pgTable(
     attempts: integer("attempts").notNull().default(0),
     lastAttemptAt: timestamp("last_attempt_at"),
     nextRetryAt: timestamp("next_retry_at").notNull().defaultNow(),
+    sender: text("sender"),
+    providerMessageId: text("provider_message_id"),
+    idempotencyKey: text("idempotency_key"),
     errorMessage: text("error_message"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     index("email_outbox_status_created_at_idx").on(table.status, table.createdAt),
+    index("email_outbox_idempotency_idx").on(table.idempotencyKey),
+    index("email_outbox_order_user_idx").on(table.orderId, table.userId, table.type),
   ]
 );
 

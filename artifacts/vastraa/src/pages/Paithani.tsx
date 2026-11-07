@@ -5,7 +5,6 @@ export default function Paithani() {
   return (
     <ProductsListing
       category="paithani"
-      topBannerImage="/images/hero-paithani-banner.png"
       hideHero={true}
     />
   );

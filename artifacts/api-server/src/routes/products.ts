@@ -1,7 +1,8 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { getAuth } from "@clerk/express";
 import { requireAuth } from "../middlewares/isAuthenticated";
-import { db, mongoProducts, mongoGeneric, mongoWishlists, mongoNotifications, mongoNotificationPreferences, mongoSellers, mongoVendors, mongoUsers, getNextSequenceValue, validateCategoryAndSubcategory, resolveCategoryData, findCategoryDefinition } from "@workspace/db";
+import { db, mongoProducts, mongoGeneric, mongoWishlists, mongoNotifications, mongoNotificationPreferences, mongoSellers, mongoVendors, mongoUsers, mongoProductCategories, getNextSequenceValue, validateCategoryAndSubcategory, resolveCategoryData, findCategoryDefinition, registerDynamicSubcategory, normalizeCategoryString } from "@workspace/db";
 import { productsTable, vendorsTable, wishlistsTable, notificationsTable, notificationPreferencesTable, searchQueriesTable, CATEGORY_PREFIX } from "@workspace/db";
 import type { Request, Response, NextFunction } from "express";
 import { eq, ilike, and, gte, lte, desc, asc, sql, or, isNotNull, isNull, inArray, lt } from "@workspace/db";
@@ -14,6 +15,7 @@ import { globalCache, safeClearCache, safeInvalidatePattern } from "../lib/cache
 import { calculateVastraaFinancials, toPaise, toRupees } from "../lib/pricingEngine";
 import { getApprovedVendorData, isProductVendorValid } from "../lib/vendorValidation";
 import { verifyAccessToken } from "../lib/jwt";
+import { verifyAdminAccessKey } from "../middlewares/isAdmin";
 
 async function notifySellerStockLevel(
   vendorId: string | null,
@@ -76,6 +78,9 @@ router.get("/products", async (req, res) => {
         fabric: query.fabric ? (Array.isArray(query.fabric) ? query.fabric.map(String) : String(query.fabric)) : undefined,
         color: query.color ? (Array.isArray(query.color) ? query.color.map(String) : String(query.color)) : undefined,
         brand: query.brand ? (Array.isArray(query.brand) ? query.brand.map(String) : String(query.brand)) : undefined,
+      size: query.size ? (Array.isArray(query.size) ? query.size.map(String) : String(query.size)) : undefined,
+      sleeveLength: (query.sleeveLength || query.sleeve) ? (Array.isArray(query.sleeveLength || query.sleeve) ? (query.sleeveLength || query.sleeve).map(String) : String(query.sleeveLength || query.sleeve)) : undefined,
+      neckStyle: (query.neckStyle || query.neck) ? (Array.isArray(query.neckStyle || query.neck) ? (query.neckStyle || query.neck).map(String) : String(query.neckStyle || query.neck)) : undefined,
         pattern: query.pattern ? (Array.isArray(query.pattern) ? query.pattern.map(String) : String(query.pattern)) : undefined,
         occasion: query.occasion ? (Array.isArray(query.occasion) ? query.occasion.map(String) : String(query.occasion)) : undefined,
         gender: query.gender ? (Array.isArray(query.gender) ? query.gender.map(String) : String(query.gender)) : undefined,
@@ -83,6 +88,13 @@ router.get("/products", async (req, res) => {
         sareeStyle: query.sareeStyle ? (Array.isArray(query.sareeStyle) ? query.sareeStyle.map(String) : String(query.sareeStyle)) : undefined,
         packOf: query.packOf ? (Array.isArray(query.packOf) ? query.packOf.map(String) : String(query.packOf)) : undefined,
         countryOfOrigin: query.countryOfOrigin ? (Array.isArray(query.countryOfOrigin) ? query.countryOfOrigin.map(String) : String(query.countryOfOrigin)) : undefined,
+        subtype: query.subtype ? (Array.isArray(query.subtype) ? query.subtype.map(String) : String(query.subtype)) : undefined,
+        weavingTechnique: query.weavingTechnique ? (Array.isArray(query.weavingTechnique) ? query.weavingTechnique.map(String) : String(query.weavingTechnique)) : undefined,
+        workType: query.workType ? (Array.isArray(query.workType) ? query.workType.map(String) : String(query.workType)) : undefined,
+        borderType: query.borderType ? (Array.isArray(query.borderType) ? query.borderType.map(String) : String(query.borderType)) : undefined,
+        palluDesign: query.palluDesign ? (Array.isArray(query.palluDesign) ? query.palluDesign.map(String) : String(query.palluDesign)) : undefined,
+        sareeLength: query.sareeLength ? (Array.isArray(query.sareeLength) ? query.sareeLength.map(String) : String(query.sareeLength)) : undefined,
+        origin: query.origin ? (Array.isArray(query.origin) ? query.origin.map(String) : String(query.origin)) : undefined,
         vendorId: query.vendorId ? String(query.vendorId) : undefined,
         minPrice: query.minPrice !== undefined && query.minPrice !== "" && !isNaN(Number(query.minPrice)) ? Number(query.minPrice) : undefined,
         maxPrice: query.maxPrice !== undefined && query.maxPrice !== "" && !isNaN(Number(query.maxPrice)) ? Number(query.maxPrice) : undefined,
@@ -141,6 +153,9 @@ router.get("/products/facets", async (req, res) => {
       fabric: query.fabric ? (Array.isArray(query.fabric) ? query.fabric.map(String) : String(query.fabric)) : undefined,
       color: query.color ? (Array.isArray(query.color) ? query.color.map(String) : String(query.color)) : undefined,
       brand: query.brand ? (Array.isArray(query.brand) ? query.brand.map(String) : String(query.brand)) : undefined,
+      size: query.size ? (Array.isArray(query.size) ? query.size.map(String) : String(query.size)) : undefined,
+      sleeveLength: (query.sleeveLength || query.sleeve) ? (Array.isArray(query.sleeveLength || query.sleeve) ? (query.sleeveLength || query.sleeve).map(String) : String(query.sleeveLength || query.sleeve)) : undefined,
+      neckStyle: (query.neckStyle || query.neck) ? (Array.isArray(query.neckStyle || query.neck) ? (query.neckStyle || query.neck).map(String) : String(query.neckStyle || query.neck)) : undefined,
       pattern: query.pattern ? (Array.isArray(query.pattern) ? query.pattern.map(String) : String(query.pattern)) : undefined,
       occasion: query.occasion ? (Array.isArray(query.occasion) ? query.occasion.map(String) : String(query.occasion)) : undefined,
       gender: query.gender ? (Array.isArray(query.gender) ? query.gender.map(String) : String(query.gender)) : undefined,
@@ -148,6 +163,13 @@ router.get("/products/facets", async (req, res) => {
       sareeStyle: query.sareeStyle ? (Array.isArray(query.sareeStyle) ? query.sareeStyle.map(String) : String(query.sareeStyle)) : undefined,
       packOf: query.packOf ? (Array.isArray(query.packOf) ? query.packOf.map(String) : String(query.packOf)) : undefined,
       countryOfOrigin: query.countryOfOrigin ? (Array.isArray(query.countryOfOrigin) ? query.countryOfOrigin.map(String) : String(query.countryOfOrigin)) : undefined,
+      subtype: query.subtype ? (Array.isArray(query.subtype) ? query.subtype.map(String) : String(query.subtype)) : undefined,
+      weavingTechnique: query.weavingTechnique ? (Array.isArray(query.weavingTechnique) ? query.weavingTechnique.map(String) : String(query.weavingTechnique)) : undefined,
+      workType: query.workType ? (Array.isArray(query.workType) ? query.workType.map(String) : String(query.workType)) : undefined,
+      borderType: query.borderType ? (Array.isArray(query.borderType) ? query.borderType.map(String) : String(query.borderType)) : undefined,
+      palluDesign: query.palluDesign ? (Array.isArray(query.palluDesign) ? query.palluDesign.map(String) : String(query.palluDesign)) : undefined,
+      sareeLength: query.sareeLength ? (Array.isArray(query.sareeLength) ? query.sareeLength.map(String) : String(query.sareeLength)) : undefined,
+      origin: query.origin ? (Array.isArray(query.origin) ? query.origin.map(String) : String(query.origin)) : undefined,
       vendorId: query.vendorId ? String(query.vendorId) : undefined,
       minPrice: query.minPrice !== undefined && query.minPrice !== "" && !isNaN(Number(query.minPrice)) ? Number(query.minPrice) : undefined,
       maxPrice: query.maxPrice !== undefined && query.maxPrice !== "" && !isNaN(Number(query.maxPrice)) ? Number(query.maxPrice) : undefined,
@@ -305,10 +327,13 @@ export async function resolveCallerSellerContext(req: any): Promise<CallerSeller
   }
 
   // Check admin key in headers
-  const adminKey = process.env.ADMIN_API_KEY || "Admin@123";
   const providedAdminKey = req.headers?.["x-admin-key"] || req.query?.adminKey;
-  if (providedAdminKey && providedAdminKey === adminKey) {
-    result.isAdmin = true;
+  if (providedAdminKey && typeof providedAdminKey === "string") {
+    if (process.env.NODE_ENV === "test" && (providedAdminKey === "Admin@123" || providedAdminKey === process.env.ADMIN_API_KEY)) {
+      result.isAdmin = true;
+    } else {
+      result.isAdmin = await verifyAdminAccessKey(providedAdminKey);
+    }
   }
 
   if (role === "admin" || role === "superadmin") {
@@ -663,12 +688,44 @@ function toPostgresProductData(data: Record<string, any>): Record<string, any> {
   return result;
 }
 
+// Category check helper
+function isSareeCategory(categorySlugOrId?: string | null): boolean {
+  if (!categorySlugOrId) return true;
+  const s = String(categorySlugOrId).toLowerCase().trim();
+  return (
+    s === "sarees" ||
+    s === "saree" ||
+    s === "cat-sarees-default" ||
+    [
+      "paithani",
+      "designer",
+      "gadwal",
+      "banarasi",
+      "kanjivaram",
+      "chanderi",
+      "bandhani",
+      "mysore-silk",
+      "ikat",
+      "cotton",
+      "silk",
+      "other-traditional",
+    ].includes(s)
+  );
+}
+
 router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<void> => {
   const {
     name, description, category, subcategory, childCategory, brand, designPattern,
     fabric, color, occasion, price, basePrice, shippingFee, originalPrice, stock, lowStockThreshold,
     images, videos, variants, specifications, deliveryInfo, returnPolicy,
     isBestSeller, isNewArrival, collection, gender, sareeType, sareeStyle, packOf, countryOfOrigin, blouseIncluded,
+    subtype, weavingTechnique, workType, borderType, palluDesign, sareeLength, origin,
+    kurtiType, kurtiLength, fit, pattern, closureType,
+    setType, kurtaLength, bottomType, bottomLength, dupattaIncluded, dupattaFabric,
+    dressType, dressLength, sleeveLength, neckStyle, silhouette, embellishment,
+    neckline, waistline, winterWearType, warmthLevel, winterWearLength,
+    topType, sleeveType, topLength,
+    blouseFabric, blouseColor, blouseLength, blouseDesign, blouseImages, blouseDetails,
   } = req.body;
 
   if (!name || !String(name).trim()) { res.status(400).json({ error: "Product name is required" }); return; }
@@ -691,7 +748,36 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
   }
 
   // Authoritative category and subcategory validation
-  const catValidation = validateCategoryAndSubcategory(category, subcategory);
+  let catValidation = validateCategoryAndSubcategory(category, subcategory);
+  if (!catValidation.valid && subcategory) {
+    try {
+      const parentCat = findCategoryDefinition(category);
+      const parentIds = [category];
+      if (parentCat) {
+        parentIds.push(parentCat.id, parentCat.slug);
+      }
+      const allActive = await mongoProductCategories.listActive();
+      const subDoc = allActive.find((c: any) =>
+        (parentIds.includes(c.parentId) || parentIds.includes(c.parentCategory) || (parentCat && c.parentId === parentCat.id)) &&
+        (c.name?.toLowerCase() === String(subcategory).trim().toLowerCase() ||
+         c.slug === normalizeCategoryString(String(subcategory).trim()) ||
+         c.id === String(subcategory).trim())
+      );
+      if (subDoc) {
+        registerDynamicSubcategory(parentCat?.slug || category, {
+          id: subDoc.id,
+          name: subDoc.name,
+          slug: subDoc.slug,
+          route: subDoc.route,
+          subtypes: subDoc.subtypes || [],
+        });
+        catValidation = validateCategoryAndSubcategory(category, subcategory);
+      }
+    } catch {
+      // fallback
+    }
+  }
+
   if (!catValidation.valid) {
     res.status(400).json({ error: catValidation.error });
     return;
@@ -725,25 +811,164 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
       res.status(403).json({ error: "Forbidden: genuine registered seller required" });
       return;
     }
-    const resolvedVendorName = req.vendor?.shopName || req.vendor?.name || req.vendor?.sellerName || "Seller Store";
 
-    const targetStatus = req.body.status === "draft" ? "draft" : "pending";
-    const isActive = false;
+    // 1. Idempotency Key Deduplication Check
+    const idempotencyKey = ((req.headers["x-idempotency-key"] || req.body.idempotencyKey) as string | undefined)?.trim();
+    if (idempotencyKey) {
+      try {
+        const existingProduct = await mongoProducts.findOne({
+          idempotencyKey,
+          vendorId: resolvedVendorId,
+        });
+        if (existingProduct) {
+          const normalizedExisting = normalizeProduct(existingProduct);
+          res.status(200).json({ ...normalizedExisting, product: normalizedExisting, deduplicated: true });
+          return;
+        }
+      } catch {}
+    }
+
+    // 2. Double-Click / Rapid Resubmission Fingerprint Protection (30 seconds)
+    const submitFingerprint = crypto
+      .createHash("sha256")
+      .update(
+        `${resolvedVendorId}:${String(name).trim().toLowerCase()}:${resolvedCategory.category}:${resolvedCategory.subcategory || ""}:${inputBasePrice}`
+      )
+      .digest("hex");
+
+    try {
+      const recentDuplicate = await mongoProducts.findOne({
+        submitFingerprint,
+        vendorId: resolvedVendorId,
+        createdAt: { $gte: new Date(Date.now() - 30_000) },
+      });
+      if (recentDuplicate) {
+        const normalizedRecent = normalizeProduct(recentDuplicate);
+        res.status(200).json({ ...normalizedRecent, product: normalizedRecent, deduplicated: true });
+        return;
+      }
+    } catch {}
+
+    // 3. Seller SKU Uniqueness Check
+    const rawSku = req.body.sku ? String(req.body.sku).trim() : null;
+    if (rawSku) {
+      try {
+        const existingSku = await mongoProducts.findOne({
+          vendorId: resolvedVendorId,
+          sku: rawSku,
+        });
+        if (existingSku) {
+          res.status(409).json({
+            error: `A product with SKU "${rawSku}" already exists in your inventory. Please provide a unique SKU or edit the existing product.`,
+            existingProductId: existingSku.id,
+          });
+          return;
+        }
+      } catch {}
+    }
+
+    const isDraft = req.body.status === "draft";
+    let resolvedVendorName =
+      req.vendor?.shopName ||
+      req.vendor?.name ||
+      req.vendor?.sellerName ||
+      req.vendor?.storeName ||
+      "";
+
+    if (!resolvedVendorName && resolvedVendorId) {
+      try {
+        const sellerDoc =
+          (await mongoSellers.findById?.(resolvedVendorId)) ||
+          (await mongoSellers.findByVendorId?.(resolvedVendorId)) ||
+          (await mongoSellers.findBySellerId?.(resolvedVendorId)) ||
+          (await mongoVendors.findById?.(resolvedVendorId));
+        if (sellerDoc) {
+          resolvedVendorName = sellerDoc.shopName || sellerDoc.name || sellerDoc.sellerName || "";
+        }
+      } catch {}
+    }
+
+    if (!resolvedVendorName && req.userId) {
+      try {
+        const userDoc = await mongoUsers.findById?.(req.userId);
+        if (userDoc) {
+          resolvedVendorName = userDoc.name ? `${userDoc.name}'s Shop` : "";
+        }
+      } catch {}
+    }
+
+    if (!resolvedVendorName) {
+      resolvedVendorName = req.user?.name ? `${req.user.name}'s Shop` : "Seller Store";
+    }
+
+    const isApprovedByAdmin = req.isAdmin && req.body.status === "approved";
+    const targetStatus = isDraft ? "draft" : (isApprovedByAdmin ? "approved" : "pending");
+    const isActive = targetStatus === "approved";
     const now = new Date();
 
+    const isSaree = isSareeCategory(resolvedCategory.category);
+    const resolvedBlouseIncluded = isSaree ? (blouseIncluded !== undefined ? Boolean(blouseIncluded) : false) : false;
+    const resolvedBlouseImages = isSaree && resolvedBlouseIncluded && Array.isArray(blouseImages)
+      ? blouseImages.filter(Boolean)
+      : [];
+    const resolvedBlouseDetails = isSaree && resolvedBlouseIncluded
+      ? (blouseDetails && typeof blouseDetails === "object" ? blouseDetails : {
+          fabric: blouseFabric ? String(blouseFabric).trim() : "",
+          color: blouseColor ? String(blouseColor).trim() : "",
+          length: blouseLength ? String(blouseLength).trim() : "",
+          design: blouseDesign ? String(blouseDesign).trim() : "",
+        })
+      : null;
+
     const newProductData = {
+      mainCategoryId: resolvedCategory.categoryId,
+      categoryId: resolvedCategory.categoryId,
+      categoryName: resolvedCategory.categoryName,
+      category: resolvedCategory.category as any,
+      categorySlug: resolvedCategory.categorySlug || resolvedCategory.category,
+      parentCategoryId: resolvedCategory.parentCategoryId,
+      parentCategoryName: resolvedCategory.parentCategoryName,
+
+      subcategory: resolvedCategory.subcategory,
+      subcategoryId: resolvedCategory.subcategoryId,
+      subcategoryName: resolvedCategory.subcategoryName,
+      subcategorySlug: resolvedCategory.subcategorySlug,
+
+      subtype: resolvedCategory.subtype || (subtype ? String(subtype).trim() : null),
+      subtypeId: resolvedCategory.subtypeId || (subtype ? String(subtype).trim() : null),
+      childCategory: childCategory ? String(childCategory).trim() : (resolvedCategory.subtype || null),
+      blouseIncluded: resolvedBlouseIncluded,
+      blouseImages: resolvedBlouseImages,
+      blouseDetails: resolvedBlouseDetails,
+      kurtiType: kurtiType ? String(kurtiType).trim() : null,
+      kurtiLength: kurtiLength ? String(kurtiLength).trim() : null,
+      fit: fit ? String(fit).trim() : null,
+      pattern: pattern ? String(pattern).trim() : null,
+      closureType: closureType ? String(closureType).trim() : null,
+      setType: setType ? String(setType).trim() : null,
+      kurtaLength: kurtaLength ? String(kurtaLength).trim() : null,
+      bottomType: bottomType ? String(bottomType).trim() : null,
+      bottomLength: bottomLength ? String(bottomLength).trim() : null,
+      dupattaIncluded: dupattaIncluded ? String(dupattaIncluded).trim() : null,
+      dupattaFabric: dupattaFabric ? String(dupattaFabric).trim() : null,
+      dressType: dressType ? String(dressType).trim() : null,
+      dressLength: dressLength ? String(dressLength).trim() : null,
+      sleeveLength: sleeveLength ? String(sleeveLength).trim() : null,
+      neckStyle: neckStyle ? String(neckStyle).trim() : null,
+      silhouette: silhouette ? String(silhouette).trim() : null,
+      embellishment: embellishment ? String(embellishment).trim() : null,
+      neckline: neckline ? String(neckline).trim() : null,
+      waistline: waistline ? String(waistline).trim() : null,
+      winterWearType: winterWearType ? String(winterWearType).trim() : null,
+      warmthLevel: warmthLevel ? String(warmthLevel).trim() : null,
+      winterWearLength: winterWearLength ? String(winterWearLength).trim() : null,
+      topType: topType ? String(topType).trim() : null,
+      sleeveType: sleeveType ? String(sleeveType).trim() : null,
+      topLength: topLength ? String(topLength).trim() : null,
       id: newProductId,
       name: String(name).trim(),
       description: description ? String(description).trim() : "",
-      category: resolvedCategory.category as any,
-      categoryName: resolvedCategory.categoryName,
-      categoryId: resolvedCategory.categoryId,
-      parentCategoryId: resolvedCategory.parentCategoryId,
-      parentCategoryName: resolvedCategory.parentCategoryName,
-      subcategory: resolvedCategory.subcategory,
-      subcategoryName: resolvedCategory.subcategoryName,
-      subcategoryId: resolvedCategory.subcategoryId,
-      childCategory: childCategory ? String(childCategory).trim() : null,
+
       brand: brand ? String(brand).trim() : null,
       designPattern: designPattern ? String(designPattern).trim() : null,
       fabric: (fabric ?? "silk") as any,
@@ -770,10 +995,19 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
       sareeStyle: sareeStyle ? String(sareeStyle).trim() : null,
       packOf: packOf ? String(packOf).trim() : "Pack of 1",
       countryOfOrigin: countryOfOrigin ? String(countryOfOrigin).trim() : "India",
-      blouseIncluded: blouseIncluded !== undefined ? Boolean(blouseIncluded) : true,
+
+      weavingTechnique: weavingTechnique ? String(weavingTechnique).trim() : null,
+      workType: workType ? String(workType).trim() : null,
+      borderType: borderType ? String(borderType).trim() : null,
+      palluDesign: palluDesign ? String(palluDesign).trim() : null,
+      sareeLength: sareeLength ? String(sareeLength).trim() : "5.5 meters",
+      origin: origin ? String(origin).trim() : (countryOfOrigin ? String(countryOfOrigin).trim() : "India"),
       vendorId: resolvedVendorId,
       sellerId: req.vendor?.sellerId || req.vendor?.vendorId || resolvedVendorId,
       vendorName: resolvedVendorName,
+      sku: rawSku || null,
+      idempotencyKey: idempotencyKey || null,
+      submitFingerprint,
       status: targetStatus,
       active: isActive,
       createdAt: now,
@@ -798,8 +1032,8 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
         ...newProductData,
         id: newProductId,
       });
-      if (!product) {
-        product = mongoSaved;
+      if (mongoSaved) {
+        product = { ...newProductData, ...(product || {}), ...mongoSaved };
       }
     } catch (mongoErr: any) {
       req.log?.warn({ mongoErr }, "MongoDB product sync failed");
@@ -808,6 +1042,7 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
     if (!product) {
       product = newProductData;
     } else {
+      product = { ...newProductData, ...product };
       if (!product.vendorId && resolvedVendorId) {
         product.vendorId = resolvedVendorId;
       }
@@ -862,6 +1097,15 @@ router.post("/products", requireVendorAuth, async (req: any, res: any): Promise<
       sellerId: product.sellerId || resolvedVendorId,
       product: normalizedNewProduct,
     });
+    if (targetStatus === "approved") {
+      emitProductEvent("product:approved", {
+        id: product.id,
+        productId: product.id,
+        status: "approved",
+        active: true,
+        product: normalizedNewProduct,
+      });
+    }
     res.status(201).json(normalizedNewProduct);
   } catch (err: any) {
     req.log?.error({ err }, "Failed to create product");
@@ -876,6 +1120,13 @@ const updateProductHandler = async (req: any, res: any): Promise<void> => {
     fabric, color, occasion, price, basePrice, shippingFee, originalPrice, stock, lowStockThreshold,
     images, videos, variants, specifications, deliveryInfo, returnPolicy,
     isBestSeller, isNewArrival, collection, gender, sareeType, sareeStyle, packOf, countryOfOrigin, blouseIncluded,
+    subtype, weavingTechnique, workType, borderType, palluDesign, sareeLength, origin,
+    kurtiType, kurtiLength, fit, pattern, closureType,
+    setType, kurtaLength, bottomType, bottomLength, dupattaIncluded, dupattaFabric,
+    dressType, dressLength, sleeveLength, neckStyle, silhouette, embellishment,
+    neckline, waistline, winterWearType, warmthLevel, winterWearLength,
+    topType, sleeveType, topLength,
+    blouseFabric, blouseColor, blouseLength, blouseDesign, blouseImages, blouseDetails,
   } = req.body;
 
   try {
@@ -913,20 +1164,52 @@ const updateProductHandler = async (req: any, res: any): Promise<void> => {
     if (category !== undefined || subcategory !== undefined) {
       const effCategory = category !== undefined ? category : existing.category;
       const effSubcategory = subcategory !== undefined ? subcategory : existing.subcategory;
-      const val = validateCategoryAndSubcategory(effCategory, effSubcategory);
+      let val = validateCategoryAndSubcategory(effCategory, effSubcategory);
+      if (!val.valid && effSubcategory) {
+        try {
+          const parentCat = findCategoryDefinition(effCategory);
+          const parentIds = [effCategory];
+          if (parentCat) {
+            parentIds.push(parentCat.id, parentCat.slug);
+          }
+          const allActive = await mongoProductCategories.listActive();
+          const subDoc = allActive.find((c: any) =>
+            (parentIds.includes(c.parentId) || parentIds.includes(c.parentCategory) || (parentCat && c.parentId === parentCat.id)) &&
+            (c.name?.toLowerCase() === String(effSubcategory).trim().toLowerCase() ||
+             c.slug === normalizeCategoryString(String(effSubcategory).trim()) ||
+             c.id === String(effSubcategory).trim())
+          );
+          if (subDoc) {
+            registerDynamicSubcategory(parentCat?.slug || effCategory, {
+              id: subDoc.id,
+              name: subDoc.name,
+              slug: subDoc.slug,
+              route: subDoc.route,
+              subtypes: subDoc.subtypes || [],
+            });
+            val = validateCategoryAndSubcategory(effCategory, effSubcategory);
+          }
+        } catch {
+          // fallback
+        }
+      }
       if (!val.valid) {
         res.status(400).json({ error: val.error });
         return;
       }
       const resCat = resolveCategoryData(effCategory, effSubcategory);
       updates.category = resCat.category;
+      updates.categorySlug = resCat.categorySlug;
       updates.categoryName = resCat.categoryName;
       updates.categoryId = resCat.categoryId;
       updates.parentCategoryId = resCat.parentCategoryId;
       updates.parentCategoryName = resCat.parentCategoryName;
+      updates.mainCategoryId = resCat.categoryId;
       updates.subcategory = resCat.subcategory;
+      updates.subcategorySlug = resCat.subcategorySlug;
       updates.subcategoryName = resCat.subcategoryName;
       updates.subcategoryId = resCat.subcategoryId;
+      if (resCat.subtypeId) updates.subtypeId = resCat.subtypeId;
     }
     updates.updatedAt = new Date();
     if (childCategory !== undefined) updates.childCategory = childCategory ? String(childCategory).trim() : null;
@@ -977,7 +1260,62 @@ const updateProductHandler = async (req: any, res: any): Promise<void> => {
     if (sareeStyle !== undefined) updates.sareeStyle = sareeStyle ? String(sareeStyle).trim() : null;
     if (packOf !== undefined) updates.packOf = String(packOf).trim();
     if (countryOfOrigin !== undefined) updates.countryOfOrigin = String(countryOfOrigin).trim();
-    if (blouseIncluded !== undefined) updates.blouseIncluded = Boolean(blouseIncluded);
+    const effectiveCategory = updates.category || existing.category;
+    const isSaree = isSareeCategory(effectiveCategory);
+    if (!isSaree) {
+      updates.blouseIncluded = false;
+      updates.blouseImages = [];
+      updates.blouseDetails = null;
+    } else if (blouseIncluded !== undefined) {
+      updates.blouseIncluded = Boolean(blouseIncluded);
+      if (!updates.blouseIncluded) {
+        updates.blouseImages = [];
+        updates.blouseDetails = null;
+      }
+    }
+    if (isSaree && updates.blouseIncluded !== false) {
+      if (blouseImages !== undefined) updates.blouseImages = Array.isArray(blouseImages) ? blouseImages.filter(Boolean) : [];
+      if (blouseDetails !== undefined || blouseFabric !== undefined || blouseColor !== undefined || blouseLength !== undefined || blouseDesign !== undefined) {
+        updates.blouseDetails = blouseDetails && typeof blouseDetails === "object" ? blouseDetails : {
+          fabric: blouseFabric ? String(blouseFabric).trim() : (existing.blouseDetails?.fabric || ""),
+          color: blouseColor ? String(blouseColor).trim() : (existing.blouseDetails?.color || ""),
+          length: blouseLength ? String(blouseLength).trim() : (existing.blouseDetails?.length || ""),
+          design: blouseDesign ? String(blouseDesign).trim() : (existing.blouseDetails?.design || ""),
+        };
+      }
+    }
+    if (kurtiType !== undefined) updates.kurtiType = kurtiType ? String(kurtiType).trim() : null;
+    if (kurtiLength !== undefined) updates.kurtiLength = kurtiLength ? String(kurtiLength).trim() : null;
+    if (fit !== undefined) updates.fit = fit ? String(fit).trim() : null;
+    if (pattern !== undefined) updates.pattern = pattern ? String(pattern).trim() : null;
+    if (closureType !== undefined) updates.closureType = closureType ? String(closureType).trim() : null;
+    if (setType !== undefined) updates.setType = setType ? String(setType).trim() : null;
+    if (kurtaLength !== undefined) updates.kurtaLength = kurtaLength ? String(kurtaLength).trim() : null;
+    if (bottomType !== undefined) updates.bottomType = bottomType ? String(bottomType).trim() : null;
+    if (bottomLength !== undefined) updates.bottomLength = bottomLength ? String(bottomLength).trim() : null;
+    if (dupattaIncluded !== undefined) updates.dupattaIncluded = dupattaIncluded ? String(dupattaIncluded).trim() : null;
+    if (dupattaFabric !== undefined) updates.dupattaFabric = dupattaFabric ? String(dupattaFabric).trim() : null;
+    if (dressType !== undefined) updates.dressType = dressType ? String(dressType).trim() : null;
+    if (dressLength !== undefined) updates.dressLength = dressLength ? String(dressLength).trim() : null;
+    if (sleeveLength !== undefined) updates.sleeveLength = sleeveLength ? String(sleeveLength).trim() : null;
+    if (neckStyle !== undefined) updates.neckStyle = neckStyle ? String(neckStyle).trim() : null;
+    if (silhouette !== undefined) updates.silhouette = silhouette ? String(silhouette).trim() : null;
+    if (embellishment !== undefined) updates.embellishment = embellishment ? String(embellishment).trim() : null;
+    if (neckline !== undefined) updates.neckline = neckline ? String(neckline).trim() : null;
+    if (waistline !== undefined) updates.waistline = waistline ? String(waistline).trim() : null;
+    if (winterWearType !== undefined) updates.winterWearType = winterWearType ? String(winterWearType).trim() : null;
+    if (warmthLevel !== undefined) updates.warmthLevel = warmthLevel ? String(warmthLevel).trim() : null;
+    if (winterWearLength !== undefined) updates.winterWearLength = winterWearLength ? String(winterWearLength).trim() : null;
+    if (topType !== undefined) updates.topType = topType ? String(topType).trim() : null;
+    if (sleeveType !== undefined) updates.sleeveType = sleeveType ? String(sleeveType).trim() : null;
+    if (topLength !== undefined) updates.topLength = topLength ? String(topLength).trim() : null;
+    if (subtype !== undefined) updates.subtype = subtype ? String(subtype).trim() : null;
+    if (weavingTechnique !== undefined) updates.weavingTechnique = weavingTechnique ? String(weavingTechnique).trim() : null;
+    if (workType !== undefined) updates.workType = workType ? String(workType).trim() : null;
+    if (borderType !== undefined) updates.borderType = borderType ? String(borderType).trim() : null;
+    if (palluDesign !== undefined) updates.palluDesign = palluDesign ? String(palluDesign).trim() : null;
+    if (sareeLength !== undefined) updates.sareeLength = sareeLength ? String(sareeLength).trim() : null;
+    if (origin !== undefined) updates.origin = origin ? String(origin).trim() : null;
 
     // Preserve existing approval status and active state so unapproved products cannot bypass admin approval
     const currentStatus = existing.status || "pending";
@@ -1277,6 +1615,7 @@ function normalizeProduct(p: typeof productsTable.$inferSelect | any) {
     parentCategoryName: p.parentCategoryName ?? p.categoryName ?? null,
     subcategory: p.subcategory ?? null,
     subcategoryId: p.subcategoryId ?? null,
+
     subcategoryName: p.subcategoryName ?? p.subcategory ?? null,
     childCategory: p.childCategory ?? null,
     brand: p.brand ?? null,
@@ -1308,7 +1647,46 @@ function normalizeProduct(p: typeof productsTable.$inferSelect | any) {
     sareeStyle: p.sareeStyle ?? null,
     packOf: p.packOf ?? "Pack of 1",
     countryOfOrigin: p.countryOfOrigin ?? "India",
-    blouseIncluded: p.blouseIncluded !== undefined ? Boolean(p.blouseIncluded) : true,
+    blouseIncluded: isSareeCategory(p.category) ? (p.blouseIncluded !== undefined ? Boolean(p.blouseIncluded) : false) : false,
+    blouseImages: Array.isArray(p.blouseImages) ? p.blouseImages : [],
+    blouseDetails: p.blouseDetails || (p.blouseFabric ? { fabric: p.blouseFabric, color: p.blouseColor, length: p.blouseLength, design: p.blouseDesign } : null),
+    mainCategoryId: p.mainCategoryId ?? p.categoryId ?? null,
+
+    subtypeId: p.subtypeId ?? p.subtype ?? null,
+    categorySlug: p.categorySlug ?? p.category ?? null,
+    subcategorySlug: p.subcategorySlug ?? p.subcategory ?? null,
+    kurtiType: p.kurtiType ?? null,
+    kurtiLength: p.kurtiLength ?? null,
+    fit: p.fit ?? null,
+    pattern: p.pattern ?? null,
+    closureType: p.closureType ?? null,
+    setType: p.setType ?? null,
+    kurtaLength: p.kurtaLength ?? null,
+    bottomType: p.bottomType ?? null,
+    bottomLength: p.bottomLength ?? null,
+    dupattaIncluded: p.dupattaIncluded ?? null,
+    dupattaFabric: p.dupattaFabric ?? null,
+    dressType: p.dressType ?? null,
+    dressLength: p.dressLength ?? null,
+    sleeveLength: p.sleeveLength ?? null,
+    neckStyle: p.neckStyle ?? null,
+    silhouette: p.silhouette ?? null,
+    embellishment: p.embellishment ?? null,
+    neckline: p.neckline ?? null,
+    waistline: p.waistline ?? null,
+    winterWearType: p.winterWearType ?? null,
+    warmthLevel: p.warmthLevel ?? null,
+    winterWearLength: p.winterWearLength ?? null,
+    topType: p.topType ?? null,
+    sleeveType: p.sleeveType ?? null,
+    topLength: p.topLength ?? null,
+    subtype: p.subtype ?? p.childCategory ?? null,
+    weavingTechnique: p.weavingTechnique ?? null,
+    workType: p.workType ?? null,
+    borderType: p.borderType ?? null,
+    palluDesign: p.palluDesign ?? null,
+    sareeLength: p.sareeLength ?? null,
+    origin: p.origin ?? p.countryOfOrigin ?? "India",
     createdAt: p.createdAt ?? null,
     updatedAt: p.updatedAt ?? null,
   };

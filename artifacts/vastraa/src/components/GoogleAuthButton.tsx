@@ -48,7 +48,7 @@ export function GoogleAuthButton({
     onError("");
 
     try {
-      // Step 1: Fetch production/dev Google OAuth URL from server
+      // Step 1: Fetch production/dev Google OAuth URL from server or fallback to verified client config
       const searchParams = new URLSearchParams(window.location.search);
       const returnTo = searchParams.get("redirect") || searchParams.get("from") || "";
       const redirectUri = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/google-callback`;
@@ -60,16 +60,59 @@ export function GoogleAuthButton({
         ...(returnTo ? { returnTo } : {}),
       });
 
-      const urlRes = await apiFetch(`/api/auth/google/url?${urlQuery.toString()}`);
+      let oauthUrl = "";
 
-      if (!urlRes.ok) {
-        const errorJson = await urlRes.json().catch(() => ({}));
-        throw new Error(errorJson.error || "Failed to initialize Google login.");
+      try {
+        const urlRes = await apiFetch(`/api/auth/google/url?${urlQuery.toString()}`);
+        if (urlRes.ok) {
+          const urlData = await urlRes.json().catch(() => ({}));
+          if (urlData.success && urlData.url) {
+            oauthUrl = urlData.url;
+          }
+        } else {
+          let errorDetail = "";
+          try {
+            const errJson = await urlRes.json();
+            errorDetail = errJson.error || errJson.message || "";
+          } catch {
+            const rawText = await urlRes.text().catch(() => "");
+            if (rawText && rawText.length < 150 && !rawText.includes("<!DOCTYPE") && !rawText.includes("<html")) {
+              errorDetail = rawText;
+            }
+          }
+          if (errorDetail) {
+            console.warn("[GoogleAuth] Backend OAuth URL warning:", errorDetail);
+          }
+        }
+      } catch (fetchErr: any) {
+        console.warn("[GoogleAuth] Failed to reach /api/auth/google/url, falling back to client-side initialization:", fetchErr?.message);
       }
 
-      const urlData = await urlRes.json();
-      if (!urlData.success || !urlData.url) {
-        throw new Error(urlData.error || "Google login service unavailable.");
+      // Resilient fallback: Construct standard Google OAuth 2.0 URL directly using verified Client ID
+      if (!oauthUrl) {
+        const clientId =
+          (typeof import.meta !== "undefined" && import.meta.env?.VITE_GOOGLE_CLIENT_ID) ||
+          "754673999695-nc31fv68478c9lhvs0eif0jh5dle7b7d.apps.googleusercontent.com";
+
+        if (clientId && clientId.includes(".apps.googleusercontent.com")) {
+          const stateObj = { role: targetRole, mode, returnTo, redirectUri, nonce: Math.random().toString(36).substring(2) };
+          const stateStr = JSON.stringify(stateObj);
+          const state = btoa(unescape(encodeURIComponent(stateStr))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          const params = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: "code",
+            scope: "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid",
+            state,
+            access_type: "offline",
+            prompt: "select_account",
+          });
+          oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+        }
+      }
+
+      if (!oauthUrl) {
+        throw new Error("Unable to initialize Google OAuth URL. Please verify your Google Client ID configuration.");
       }
 
       // Step 2: Direct redirect on mobile devices for seamless mobile browser UX
@@ -78,7 +121,7 @@ export function GoogleAuthButton({
         /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
       if (isMobile) {
-        window.location.href = urlData.url;
+        window.location.href = oauthUrl;
         return;
       }
 
@@ -89,14 +132,14 @@ export function GoogleAuthButton({
       const top = window.screenY + (window.innerHeight - height) / 2;
 
       const popup = window.open(
-        urlData.url,
+        oauthUrl,
         "GoogleOAuthWindow",
         `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes,scrollbars=yes`
       );
 
       if (!popup) {
         // Fallback: redirect top window if popup blocker prevented window opening
-        window.location.href = urlData.url;
+        window.location.href = oauthUrl;
         return;
       }
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
-import { db, mongoGeneric, isMongoDbConnected, mongoSellers, mongoOrders, mongoProducts, mongoSettlements } from "@workspace/db";
+import { db, mongoGeneric, isMongoDbConnected, mongoSellers, mongoVendors, mongoOrders, mongoProducts, mongoSettlements } from "@workspace/db";
 import { vendorSettlementsTable, ordersTable, vendorsTable, productsTable } from "@workspace/db";
-import { eq, and, lte, inArray } from "drizzle-orm";
+import { eq, and, lte, inArray, or } from "drizzle-orm";
 import {
   getCashfreeConfig,
   initiateCashfreeTransfer,
@@ -22,6 +22,54 @@ import {
 import { emitFinancialsEvent, emitAnalyticsEvent } from "./socket";
 import { safeInvalidatePattern } from "./cacheEngine";
 
+/**
+ * Checks if a seller has a genuinely verified bank account.
+ * Only verified bank accounts become eligible for Wednesday seller settlements.
+ */
+export function isVendorBankVerified(vendor: any): boolean {
+  if (!vendor) return false;
+  const isVerified = vendor.bankVerified === true || vendor.bankVerificationStatus === "verified";
+  const hasAccount = Boolean(vendor.bankAccount && String(vendor.bankAccount).trim().length >= 8);
+  const hasIfsc = Boolean(vendor.bankIfsc && String(vendor.bankIfsc).trim().length >= 11);
+  return Boolean(isVerified && hasAccount && hasIfsc);
+}
+
+/**
+ * Resolves a vendor record by vendorId, sellerId, ownerId, or id across Mongo and Postgres.
+ */
+export async function resolveVendorRecord(vendorId: string): Promise<any> {
+  if (!vendorId) return null;
+  let vendor: any = null;
+  try {
+    if (mongoSellers) {
+      vendor = (await mongoSellers.findById(vendorId)) ||
+               (await mongoSellers.findByVendorId(vendorId)) ||
+               (await mongoSellers.findBySellerId(vendorId)) ||
+               (await mongoSellers.findByOwnerId(vendorId));
+    }
+  } catch {}
+  if (!vendor && mongoVendors && mongoVendors !== (mongoSellers as any)) {
+    try {
+      vendor = (await mongoVendors.findById(vendorId)) ||
+               (await mongoVendors.findByVendorId(vendorId)) ||
+               (await mongoVendors.findBySellerId(vendorId)) ||
+               (await mongoVendors.findByOwnerId(vendorId));
+    } catch {}
+  }
+  if (!vendor && db && vendorsTable) {
+    try {
+      const isUuid = Boolean(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vendorId));
+      const conds: any[] = [];
+      if (isUuid) conds.push(eq(vendorsTable.id, vendorId));
+      conds.push(eq(vendorsTable.vendorId, vendorId));
+      conds.push(eq(vendorsTable.ownerId, vendorId));
+      const rows = await db.select().from(vendorsTable).where(or(...conds)).limit(1);
+      vendor = rows[0];
+    } catch {}
+  }
+  return vendor;
+}
+
 export interface PayoutProvider {
   processPayout(settlement: {
     id: string;
@@ -39,6 +87,14 @@ export interface PayoutProvider {
 
 export class StubPayoutProvider implements PayoutProvider {
   async processPayout(settlement: { id: string; amount: number; vendorId: string }) {
+    const vendor = await resolveVendorRecord(settlement.vendorId);
+    if (!isVendorBankVerified(vendor)) {
+      return {
+        success: false,
+        status: "FAILED" as const,
+        error: "Seller bank account is not verified. Wednesday settlement payouts require a verified bank account.",
+      };
+    }
     const utrNumber = `UTR${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const payoutReference = `PAY-${settlement.id.slice(0, 8).toUpperCase()}`;
     return { success: true, status: "SUCCESS" as const, utrNumber, payoutReference };
@@ -71,12 +127,20 @@ export class CashfreePayoutProvider implements PayoutProvider {
       return { success: false, status: "FAILED", error: `Vendor ${settlement.vendorId} not found` };
     }
 
-    // 2. Validate bank account and IFSC
+    // 2. Validate bank account, IFSC, and genuine verification status
     if (!vendor.bankAccount || !vendor.bankIfsc) {
       return {
         success: false,
         status: "FAILED",
         error: "Seller bank account or IFSC is missing. Please update bank details in Seller Profile.",
+      };
+    }
+
+    if (!isVendorBankVerified(vendor)) {
+      return {
+        success: false,
+        status: "FAILED",
+        error: "Seller bank account has not been genuinely verified. Wednesday settlements require a verified bank account.",
       };
     }
 
@@ -204,6 +268,12 @@ export async function processSettlementTransitions(options?: {
     const pastReturnWindow = deliveryDate <= cutoffDate;
 
     if (isDelivered && pastReturnWindow) {
+      // Only genuinely verified bank accounts should become eligible for Wednesday seller settlements
+      const vendor = await resolveVendorRecord(s.vendorId);
+      if (!isVendorBankVerified(vendor)) {
+        continue;
+      }
+
       const now = new Date();
       try {
         await db
@@ -244,6 +314,13 @@ export async function processSettlementTransitions(options?: {
       const settlementAmount = s.sellerSettlement ?? s.amount;
       // Respect configured minimum payout threshold
       if (settlementAmount < config.minimumPayoutThresholdPaise && s.amount < (config.minimumPayoutThresholdPaise / 100)) {
+        continue;
+      }
+
+      // Re-verify that seller's bank account remains genuinely verified prior to disbursement
+      const vendor = await resolveVendorRecord(s.vendorId);
+      if (!isVendorBankVerified(vendor)) {
+        logger.warn({ settlementId: s.id, vendorId: s.vendorId }, "Skipping Wednesday payout: vendor bank is not genuinely verified");
         continue;
       }
 
@@ -441,13 +518,17 @@ export async function syncEligibleOrderSettlements(): Promise<SyncSettlementsRes
   const combinedVendors = [...allVendors, ...sqlVendors];
 
   const vendorAliasToPrimaryId = new Map<string, string>();
+  const vendorBankVerifiedMap = new Map<string, boolean>();
   for (const v of combinedVendors) {
     if (!v) continue;
     const primaryId = String(v.id || v._id || v.vendorId || v.sellerId);
+    const verified = isVendorBankVerified(v);
     const aliases = [v.id, v._id ? String(v._id) : null, v.vendorId, v.sellerId, v.ownerId, v.userId].filter(Boolean);
     for (const a of aliases) {
       vendorAliasToPrimaryId.set(String(a), primaryId);
       vendorAliasToPrimaryId.set(String(a).toLowerCase(), primaryId);
+      vendorBankVerifiedMap.set(String(a), verified);
+      vendorBankVerifiedMap.set(String(a).toLowerCase(), verified);
     }
   }
 
@@ -594,8 +675,10 @@ export async function syncEligibleOrderSettlements(): Promise<SyncSettlementsRes
         : (order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt || now));
       const pastReturnWindow = deliveryDate <= cutoffReturnDate;
 
+      // Only genuinely verified bank accounts should become eligible for Wednesday seller settlements
+      const isBankVerified = vendorBankVerifiedMap.get(vid) ?? vendorBankVerifiedMap.get(vid.toLowerCase()) ?? false;
       let settlementStatus: "eligible" | "pending" = "pending";
-      if (isDelivered && pastReturnWindow) {
+      if (isDelivered && pastReturnWindow && isBankVerified) {
         settlementStatus = "eligible";
       }
 

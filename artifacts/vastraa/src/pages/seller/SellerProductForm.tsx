@@ -1,13 +1,50 @@
-import React, { useCallback, useState, useRef, useEffect } from "react";
-import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X, Upload } from "lucide-react";
+import React, { useCallback, useState, useRef, useEffect, useMemo } from "react";
+import { Image, Info, Tag, DollarSign, Package, Sparkles, Video, Layers, ListChecks, Truck, RotateCcw, Plus, X, Upload, Loader2, AlertCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiUrl, apiFetch } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import {
   CATEGORY_DROPDOWN_OPTIONS,
   getSubcategoriesForCategory,
+  getSubtypesForSubcategory,
   isValidSubcategoryForCategory,
   resolveCanonicalSubcategoryName,
+  registerClientDynamicSubcategory,
+  FABRICS_OPTIONS,
+  WEAVING_TECHNIQUES_OPTIONS,
+  WORK_TYPES_OPTIONS,
+  BORDER_TYPES_OPTIONS,
+  PALLU_DESIGNS_OPTIONS,
+  OCCASIONS_OPTIONS,
+  ORIGINS_OPTIONS,
+  SAREE_LENGTHS_OPTIONS,
+  COLORS_OPTIONS,
+  KURTI_LENGTHS_OPTIONS,
+  KURTI_FITS_OPTIONS,
+  SLEEVE_LENGTHS_OPTIONS,
+  NECK_TYPES_OPTIONS,
+  KURTA_SET_PIECES_OPTIONS,
+  BOTTOM_TYPES_OPTIONS,
+  DUPATTA_TYPES_OPTIONS,
+  DRESS_LENGTHS_OPTIONS,
+  WESTERN_DRESS_FITS_OPTIONS,
+  WINTER_GARMENT_TYPES_OPTIONS,
+  WINTER_WARMTH_LEVELS_OPTIONS,
+  WOMENS_TOPS_SIZES,
+  GIRLS_TOPS_SIZES,
+  ALL_TOPS_SIZES,
+  TOPS_NECK_TYPES,
+  TOPS_SLEEVE_LENGTHS,
+  TOPS_FITS,
+  TOPS_PATTERNS,
 } from "@/constants/categories";
+import {
+  getCategorySpecifications,
+  isSareeCategory,
+  BLOUSE_FABRICS_OPTIONS,
+  BLOUSE_LENGTHS_OPTIONS,
+  BLOUSE_DESIGNS_OPTIONS,
+} from "@/constants/categorySpecifications";
 
 const MAROON = "#0A1F44";
 const GOLD = "#C7CCD1";
@@ -15,17 +52,29 @@ const CREAM = "#E5E8EC";
 const IVORY = "#F4F5F7";
 
 export const CATEGORIES = [
+  "sarees",
+  "kurtis",
+  "kurta-sets",
+  "ethnic-dresses",
+  "western-dresses",
+  "winter-wear",
+  "tops",
   "paithani",
   "designer",
-  "bollywood",
-  "bridal",
-  "contemporary-silk",
-  "wedding-paithani",
-  "western-paithani",
+  "gadwal",
+  "banarasi",
+  "kanjivaram",
+  "chanderi",
+  "bandhani",
+  "mysore-silk",
+  "ikat",
+  "cotton",
+  "silk",
+  "other-traditional",
 ] as const;
-export const FABRICS = ["silk", "cotton", "georgette", "net", "chiffon", "tissue"] as const;
-export const OCCASIONS = ["bridal", "festival", "casual", "party", "formal"] as const;
-export const COLORS = ["red", "maroon", "blue", "green", "yellow", "pink", "purple", "cream", "gold", "black", "orange", "mint"] as const;
+export const FABRICS = FABRICS_OPTIONS;
+export const OCCASIONS = OCCASIONS_OPTIONS;
+export const COLORS = COLORS_OPTIONS;
 
 export interface ProductAttributeGroup {
   name: string;
@@ -50,6 +99,7 @@ export interface ProductFormData {
   description: string;
   category: string;
   subcategory: string;
+  subtype: string;
   collection: string;
   gender: string;
   sareeType: string;
@@ -60,6 +110,12 @@ export interface ProductFormData {
   brand: string;
   designPattern: string;
   fabric: string;
+  weavingTechnique: string;
+  workType: string;
+  borderType: string;
+  palluDesign: string;
+  sareeLength: string;
+  origin: string;
   color: string;
   occasion: string;
   price: string;
@@ -75,14 +131,54 @@ export interface ProductFormData {
   returnPolicy: string;
   isBestSeller: boolean;
   isNewArrival: boolean;
+  kurtiLength?: string;
+  kurtiFit?: string;
+  sleeveLength?: string;
+  neckType?: string;
+  bottomType?: string;
+  dupattaType?: string;
+  piecesInSet?: string;
+  dressLength?: string;
+  westernDressFit?: string;
+  winterGarmentType?: string;
+  winterWarmthLevel?: string;
+  // Matching Blouse Piece fields (Sarees only)
+  blouseFabric?: string;
+  blouseColor?: string;
+  blouseLength?: string;
+  blouseDesign?: string;
+  blouseImages: string[];
+  // Dynamic category specification fields
+  kurtiType?: string;
+  fit?: string;
+  pattern?: string;
+  closureType?: string;
+  setType?: string;
+  kurtaLength?: string;
+  bottomLength?: string;
+  dupattaIncluded?: string;
+  dupattaFabric?: string;
+  dressType?: string;
+  silhouette?: string;
+  embellishment?: string;
+  neckline?: string;
+  waistline?: string;
+  winterWearType?: string;
+  warmthLevel?: string;
+  winterWearLength?: string;
+  topType?: string;
+  sleeveType?: string;
+  topLength?: string;
+  neckStyle?: string;
 }
 
 export function emptyFormData(): ProductFormData {
   return {
     name: "",
     description: "",
-    category: "paithani",
+    category: "sarees",
     subcategory: "",
+    subtype: "",
     collection: "",
     gender: "Women",
     sareeType: "",
@@ -93,6 +189,12 @@ export function emptyFormData(): ProductFormData {
     brand: "",
     designPattern: "",
     fabric: "silk",
+    weavingTechnique: "",
+    workType: "",
+    borderType: "",
+    palluDesign: "",
+    sareeLength: "5.5 meters",
+    origin: "India",
     color: "red",
     occasion: "festival",
     price: "",
@@ -108,11 +210,41 @@ export function emptyFormData(): ProductFormData {
     returnPolicy: "",
     isBestSeller: false,
     isNewArrival: false,
+    blouseImages: [],
+    blouseFabric: "Pure Silk",
+    blouseColor: "red",
+    blouseLength: "0.80 Metre (Standard Unstitched)",
+    blouseDesign: "Matching Running Blouse Piece",
+    kurtiType: "Straight Kurti",
+    kurtiLength: "Knee Length",
+    fit: "Regular Fit",
+    pattern: "Solid / Plain",
+    closureType: "Slip-On / Pull Over",
+    setType: "3-Piece Set (Kurta + Bottom + Dupatta)",
+    kurtaLength: "Calf Length",
+    bottomType: "Palazzo Pants",
+    bottomLength: "Ankle Length (Standard)",
+    dupattaIncluded: "Yes (Included in Set)",
+    dupattaFabric: "Chiffon",
+    dressType: "Anarkali Gown",
+    dressLength: "Maxi (Ankle Length)",
+    sleeveLength: "Three-Quarter Sleeve (3/4th)",
+    neckStyle: "Round Neck",
+    silhouette: "Fit & Flare",
+    embellishment: "Minimal / Plain",
+    neckline: "V-Neck",
+    waistline: "Natural Waist",
+    winterWearType: "Winter Dress",
+    warmthLevel: "Moderate Winter / Medium Warmth",
+    winterWearLength: "Midi (Calf Length)",
+    topType: "Western Top",
+    sleeveType: "Short Sleeve",
+    topLength: "Hip Length (Regular)",
   };
 }
 
 interface FieldProps {
-  label: string;
+  label: React.ReactNode;
   required?: boolean;
   error?: string;
   children: React.ReactNode;
@@ -754,9 +886,19 @@ export const ImageUploadGallery = React.memo(function ImageUploadGallery({ image
 
 // ── Attribute-based variant builder ──────────────────────────────────────────
 
-const ATTRIBUTE_SUGGESTIONS = ["Colour", "Fabric", "Border Style", "Work Type", "Occasion", "Pattern"];
+const ATTRIBUTE_SUGGESTIONS = ["Size", "Colour", "Fabric", "Sleeve Length", "Neck Style", "Border Style", "Work Type", "Occasion", "Pattern"];
 
 const PRESET_TEMPLATES: Record<string, ProductAttributeGroup[]> = {
+  "Women's Tops Sizes": [
+    { name: "Size", values: ["XS", "S", "M", "L", "XL", "XXL", "3XL"] },
+  ],
+  "Girls' Tops Sizes": [
+    { name: "Size", values: ["2-3Y", "3-4Y", "4-5Y", "5-6Y", "7-8Y", "9-10Y", "11-12Y", "13-14Y"] },
+  ],
+  "Tops (Color & Size)": [
+    { name: "Colour", values: ["White", "Black", "Navy Blue"] },
+    { name: "Size", values: ["S", "M", "L", "XL"] },
+  ],
   "6-Variant": [
     { name: "Colour", values: ["Red", "Blue", "Green"] },
     { name: "Border Style", values: ["Gold Zari", "Silver Zari"] },
@@ -1050,6 +1192,100 @@ export default function ProductForm({
   onSubmit,
   onCancel,
 }: ProductFormProps) {
+  const queryClient = useQueryClient();
+  const { data: dbCategoriesData } = useQuery<{ categories: any[] }>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      try {
+        const res = await apiFetch("/api/categories");
+        if (!res.ok) return { categories: [] };
+        return res.json();
+      } catch {
+        return { categories: [] };
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  const [showAddSubModal, setShowAddSubModal] = useState(false);
+  const [newSubName, setNewSubName] = useState("");
+  const [addingSub, setAddingSub] = useState(false);
+  const [addSubError, setAddSubError] = useState("");
+
+  const subcategories = useMemo(
+    () => getSubcategoriesForCategory(data.category, dbCategoriesData?.categories),
+    [data.category, dbCategoriesData?.categories]
+  );
+
+  const handleCreateSubcategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newSubName.trim();
+    if (!trimmed) {
+      setAddSubError("Please enter a subcategory name.");
+      return;
+    }
+    if (!data.category) {
+      setAddSubError("Please select a main category first.");
+      return;
+    }
+
+    setAddingSub(true);
+    setAddSubError("");
+    try {
+      const res = await apiFetch("/api/seller/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmed,
+          parentId: data.category,
+          type: "subcategory",
+        }),
+      });
+
+      const resJson = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resJson.error || "Failed to create subcategory.");
+      }
+
+      const createdDoc = resJson.category || {
+        id: resJson.id || trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        name: trimmed,
+        slug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        parentId: data.category,
+      };
+
+      registerClientDynamicSubcategory(data.category, {
+        id: createdDoc.id,
+        name: createdDoc.name,
+        slug: createdDoc.slug,
+        route: `/${data.category}?subcategory=${createdDoc.slug}`,
+        subtypes: [],
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+
+      // Automatically select newly created subcategory
+      onChange("subcategory", createdDoc.name);
+      onChange("subtype", "");
+
+      window.dispatchEvent(
+        new CustomEvent("vastraa-realtime-event", {
+          detail: {
+            name: "category:created",
+            data: { category: createdDoc, parentId: data.category },
+          },
+        })
+      );
+
+      setNewSubName("");
+      setShowAddSubModal(false);
+    } catch (err: any) {
+      setAddSubError(err.message || "Failed to create subcategory.");
+    } finally {
+      setAddingSub(false);
+    }
+  };
+
   const input = useCallback(
     (field: keyof ProductFormData) =>
       (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -1071,7 +1307,6 @@ export default function ProductForm({
     (idx: number) => onChange("videos", data.videos.filter((_, i) => i !== idx)),
     [data.videos, onChange],
   );
-
 
   const updateSpec = useCallback(
     (idx: number, field: keyof ProductSpecForm, value: string) => {
@@ -1121,18 +1356,22 @@ export default function ProductForm({
         </div>
       </Section>
 
-      <Section icon={Tag} title="Classification & Collection Mapping">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Category" required error={errors.category}>
+      <Section icon={Tag} title="Classification & Product Attributes (Official VASTRAA Categories)">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3.5 rounded-xl bg-[#0A1F44]/5 border border-[#0A1F44]/15 mb-2">
+          {/* Tier 1: Main Category */}
+          <Field label="1. Main Category" required error={errors.category} hint="1 of 7 VASTRAA categories">
             <select
               value={data.category}
               onChange={(e) => {
                 const newCat = e.target.value;
                 onChange("category", newCat);
-                const nextSub = resolveCanonicalSubcategoryName(newCat, data.subcategory);
-                onChange("subcategory", nextSub);
+                onChange("subcategory", "");
+                onChange("subtype", "");
+                if (!isSareeCategory(newCat)) {
+                  onChange("blouseIncluded", false);
+                }
               }}
-              className={selectClass}
+              className={selectClass + " font-semibold text-[#0A1F44]"}
               style={inputStyle}
             >
               {CATEGORY_DROPDOWN_OPTIONS.map((c) => (
@@ -1142,66 +1381,202 @@ export default function ProductForm({
               ))}
             </select>
           </Field>
-          <Field label="Collection Filter" hint="Maps product to curated collection">
-            <FormInput
-              field="collection"
-              value={data.collection}
-              onChangeField={onChange}
-              placeholder={data.category === "designer" ? "e.g. bollywood-fashion, party-wear, reception-collections" : "e.g. royal-festival, bridal-paithani, heritage-weaving"}
-            />
-          </Field>
-          <Field label="Subcategory" error={errors.subcategory} hint="Dynamic by parent category">
+
+          {/* Tier 2: Subcategory */}
+          <Field
+            label="2. Subcategory"
+            error={errors.subcategory}
+            hint={`Approved subcategories for ${CATEGORY_DROPDOWN_OPTIONS.find((c) => c.value === data.category)?.label || data.category}`}
+          >
             <select
               value={resolveCanonicalSubcategoryName(data.category, data.subcategory) || data.subcategory}
-              onChange={(e) => onChange("subcategory", e.target.value)}
+              onChange={(e) => {
+                onChange("subcategory", e.target.value);
+                onChange("subtype", "");
+              }}
               className={selectClass}
               style={inputStyle}
             >
               <option value="">Select subcategory...</option>
-              {getSubcategoriesForCategory(data.category).map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
+              {(() => {
+                const hasGroups = subcategories.some((s) => Boolean(s.group));
+                if (!hasGroups) {
+                  return subcategories.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ));
+                }
+                const groups: Record<string, typeof subcategories> = {};
+                for (const s of subcategories) {
+                  const grp = s.group || "Other";
+                  if (!groups[grp]) groups[grp] = [];
+                  groups[grp].push(s);
+                }
+                return Object.entries(groups).map(([grpName, subs]) => (
+                  <optgroup key={grpName} label={grpName}>
+                    {subs.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ));
+              })()}
             </select>
           </Field>
-          <Field label="Fabric" required error={errors.fabric}>
-            <FormSelect field="fabric" value={data.fabric} options={FABRICS} onChangeField={onChange} />
+
+          {/* Tier 3: Subtype */}
+          <Field label="3. Subtype / Variety" error={errors.subtype} hint="Dynamic by subcategory">
+            {(() => {
+              const subtypes = getSubtypesForSubcategory(data.category, data.subcategory);
+              if (subtypes.length > 0) {
+                return (
+                  <select
+                    value={data.subtype || ""}
+                    onChange={(e) => onChange("subtype", e.target.value)}
+                    className={selectClass}
+                    style={inputStyle}
+                  >
+                    <option value="">Select subtype...</option>
+                    {subtypes.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                );
+              }
+              return (
+                <FormInput
+                  field="subtype"
+                  value={data.subtype}
+                  onChangeField={onChange}
+                  placeholder="e.g. Traditional Motif / Handloom"
+                />
+              );
+            })()}
           </Field>
-          <Field label="Color" required error={errors.color}>
-            <FormSelect field="color" value={data.color} options={COLORS} onChangeField={onChange} />
-          </Field>
-          <Field label="Occasion" required error={errors.occasion}>
-            <FormSelect field="occasion" value={data.occasion} options={OCCASIONS} onChangeField={onChange} />
-          </Field>
-          <Field label="Saree Type" hint="e.g. Paithani, Designer Saree, Bollywood Saree">
-            <FormInput field="sareeType" value={data.sareeType} onChangeField={onChange} placeholder="e.g. Paithani" />
-          </Field>
-          <Field label="Saree Style" hint="e.g. Traditional, Contemporary, Modern">
-            <FormInput field="sareeStyle" value={data.sareeStyle} onChangeField={onChange} placeholder="e.g. Traditional" />
-          </Field>
-          <Field label="Gender" hint="e.g. Women, Girls, Unisex">
-            <FormInput field="gender" value={data.gender} onChangeField={onChange} placeholder="Women" />
-          </Field>
-          <Field label="Pack Of" hint="e.g. Pack of 1">
-            <FormInput field="packOf" value={data.packOf} onChangeField={onChange} placeholder="Pack of 1" />
-          </Field>
-          <Field label="Country of Origin">
-            <FormInput field="countryOfOrigin" value={data.countryOfOrigin} onChangeField={onChange} placeholder="India" />
-          </Field>
-          <div className="flex items-center pt-5">
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="w-4 h-4 rounded cursor-pointer"
-                checked={data.blouseIncluded}
-                onChange={(e) => onChange("blouseIncluded", e.target.checked)}
-                style={{ accentColor: MAROON }}
-              />
-              <span className="text-sm font-medium text-gray-700">Blouse Included</span>
-            </label>
-          </div>
         </div>
+
+        {(() => {
+          const isSaree = isSareeCategory(data.category);
+          const specFields = getCategorySpecifications(data.category);
+
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
+              {specFields.map((field) => {
+                const val = (data as any)[field.key] ?? "";
+                const isRequired = field.required;
+                const err = (errors as any)[field.key];
+
+                if (field.type === "select" && field.options) {
+                  return (
+                    <Field key={field.key} label={field.label} required={isRequired} error={err} hint={field.hint}>
+                      <FormSelect
+                        field={field.key as keyof ProductFormData}
+                        value={val}
+                        options={field.options}
+                        onChangeField={onChange}
+                      />
+                    </Field>
+                  );
+                }
+
+                return (
+                  <Field key={field.key} label={field.label} required={isRequired} error={err} hint={field.hint}>
+                    <FormInput
+                      field={field.key as keyof ProductFormData}
+                      value={val}
+                      onChangeField={onChange}
+                      placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                    />
+                  </Field>
+                );
+              })}
+
+              {/* Universal: Collection Filter */}
+              <Field label="Collection Filter" hint="Curated storefront tag">
+                <FormInput
+                  field="collection"
+                  value={data.collection}
+                  onChangeField={onChange}
+                  placeholder="e.g. royal-festival, festive-glam"
+                />
+              </Field>
+
+              {/* Universal: Target Gender */}
+              <Field label="Target Gender">
+                <FormInput field="gender" value={data.gender} onChangeField={onChange} placeholder="Women" />
+              </Field>
+
+              {/* Universal: Pack Of */}
+              <Field label="Pack Of">
+                <FormInput field="packOf" value={data.packOf} onChangeField={onChange} placeholder="Pack of 1" />
+              </Field>
+
+              {/* Universal: Country of Origin */}
+              <Field label="Country of Origin">
+                <FormInput field="countryOfOrigin" value={data.countryOfOrigin} onChangeField={onChange} placeholder="India" />
+              </Field>
+
+              {/* Saree-Only: Blouse Piece Availability & Details */}
+              {isSaree && (
+                <div className="col-span-full border-t border-[#0A1F44]/10 pt-4 mt-2">
+                  <div className="flex items-center gap-2.5 pb-3">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded cursor-pointer"
+                        checked={data.blouseIncluded}
+                        onChange={(e) => onChange("blouseIncluded", e.target.checked)}
+                        style={{ accentColor: MAROON }}
+                      />
+                      <span className="text-sm font-bold text-gray-800">Includes Matching Unstitched Blouse Piece</span>
+                    </label>
+                  </div>
+
+                  {data.blouseIncluded && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-[#0A1F44]/5 border border-[#0A1F44]/15 animate-in fade-in">
+                      <Field label="Blouse Piece Fabric">
+                        <FormSelect
+                          field="blouseFabric"
+                          value={data.blouseFabric || "Pure Silk"}
+                          options={BLOUSE_FABRICS_OPTIONS}
+                          onChangeField={onChange}
+                        />
+                      </Field>
+                      <Field label="Blouse Piece Colour">
+                        <FormSelect
+                          field="blouseColor"
+                          value={data.blouseColor || data.color}
+                          options={COLORS_OPTIONS}
+                          onChangeField={onChange}
+                        />
+                      </Field>
+                      <Field label="Blouse Piece Length">
+                        <FormSelect
+                          field="blouseLength"
+                          value={data.blouseLength || "0.80 Metre (Standard Unstitched)"}
+                          options={BLOUSE_LENGTHS_OPTIONS}
+                          onChangeField={onChange}
+                        />
+                      </Field>
+                      <Field label="Blouse Piece Design (Optional)">
+                        <FormSelect
+                          field="blouseDesign"
+                          value={data.blouseDesign || "Matching Running Blouse Piece"}
+                          options={BLOUSE_DESIGNS_OPTIONS}
+                          onChangeField={onChange}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Section>
 
       <Section icon={DollarSign} title="Pricing">
@@ -1373,6 +1748,100 @@ export default function ProductForm({
           Cancel
         </button>
       </div>
+
+      {/* Modal: Add New Subcategory */}
+      {showAddSubModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#0A1F44]/10 text-[#0A1F44] flex items-center justify-center font-bold">
+                  <Plus size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#0A1F44]">Add New Subcategory</h3>
+                  <p className="text-[11px] text-gray-500">
+                    Under {CATEGORY_DROPDOWN_OPTIONS.find((c) => c.value === data.category)?.label || data.category}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddSubModal(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {addSubError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{addSubError}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="new-sub-name-input" className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Subcategory Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="new-sub-name-input"
+                  type="text"
+                  value={newSubName}
+                  onChange={(e) => {
+                    setNewSubName(e.target.value);
+                    if (addSubError) setAddSubError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateSubcategory();
+                    }
+                  }}
+                  placeholder="e.g. Festival Special, Embroidered Velvet, Tissue Pure"
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-all"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  This subcategory will appear dynamically only within{" "}
+                  <strong>{CATEGORY_DROPDOWN_OPTIONS.find((c) => c.value === data.category)?.label || data.category}</strong>.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddSubModal(false)}
+                  disabled={addingSub}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateSubcategory}
+                  disabled={addingSub || !newSubName.trim()}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#0A1F44] hover:bg-[#0A1F44]/90 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  {addingSub ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Adding...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={13} />
+                      <span>Add Subcategory</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

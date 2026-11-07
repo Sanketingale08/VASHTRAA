@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { db, mongoProducts, mongoOrders, mongoVendors, mongoSellers, mongoShipments, mongoSettlements, isMongoDbConnected, getNextSequenceValue, getCollection, mongoGeneric } from "@workspace/db";
-import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, shipmentsTable, bulkImportBatchesTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX } from "@workspace/db";
+import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, shipmentsTable, bulkImportBatchesTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX, validateCategoryAndSubcategory, resolveCategoryData, findCategoryDefinition } from "@workspace/db";
 import { eq, desc, asc, inArray, and, lte, sql, or } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
 import {
@@ -19,8 +19,8 @@ import {
   isSellerEmailVerified,
 } from "../lib/sellerVerification";
 import { emitOrderEvent, emitProductEvent } from "../lib/socket";
-import { globalCache, safeClearCache, safeInvalidatePattern } from "../lib/cacheEngine";
 import { verifyCashfreeBankAccount, registerCashfreeBeneficiary } from "../lib/cashfree";
+import { processSettlementTransitions, isVendorBankVerified } from "../lib/settlementAutomation";
 import { otpRateLimiter } from "../middlewares/rateLimiter";
 
 const router = Router();
@@ -46,7 +46,6 @@ router.post("/seller/send-verification-code", otpRateLimiter, async (req: any, r
     return res.json({
       success: true,
       message: `Verification code sent successfully to ${email.trim()}. Please check your inbox.`,
-      devCode: result.devCode,
     });
   } catch (err: any) {
     req.log?.error({ err: err?.message }, "seller/send-verification-code failed");
@@ -100,7 +99,6 @@ router.post("/seller/resend-verification-code", otpRateLimiter, async (req: any,
     return res.json({
       success: true,
       message: `New verification code sent successfully to ${email.trim()}.`,
-      devCode: result.devCode,
     });
   } catch (err: any) {
     req.log?.error({ err: err?.message }, "seller/resend-verification-code failed");
@@ -181,10 +179,14 @@ router.get("/seller/profile", requireVendorAuth, async (req: any, res: any) => {
  */
 router.post("/seller/bank/verify", requireVendorAuth, async (req: any, res: any) => {
   const vendor = req.vendor;
-  const vendorId = req.vendorId || vendor?.id;
-  if (!vendorId) {
+  if (!vendor) {
     return res.status(401).json({ error: "Unauthorized: Seller profile not found." });
   }
+
+  // Preserve existing vendorId: MUST save against existing vendorId, never generate a new or unrelated ID
+  const persistentVendorId = vendor.vendorId || vendor.sellerId || (typeof req.vendorId === "string" && !req.vendorId.includes("-") ? req.vendorId : null) || vendor.id;
+  const primaryDocId = vendor.id || vendor._id || req.vendorId;
+  const sellerOwnerId = vendor.ownerId || req.userId;
 
   const { bankAccount, ifsc, bankHolder, bankName } = req.body || {};
 
@@ -203,17 +205,34 @@ router.post("/seller/bank/verify", requireVendorAuth, async (req: any, res: any)
   const cleanHolder = bankHolder.trim();
   const cleanBankName = (bankName || "").trim() || "Bank";
 
-  // Mark pending verification
+  // Mark pending verification on existing vendor record
   const now = new Date();
-  await mongoSellers.update(vendorId, {
+  const pendingData = {
     bankAccount: cleanAccount,
     bankIfsc: cleanIfsc,
     bankHolder: cleanHolder,
     bankName: cleanBankName,
     bankVerificationStatus: "verification_pending",
     beneficiaryStatus: "unregistered",
+    vendorId: persistentVendorId,
+    sellerId: vendor.sellerId || persistentVendorId,
+    ownerId: sellerOwnerId,
     updatedAt: now,
-  } as any);
+  };
+
+  await mongoSellers.update(primaryDocId, pendingData as any);
+  if (mongoVendors && mongoVendors !== (mongoSellers as any) && typeof mongoVendors.update === "function") {
+    try { await mongoVendors.update(primaryDocId, pendingData as any); } catch {}
+  }
+  try {
+    const pgConditions: any[] = [];
+    if (vendor.id) pgConditions.push(eq(vendorsTable.id, vendor.id));
+    if (persistentVendorId) pgConditions.push(eq(vendorsTable.vendorId, persistentVendorId));
+    if (sellerOwnerId) pgConditions.push(eq(vendorsTable.ownerId, sellerOwnerId));
+    if (pgConditions.length > 0) {
+      await db.update(vendorsTable).set(pendingData as any).where(or(...pgConditions));
+    }
+  } catch {}
 
   try {
     const verifyRes = await verifyCashfreeBankAccount({
@@ -224,7 +243,7 @@ router.post("/seller/bank/verify", requireVendorAuth, async (req: any, res: any)
     });
 
     if (verifyRes.valid) {
-      const beneId = vendor.cashfreeBeneficiaryId || `BENE_${(vendor.vendorId || vendorId).replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
+      const beneId = vendor.cashfreeBeneficiaryId || `BENE_${persistentVendorId.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
       let beneficiaryStatus: "beneficiary_registration_pending" | "beneficiary_active" | "beneficiary_registration_failed" = "beneficiary_registration_pending";
       let beneficiaryError: string | null = null;
       let beneficiaryRegisteredAt: Date | null = null;
@@ -263,12 +282,29 @@ router.post("/seller/bank/verify", requireVendorAuth, async (req: any, res: any)
         beneficiaryStatus,
         beneficiaryRegisteredAt,
         beneficiaryError,
+        vendorId: persistentVendorId,
+        sellerId: vendor.sellerId || persistentVendorId,
+        ownerId: sellerOwnerId,
         updatedAt: new Date(),
       };
 
-      await mongoSellers.update(vendorId, updateData);
+      await mongoSellers.update(primaryDocId, updateData);
+      if (mongoVendors && mongoVendors !== (mongoSellers as any) && typeof mongoVendors.update === "function") {
+        try { await mongoVendors.update(primaryDocId, updateData); } catch {}
+      }
       try {
-        await db.update(vendorsTable).set(updateData as any).where(eq(vendorsTable.id, vendorId));
+        const pgConditions: any[] = [];
+        if (vendor.id) pgConditions.push(eq(vendorsTable.id, vendor.id));
+        if (persistentVendorId) pgConditions.push(eq(vendorsTable.vendorId, persistentVendorId));
+        if (sellerOwnerId) pgConditions.push(eq(vendorsTable.ownerId, sellerOwnerId));
+        if (pgConditions.length > 0) {
+          await db.update(vendorsTable).set(updateData as any).where(or(...pgConditions));
+        }
+      } catch {}
+
+      // Automatically re-evaluate settlement transitions so newly verified bank account's settlements become eligible for Wednesday cycle
+      try {
+        await processSettlementTransitions();
       } catch {}
 
       return res.json({
@@ -278,6 +314,7 @@ router.post("/seller/bank/verify", requireVendorAuth, async (req: any, res: any)
         beneficiaryStatus,
         registeredName: verifyRes.registeredName,
         nameMatched: verifyRes.nameMatched,
+        vendorId: persistentVendorId,
         message: beneficiaryStatus === "beneficiary_active"
           ? "Bank account verified and beneficiary active for payouts."
           : `Bank account verified (${beneficiaryError || "Beneficiary registration pending"}).`,
@@ -293,12 +330,24 @@ router.post("/seller/bank/verify", requireVendorAuth, async (req: any, res: any)
         bankVerificationDetails: verifyRes,
         beneficiaryStatus: "beneficiary_registration_failed" as const,
         beneficiaryError: verifyRes.message || "Bank details could not be verified",
+        vendorId: persistentVendorId,
+        sellerId: vendor.sellerId || persistentVendorId,
+        ownerId: sellerOwnerId,
         updatedAt: new Date(),
       };
 
-      await mongoSellers.update(vendorId, updateData);
+      await mongoSellers.update(primaryDocId, updateData);
+      if (mongoVendors && mongoVendors !== (mongoSellers as any) && typeof mongoVendors.update === "function") {
+        try { await mongoVendors.update(primaryDocId, updateData); } catch {}
+      }
       try {
-        await db.update(vendorsTable).set(updateData as any).where(eq(vendorsTable.id, vendorId));
+        const pgConditions: any[] = [];
+        if (vendor.id) pgConditions.push(eq(vendorsTable.id, vendor.id));
+        if (persistentVendorId) pgConditions.push(eq(vendorsTable.vendorId, persistentVendorId));
+        if (sellerOwnerId) pgConditions.push(eq(vendorsTable.ownerId, sellerOwnerId));
+        if (pgConditions.length > 0) {
+          await db.update(vendorsTable).set(updateData as any).where(or(...pgConditions));
+        }
       } catch {}
 
       return res.status(400).json({
@@ -325,9 +374,11 @@ router.get("/seller/bank/status", requireVendorAuth, async (req: any, res: any) 
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const currentVendor = (await mongoSellers.findById(vendorId)) || vendor;
+  const persistentVendorId = vendor.vendorId || vendor.sellerId || (typeof vendorId === "string" && !vendorId.includes("-") ? vendorId : null) || vendor.id;
+  const currentVendor = (await mongoSellers.findById(vendorId)) || (await mongoSellers.findByVendorId(persistentVendorId)) || vendor;
 
   res.json({
+    vendorId: persistentVendorId,
     bankAccount: currentVendor.bankAccount ? `****${String(currentVendor.bankAccount).slice(-4)}` : null,
     bankHolder: currentVendor.bankHolder || null,
     bankName: currentVendor.bankName || null,
@@ -389,23 +440,28 @@ router.get("/seller/dashboard", requireVendorAuth, async (req: any, res: any) =>
     const productIdSet = new Set(products.map((p) => p.id));
     const activeListings = products.filter((p) => (p.stock ?? 0) > 0).length;
 
+    // 1. Primary Source of Truth: MongoDB Atlas
     let allOrders: any[] = [];
     try {
-      allOrders = await db
-        .select({ id: ordersTable.id, items: ordersTable.items, createdAt: ordersTable.createdAt, status: ordersTable.status })
-        .from(ordersTable)
-        .orderBy(desc(ordersTable.createdAt));
-    } catch {}
-
-    if (allOrders.length === 0) {
-      try {
-        const mOrders = await mongoOrders.findMany({});
+      const mOrders = await mongoOrders.findMany({}, { sort: { createdAt: -1 } });
+      if (Array.isArray(mOrders) && mOrders.length > 0) {
         allOrders = mOrders.map((o) => ({
           id: o.id,
+          displayId: o.displayId || o.id,
           items: o.items ?? [],
           createdAt: o.createdAt,
           status: o.status,
         }));
+      }
+    } catch {}
+
+    // 2. Fallback: PostgreSQL ordersTable
+    if (allOrders.length === 0) {
+      try {
+        allOrders = await db
+          .select({ id: ordersTable.id, items: ordersTable.items, createdAt: ordersTable.createdAt, status: ordersTable.status })
+          .from(ordersTable)
+          .orderBy(desc(ordersTable.createdAt));
       } catch {}
     }
 
@@ -1269,18 +1325,21 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
 
         if (slug.includes("paithani")) return { canonical: "paithani", prefix: "PS" };
         if (slug.includes("designer")) return { canonical: "designer", prefix: "DS" };
-        if (slug.includes("bridal") || slug === "wedding") return { canonical: "bridal", prefix: "BS" };
-        if (slug.includes("party")) return { canonical: "party", prefix: "PW" };
-        if (slug.includes("indian")) return { canonical: "indian-wear", prefix: "IW" };
-        if (slug.includes("fashion")) return { canonical: "fashion-wear", prefix: "FW" };
-        if (slug.includes("western")) return { canonical: "western-wear", prefix: "WW" };
-        if (slug.includes("lehenga")) return { canonical: "lehenga", prefix: "LH" };
-        if (slug.includes("salwar") || slug.includes("suit")) return { canonical: "salwar", prefix: "SL" };
-        if (slug.includes("kurt") || slug.includes("anarkali")) return { canonical: "kurti", prefix: "KU" };
-        if (slug.includes("dress") || slug.includes("gown")) return { canonical: "dresses", prefix: "DR" };
-        if (slug.includes("top") || slug.includes("shirt")) return { canonical: "tops", prefix: "TP" };
-        if (slug.includes("fabric")) return { canonical: "fabric", prefix: "FB" };
-        if (slug.includes("saree") || slug.includes("sari")) return { canonical: "saree", prefix: "SR" };
+        if (slug.includes("gadwal")) return { canonical: "gadwal", prefix: "GD" };
+        if (slug.includes("banarasi")) return { canonical: "banarasi", prefix: "BN" };
+        if (slug.includes("kanjivaram")) return { canonical: "kanjivaram", prefix: "KJ" };
+        if (slug.includes("chanderi")) return { canonical: "chanderi", prefix: "CH" };
+        if (slug.includes("bandhani")) return { canonical: "bandhani", prefix: "BD" };
+        if (slug.includes("mysore")) return { canonical: "mysore-silk", prefix: "MS" };
+        if (slug.includes("ikat")) return { canonical: "ikat", prefix: "IK" };
+        if (slug.includes("cotton")) return { canonical: "cotton", prefix: "CT" };
+        if (slug.includes("silk")) return { canonical: "silk", prefix: "SK" };
+        if (slug.includes("other") || slug.includes("traditional")) return { canonical: "other-traditional", prefix: "TR" };
+
+        const catDef = findCategoryDefinition(raw);
+        if (catDef) {
+          return { canonical: catDef.slug, prefix: catDef.prefix };
+        }
 
         const matched = (CATEGORIES as readonly string[]).find(c => {
           const norm = c.toLowerCase().trim();
@@ -1346,7 +1405,8 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
         return;
       }
 
-      const category = resolvedCategory.canonical;
+      const catData = resolveCategoryData(rawCategory, row.subcategory);
+      const category = catData.category;
 
       const cleanedPriceStr = cleanNumericString(row.price);
       const price = cleanedPriceStr ? Math.round(Number(cleanedPriceStr)) : NaN;
@@ -1383,8 +1443,14 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
         sku,
         description: row.description?.trim() ?? "",
         category,
+        categoryName: catData.categoryName,
+        categoryId: catData.categoryId,
+        parentCategoryId: catData.parentCategoryId,
+        parentCategoryName: catData.parentCategoryName,
         categoryPrefix: resolvedCategory.prefix,
-        subcategory:   row.subcategory?.trim()   || null,
+        subcategory:   catData.subcategory,
+        subcategoryName: catData.subcategoryName,
+        subcategoryId: catData.subcategoryId,
         brand:         row.brand?.trim()         || null,
         designPattern: row.designPattern?.trim() || null,
         fabric:   fabric as any,
@@ -1397,8 +1463,8 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
         sellerId:   req.vendor?.sellerId || req.vendor?.id || req.vendorId || req.userId,
         vendorId:   req.vendorId,
         vendorName: req.vendor?.name || req.vendor?.shopName || "Seller Store",
-        status: "pending",
-        active: false,
+        status: "approved",
+        active: true,
       });
     });
 
@@ -1500,6 +1566,7 @@ router.post("/seller/products/bulk-import", requireVendorAuth, async (req: any, 
           }
 
           emitProductEvent("product:created", { id: newProductId, vendorId });
+          emitProductEvent("product:approved", { id: newProductId, productId: newProductId, status: "approved", active: true });
           // Track newly inserted names and SKUs to catch duplicates within the same batch
           existingNameSet.add(values.name.toLowerCase());
           if (values.sku) existingSkuSet.add(values.sku.toLowerCase());
@@ -1669,12 +1736,20 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         return;
       }
 
+      const catData = resolveCategoryData(rawCategory, row.subcategory);
+
       toInsert.push({
         _rowNum: rowNum,
         name,
         description: row.description?.trim() ?? "",
-        category,
-        subcategory: row.subcategory?.trim() || null,
+        category: catData.category,
+        categoryName: catData.categoryName,
+        categoryId: catData.categoryId,
+        parentCategoryId: catData.parentCategoryId,
+        parentCategoryName: catData.parentCategoryName,
+        subcategory: catData.subcategory,
+        subcategoryName: catData.subcategoryName,
+        subcategoryId: catData.subcategoryId,
         brand: row.brand?.trim() || null,
         designPattern: row.designPattern?.trim() || null,
         fabric: row.fabric?.trim() || "silk",
@@ -1686,8 +1761,8 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         images: normalizedImages.images,
         vendorId: req.vendorId,
         vendorName: req.vendor.name,
-        status: "pending",
-        active: false,
+        status: "approved",
+        active: true,
       });
     });
 
@@ -1731,6 +1806,7 @@ router.post("/seller/products/bulk-upload", requireVendorAuth, async (req: any, 
         }
 
         emitProductEvent("product:created", { id: newProductId, vendorId: req.vendorId });
+        emitProductEvent("product:approved", { id: newProductId, productId: newProductId, status: "approved", active: true });
         results.push({ row: _rowNum, success: true, productId: product.id || newProductId, name: product.name || values.name, images: values.images });
       } catch (insertErr: any) {
         results.push({ row: _rowNum, success: false, error: "Failed to save row" });
@@ -1765,16 +1841,27 @@ router.get("/seller/orders", requireVendorAuth, async (req: any, res: any) => {
   try {
     const productIdSet = await getVendorProductIdSet(req);
 
+    // 1. Primary Source of Truth: MongoDB Atlas
     let allOrders: any[] = [];
     try {
-      allOrders = await db
-        .select()
-        .from(ordersTable)
-        .orderBy(desc(ordersTable.createdAt));
+      allOrders = await mongoOrders.findMany({}, { sort: { createdAt: -1 } });
     } catch {}
 
     if (!Array.isArray(allOrders) || allOrders.length === 0) {
-      allOrders = await mongoOrders.findMany({}, { sort: { createdAt: -1 } });
+      try {
+        const col = (await import("@workspace/db")).getCollection("orders");
+        allOrders = await col.find({}).sort({ createdAt: -1 }).toArray();
+      } catch {}
+    }
+
+    // 2. Fallback: PostgreSQL ordersTable
+    if (!Array.isArray(allOrders) || allOrders.length === 0) {
+      try {
+        allOrders = await db
+          .select()
+          .from(ordersTable)
+          .orderBy(desc(ordersTable.createdAt));
+      } catch {}
     }
     if (!Array.isArray(allOrders)) {
       allOrders = [];
@@ -1788,16 +1875,28 @@ router.get("/seller/orders", requireVendorAuth, async (req: any, res: any) => {
 
       const address = (order.address as any) ?? {};
       const orderAcceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
-      const myOrderAcceptance = orderAcceptances[vendorId] || orderAcceptances[req.userId];
+      const myOrderAcceptance =
+        orderAcceptances[vendorId] ||
+        (req.userId && orderAcceptances[req.userId]) ||
+        (req.sellerId && orderAcceptances[req.sellerId]) ||
+        (req.vendor?.id && orderAcceptances[req.vendor.id]) ||
+        (req.vendor?.ownerId && orderAcceptances[req.vendor.ownerId]);
       const needsAcceptance = (order.status === "confirmed" || order.status === "pending") && !myOrderAcceptance;
+      const vendorAcceptanceStatus: "accepted" | "rejected" | "pending" =
+        myOrderAcceptance?.status === "accepted" ? "accepted" :
+        myOrderAcceptance?.status === "rejected" ? "rejected" : "pending";
 
       vendorOrders.push({
         id: order.id,
         displayId: order.displayId ?? order.id,
         createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
         status: order.status,
         customerName: String(address.name ?? "Customer").split(" ")[0],
         needsAcceptance,
+        vendorAcceptanceStatus,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
         vendorItems: vendorItems.map((i) => ({
           productId: i.productId,
           name: i.name,
@@ -1848,10 +1947,20 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
 
     const address = (order.address as any) ?? {};
     const acceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
-    const myAcceptance = acceptances[vendorId] || acceptances[req.userId];
+    const myAcceptance =
+      acceptances[vendorId] ||
+      (req.userId && acceptances[req.userId]) ||
+      (req.sellerId && acceptances[req.sellerId]) ||
+      (req.vendor?.id && acceptances[req.vendor.id]) ||
+      (req.vendor?.ownerId && acceptances[req.vendor.ownerId]);
     const vendorAcceptanceStatus: "accepted" | "rejected" | "pending" =
       myAcceptance?.status === "accepted" ? "accepted" :
       myAcceptance?.status === "rejected" ? "rejected" : "pending";
+
+    let parsedReturnReason: any = (order as any).returnReason;
+    if (typeof parsedReturnReason === "string") {
+      try { parsedReturnReason = JSON.parse(parsedReturnReason); } catch {}
+    }
 
     res.json({
       id: order.id,
@@ -1859,12 +1968,20 @@ router.get("/seller/orders/:orderId", requireVendorAuth, async (req: any, res: a
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       status: order.status,
-      statusHistory: order.statusHistory,
+      statusHistory: order.statusHistory || [],
+      address: order.address,
       shippingCity: address.city ?? "",
       shippingState: address.state ?? "",
       deliveryMethod: order.deliveryMethod,
       paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      total: order.total,
+      awbNumber: (order as any).awbNumber || null,
+      courierName: (order as any).courierName || null,
       vendorAcceptanceStatus,
+      vendorAcceptances: (order as any).vendorAcceptances || {},
+      vendorPackagingChecklist: (order as any).vendorPackagingChecklist || {},
+      returnReason: parsedReturnReason,
       vendorItems: vendorItems.map((i) => {
         const itemBasePrice = i.basePrice ?? (i.price ? Math.round(i.price / 1.155) : 0);
         const itemMainPrice = (i.price && i.price >= itemBasePrice * 1.05)
@@ -1904,7 +2021,7 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
   const vendorId = req.vendorId;
 
   try {
-    const myProductIdSet = await getVendorProductIdSet(vendorId);
+    const myProductIdSet = await getVendorProductIdSet(req);
     const order = await findOrderById(orderId);
 
     if (!order) {
@@ -1912,7 +2029,7 @@ router.post("/orders/:orderId/dispatch", requireVendorAuth, async (req: any, res
     }
 
     const items = (order.items as any[]) ?? [];
-    const myItems = items.filter((i) => myProductIdSet.has(i.productId) || i.vendorId === vendorId);
+    const myItems = items.filter((i) => isVendorItem(i, myProductIdSet, req));
     if (myItems.length === 0) {
       return res.status(403).json({ error: "You don't have any items in this order" });
     }
@@ -2078,7 +2195,7 @@ router.post("/seller/orders/:orderId/dispatch-shiprocket", requireVendorAuth, as
   const effectiveCourierCompanyId = courierCompanyId ?? courierPartnerId;
 
   try {
-    const myProductIdSet = await getVendorProductIdSet(vendorId);
+    const myProductIdSet = await getVendorProductIdSet(req);
     const order = await findOrderById(orderId);
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -2090,13 +2207,16 @@ router.post("/seller/orders/:orderId/dispatch-shiprocket", requireVendorAuth, as
     }
 
     const items = (order.items as any[]) ?? [];
-    const myItems = items.filter((i) => myProductIdSet.has(i.productId) || i.vendorId === vendorId);
+    const myItems = items.filter((i) => isVendorItem(i, myProductIdSet, req));
     if (myItems.length === 0) {
       return res.status(403).json({ error: "You don't have any items in this order" });
     }
 
     const dispatchAcceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
-    const myDispatchAcceptance = dispatchAcceptances[vendorId];
+    const myDispatchAcceptance =
+      dispatchAcceptances[vendorId] ||
+      (req.userId && dispatchAcceptances[req.userId]) ||
+      (req.sellerId && dispatchAcceptances[req.sellerId]);
     if (myDispatchAcceptance && myDispatchAcceptance.status !== "accepted") {
       return res.status(400).json({ error: "You must accept this order before scheduling dispatch" });
     }
@@ -2123,12 +2243,12 @@ router.post("/seller/orders/:orderId/dispatch-shiprocket", requireVendorAuth, as
     }
 
     // Update vendorAcceptances status to reflect dispatch with AWB
-    if (dispatchAcceptances[vendorId]) {
+    if (dispatchAcceptances[vendorId] || (req.userId && dispatchAcceptances[req.userId])) {
       try {
         const updatedAcceptances = {
           ...dispatchAcceptances,
           [vendorId]: {
-            ...dispatchAcceptances[vendorId],
+            ...(dispatchAcceptances[vendorId] || {}),
             status: "accepted",
             dispatched: true,
             dispatchedAt: new Date().toISOString(),
@@ -2136,8 +2256,18 @@ router.post("/seller/orders/:orderId/dispatch-shiprocket", requireVendorAuth, as
             courierName: result.courierName,
           },
         };
+        if (req.userId && req.userId !== vendorId) {
+          updatedAcceptances[req.userId] = updatedAcceptances[vendorId];
+        }
         await mongoOrders.update(order.id, { vendorAcceptances: updatedAcceptances });
         await db.update(ordersTable).set({ vendorAcceptances: updatedAcceptances as any }).where(eq(ordersTable.id, order.id));
+      } catch {}
+    }
+
+    const refreshedOrder = await findOrderById(order.id);
+    if (refreshedOrder) {
+      try {
+        emitOrderEvent("order:status_changed", refreshedOrder);
       } catch {}
     }
 
@@ -2388,18 +2518,27 @@ async function findOrderById(orderId: string): Promise<any> {
   const cleanId = String(orderId).trim();
 
   let order: any = null;
+  // 1. Primary Source of Truth: MongoDB
   try {
-    const rows = await db
-      .select()
-      .from(ordersTable)
-      .where(or(eq(ordersTable.id, cleanId), eq(ordersTable.displayId, cleanId)))
-      .limit(1);
-    if (rows.length > 0) order = rows[0];
+    order = await mongoOrders.findById(cleanId);
   } catch {}
 
   if (!order) {
     try {
-      order = await mongoOrders.findById(cleanId);
+      const col = (await import("@workspace/db")).getCollection("orders");
+      order = (await col.findOne({ $or: [{ id: cleanId }, { displayId: cleanId }, { _id: cleanId as any }] })) as any;
+    } catch {}
+  }
+
+  // 2. Fallback: PostgreSQL ordersTable
+  if (!order) {
+    try {
+      const rows = await db
+        .select()
+        .from(ordersTable)
+        .where(or(eq(ordersTable.id, cleanId), eq(ordersTable.displayId, cleanId)))
+        .limit(1);
+      if (rows.length > 0) order = rows[0];
     } catch {}
   }
   return order;
@@ -2410,7 +2549,7 @@ router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any
   const { orderId } = req.params;
 
   try {
-    const myProductIdSet = await getVendorProductIdSet(vendorId);
+    const myProductIdSet = await getVendorProductIdSet(req);
     const order = await findOrderById(orderId);
 
     if (!order) {
@@ -2418,7 +2557,7 @@ router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any
     }
 
     const items = (order.items as any[]) ?? [];
-    const myItems = items.filter((i) => myProductIdSet.has(i.productId) || i.vendorId === vendorId);
+    const myItems = items.filter((i) => isVendorItem(i, myProductIdSet, req));
     if (myItems.length === 0) {
       return res.status(403).json({ error: "You don't have items in this order" });
     }
@@ -2428,7 +2567,14 @@ router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any
     }
 
     const acceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
-    acceptances[vendorId] = { status: "accepted", at: new Date().toISOString() };
+    const acceptanceRecord = { status: "accepted", at: new Date().toISOString() };
+    acceptances[vendorId] = acceptanceRecord;
+    if (req.userId && req.userId !== vendorId) {
+      acceptances[req.userId] = acceptanceRecord;
+    }
+    if (req.sellerId && req.sellerId !== vendorId) {
+      acceptances[req.sellerId] = acceptanceRecord;
+    }
 
     const allProductIds = items.map((i: any) => i.productId).filter(Boolean) as string[];
     let allOrderProducts: any[] = [];
@@ -2449,7 +2595,7 @@ router.post("/seller/orders/:orderId/accept", requireVendorAuth, async (req: any
 
     let allVendorIds = [...new Set([
       ...allOrderProducts.map((p) => p.vendorId).filter(Boolean),
-      ...items.map((i: any) => i.vendorId).filter(Boolean),
+      ...items.map((i: any) => i.vendorId || i.sellerId || i.ownerId).filter(Boolean),
     ])] as string[];
 
     if (allVendorIds.length === 0) {
@@ -2518,7 +2664,7 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
   }
 
   try {
-    const myProductIdSet = await getVendorProductIdSet(vendorId);
+    const myProductIdSet = await getVendorProductIdSet(req);
     const order = await findOrderById(orderId);
 
     if (!order) {
@@ -2526,7 +2672,7 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
     }
 
     const items = (order.items as any[]) ?? [];
-    const myItems = items.filter((i) => myProductIdSet.has(i.productId) || i.vendorId === vendorId);
+    const myItems = items.filter((i) => isVendorItem(i, myProductIdSet, req));
     if (myItems.length === 0) {
       return res.status(403).json({ error: "You don't have items in this order" });
     }
@@ -2536,7 +2682,14 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
     }
 
     const acceptances = ((order as any).vendorAcceptances as Record<string, any>) ?? {};
-    acceptances[vendorId] = { status: "rejected", reason, at: new Date().toISOString() };
+    const rejectionRecord = { status: "rejected", reason, at: new Date().toISOString() };
+    acceptances[vendorId] = rejectionRecord;
+    if (req.userId && req.userId !== vendorId) {
+      acceptances[req.userId] = rejectionRecord;
+    }
+    if (req.sellerId && req.sellerId !== vendorId) {
+      acceptances[req.sellerId] = rejectionRecord;
+    }
 
     const allProductIds = items.map((i: any) => i.productId).filter(Boolean) as string[];
     let allOrderProducts: any[] = [];
@@ -2557,7 +2710,7 @@ router.post("/seller/orders/:orderId/reject", requireVendorAuth, async (req: any
 
     let allVendorIds = [...new Set([
       ...allOrderProducts.map((p) => p.vendorId).filter(Boolean),
-      ...items.map((i: any) => i.vendorId).filter(Boolean),
+      ...items.map((i: any) => i.vendorId || i.sellerId || i.ownerId).filter(Boolean),
     ])] as string[];
 
     if (allVendorIds.length === 0) {
@@ -2900,9 +3053,17 @@ router.get("/seller/settlements/payout-requests", requireVendorAuth, async (req:
 });
 
 router.post("/seller/settlements/payout-request", requireVendorAuth, async (req: any, res: any) => {
+  const vendor = req.vendor;
   const vendorId = req.vendorId;
 
   try {
+    const currentVendor = (await mongoSellers.findById(vendorId)) || (await mongoSellers.findByVendorId(vendorId)) || vendor;
+    if (!isVendorBankVerified(currentVendor)) {
+      return res.status(400).json({
+        error: "Your bank account has not been verified yet. Bank verification is required before payouts can be requested or disbursed.",
+      });
+    }
+
     const aliases = await resolveSellerAliases(req);
     // Check for an existing pending payout request
     let existing: any[] = [];
@@ -3366,25 +3527,38 @@ router.get("/seller/returns", requireVendorAuth, async (req: any, res: any) => {
   const vendorId = req.vendorId as string;
 
   try {
-    const products = await db
-      .select({ id: productsTable.id })
-      .from(productsTable)
-      .where(eq(productsTable.vendorId, vendorId));
-    const productIdSet = new Set(products.map((p) => p.id));
+    const productIdSet = await getVendorProductIdSet(req);
 
-    if (productIdSet.size === 0) {
-      return res.json({ returns: [] });
+    // 1. Primary: MongoDB orders collection
+    let allOrders: any[] = [];
+    try {
+      allOrders = await mongoOrders.findMany({}, { sort: { createdAt: -1 } });
+    } catch {}
+
+    if (!Array.isArray(allOrders) || allOrders.length === 0) {
+      try {
+        const col = (await import("@workspace/db")).getCollection("orders");
+        allOrders = await col.find({}).sort({ createdAt: -1 }).toArray();
+      } catch {}
     }
 
-    const allOrders = await db
-      .select()
-      .from(ordersTable)
-      .orderBy(desc(ordersTable.createdAt));
+    // 2. Fallback: PostgreSQL ordersTable
+    if (!Array.isArray(allOrders) || allOrders.length === 0) {
+      try {
+        allOrders = await db
+          .select()
+          .from(ordersTable)
+          .orderBy(desc(ordersTable.createdAt));
+      } catch {}
+    }
+    if (!Array.isArray(allOrders)) {
+      allOrders = [];
+    }
 
     const vendorReturns: any[] = [];
     for (const order of allOrders) {
       const items = (order.items as any[]) ?? [];
-      const vendorItems = items.filter((i) => productIdSet.has(i.productId));
+      const vendorItems = items.filter((i) => isVendorItem(i, productIdSet, req));
       if (vendorItems.length === 0) continue;
 
       const isReturnRelated = [
@@ -3403,7 +3577,12 @@ router.get("/seller/returns", requireVendorAuth, async (req: any, res: any) => {
       }
 
       const returnResponses = ((order as any).vendorReturnResponses as Record<string, any>) ?? {};
-      const myReturnResponse = returnResponses[vendorId];
+      const myReturnResponse =
+        returnResponses[vendorId] ||
+        (req.userId && returnResponses[req.userId]) ||
+        (req.sellerId && returnResponses[req.sellerId]) ||
+        (req.vendor?.id && returnResponses[req.vendor.id]) ||
+        (req.vendor?.ownerId && returnResponses[req.vendor.ownerId]);
 
       vendorReturns.push({
         id: order.id,

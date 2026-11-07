@@ -8,8 +8,7 @@ export default function PaithaniShop() {
       title="Paithani Sarees"
       subtitle="Authentic Yeola & Pure Silk Heritage"
       description="Handwoven with pure silk yarn, genuine zari borders, peacock motifs, and centuries of Maharashtrian artisan tradition."
-      heroBanner="/images/hero-paithani-shop-banner.jpg"
-      badgeLabel="Royal Handloom Collection"
+      hideHero={true}
     />
   );
 }

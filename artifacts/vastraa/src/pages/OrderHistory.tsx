@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { getProductImageSrc, replaceProductImageWithFallback } from "@/lib/productImages";
 import { motion } from "framer-motion";
-import { Package, ShoppingBag, Download, Layers, Eye } from "lucide-react";
+import { Package, ShoppingBag, Download, Layers, Eye, RotateCcw, RefreshCw, Clock } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { OrderCardSkeleton, Skeleton } from "@/components/skeletons";
@@ -28,6 +28,8 @@ type Order = {
   total: number;
   status: string;
   createdAt: string;
+  updatedAt?: string;
+  deliveredAt?: string | null;
   paymentMethod?: string;
   paymentStatus?: string;
   refundStatus?: string | null;
@@ -421,6 +423,84 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
                           })()}
                         </div>
                       </div>
+
+                      {/* 7-Day Return & Exchange Actions & Deadlines */}
+                      {(() => {
+                        const isDelivered = order.status === "delivered";
+                        const deliveryDate = order.deliveredAt ? new Date(order.deliveredAt) : order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt);
+                        const daysSinceDelivery = Math.floor((Date.now() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+                        const daysRemaining = Math.max(0, 7 - daysSinceDelivery);
+                        const isReturnWindowOpen = isDelivered && daysSinceDelivery <= 7;
+                        const hasReturnClaim = ["returned", "return_requested", "return_approved"].includes(order.status) || Boolean(order.refundStatus);
+
+                        if (isDelivered && !hasReturnClaim) {
+                          return (
+                            <div className="mt-3 pt-3 border-t border-[#C7CCD1]/20 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <Clock size={13} className={isReturnWindowOpen ? "text-emerald-600" : "text-gray-400"} />
+                                {isReturnWindowOpen ? (
+                                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                                    Eligible for 7-Day Return / Exchange · <strong className="font-semibold">{daysRemaining} day{daysRemaining === 1 ? "" : "s"} left</strong>
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 dark:text-gray-500">
+                                    Return window closed (delivered {daysSinceDelivery} days ago)
+                                  </span>
+                                )}
+                              </div>
+                              {isReturnWindowOpen && (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.location.href = `${BASE}/account/returns?orderId=${order.id}&action=return`;
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300 transition-colors"
+                                  >
+                                    <RotateCcw size={12} />
+                                    Request Return
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.location.href = `${BASE}/account/returns?orderId=${order.id}&action=exchange`;
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 transition-colors"
+                                  >
+                                    <RefreshCw size={12} />
+                                    Request Exchange
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (hasReturnClaim) {
+                          return (
+                            <div className="mt-3 pt-3 border-t border-[#C7CCD1]/20 flex items-center justify-between gap-2">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0A1F44] dark:text-[#C7CCD1]">
+                                <RotateCcw size={13} className="text-[#0A1F44] dark:text-[#C7CCD1]" />
+                                Return / Exchange Active · Tracking Live
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  window.location.href = `${BASE}/account/returns`;
+                                }}
+                                className="text-xs font-bold text-[#0A1F44] dark:text-[#C7CCD1] hover:underline"
+                              >
+                                View Tracker →
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })()}
                     </div>
                   </Link>
                 </motion.div>
@@ -444,4 +524,6 @@ export function OrderHistoryContent({ dashboardMode = false }: { dashboardMode?:
 export function OrderHistoryPage() {
   return <Layout><OrderHistoryContent /></Layout>;
 }
+
+export default OrderHistoryPage;
 

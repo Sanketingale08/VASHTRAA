@@ -49,15 +49,37 @@ import {
   CATALOG_CATEGORIES,
   CATEGORY_DROPDOWN_OPTIONS,
   getSubcategoriesForCategory,
+  getSubtypesForSubcategory,
   isValidSubcategoryForCategory,
   resolveCanonicalSubcategoryName,
+  findCategoryBySlugOrName,
+  findSubcategoryDefinition,
+  normalizeCategoryKey,
+  FABRICS_OPTIONS,
+  WEAVING_TECHNIQUES_OPTIONS,
+  WORK_TYPES_OPTIONS,
+  BORDER_TYPES_OPTIONS,
+  PALLU_DESIGNS_OPTIONS,
+  OCCASIONS_OPTIONS,
+  ORIGINS_OPTIONS,
+  SAREE_LENGTHS_OPTIONS,
+  COLORS_OPTIONS,
+  registerClientDynamicSubcategory,
 } from "@/constants/categories";
+import {
+  getCategorySpecifications,
+  isSareeCategory,
+  extractSpecificationsList,
+  BLOUSE_FABRICS_OPTIONS,
+  BLOUSE_LENGTHS_OPTIONS,
+  BLOUSE_DESIGNS_OPTIONS,
+} from "@/constants/categorySpecifications";
 
 const MAROON = "#0A1F44";
 const GOLD = "#D4AF37";
 
 const STEPS = [
-  { id: 1, title: "Product Information", shortTitle: "Info", desc: "Identity & saree details" },
+  { id: 1, title: "Product Information", shortTitle: "Info", desc: "Identity & product details" },
   { id: 2, title: "Images & Variants", shortTitle: "Images", desc: "Photos & combinations" },
   { id: 3, title: "Pricing & Inventory", shortTitle: "Pricing", desc: "Price, MRP & stock" },
   { id: 4, title: "Shipping & Review", shortTitle: "Review", desc: "Pickup & final checks" },
@@ -117,9 +139,105 @@ export default function SellerProductNew() {
     } catch {}
   }, [draftStorageKey]);
 
-  // Authoritative category options and dynamic subcategories for current category
+  // Authoritative category options and dynamic subcategories & subtypes
+  const { data: dbCategoriesData } = useQuery<{ categories: any[] }>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      try {
+        const res = await apiFetch("/api/categories");
+        if (!res.ok) return { categories: [] };
+        return res.json();
+      } catch {
+        return { categories: [] };
+      }
+    },
+    staleTime: 60_000,
+  });
+
   const categoryOptions = CATEGORY_DROPDOWN_OPTIONS;
-  const subcategories = useMemo(() => getSubcategoriesForCategory(form.category), [form.category]);
+  const subcategories = useMemo(
+    () => getSubcategoriesForCategory(form.category, dbCategoriesData?.categories),
+    [form.category, dbCategoriesData?.categories]
+  );
+  const subtypes = useMemo(
+    () => getSubtypesForSubcategory(form.category, form.subcategory),
+    [form.category, form.subcategory]
+  );
+
+  // New subcategory creation state
+  const [showAddSubcategoryModal, setShowAddSubcategoryModal] = useState(false);
+  const [newSubcategoryName, setNewSubcategoryName] = useState("");
+  const [addingSubcategory, setAddingSubcategory] = useState(false);
+  const [addSubcategoryError, setAddSubcategoryError] = useState("");
+
+  const handleCreateSubcategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newSubcategoryName.trim();
+    if (!trimmed) {
+      setAddSubcategoryError("Please enter a subcategory name.");
+      return;
+    }
+    if (!form.category) {
+      setAddSubcategoryError("Please select a main category first.");
+      return;
+    }
+
+    setAddingSubcategory(true);
+    setAddSubcategoryError("");
+    try {
+      const res = await apiFetch("/api/seller/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmed,
+          parentId: form.category,
+          type: "subcategory",
+        }),
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || "Failed to create subcategory.");
+      }
+
+      const createdDoc = resData.category || {
+        id: resData.id || trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        name: trimmed,
+        slug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        parentId: form.category,
+      };
+
+      registerClientDynamicSubcategory(form.category, {
+        id: createdDoc.id,
+        name: createdDoc.name,
+        slug: createdDoc.slug,
+        route: `/${form.category}?subcategory=${createdDoc.slug}`,
+        subtypes: [],
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+
+      // Automatically select the newly created subcategory
+      handleChange("subcategory", createdDoc.name);
+
+      window.dispatchEvent(
+        new CustomEvent("vastraa-realtime-event", {
+          detail: {
+            name: "category:created",
+            data: { category: createdDoc, parentId: form.category },
+          },
+        })
+      );
+
+      setNewSubcategoryName("");
+      setShowAddSubcategoryModal(false);
+      showToast(`Subcategory "${createdDoc.name}" added successfully!`);
+    } catch (err: any) {
+      setAddSubcategoryError(err.message || "Failed to create subcategory.");
+    } finally {
+      setAddingSubcategory(false);
+    }
+  };
 
   // Check if form has any unsaved user input
   const isDirty = useMemo(() => {
@@ -136,12 +254,21 @@ export default function SellerProductNew() {
   const handleChange = useCallback((field: keyof ProductFormData | "sku", value: any) => {
     setForm((prev) => {
       if (field === "category") {
-        // When parent category changes, reset selected subcategory if it is no longer valid
-        const nextSub = resolveCanonicalSubcategoryName(value, prev.subcategory);
+        const isSaree = isSareeCategory(value);
         return {
           ...prev,
           category: value,
-          subcategory: nextSub,
+          subcategory: "",
+          subtype: "",
+          blouseIncluded: isSaree ? prev.blouseIncluded : false,
+          blouseImages: isSaree ? prev.blouseImages : [],
+        };
+      }
+      if (field === "subcategory") {
+        return {
+          ...prev,
+          subcategory: value,
+          subtype: "",
         };
       }
       return prev[field as keyof ProductFormData] === value ? prev : { ...prev, [field]: value };
@@ -174,12 +301,37 @@ export default function SellerProductNew() {
 
       if (form.name.trim() && form.category && form.price.trim() && !isNaN(Number(form.price)) && Number(form.price) > 0) {
         try {
+          const categoryDef = findCategoryBySlugOrName(form.category);
+          const canonicalSubcategory = form.subcategory.trim()
+            ? resolveCanonicalSubcategoryName(form.category, form.subcategory)
+            : null;
+          const subcategoryDef = categoryDef && canonicalSubcategory
+            ? findSubcategoryDefinition(categoryDef.slug, canonicalSubcategory)
+            : null;
+
+          const categorySlug = categoryDef?.slug || form.category;
+          const categoryId = categoryDef?.id || `cat-${categorySlug}-default`;
+          const categoryName = categoryDef?.name || form.category;
+          const subcategorySlug = subcategoryDef?.slug || (canonicalSubcategory ? normalizeCategoryKey(canonicalSubcategory) : null);
+          const subcategoryId = subcategoryDef?.id || (subcategorySlug ? `sub-${categorySlug}-${subcategorySlug}` : null);
+
           const body = {
             name: form.name.trim(),
             description: form.description.trim() || `${form.name.trim()} (Draft)`,
             category: form.category,
+            categorySlug,
+            categoryId,
+            categoryName,
+            mainCategoryId: categoryId,
+            subcategory: canonicalSubcategory,
+            subcategorySlug,
+            subcategoryId,
+            subcategoryName: canonicalSubcategory,
+            subtype: form.subtype?.trim() || null,
+            subtypeId: form.subtype?.trim() ? normalizeCategoryKey(form.subtype.trim()) : null,
             price: parseInt(form.price, 10),
             fabric: form.fabric.trim() || "Silk",
+            color: form.color || "Red",
             status: "draft",
             images: form.images.filter(Boolean),
             stock: form.stock.trim() ? parseInt(form.stock, 10) : 10,
@@ -338,9 +490,19 @@ export default function SellerProductNew() {
     setApiError("");
 
     try {
+      const categoryDef = findCategoryBySlugOrName(form.category);
       const canonicalSubcategory = form.subcategory.trim()
         ? resolveCanonicalSubcategoryName(form.category, form.subcategory)
         : null;
+      const subcategoryDef = categoryDef && canonicalSubcategory
+        ? findSubcategoryDefinition(categoryDef.slug, canonicalSubcategory)
+        : null;
+
+      const categorySlug = categoryDef?.slug || form.category;
+      const categoryId = categoryDef?.id || `cat-${categorySlug}-default`;
+      const categoryName = categoryDef?.name || form.category;
+      const subcategorySlug = subcategoryDef?.slug || (canonicalSubcategory ? normalizeCategoryKey(canonicalSubcategory) : null);
+      const subcategoryId = subcategoryDef?.id || (subcategorySlug ? `sub-${categorySlug}-${subcategorySlug}` : null);
 
       if (form.subcategory.trim() && !canonicalSubcategory) {
         setErrors((prev) => ({
@@ -351,21 +513,79 @@ export default function SellerProductNew() {
         return;
       }
 
+      const isSaree = isSareeCategory(form.category);
+      const categorySpecifics = extractSpecificationsList(form, form.category);
+      const manualSpecs = form.specifications
+        .filter((s) => s.key.trim() && s.value.trim())
+        .map((s) => ({ key: s.key.trim(), value: s.value.trim() }));
+      const existingKeys = new Set(categorySpecifics.map((s) => s.key.toLowerCase()));
+      const combinedSpecifications = [
+        ...categorySpecifics,
+        ...manualSpecs.filter((s) => !existingKeys.has(s.key.toLowerCase())),
+      ];
+
       const body = {
         name: form.name.trim(),
         description: form.description.trim(),
         category: form.category,
+        categorySlug,
+        categoryId,
+        categoryName,
+        mainCategoryId: categoryId,
         subcategory: canonicalSubcategory,
+        subcategorySlug,
+        subcategoryId,
+        subcategoryName: canonicalSubcategory,
+        subtype: form.subtype?.trim() || null,
+        subtypeId: form.subtype?.trim() ? normalizeCategoryKey(form.subtype.trim()) : null,
         collection: form.collection?.trim() || null,
         gender: form.gender?.trim() || "Women",
         sareeType: form.sareeType?.trim() || null,
         sareeStyle: form.sareeStyle?.trim() || null,
         packOf: form.packOf?.trim() || "Pack of 1",
         countryOfOrigin: form.countryOfOrigin?.trim() || "India",
-        blouseIncluded: form.blouseIncluded,
+        blouseIncluded: isSaree ? Boolean(form.blouseIncluded) : false,
+        blouseImages: isSaree && form.blouseIncluded ? (form.blouseImages || []).filter(Boolean) : [],
+        blouseDetails: isSaree && form.blouseIncluded ? {
+          fabric: form.blouseFabric || "Pure Silk",
+          color: form.blouseColor || form.color,
+          length: form.blouseLength || "0.80 Metre (Standard Unstitched)",
+          design: form.blouseDesign || "Matching Running Blouse Piece",
+        } : null,
+        // Category specific attributes
+        kurtiType: form.kurtiType?.trim() || null,
+        dressType: form.dressType?.trim() || null,
+        topType: form.topType?.trim() || null,
+        winterWearType: form.winterWearType?.trim() || null,
+        fit: form.fit?.trim() || null,
+        pattern: form.pattern?.trim() || null,
+        closureType: form.closureType?.trim() || null,
+        sleeveLength: form.sleeveLength?.trim() || null,
+        sleeveType: form.sleeveType?.trim() || null,
+        neckStyle: form.neckStyle?.trim() || null,
+        neckline: form.neckline?.trim() || null,
+        kurtiLength: form.kurtiLength?.trim() || null,
+        kurtaLength: form.kurtaLength?.trim() || null,
+        dressLength: form.dressLength?.trim() || null,
+        topLength: form.topLength?.trim() || null,
+        bottomType: form.bottomType?.trim() || null,
+        bottomLength: form.bottomLength?.trim() || null,
+        dupattaIncluded: form.dupattaIncluded?.trim() || null,
+        dupattaFabric: form.dupattaFabric?.trim() || null,
+        silhouette: form.silhouette?.trim() || null,
+        embellishment: form.embellishment?.trim() || null,
+        waistline: form.waistline?.trim() || null,
+        warmthLevel: form.warmthLevel?.trim() || null,
+        winterWearLength: form.winterWearLength?.trim() || null,
         brand: form.brand.trim() || null,
         designPattern: form.designPattern.trim() || null,
         fabric: form.fabric,
+        weavingTechnique: form.weavingTechnique?.trim() || null,
+        workType: form.workType?.trim() || null,
+        borderType: form.borderType?.trim() || null,
+        palluDesign: form.palluDesign?.trim() || null,
+        sareeLength: form.sareeLength?.trim() || null,
+        origin: form.origin?.trim() || form.countryOfOrigin?.trim() || "India",
         color: form.color,
         occasion: form.occasion,
         basePrice: parseInt(form.price, 10),
@@ -384,9 +604,7 @@ export default function SellerProductNew() {
             sku: v.sku.trim() || null,
             image: v.image.trim() || null,
           })),
-        specifications: form.specifications
-          .filter((s) => s.key.trim() && s.value.trim())
-          .map((s) => ({ key: s.key.trim(), value: s.value.trim() })),
+        specifications: combinedSpecifications,
         deliveryInfo: form.deliveryInfo.trim() || "Ships within 2-3 business days",
         returnPolicy: form.returnPolicy.trim() || "7-day return and replacement policy",
         isBestSeller: form.isBestSeller,
@@ -415,7 +633,7 @@ export default function SellerProductNew() {
         } else if (data.code === "VENDOR_PROFILE_INCOMPLETE") {
           throw new Error("Your seller profile is incomplete. Please complete all required business details before submitting products.");
         }
-        throw new Error(data.error || "Failed to submit product for approval");
+        throw new Error(data.error || "Failed to publish product");
       }
       const createdProduct = await res.json().catch(() => ({}));
 
@@ -426,6 +644,7 @@ export default function SellerProductNew() {
 
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products/facets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/seller/products"] });
       queryClient.invalidateQueries({ queryKey: ["/seller/products"] });
 
@@ -447,6 +666,23 @@ export default function SellerProductNew() {
           },
         })
       );
+
+      if (createdProduct?.status === "approved") {
+        window.dispatchEvent(
+          new CustomEvent("vastraa-realtime-event", {
+            detail: {
+              name: "product:approved",
+              data: {
+                id: createdProduct?.id,
+                productId: createdProduct?.id,
+                status: "approved",
+                active: true,
+                product: createdProduct,
+              },
+            },
+          })
+        );
+      }
 
       setSuccess(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -686,7 +922,7 @@ export default function SellerProductNew() {
         </div>
 
         {/* ── Form Container ──────────────────────────────────────────────── */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-6">
           
           {/* ================================================================= */}
           {/* STEP 1: Product Information                                       */}
@@ -739,127 +975,262 @@ export default function SellerProductNew() {
                   )}
                 </div>
 
-                {/* Category & Subcategory Selection */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="seller-product-category" className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
-                      Product Category <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="seller-product-category"
-                      value={form.category}
-                      onChange={(e) => handleChange("category", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm text-[#111] font-medium outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
-                    >
-                      {categoryOptions.map((cat) => (
-                        <option key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.category && (
-                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                        <AlertCircle size={12} /> {errors.category}
-                      </p>
-                    )}
+                {/* 3-Tier Category Selection: Main Category -> Subcategory -> Subtype */}
+                <div className="p-4 rounded-xl bg-[#0A1F44]/5 border border-[#0A1F44]/15 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0A1F44] uppercase tracking-wider">
+                    <Sparkles size={13} className="text-[#D4AF37]" />
+                    <span>Product Taxonomy (3-Tier Dependent Selection)</span>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Tier 1: Main Category */}
+                    <div>
+                      <label htmlFor="seller-product-category" className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                        1. Main Category <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        id="seller-product-category"
+                        value={form.category}
+                        onChange={(e) => handleChange("category", e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#0A1F44] font-bold outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
+                      >
+                        {categoryOptions.map((cat) => (
+                          <option key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.category && (
+                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle size={12} /> {errors.category}
+                        </p>
+                      )}
+                    </div>
 
-                  <div>
-                    <label htmlFor="seller-product-subcategory" className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
-                      Subcategory <span className="text-gray-400 font-normal">(Dynamic by Category)</span>
-                    </label>
-                    <select
-                      id="seller-product-subcategory"
-                      value={form.subcategory}
-                      onChange={(e) => handleChange("subcategory", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm text-[#111] outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
-                    >
-                      <option value="">Select subcategory...</option>
-                      {subcategories.map((sub) => (
-                        <option key={sub.id} value={sub.name}>
-                          {sub.name}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.subcategory && (
-                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                        <AlertCircle size={12} /> {errors.subcategory}
-                      </p>
-                    )}
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      {subcategories.length > 0
-                        ? `Available subcategories for ${categoryOptions.find((c) => c.value === form.category)?.label || form.category}`
-                        : "Select a parent category to load matching subcategories"}
-                    </p>
+                    {/* Tier 2: Subcategory */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="seller-product-subcategory" className="block text-xs font-bold uppercase tracking-wide text-[#333]">
+                          2. Subcategory <span className="text-gray-400 font-normal">(Dynamic)</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAddSubcategoryError("");
+                            setNewSubcategoryName("");
+                            setShowAddSubcategoryModal(true);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0A1F44] hover:text-[#0A1F44]/80 hover:underline cursor-pointer transition-colors"
+                        >
+                          <Plus size={12} className="stroke-[2.5]" />
+                          <span>Add Subcategory</span>
+                        </button>
+                      </div>
+                      <select
+                        id="seller-product-subcategory"
+                        value={form.subcategory}
+                        onChange={(e) => handleChange("subcategory", e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] font-medium outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
+                      >
+                        <option value="">Select subcategory...</option>
+                        {subcategories.map((sub) => (
+                          <option key={sub.id} value={sub.name}>
+                            {sub.name}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.subcategory && (
+                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle size={12} /> {errors.subcategory}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Tier 3: Subtype */}
+                    <div>
+                      <label htmlFor="seller-product-subtype" className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                        3. Subtype / Variety <span className="text-gray-400 font-normal">(Dynamic)</span>
+                      </label>
+                      {subtypes.length > 0 ? (
+                        <select
+                          id="seller-product-subtype"
+                          value={form.subtype || ""}
+                          onChange={(e) => handleChange("subtype", e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] font-medium outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
+                        >
+                          <option value="">Select subtype...</option>
+                          {subtypes.map((st) => (
+                            <option key={st} value={st}>
+                              {st}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          id="seller-product-subtype"
+                          type="text"
+                          value={form.subtype || ""}
+                          onChange={(e) => handleChange("subtype", e.target.value)}
+                          placeholder="e.g. Traditional Motif / Handloom"
+                          className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] outline-none focus:border-[#0A1F44]"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Brand & Fabric */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
-                      Brand
-                    </label>
-                    <input
-                      type="text"
-                      value={form.brand}
-                      onChange={(e) => handleChange("brand", e.target.value)}
-                      placeholder="e.g. VASTRAA Signature or your label"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
-                    />
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      Leave blank to list under your seller shop name.
-                    </p>
+                {/* Dynamic Product Specifications Grid */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0A1F44]">
+                      Product Specifications
+                    </h3>
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      Tailored to {categoryOptions.find((c) => c.value === form.category)?.label || form.category}
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
-                      Fabric / Material <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={form.fabric}
-                      onChange={(e) => handleChange("fabric", e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15 capitalize"
-                    >
-                      {FABRICS.map((f) => (
-                        <option key={f} value={f}>
-                          {f}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.fabric && (
-                      <p className="text-xs text-red-500 mt-1">{errors.fabric}</p>
-                    )}
-                  </div>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {getCategorySpecifications(form.category).map((field) => {
+                      const val = (form as any)[field.key] ?? "";
+                      const isRequired = field.required;
+                      const err = (errors as any)[field.key];
 
-                {/* Saree Type & Style */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
-                      Saree Type
-                    </label>
-                    <input
-                      type="text"
-                      value={form.sareeType}
-                      onChange={(e) => handleChange("sareeType", e.target.value)}
-                      placeholder={form.category === "paithani" ? "e.g. Yeola Paithani" : "e.g. Bollywood Designer Saree"}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
-                    />
+                      return (
+                        <div key={field.key}>
+                          <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                            {field.label} {isRequired && <span className="text-red-500">*</span>}
+                          </label>
+                          {field.type === "select" && field.options ? (
+                            <select
+                              value={val}
+                              onChange={(e) => handleChange(field.key as keyof ProductFormData, e.target.value)}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none cursor-pointer focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
+                            >
+                              {field.options.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={(e) => handleChange(field.key as keyof ProductFormData, e.target.value)}
+                              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
+                            />
+                          )}
+                          {err && <p className="text-xs text-red-500 mt-1">{err}</p>}
+                        </div>
+                      );
+                    })}
+
+                    {/* Brand */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                        Brand
+                      </label>
+                      <input
+                        type="text"
+                        value={form.brand}
+                        onChange={(e) => handleChange("brand", e.target.value)}
+                        placeholder="e.g. VASTRAA Signature or your label"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Leave blank to list under your seller shop name.
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
-                      Saree Style
-                    </label>
-                    <input
-                      type="text"
-                      value={form.sareeStyle}
-                      onChange={(e) => handleChange("sareeStyle", e.target.value)}
-                      placeholder="e.g. Traditional, Royal Bridal, Party Drape"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6C9BA] bg-[#FDFBF8] text-sm outline-none focus:border-[#0A1F44] focus:ring-2 focus:ring-[#0A1F44]/15"
-                    />
-                  </div>
+                  {/* Saree-Only Matching Blouse Section */}
+                  {isSareeCategory(form.category) && (
+                    <div className="p-4 rounded-xl bg-[#0A1F44]/5 border border-[#0A1F44]/15 space-y-3 mt-4">
+                      <div className="flex items-center gap-2.5">
+                        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={form.blouseIncluded}
+                            onChange={(e) => handleChange("blouseIncluded", e.target.checked)}
+                            className="w-4 h-4 rounded text-[#0A1F44] focus:ring-0 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-[#0A1F44]">
+                            Includes Matching Unstitched Blouse Piece
+                          </span>
+                        </label>
+                      </div>
+
+                      {form.blouseIncluded && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-[#0A1F44]/10 animate-in fade-in">
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                              Blouse Piece Fabric
+                            </label>
+                            <select
+                              value={form.blouseFabric || "Pure Silk"}
+                              onChange={(e) => handleChange("blouseFabric", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] font-medium outline-none focus:border-[#0A1F44]"
+                            >
+                              {BLOUSE_FABRICS_OPTIONS.map((f) => (
+                                <option key={f} value={f}>
+                                  {f}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                              Blouse Piece Colour
+                            </label>
+                            <select
+                              value={form.blouseColor || form.color}
+                              onChange={(e) => handleChange("blouseColor", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] font-medium outline-none focus:border-[#0A1F44]"
+                            >
+                              {COLORS_OPTIONS.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                              Blouse Piece Length
+                            </label>
+                            <select
+                              value={form.blouseLength || "0.80 Metre (Standard Unstitched)"}
+                              onChange={(e) => handleChange("blouseLength", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] font-medium outline-none focus:border-[#0A1F44]"
+                            >
+                              {BLOUSE_LENGTHS_OPTIONS.map((l) => (
+                                <option key={l} value={l}>
+                                  {l}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wide text-[#333] mb-1.5">
+                              Blouse Piece Design (Optional)
+                            </label>
+                            <select
+                              value={form.blouseDesign || "Matching Running Blouse Piece"}
+                              onChange={(e) => handleChange("blouseDesign", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#D6C9BA] bg-white text-xs text-[#111] font-medium outline-none focus:border-[#0A1F44]"
+                            >
+                              {BLOUSE_DESIGNS_OPTIONS.map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Product Description */}
@@ -889,7 +1260,7 @@ export default function SellerProductNew() {
                 </div>
               </div>
 
-              {/* Section 1B: Progressive Disclosure — Advanced Attributes */}
+              {/* Section 1B: Progressive Disclosure — Additional Attributes */}
               <div className="bg-white rounded-2xl border border-[#E5E8EC] p-5 sm:p-6 shadow-2xs">
                 <button
                   type="button"
@@ -899,10 +1270,10 @@ export default function SellerProductNew() {
                   <div className="flex items-center gap-2">
                     <Layers size={16} className="text-[#0A1F44]" />
                     <span className="text-sm font-bold uppercase tracking-wider text-[#0A1F44]">
-                      Advanced Saree Attributes
+                      Additional Product Attributes
                     </span>
                     <span className="text-xs text-gray-400 font-normal">
-                      (Color, Design Pattern, Blouse, Specifications)
+                      (Collection, Gender, Pack Of, Custom Specifications)
                     </span>
                   </div>
                   <div className="p-1 rounded-lg bg-gray-100 group-hover:bg-gray-200 text-gray-600 transition-colors">
@@ -913,58 +1284,6 @@ export default function SellerProductNew() {
                 {showAdvanced && (
                   <div className="mt-5 pt-5 border-t border-[#F0F2F5] space-y-4 animate-in fade-in duration-150">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {/* Color */}
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wide text-[#555] mb-1">
-                          Primary Color
-                        </label>
-                        <select
-                          value={form.color}
-                          onChange={(e) => handleChange("color", e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none cursor-pointer capitalize"
-                        >
-                          {COLORS.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Occasion */}
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wide text-[#555] mb-1">
-                          Occasion
-                        </label>
-                        <select
-                          value={form.occasion}
-                          onChange={(e) => handleChange("occasion", e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none cursor-pointer capitalize"
-                        >
-                          {OCCASIONS.map((o) => (
-                            <option key={o} value={o}>
-                              {o}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Design Pattern */}
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wide text-[#555] mb-1">
-                          Design Pattern
-                        </label>
-                        <input
-                          type="text"
-                          value={form.designPattern}
-                          onChange={(e) => handleChange("designPattern", e.target.value)}
-                          placeholder="e.g. Peacock motif, zari border"
-                          className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Collection filter */}
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wide text-[#555] mb-1">
@@ -974,51 +1293,45 @@ export default function SellerProductNew() {
                           type="text"
                           value={form.collection}
                           onChange={(e) => handleChange("collection", e.target.value)}
-                          placeholder="e.g. royal-festival, bridal-paithani"
+                          placeholder="e.g. royal-festival, festive-glam"
                           className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none"
                         />
                       </div>
 
-                      {/* Subcategory */}
+                      {/* Gender */}
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wide text-[#555] mb-1">
-                          Subcategory
+                          Target Gender
                         </label>
-                        <select
-                          value={form.subcategory}
-                          onChange={(e) => handleChange("subcategory", e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none cursor-pointer"
-                        >
-                          <option value="">Select subcategory...</option>
-                          {subcategories.map((sub) => (
-                            <option key={sub.id} value={sub.name}>
-                              {sub.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Blouse Included checkbox */}
-                    <div className="pt-2">
-                      <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
                         <input
-                          type="checkbox"
-                          checked={form.blouseIncluded}
-                          onChange={(e) => handleChange("blouseIncluded", e.target.checked)}
-                          className="w-4 h-4 rounded text-[#0A1F44] focus:ring-0 cursor-pointer"
+                          type="text"
+                          value={form.gender}
+                          onChange={(e) => handleChange("gender", e.target.value)}
+                          placeholder="Women"
+                          className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none"
                         />
-                        <span className="text-xs font-semibold text-[#333]">
-                          Includes Unstitched Matching Blouse Piece (0.8m)
-                        </span>
-                      </label>
+                      </div>
+
+                      {/* Pack Of */}
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-[#555] mb-1">
+                          Pack Of
+                        </label>
+                        <input
+                          type="text"
+                          value={form.packOf}
+                          onChange={(e) => handleChange("packOf", e.target.value)}
+                          placeholder="Pack of 1"
+                          className="w-full px-3 py-2 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none"
+                        />
+                      </div>
                     </div>
 
                     {/* Specifications table */}
                     <div className="pt-3 border-t border-[#F0F2F5] space-y-2.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold uppercase tracking-wider text-[#555]">
-                          Custom Saree Specifications
+                          Custom Specifications
                         </span>
                         <button
                           type="button"
@@ -1035,14 +1348,14 @@ export default function SellerProductNew() {
                             type="text"
                             value={s.key}
                             onChange={(e) => updateSpec(idx, "key", e.target.value)}
-                            placeholder="Attribute (e.g. Weave)"
+                            placeholder="Attribute (e.g. Weave / Care)"
                             className="flex-1 px-3 py-1.5 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none"
                           />
                           <input
                             type="text"
                             value={s.value}
                             onChange={(e) => updateSpec(idx, "value", e.target.value)}
-                            placeholder="Value (e.g. Handwoven Pure Silk)"
+                            placeholder="Value (e.g. Dry Clean Only)"
                             className="flex-1 px-3 py-1.5 rounded-lg border border-[#D6C9BA] bg-[#FDFBF8] text-xs outline-none"
                           />
                           <button
@@ -1105,15 +1418,41 @@ export default function SellerProductNew() {
                 )}
               </div>
 
+              {/* Saree-Only Matching Blouse Photography */}
+              {isSareeCategory(form.category) && form.blouseIncluded && (
+                <div className="bg-white rounded-2xl border border-[#E5E8EC] p-5 sm:p-6 space-y-4 shadow-2xs animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-[#F0F2F5] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#0A1F44]" />
+                      <h2 className="text-sm font-bold uppercase tracking-wider text-[#0A1F44]">
+                        Matching Blouse Piece Photography
+                      </h2>
+                    </div>
+                    <span className="text-[11px] text-[#0A1F44] font-semibold bg-[#0A1F44]/5 px-2.5 py-1 rounded-full border border-[#0A1F44]/10">
+                      Saree Blouse Gallery
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-500">
+                    Upload photos of the matching unstitched blouse piece (fabric, embroidery, border work). These photos will appear in the dedicated blouse section for customers.
+                  </p>
+
+                  <ImageUploadGallery
+                    images={form.blouseImages || []}
+                    onImagesChange={(urls) => handleChange("blouseImages", urls)}
+                  />
+                </div>
+              )}
+
               {/* Variants Section */}
               <div className="bg-white rounded-2xl border border-[#E5E8EC] p-5 sm:p-6 space-y-4 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-bold uppercase tracking-wider text-[#0A1F44]">
-                      Saree Variants
+                      Product Variants
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Does this saree design come in multiple colours or borders?
+                      Does this product design come in multiple colours, sizes, or variants?
                     </p>
                   </div>
 
@@ -1425,7 +1764,7 @@ export default function SellerProductNew() {
                       )}
                     </div>
                     <h4 className="font-serif text-lg font-bold text-[#0A1F44]">
-                      {form.name || "Untitled Saree"}
+                      {form.name || "Untitled Product"}
                     </h4>
                     <p className="text-xs text-gray-500 line-clamp-2">
                       {form.description || "No description provided."}
@@ -1438,7 +1777,7 @@ export default function SellerProductNew() {
                       <span className="px-2 py-0.5 rounded bg-gray-100 font-medium">
                         Color: <strong>{form.color}</strong>
                       </span>
-                      {form.blouseIncluded && (
+                      {isSareeCategory(form.category) && form.blouseIncluded && (
                         <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium">
                           ✓ Blouse piece included
                         </span>
@@ -1579,6 +1918,7 @@ export default function SellerProductNew() {
 
               {currentStep < 4 ? (
                 <button
+                  key="btn-step-continue"
                   type="button"
                   onClick={handleNextStep}
                   className="px-6 py-2.5 rounded-xl bg-[#0A1F44] hover:bg-[#1B365D] text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
@@ -1588,7 +1928,12 @@ export default function SellerProductNew() {
                 </button>
               ) : (
                 <button
-                  type="submit"
+                  key="btn-step-submit-approval"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }}
                   disabled={submitting}
                   aria-label="Create Product - Submit for Approval"
                   className="px-7 py-2.5 rounded-xl bg-[#0A1F44] hover:bg-[#1B365D] text-white text-xs font-bold shadow-md transition-all disabled:opacity-60 flex items-center gap-2"
@@ -1721,7 +2066,7 @@ export default function SellerProductNew() {
                       {form.brand || (vendor as any)?.shopName || "VASTRAA Artisan"}
                     </span>
                     <h3 className="font-serif text-xl font-bold text-[#0A1F44] mt-0.5">
-                      {form.name || "Untitled Saree"}
+                      {form.name || "Untitled Product"}
                     </h3>
                   </div>
 
@@ -1742,13 +2087,15 @@ export default function SellerProductNew() {
                   </div>
 
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    {form.description || "Authentic saree listing created on VASTRAA marketplace."}
+                    {form.description || "Authentic product listing created on VASTRAA marketplace."}
                   </p>
 
                   <div className="p-3 rounded-xl bg-gray-50 border text-xs space-y-1">
                     <div className="text-gray-500">Fabric: <strong className="text-gray-800">{form.fabric}</strong></div>
                     <div className="text-gray-500">Primary Color: <strong className="text-gray-800">{form.color}</strong></div>
-                    <div className="text-gray-500">Blouse: <strong className="text-gray-800">{form.blouseIncluded ? "Included (Unstitched 0.8m)" : "Not Included"}</strong></div>
+                    {isSareeCategory(form.category) && form.blouseIncluded && (
+                      <div className="text-gray-500">Blouse: <strong className="text-gray-800">Included ({form.blouseLength || "Unstitched"})</strong></div>
+                    )}
                     <div className="text-gray-500">Sold by: <strong className="text-[#0A1F44]">{(vendor as any)?.shopName || "Verified Artisan"}</strong></div>
                   </div>
 
@@ -1773,6 +2120,93 @@ export default function SellerProductNew() {
                   Close Preview
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Add New Subcategory */}
+        {showAddSubcategoryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-[#0A1F44]/10 text-[#0A1F44] flex items-center justify-center font-bold">
+                    <Plus size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#0A1F44]">Add New Subcategory</h3>
+                    <p className="text-[11px] text-gray-500">
+                      Under {categoryOptions.find((c) => c.value === form.category)?.label || form.category}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSubcategoryModal(false)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {addSubcategoryError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <span>{addSubcategoryError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateSubcategory} className="space-y-4">
+                <div>
+                  <label htmlFor="new-subcategory-name-input" className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Subcategory Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="new-subcategory-name-input"
+                    type="text"
+                    value={newSubcategoryName}
+                    onChange={(e) => {
+                      setNewSubcategoryName(e.target.value);
+                      if (addSubcategoryError) setAddSubcategoryError("");
+                    }}
+                    placeholder="e.g. Festival Special, Embroidered Velvet, Tissue Pure"
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0A1F44]/20 focus:border-[#0A1F44] transition-all"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    This subcategory will appear dynamically only within{" "}
+                    <strong>{categoryOptions.find((c) => c.value === form.category)?.label || form.category}</strong>.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSubcategoryModal(false)}
+                    disabled={addingSubcategory}
+                    className="px-4 py-2 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addingSubcategory || !newSubcategoryName.trim()}
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#0A1F44] hover:bg-[#0A1F44]/90 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    {addingSubcategory ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Adding...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={13} />
+                        <span>Add Subcategory</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

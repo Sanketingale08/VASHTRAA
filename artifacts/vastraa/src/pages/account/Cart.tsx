@@ -21,3 +21,5 @@ export function AccountCartPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountCartPage;

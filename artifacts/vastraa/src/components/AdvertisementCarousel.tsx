@@ -250,11 +250,11 @@ function AdvertisementCarouselView({
   return (
     <section
       aria-label="Promotional Showcase"
-      className={cn("w-full py-8 sm:py-10 md:py-12 bg-transparent select-none overflow-hidden", className)}
+      className={cn("w-full py-4 sm:py-6 md:py-8 bg-transparent select-none overflow-hidden", className)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6">
         <div className="relative group">
           {/* ── Carousel Viewport (Center alignment with peek preview) ── */}
           <div className="overflow-hidden" ref={emblaRef}>
@@ -271,8 +271,8 @@ function AdvertisementCarouselView({
                     className={cn(
                       "min-w-0 pl-3 sm:pl-4 transition-all duration-300",
                       hasMultiple
-                        ? "flex-[0_0_82%] sm:flex-[0_0_85%] md:flex-[0_0_88%]"
-                        : "flex-[0_0_100%] max-w-5xl mx-auto"
+                        ? "flex-[0_0_80%] sm:flex-[0_0_83%] md:flex-[0_0_86%]"
+                        : "flex-[0_0_100%] max-w-4xl mx-auto"
                     )}
                   >
                     <CardWrapper
@@ -287,8 +287,8 @@ function AdvertisementCarouselView({
                         canNavigate && "cursor-pointer group/card hover:border-[#2C3E6B]"
                       )}
                     >
-                      {/* Responsive image container adhering to the reference horizontal outline */}
-                      <div className="relative w-full aspect-[16/7] sm:aspect-[21/8] md:aspect-[24/8] lg:aspect-[26/8] bg-gray-50 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                      {/* Responsive compact image container adhering to the reference horizontal outline */}
+                      <div className="relative w-full aspect-[18/7] sm:aspect-[22/7] md:aspect-[26/7] lg:aspect-[30/7] max-h-[160px] sm:max-h-[200px] md:max-h-[230px] lg:max-h-[250px] bg-gray-50 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
                         <img
                           src={getAdvertisementImageSrc(ad.imageUrl)}
                           alt={ad.title?.trim() || "Advertisement"}
@@ -307,22 +307,22 @@ function AdvertisementCarouselView({
 
                         {/* Optional subtle gradient overlay only if non-empty title or description present */}
                         {Boolean(ad.title?.trim() || ad.description?.trim()) && (
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-4 sm:p-6 md:p-8 flex items-end justify-between pointer-events-none">
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 sm:p-4 md:p-5 flex items-end justify-between pointer-events-none">
                             <div className="text-white max-w-2xl pointer-events-auto">
                               {Boolean(ad.title?.trim()) && (
-                                <h3 className="font-serif text-lg sm:text-2xl md:text-3xl font-bold tracking-wide leading-tight drop-shadow-sm">
+                                <h3 className="font-serif text-sm sm:text-lg md:text-xl font-bold tracking-wide leading-tight drop-shadow-sm">
                                   {ad.title!.trim()}
                                 </h3>
                               )}
                               {Boolean(ad.description?.trim()) && (
-                                <p className="mt-1 text-xs sm:text-sm text-gray-200 line-clamp-2 drop-shadow-sm">
+                                <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-gray-200 line-clamp-1 sm:line-clamp-2 drop-shadow-sm">
                                   {ad.description!.trim()}
                                 </p>
                               )}
                             </div>
                             {Boolean(ad.linkUrl?.trim()) && (
-                              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-white bg-white/20 hover:bg-white/30 backdrop-blur-md px-3 py-1.5 rounded-full transition-colors shrink-0 ml-4 pointer-events-auto">
-                                Explore <ExternalLink size={12} />
+                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-white bg-white/20 hover:bg-white/30 backdrop-blur-md px-2.5 py-1 rounded-full transition-colors shrink-0 ml-3 pointer-events-auto">
+                                Explore <ExternalLink size={11} />
                               </span>
                             )}
                           </div>
@@ -342,24 +342,24 @@ function AdvertisementCarouselView({
                 type="button"
                 onClick={scrollPrev}
                 aria-label="Previous advertisement"
-                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/90 dark:bg-[#0A1F44]/90 text-[#0A1F44] dark:text-white shadow-lg border border-[#C7CCD1]/40 flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-105 active:scale-95 z-10 focus:outline-hidden cursor-pointer"
+                className="absolute left-1.5 sm:left-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/90 dark:bg-[#0A1F44]/90 text-[#0A1F44] dark:text-white shadow-lg border border-[#C7CCD1]/40 flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-105 active:scale-95 z-10 focus:outline-hidden cursor-pointer"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={18} />
               </button>
               <button
                 type="button"
                 onClick={scrollNext}
                 aria-label="Next advertisement"
-                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/90 dark:bg-[#0A1F44]/90 text-[#0A1F44] dark:text-white shadow-lg border border-[#C7CCD1]/40 flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-105 active:scale-95 z-10 focus:outline-hidden cursor-pointer"
+                className="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/90 dark:bg-[#0A1F44]/90 text-[#0A1F44] dark:text-white shadow-lg border border-[#C7CCD1]/40 flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-105 active:scale-95 z-10 focus:outline-hidden cursor-pointer"
               >
-                <ChevronRight size={20} />
+                <ChevronRight size={18} />
               </button>
             </>
           )}
 
           {/* ── Pagination Indicator Pills (Only if multiple ads) ── */}
           {hasMultiple && (
-            <div className="flex justify-center items-center gap-1.5 sm:gap-2 mt-4 sm:mt-5">
+            <div className="flex justify-center items-center gap-1.5 sm:gap-2 mt-3 sm:mt-4">
               {ads.map((_, i) => (
                 <button
                   key={i}
@@ -369,7 +369,7 @@ function AdvertisementCarouselView({
                   className={cn(
                     "h-1.5 sm:h-2 rounded-full transition-all duration-300 focus:outline-hidden cursor-pointer",
                     i === activeDotIndex
-                      ? "w-6 sm:w-8 bg-[#0A1F44] dark:bg-[#C7CCD1]"
+                      ? "w-5 sm:w-7 bg-[#0A1F44] dark:bg-[#C7CCD1]"
                       : "w-1.5 sm:w-2 bg-[#C7CCD1]/60 hover:bg-[#C7CCD1]"
                   )}
                 />

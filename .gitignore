@@ -3,6 +3,7 @@
 # secrets and temporary files
 .env
 .env.*
+!.env.example
 .tmp
 .config/
 GUEST_/
@@ -59,3 +60,5 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+screenshot_*.png
+scripts/test-dist/

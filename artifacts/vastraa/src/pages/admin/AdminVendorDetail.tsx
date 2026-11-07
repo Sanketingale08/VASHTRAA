@@ -156,7 +156,7 @@ function VendorDetailContent() {
         return r.json();
       })
       .then((d) => setVendor(d))
-      .catch(() => setError("Failed to load vendor details"))
+      .catch(() => setError("Failed to load seller details"))
       .finally(() => setLoading(false));
   }
 
@@ -172,7 +172,7 @@ function VendorDetailContent() {
 
     let payload: any = undefined;
     if (action === "reject") {
-      const reason = window.prompt("Optional reason for rejecting this vendor application:");
+      const reason = window.prompt("Optional reason for rejecting this seller application:");
       if (reason === null) return;
       payload = { reason: reason.trim() };
     }
@@ -242,7 +242,7 @@ function VendorDetailContent() {
           </button>
           <div>
             <h1 className="text-xl font-serif font-bold" style={{ color: NAVY }}>
-              {vendor?.name ?? "Vendor Detail"}
+              {vendor?.name ?? "Seller Detail"}
             </h1>
           </div>
         </div>
@@ -258,7 +258,7 @@ function VendorDetailContent() {
 
       {loading && (
         <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center text-gray-400 text-sm animate-pulse">
-          Loading vendor details…
+          Loading seller details…
         </div>
       )}
       {error && (
@@ -289,7 +289,7 @@ function VendorDetailContent() {
 
               {vendor.vendorId && (
                 <div className="mb-4 px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: "rgba(199,204,209,0.08)", border: "1px solid rgba(199,204,209,0.25)" }}>
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: GOLD }}>Vendor ID</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: GOLD }}>Seller ID</span>
                   <span className="text-sm font-mono font-semibold ml-auto" style={{ color: NAVY }}>{vendor.vendorId}</span>
                 </div>
               )}
@@ -328,21 +328,21 @@ function VendorDetailContent() {
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Admin Actions</h3>
               {vendor.status === "pending" && (
                 <>
-                  <ActionBtn label="✓ Approve Vendor" action="approve" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
-                  <ActionBtn label="✗ Reject Vendor" action="reject" color="#b91c1c" bg="#fef2f2" loading={actionLoading} onClick={doAction} />
+                  <ActionBtn label="✓ Approve Seller" action="approve" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
+                  <ActionBtn label="✗ Reject Seller" action="reject" color="#b91c1c" bg="#fef2f2" loading={actionLoading} onClick={doAction} />
                 </>
               )}
               {vendor.status === "approved" && (
                 <>
-                  <ActionBtn label="Suspend Vendor" action="suspend" color="#b91c1c" bg="#fef2f2" loading={actionLoading} onClick={doAction} />
-                  <ActionBtn label="Deactivate Vendor" action="deactivate" color="#4b5563" bg="#f3f4f6" loading={actionLoading} onClick={doAction} />
+                  <ActionBtn label="Suspend Seller" action="suspend" color="#b91c1c" bg="#fef2f2" loading={actionLoading} onClick={doAction} />
+                  <ActionBtn label="Deactivate Seller" action="deactivate" color="#4b5563" bg="#f3f4f6" loading={actionLoading} onClick={doAction} />
                 </>
               )}
               {(vendor.status === "rejected" || vendor.status === "declined") && (
-                <ActionBtn label="✓ Approve Vendor" action="approve" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
+                <ActionBtn label="✓ Approve Seller" action="approve" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
               )}
               {(vendor.status === "suspended" || vendor.status === "deactivated") && (
-                <ActionBtn label="✓ Reactivate Vendor" action="reactivate" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
+                <ActionBtn label="✓ Reactivate Seller" action="reactivate" color="#15803d" bg="#f0fdf4" loading={actionLoading} onClick={doAction} />
               )}
               <div className="pt-1 mt-1 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-2">

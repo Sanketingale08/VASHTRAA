@@ -75,6 +75,15 @@ export async function confirmOrderPayment(
     throw new Error(`Order ${orderId} not found`);
   }
 
+  // Verify paid amount matches order total if amount is provided
+  if (paymentDetails.amount !== undefined && paymentDetails.amount !== null) {
+    const expectedTotal = Number(order.total);
+    const paidAmount = Number(paymentDetails.amount);
+    if (!isNaN(expectedTotal) && !isNaN(paidAmount) && paidAmount < (expectedTotal - 1)) {
+      throw new Error(`Payment amount mismatch: Expected at least ₹${expectedTotal}, received ₹${paidAmount}`);
+    }
+  }
+
   // Idempotency check: if order is already paid & confirmed, return immediately
   if (order.paymentStatus === "paid" && (order.status === "confirmed" || order.status === "processing" || order.status === "shipped" || order.status === "delivered")) {
     return { success: true, order, alreadyConfirmed: true };
@@ -314,20 +323,18 @@ export async function confirmOrderPayment(
   }).catch(() => {});
 
   // 6. Emit real-time events
-  emitOrderEvent("order:status_changed", {
-    orderId,
-    displayId: order.displayId || orderId,
-    userId: order.userId,
-    status: "confirmed",
+  const fullOrderPayload = {
+    ...order,
+    ...updateFields,
+    id: order.id || orderId,
+    orderId: order.id || orderId,
+    items: order.items || [],
     paymentStatus: "paid",
-  });
-  emitOrderEvent("payment:status_updated", {
-    orderId,
-    displayId: order.displayId || orderId,
-    userId: order.userId,
     status: "confirmed",
-    paymentStatus: "paid",
-  });
+  };
+  emitOrderEvent("order:status_changed", fullOrderPayload);
+  emitOrderEvent("order:created", fullOrderPayload);
+  emitOrderEvent("payment:status_updated", fullOrderPayload);
 
   safeInvalidatePattern(/financial|settlement|commission|revenue|payment|refund|profit/);
   try {
@@ -401,7 +408,33 @@ router.post("/payments/cashfree/create-order", isCustomer, async (req: any, res:
       return;
     }
 
-    // Deduplication check: prevent rapid duplicate Cashfree order creation (3 seconds)
+    // 1. Idempotency Key check: return existing pending session if same checkout key is resent
+    const idempotencyKey = ((req.headers["x-idempotency-key"] || req.body.idempotencyKey) as string | undefined)?.trim();
+    if (idempotencyKey) {
+      try {
+        const existingPendingOrder = await mongoOrders.findOne({
+          checkoutIdempotencyKey: idempotencyKey,
+          userId: req.userId,
+        });
+        if (existingPendingOrder && existingPendingOrder.cashfreePaymentSessionId) {
+          const config = await getCashfreeConfig();
+          res.json({
+            success: true,
+            orderId: existingPendingOrder.id,
+            cfOrderId: existingPendingOrder.cashfreeOrderId,
+            paymentSessionId: existingPendingOrder.cashfreePaymentSessionId,
+            orderAmount: existingPendingOrder.total,
+            orderCurrency: "INR",
+            isSimulated: false,
+            env: config.env,
+            deduplicated: true,
+          });
+          return;
+        }
+      } catch {}
+    }
+
+    // 2. Deduplication check: prevent rapid duplicate Cashfree order creation (3 seconds)
     try {
       const recentPendingOrder = await mongoOrders.findOne({
         userId: req.userId,
@@ -587,6 +620,7 @@ router.post("/payments/cashfree/create-order", isCustomer, async (req: any, res:
       statusHistory: [{ status: "payment_pending", timestamp: nowIso, note: "Cashfree checkout initiated" }],
       createdAt: now,
       updatedAt: now,
+      checkoutIdempotencyKey: idempotencyKey || null,
     };
 
     // 1. Insert order with pending payment status
@@ -831,21 +865,17 @@ const handleOrderPay = async (req: any, res: any): Promise<void> => {
         await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, orderId));
       } catch {}
 
-      emitOrderEvent("order:status_changed", {
-        orderId,
-        displayId: order.displayId || orderId,
-        userId: order.userId,
-        status: order.status,
+      const fullCodPayload = {
+        ...order,
+        ...updateData,
+        id: order.id || orderId,
+        orderId: order.id || orderId,
+        items: order.items || [],
         paymentStatus: "pending",
         paymentMethod: "cod",
-      });
-      emitOrderEvent("payment:status_updated", {
-        orderId,
-        displayId: order.displayId || orderId,
-        userId: order.userId,
-        paymentStatus: "pending",
-        paymentMethod: "cod",
-      });
+      };
+      emitOrderEvent("order:status_changed", fullCodPayload);
+      emitOrderEvent("payment:status_updated", fullCodPayload);
 
       res.json({
         success: true,
@@ -1259,7 +1289,20 @@ router.post("/payments/cashfree/webhook", async (req: Request, res: Response): P
     const timestamp = (req.headers["x-webhook-timestamp"] as string) || "";
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
 
-    // 1. Verify signature
+    // 1. Verify signature & timestamp freshness (replay attack prevention)
+    if (timestamp) {
+      const webhookTime = parseInt(timestamp, 10);
+      if (!isNaN(webhookTime)) {
+        const webhookMs = webhookTime > 1e11 ? webhookTime : webhookTime * 1000;
+        const drift = Math.abs(Date.now() - webhookMs);
+        if (drift > 5 * 60 * 1000 && process.env.NODE_ENV === "production") {
+          logger.warn({ timestamp, drift }, "Cashfree webhook timestamp is outside acceptable 5-minute window");
+          res.status(400).json({ error: "Webhook timestamp expired" });
+          return;
+        }
+      }
+    }
+
     const isValid = verifyCashfreeWebhookSignature({
       signature,
       timestamp,
@@ -1290,6 +1333,32 @@ router.post("/payments/cashfree/webhook", async (req: Request, res: Response): P
     if (!orderId) {
       res.status(200).json({ status: "OK", message: "No order ID in payload" });
       return;
+    }
+
+    // Atomic Webhook Idempotency Check (prevents duplicate processing on webhook retries)
+    const eventId = String(
+      (req.headers["x-webhook-id"] as string) ||
+      paymentData.cf_payment_id ||
+      `${orderId}:${eventType}:${timestamp || ""}`
+    ).trim();
+
+    if (eventId) {
+      try {
+        const webhooksCol = mongoGeneric.getCollection("processed_webhooks");
+        await webhooksCol.insertOne({
+          eventId,
+          orderId,
+          eventType,
+          processedAt: new Date(),
+          createdAt: new Date(),
+        });
+      } catch (dupErr: any) {
+        if (dupErr?.code === 11000 || dupErr?.message?.includes("E11000")) {
+          logger.info({ eventId, orderId }, "[Cashfree Webhook] Duplicate webhook event already processed; acknowledging idempotently.");
+          res.status(200).json({ status: "OK", duplicate: true, message: "Duplicate webhook event already processed" });
+          return;
+        }
+      }
     }
 
     // 2. Handle payment success events idempotently

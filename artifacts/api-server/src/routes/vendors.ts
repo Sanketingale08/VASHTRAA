@@ -17,6 +17,7 @@ import {
   sendVendorApprovalEmailForVendor,
   sendVendorSuspensionEmailForVendor,
   sendVendorRejectionEmailForVendor,
+  sendVendorReactivationEmailForVendor,
 } from "../lib/transactionalEmail";
 import { consumeSellerEmailVerification } from "../lib/sellerVerification";
 import { hashPassword } from "../lib/passwords";
@@ -54,25 +55,56 @@ function optionalAuth(req: any, res: any, next: any) {
 
 router.get("/vendors", async (req, res) => {
   try {
-    // Return only approved vendors, featured ones first, then sorted by rating desc.
-    const vendors = await db
-      .select()
-      .from(vendorsTable)
-      .where(eq(vendorsTable.status, "approved"))
-      .orderBy(desc(vendorsTable.featured), desc(vendorsTable.rating), desc(vendorsTable.sareesCount));
+    let vendors: any[] = [];
+    try {
+      vendors = await db
+        .select()
+        .from(vendorsTable)
+        .where(eq(vendorsTable.status, "approved"))
+        .orderBy(desc(vendorsTable.featured), desc(vendorsTable.rating), desc(vendorsTable.sareesCount));
+    } catch {}
 
-    const activeCounts = await db
-      .select({
-        vendorId: productsTable.vendorId,
-        count: sql<number>`count(*)`.mapWith(Number),
-      })
-      .from(productsTable)
-      .where(and(eq(productsTable.active, true), eq(productsTable.status, "approved")))
-      .groupBy(productsTable.vendorId);
+    if (!vendors || vendors.length === 0) {
+      const sellers = await mongoSellers.findMany({ status: { $in: ["approved", "active"] } }).catch(() => []);
+      vendors = sellers.map((s) => ({
+        id: s.vendorId || s.id || s.sellerId,
+        name: s.shopName || s.name || s.sellerName || "VASTRAA Artisan",
+        location: s.shopCity ? `${s.shopCity}, ${s.shopState || "India"}` : (s.location || "India"),
+        rating: s.rating ?? 4.8,
+        sareesCount: s.productsCount ?? s.sareesCount ?? 0,
+        avatar: s.avatar || "/images/artisan-1.png",
+        bio: s.bio ?? null,
+        tagline: s.tagline ?? null,
+      }));
+    }
 
     const countMap = new Map<string, number>();
-    for (const c of activeCounts) {
-      if (c.vendorId) countMap.set(c.vendorId, c.count);
+    try {
+      const activeCounts = await db
+        .select({
+          vendorId: productsTable.vendorId,
+          count: sql<number>`count(*)`.mapWith(Number),
+        })
+        .from(productsTable)
+        .where(and(eq(productsTable.active, true), eq(productsTable.status, "approved")))
+        .groupBy(productsTable.vendorId);
+
+      for (const c of activeCounts) {
+        if (c.vendorId) countMap.set(c.vendorId, c.count);
+      }
+    } catch {}
+
+    if (countMap.size === 0) {
+      try {
+        const mProducts = await mongoProducts.findMany(
+          { active: { $ne: false }, status: "approved" },
+          { projection: { vendorId: 1, sellerId: 1 } }
+        ).catch(() => []);
+        for (const p of mProducts) {
+          const vId = p.vendorId || p.sellerId;
+          if (vId) countMap.set(vId, (countMap.get(vId) || 0) + 1);
+        }
+      } catch {}
     }
 
     res.json(vendors.map((v) => ({
@@ -86,7 +118,7 @@ router.get("/vendors", async (req, res) => {
       tagline: v.tagline ?? null,
     })));
   } catch (err) {
-    req.log.error({ err }, "Failed to list vendors");
+    req.log?.error({ err }, "Failed to list vendors");
     res.status(500).json({ error: "Failed to fetch vendors" });
   }
 });
@@ -396,7 +428,7 @@ async function handleSellerRegistration(req: any, res: any) {
       contactEmail: shopContactEmail || effectiveEmail || null,
       tagline: tagline ? String(tagline).trim() : null,
       ownerId: userId,
-      status: (req.body.status ? String(req.body.status).toLowerCase() : "pending") as any,
+      status: "pending" as any,
       mobile: String(mobile).trim(),
       panNumber: String(panNumber).trim().toUpperCase(),
       panCardUrl: String(panCardUrl).trim(),
@@ -468,8 +500,8 @@ async function handleSellerRegistration(req: any, res: any) {
         mobile: vendor.mobile || "",
         location: vendor.location,
         passwordHash: storedPasswordHash,
-        status: vendor.status || (req.body.status ? String(req.body.status).toLowerCase() : "pending"),
-        approvalStatus: req.body.approvalStatus ? String(req.body.approvalStatus).toLowerCase() : (vendor.status || "pending"),
+        status: "pending",
+        approvalStatus: "pending",
         ownerId: userId,
         sellerId: assignedVendorId,
         vendorId: assignedVendorId,
@@ -921,6 +953,8 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         existing.bankName = existing.bankName || v.bankName;
         existing.bankAccount = existing.bankAccount || v.bankAccount;
         existing.bankIfsc = existing.bankIfsc || v.bankIfsc;
+        existing.bankVerified = existing.bankVerified ?? v.bankVerified;
+        existing.bankVerificationStatus = existing.bankVerificationStatus || v.bankVerificationStatus;
         existing.shopStreet = existing.shopStreet || v.shopStreet;
         existing.shopCity = existing.shopCity || v.shopCity;
         existing.shopState = existing.shopState || v.shopState;
@@ -1044,6 +1078,8 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         shopCity: v.shopCity ?? null,
         shopState: v.shopState ?? null,
         shopPincode: v.shopPincode ?? null,
+        bankVerified: v.bankVerified === true || v.bankVerificationStatus === "verified",
+        bankVerificationStatus: v.bankVerificationStatus ?? (v.bankVerified ? "verified" : (v.bankAccount ? "pending" : "unverified")),
       })),
     });
   } catch (err: any) {
@@ -1463,7 +1499,12 @@ const handleVendorActivation = async (req: any, res: any) => {
 
     try {
       const [row] = await db
-        .select({ status: vendorsTable.status, name: vendorsTable.name })
+        .select({
+          status: vendorsTable.status,
+          name: vendorsTable.name,
+          contactEmail: vendorsTable.contactEmail,
+          ownerId: vendorsTable.ownerId,
+        })
         .from(vendorsTable)
         .where(or(eq(vendorsTable.id, id), eq(vendorsTable.ownerId, id)))
         .limit(1);
@@ -1472,6 +1513,9 @@ const handleVendorActivation = async (req: any, res: any) => {
         vendorName = row.name;
       }
     } catch {}
+
+    let contactEmail: string | null = null;
+    let ownerId: string | null = null;
 
     if (!currentStatus) {
       let mSeller: any = null;
@@ -1483,6 +1527,8 @@ const handleVendorActivation = async (req: any, res: any) => {
       if (mSeller) {
         currentStatus = mSeller.status || "suspended";
         vendorName = mSeller.name || mSeller.shopName || "Vendor";
+        contactEmail = mSeller.contactEmail || mSeller.email || null;
+        ownerId = mSeller.ownerId || null;
       }
     }
 
@@ -1500,8 +1546,18 @@ const handleVendorActivation = async (req: any, res: any) => {
         .update(vendorsTable)
         .set(setValues)
         .where(or(eq(vendorsTable.id, id), eq(vendorsTable.ownerId, id)))
-        .returning({ id: vendorsTable.id, name: vendorsTable.name, status: vendorsTable.status });
-      if (row) updated = row;
+        .returning({
+          id: vendorsTable.id,
+          name: vendorsTable.name,
+          status: vendorsTable.status,
+          contactEmail: vendorsTable.contactEmail,
+          ownerId: vendorsTable.ownerId,
+        });
+      if (row) {
+        updated = row;
+        contactEmail = row.contactEmail || contactEmail;
+        ownerId = row.ownerId || ownerId;
+      }
     } catch {}
 
     if (!updated) {
@@ -1519,6 +1575,15 @@ const handleVendorActivation = async (req: any, res: any) => {
     } catch {}
 
     writeAuditLog({ action: "vendor_reactivated", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
+
+    if (isReactivation) {
+      sendVendorReactivationEmailForVendor({
+        vendorId: updated.id,
+        vendorName: updated.name,
+        contactEmail,
+        ownerId,
+      }).catch((err) => req.log?.warn?.({ err, vendorId: updated.id }, "Failed to send vendor reactivation email"));
+    }
 
     try {
       emitVendorEvent("vendor:updated", updated);

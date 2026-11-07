@@ -446,3 +446,5 @@ export function AccountRewardsPage() {
     </DashboardLayout>
   );
 }
+
+export default AccountRewardsPage;

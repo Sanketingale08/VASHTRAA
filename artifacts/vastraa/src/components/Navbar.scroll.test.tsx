@@ -27,9 +27,21 @@ vi.mock("@/context/WishlistContext", () => ({
 vi.mock("@/context/CartContext", () => ({
   useCart: () => ({ totalItems: 0, openDrawer: vi.fn() }),
 }));
-
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navbar } from "./Navbar";
 import { Layout } from "./Layout";
+
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function renderWithClient(ui: React.ReactElement) {
+  return render(
+    <QueryClientProvider client={testQueryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
 
 describe("Navbar - Scrolling and Sticky Behavior", () => {
   beforeEach(() => {
@@ -40,14 +52,20 @@ describe("Navbar - Scrolling and Sticky Behavior", () => {
     });
   });
 
-  it("renders with sticky top-0, z-50, and standard initial height at top of page", () => {
-    render(<Navbar />);
+  it("renders with fixed top-0, z-50, and standard initial height at top of page", () => {
+    renderWithClient(<Navbar />);
 
     const nav = screen.getByRole("navigation");
     expect(nav).toBeInTheDocument();
-    expect(nav.className).toContain("sticky");
+    expect(nav.className).toMatch(/fixed|sticky/);
     expect(nav.className).toContain("top-0");
     expect(nav.className).toContain("z-50");
+
+    // Check spacer element exists to prevent page content overlap
+    const spacer = screen.getByTestId("navbar-spacer");
+    expect(spacer).toBeInTheDocument();
+    expect(spacer.className).toContain("h-[64px]");
+    expect(spacer.className).toContain("md:h-[96px]");
 
     // Check inner flex row has initial height classes
     const innerRow = nav.querySelector(".container > div");
@@ -56,7 +74,7 @@ describe("Navbar - Scrolling and Sticky Behavior", () => {
   });
 
   it("dynamically adapts to compact height, shadow, and refined styling when scrolled", () => {
-    render(<Navbar />);
+    renderWithClient(<Navbar />);
 
     const nav = screen.getByRole("navigation");
     const innerRow = nav.querySelector(".container > div");
@@ -88,7 +106,7 @@ describe("Navbar - Scrolling and Sticky Behavior", () => {
   });
 
   it("Layout uses overflow-x-clip to prevent horizontal overflow without breaking position: sticky", () => {
-    const { container } = render(
+    const { container } = renderWithClient(
       <Layout>
         <div data-testid="page-content">Sample Page Content</div>
       </Layout>

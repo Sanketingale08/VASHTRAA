@@ -5,6 +5,10 @@ export interface User {
   email: string;
   passwordHash: string;
   role: "customer" | "seller" | "super_admin";
+  isEmailVerified?: boolean;
+  emailVerified?: boolean;
+  emailVerificationTokenHash?: string | null;
+  emailVerificationExpires?: Date | null;
   phone?: string;
   alternateMobile?: string;
   dateOfBirth?: string;

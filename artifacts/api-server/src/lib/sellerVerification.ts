@@ -31,7 +31,7 @@ function sha256hex(s: string): string {
  */
 export async function sendSellerVerificationCode(
   email: string
-): Promise<{ delivered: boolean; error?: string; devCode?: string }> {
+): Promise<{ delivered: boolean; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
 
   if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -112,7 +112,7 @@ export async function sendSellerVerificationCode(
     return { delivered: false, error: result.error || "Unable to send the verification code. Please try again." };
   }
 
-  return { delivered: true, devCode: result.devCode };
+  return { delivered: true };
 }
 
 /**

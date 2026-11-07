@@ -37,12 +37,6 @@ export default function AdminLogin() {
         if (statusRes.status === 403 || statusRes.status === 401) {
           setAdminError("Invalid access key");
         } else {
-          // Fallback check for Admin@123 when server endpoint returns 500/offline
-          if (key === "Admin@123") {
-            sessionStorage.setItem("td_admin_key", key);
-            setLocation("/admin/dashboard");
-            return;
-          }
           setAdminError("Server error, please try again.");
         }
         return;
@@ -57,6 +51,8 @@ export default function AdminLogin() {
 
       // Key is valid — store it now and open Admin Dashboard
       sessionStorage.setItem("td_admin_key", key);
+      localStorage.setItem("td_admin_key", key);
+      localStorage.setItem("admin_key", key);
 
       if (enabled) {
         sessionStorage.setItem("td_admin_2fa_pending", "true");
@@ -65,13 +61,7 @@ export default function AdminLogin() {
         setLocation("/admin/dashboard");
       }
     } catch {
-      // Network error fallback for Admin@123
-      if (key === "Admin@123") {
-        sessionStorage.setItem("td_admin_key", key);
-        setLocation("/admin/dashboard");
-      } else {
-        setAdminError("Server error, please try again.");
-      }
+      setAdminError("Unable to connect to server. Please try again.");
     } finally {
       setLoading(false);
     }

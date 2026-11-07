@@ -139,7 +139,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-6 xl:gap-8">
           
           {/* ── Section A: Brand & Description ── */}
-          <div className="md:col-span-2 lg:col-span-3 xl:col-span-3 flex flex-col items-start pr-0 lg:pr-2 mb-2 md:mb-0">
+          <div className="md:col-span-2 lg:col-span-4 xl:col-span-4 flex flex-col items-start pr-0 lg:pr-4 mb-2 md:mb-0">
             <Link
               href="/"
               className="group inline-flex items-center mb-3 transition-opacity hover:opacity-95"
@@ -167,7 +167,7 @@ export function Footer() {
           </div>
 
           {/* ── Section B: Shop ── */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 xl:col-span-2">
             <FooterNavSection title="Shop">
               <ul className="space-y-2.5 sm:space-y-3 text-sm">
                 <li>
@@ -199,20 +199,29 @@ export function Footer() {
                 </li>
                 <li>
                   <Link
-                    href="/category/indian-wear"
+                    href="/category/banarasi"
                     className="text-gray-300 hover:text-[#F3D675] hover:translate-x-0.5 transition-all duration-200 inline-flex items-center gap-1 group py-0.5"
                   >
                     <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
-                    Indian Wear
+                    Banarasi Sarees
                   </Link>
                 </li>
                 <li>
                   <Link
-                    href="/category/western-wear"
+                    href="/category/kanjivaram"
                     className="text-gray-300 hover:text-[#F3D675] hover:translate-x-0.5 transition-all duration-200 inline-flex items-center gap-1 group py-0.5"
                   >
                     <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
-                    Western Wear
+                    Kanjivaram Sarees
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/category/gadwal"
+                    className="text-gray-300 hover:text-[#F3D675] hover:translate-x-0.5 transition-all duration-200 inline-flex items-center gap-1 group py-0.5"
+                  >
+                    <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
+                    Gadwal Sarees
                   </Link>
                 </li>
                 <li>
@@ -247,7 +256,7 @@ export function Footer() {
           </div>
 
           {/* ── Section C: Customer Service ── */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3 xl:col-span-3">
             <FooterNavSection title="Customer Service">
               <ul className="space-y-2.5 sm:space-y-3 text-sm">
                 <li>
@@ -302,41 +311,6 @@ export function Footer() {
                   >
                     <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
                     Size & Blouse Guide
-                  </Link>
-                </li>
-              </ul>
-            </FooterNavSection>
-          </div>
-
-          {/* ── Section D: About VASTRAA ── */}
-          <div className="lg:col-span-2">
-            <FooterNavSection title="About VASTRAA">
-              <ul className="space-y-2.5 sm:space-y-3 text-sm">
-                <li>
-                  <Link
-                    href="/about"
-                    className="text-gray-300 hover:text-[#F3D675] hover:translate-x-0.5 transition-all duration-200 inline-flex items-center gap-1 group py-0.5"
-                  >
-                    <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
-                    About Us
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/privacy-policy"
-                    className="text-gray-300 hover:text-[#F3D675] hover:translate-x-0.5 transition-all duration-200 inline-flex items-center gap-1 group py-0.5"
-                  >
-                    <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
-                    Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/terms-of-service"
-                    className="text-gray-300 hover:text-[#F3D675] hover:translate-x-0.5 transition-all duration-200 inline-flex items-center gap-1 group py-0.5"
-                  >
-                    <ChevronRight size={13} className="text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors" />
-                    Terms and Conditions
                   </Link>
                 </li>
                 <li>

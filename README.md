@@ -3,6 +3,7 @@
 VASTRAA is a modern, full-stack, multi-vendor fashion and apparel e-commerce ecosystem. Built with TypeScript across a pnpm monorepo architecture, VASTRAA provides an end-to-end shopping experience for customers, a dedicated seller portal for vendor management and product onboarding, an administrative control center for super admins, a cross-platform mobile application, and a high-performance Express backend.
 
 ### 💰 Pricing & Seller Settlement Engine (v2 Model)
+
 - **Customer Side**: Customer pays `taxable = base + shipping` and `gst = round(taxable * productGstRate)` (5%). Commission is NEVER shown or charged to the customer.
 - **Seller Side**: Platform commission (18%) is deducted ONLY from the seller base price.
   - `commission = round(base * 18%)` (1800 BPS)
@@ -17,23 +18,27 @@ VASTRAA is a modern, full-stack, multi-vendor fashion and apparel e-commerce eco
 
 ## 🚀 Key Features
 
-### 🛒 Customer Storefront (`@workspace/VASTRAA`)
+### 🛒 Customer Storefront (`@workspace/vastraa`)
+
 - **Product Discovery**: Browse curated clothing collections, dynamic search, multi-attribute filtering (category, size, color, price, tag), and quick view modals.
 - **Cart & Checkout**: Real-time shopping cart drawer, saved cards, saved UPI payment methods, address book with Google Maps autocomplete, and order confirmation.
 - **Account & Orders**: Order history, order tracking timeline, returns & refunds management, user preferences, and wishlist synchronization.
 
 ### 👔 Vendor & Seller Portal
+
 - **Seller Onboarding**: Multi-step registration draft flow with document submission and status tracking.
 - **Catalog Management**: Product publishing, single and bulk CSV product uploads with image gallery asset managers, and featured placement management.
 - **Fulfillment & Analytics**: Order processing, shipment updates, real-time sales reporting, payout tracking, and customer message management.
 
 ### 🛡️ Super Admin Control Dashboard
+
 - **Vendor Governance**: Multi-tier approval workflows, vendor suspension/reactivation, and compliance audits.
 - **Financial Operations**: Settlement deduplication, automated payout schedules, dispute resolution, and revenue metrics.
 - **Promotions & Content**: Site-wide coupon management, banner configuration, system notifications, and 2FA authentication.
 - **Automated Workers**: Background cron workers for weekly executive reporting, email outbox retry queue, and seller registration nudge automation.
 
-### 📱 Mobile Experience (`@workspace/VASTRAA-mobile`)
+### 📱 Mobile Experience (`@workspace/vastraa-mobile`)
+
 - Native mobile client powered by **React Native & Expo**, featuring mobile product navigation, shopper cart/checkout flow, and seller dashboard views.
 
 ---
@@ -42,12 +47,12 @@ VASTRAA is a modern, full-stack, multi-vendor fashion and apparel e-commerce eco
 
 The repository is structured as a `pnpm` monorepo workspace split into `artifacts/` (applications) and `lib/` (shared packages & spec drivers):
 
-```
+```text
 VASTRAA/
 ├── artifacts/
 │   ├── api-server/         # Express 5 API Server & background worker services
-│   ├── twirldrape/         # Vite + React 19 web application (Storefront, Seller & Admin)
-│   ├── twirldrape-mobile/  # Expo / React Native mobile application
+│   ├── vastraa/            # Vite + React 19 web application (Storefront, Seller & Admin)
+│   ├── vastraa-mobile/     # Expo / React Native mobile application
 │   └── mockup-sandbox/     # Isolated component playground & design testing sandbox
 ├── lib/
 │   ├── db/                 # PostgreSQL schema, Drizzle ORM models, baseline migrations
@@ -81,18 +86,23 @@ VASTRAA/
 ## 🚦 Getting Started
 
 ### Prerequisites
+
 - **Node.js**: v24.x or higher
 - **pnpm**: v9.x or higher (`corepack enable pnpm`)
 - **PostgreSQL**: v15.x or higher database instance
 
 ### 1. Installation
+
 Clone the repository and install all workspace dependencies:
+
 ```bash
 pnpm install
 ```
 
 ### 2. Environment Setup
+
 Create a `.env` file in the root directory (or copy from `.env` template):
+
 ```bash
 # Example .env configuration
 NODE_ENV=development
@@ -107,7 +117,9 @@ SUPER_ADMIN_EMAIL=admin@vastraa.com
 ```
 
 ### 3. Database Migration & Schema Setup
+
 Push the Drizzle database schema to your PostgreSQL database:
+
 ```bash
 pnpm --filter @workspace/db run push
 ```
@@ -115,18 +127,21 @@ pnpm --filter @workspace/db run push
 ### 4. Running the Development Servers
 
 Start the **API Server** (runs on port 5000):
+
 ```bash
 pnpm --filter @workspace/api-server run dev
 ```
 
 Start the **Web Application** (Vite Dev Server):
+
 ```bash
-pnpm --filter @workspace/twirldrape run dev
+pnpm --filter @workspace/vastraa run dev
 ```
 
 Start the **Mobile Application** (Expo Packager):
+
 ```bash
-pnpm --filter @workspace/twirldrape-mobile run dev
+pnpm --filter @workspace/vastraa-mobile run dev
 ```
 
 ---
@@ -140,12 +155,12 @@ Run commands from the repository root using `pnpm`:
 | `pnpm run build` | Full typecheck and production build across all workspace packages |
 | `pnpm run typecheck` | Runs TypeScript type checking across all workspace applications and libraries |
 | `pnpm --filter @workspace/api-server run dev` | Starts the Express 5 backend server in development mode |
-| `pnpm --filter @workspace/twirldrape run dev` | Starts the web frontend storefront & admin dashboard in dev mode |
+| `pnpm --filter @workspace/vastraa run dev` | Starts the VASTRAA storefront, seller portal & admin dashboard in dev mode |
 | `pnpm --filter @workspace/api-spec run codegen` | Regenerates Zod schemas and React Query hooks from `openapi.yaml` |
 | `pnpm --filter @workspace/db run push` | Pushes Drizzle schema updates directly to the connected PostgreSQL DB |
 | `pnpm --filter @workspace/api-server run test` | Runs backend unit and controller tests with Vitest |
 | `pnpm --filter @workspace/api-server run test:integration` | Runs full database integration tests |
-| `pnpm --filter @workspace/twirldrape run test:e2e` | Executes Playwright end-to-end tests for web storefront flows |
+| `pnpm --filter @workspace/vastraa run test:e2e` | Executes Playwright end-to-end tests for the VASTRAA web storefront flows |
 
 ---
 
@@ -155,7 +170,7 @@ Run commands from the repository root using `pnpm`:
 |---|---|---|
 | `NODE_ENV` | Environment mode (`development`, `production`, `test`) | `development` |
 | `PORT` | API server listening port | `5000` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/twirldrape` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/vastraa` |
 | `CLERK_PUBLISHABLE_KEY` | Clerk authentication publishable key | `pk_test_...` |
 | `CLERK_SECRET_KEY` | Clerk backend secret key | `sk_test_...` |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key exposed to Vite web client | `pk_test_...` |
@@ -174,14 +189,18 @@ Run commands from the repository root using `pnpm`:
 ## ⚡ API Specification & Code Generation Workflow
 
 VASTRAA follows an **API-First Design Pattern**. The source of truth for all API contracts is located at:
+
 `lib/api-spec/openapi.yaml`
 
 When API endpoints or schemas change:
+
 1. Update `lib/api-spec/openapi.yaml`.
 2. Run code generation:
+
    ```bash
    pnpm --filter @workspace/api-spec run codegen
    ```
+
 3. Orval will automatically update `@workspace/api-zod` and `@workspace/api-client-react` packages.
 
 ---

@@ -27,8 +27,80 @@ import { filterRealtimeOrders } from "../lib/orderFilter";
 import { getItemBasePrice, roundCurrency } from "../lib/vendorAnalytics";
 import { emitVendorEvent, emitAnalyticsEvent } from "../lib/socket";
 import { authRateLimiter } from "../middlewares/rateLimiter";
+import { invalidateApprovedVendorDataCache } from "../lib/vendorValidation";
+import { revokeAllUserSessions } from "../lib/sessions";
 
 const router = Router();
+
+async function findVendorAcrossDatabases(id: string): Promise<{ mSeller: any; pgRow: any }> {
+  const cleanId = String(id || "").trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId);
+  const isEmail = cleanId.includes("@");
+
+  let mSeller: any = null;
+  try {
+    if (mongoSellers) {
+      if (isEmail) {
+        mSeller = await mongoSellers.findByEmail(cleanId);
+      }
+      if (!mSeller) {
+        mSeller = (await mongoSellers.findById?.(cleanId)) ||
+                  (await mongoSellers.findBySellerId?.(cleanId)) ||
+                  (await mongoSellers.findByVendorId?.(cleanId)) ||
+                  (await mongoSellers.findByOwnerId?.(cleanId));
+      }
+    }
+  } catch {}
+
+  let pgRow: any = null;
+  try {
+    const conditions: any[] = [];
+    if (isUuid) {
+      conditions.push(eq(vendorsTable.id, cleanId));
+    }
+    conditions.push(eq(vendorsTable.ownerId, cleanId));
+    if ((vendorsTable as any).vendorId) {
+      conditions.push(eq((vendorsTable as any).vendorId, cleanId));
+    }
+    if (isEmail && vendorsTable.contactEmail) {
+      conditions.push(eq(vendorsTable.contactEmail, cleanId));
+    }
+    if (mSeller?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mSeller.id)) {
+      conditions.push(eq(vendorsTable.id, mSeller.id));
+    }
+    if (mSeller?.ownerId) {
+      conditions.push(eq(vendorsTable.ownerId, mSeller.ownerId));
+    }
+    if (mSeller?.email && vendorsTable.contactEmail) {
+      conditions.push(eq(vendorsTable.contactEmail, mSeller.email));
+    }
+    if (mSeller?.contactEmail && vendorsTable.contactEmail) {
+      conditions.push(eq(vendorsTable.contactEmail, mSeller.contactEmail));
+    }
+
+    if (conditions.length > 0) {
+      const rows = await db
+        .select()
+        .from(vendorsTable)
+        .where(or(...conditions))
+        .limit(1);
+      if (rows && rows.length > 0) {
+        pgRow = rows[0];
+      }
+    }
+  } catch {}
+
+  if (!mSeller && pgRow && mongoSellers) {
+    try {
+      mSeller = (await mongoSellers.findById?.(pgRow.id)) ||
+                (pgRow.ownerId ? await mongoSellers.findByOwnerId?.(pgRow.ownerId) : null) ||
+                (pgRow.contactEmail ? await mongoSellers.findByEmail?.(pgRow.contactEmail) : null);
+    } catch {}
+  }
+
+  return { mSeller, pgRow };
+}
+
 
 function optionalAuth(req: any, res: any, next: any) {
   const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -969,6 +1041,7 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
 
         const statusPriority: Record<string, number> = {
           approved: 5,
+          active: 5,
           suspended: 4,
           deactivated: 3,
           rejected: 2,
@@ -977,8 +1050,17 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         };
         const existingPriority = statusPriority[String(existing.status).toLowerCase()] ?? 0;
         const newPriority = statusPriority[String(v.status).toLowerCase()] ?? 0;
-        if (newPriority > existingPriority) {
+        const isNewer = Boolean(
+          v.updatedAt &&
+          existing.updatedAt &&
+          new Date(v.updatedAt).getTime() > new Date(existing.updatedAt).getTime()
+        );
+        if (isNewer || (newPriority > existingPriority && !existing.updatedAt)) {
           existing.status = v.status;
+          if (v.statusReason !== undefined) existing.statusReason = v.statusReason;
+        } else if (newPriority > existingPriority) {
+          existing.status = v.status;
+          if (v.statusReason !== undefined) existing.statusReason = v.statusReason;
         }
 
         for (const idVal of vIds) {
@@ -1210,12 +1292,18 @@ router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res:
       metadata: { vendorId: updatedVendor.id },
     }).catch(() => {});
 
-    sendVendorApprovalEmailForVendor({
-      vendorId: updatedVendor.id,
-      vendorName: updatedVendor.name,
-      contactEmail: updatedVendor.contactEmail,
-      ownerId: updatedVendor.ownerId,
-    }).catch((err) => req.log?.warn?.({ err, vendorId: updatedVendor.id }, "Failed to send vendor approval email"));
+    invalidateApprovedVendorDataCache();
+
+    if (typeof sendVendorApprovalEmailForVendor === "function") {
+      try {
+        sendVendorApprovalEmailForVendor({
+          vendorId: updatedVendor.id,
+          vendorName: updatedVendor.name,
+          contactEmail: updatedVendor.contactEmail,
+          ownerId: updatedVendor.ownerId,
+        }).catch((err) => req.log?.warn?.({ err, vendorId: updatedVendor.id }, "Failed to send vendor approval email"));
+      } catch {}
+    }
 
     writeAuditLog({ action: "vendor_approved", module: "Vendors", details: { vendorId: updatedVendor.id, vendorName: updatedVendor.name }, ipAddress: getIp(req) }).catch(() => {});
 
@@ -1241,70 +1329,116 @@ router.post("/admin/vendors/:id/approve", requireAdminKey, async (req: any, res:
 router.post("/admin/vendors/:id/suspend", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   const { reason } = req.body ?? {};
+  const statusReason = reason ? String(reason).trim() : "Seller account suspended by admin.";
   try {
-    let updated: any = null;
-    try {
-      const rows = await db
-        .update(vendorsTable)
-        .set({ status: "suspended", statusReason: reason ? String(reason).trim() : null })
-        .where(or(eq(vendorsTable.id, id), eq(vendorsTable.ownerId, id)))
-        .returning({
-          id: vendorsTable.id,
-          name: vendorsTable.name,
-          status: vendorsTable.status,
-          ownerId: vendorsTable.ownerId,
-          contactEmail: vendorsTable.contactEmail,
-        });
-      if (Array.isArray(rows) && rows.length > 0) updated = rows[0];
-    } catch {}
-
-    if (!updated) {
-      let mSeller: any = null;
-      try {
-        mSeller = (await mongoSellers.findById(id)) ||
-          (await mongoSellers.findBySellerId(id)) ||
-          (await mongoSellers.findByVendorId(id)) ||
-          (await mongoSellers.findByOwnerId(id));
-      } catch {}
-
-      if (mSeller) {
-        updated = {
-          id: mSeller.id,
-          name: mSeller.name || mSeller.shopName || "Seller Store",
-          status: "suspended",
-          ownerId: mSeller.ownerId,
-          contactEmail: mSeller.contactEmail || mSeller.email,
-        };
-      }
-    }
-
-    if (!updated) {
+    const { mSeller, pgRow } = await findVendorAcrossDatabases(id);
+    if (!mSeller && !pgRow) {
       return res.status(404).json({ error: "Vendor not found" });
     }
 
+    const primaryId = pgRow?.id || mSeller?.id || id;
+    const vendorName = mSeller?.shopName || mSeller?.name || pgRow?.name || "Seller Store";
+    const contactEmail = mSeller?.email || mSeller?.contactEmail || pgRow?.contactEmail || null;
+    const ownerId = mSeller?.ownerId || pgRow?.ownerId || null;
+
+    let updated: any = null;
+
+    // 1. Update PostgreSQL vendorsTable
     try {
-      if (mongoSellers && typeof mongoSellers.update === "function") {
-        mongoSellers.update(updated.id, {
-          status: "suspended",
-          statusReason: reason ? String(reason).trim() : null,
-        }).catch(() => {});
+      const pgConditions: any[] = [];
+      if (pgRow?.id) pgConditions.push(eq(vendorsTable.id, pgRow.id));
+      if (mSeller?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mSeller.id)) {
+        pgConditions.push(eq(vendorsTable.id, mSeller.id));
+      }
+      if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+        pgConditions.push(eq(vendorsTable.id, id));
+      }
+      if (ownerId) pgConditions.push(eq(vendorsTable.ownerId, ownerId));
+      if (contactEmail && vendorsTable.contactEmail) {
+        pgConditions.push(eq(vendorsTable.contactEmail, contactEmail));
+      }
+      if (pgConditions.length > 0) {
+        const rows = await db
+          .update(vendorsTable)
+          .set({ status: "suspended", statusReason })
+          .where(or(...pgConditions))
+          .returning({
+            id: vendorsTable.id,
+            name: vendorsTable.name,
+            status: vendorsTable.status,
+            ownerId: vendorsTable.ownerId,
+            contactEmail: vendorsTable.contactEmail,
+          });
+        if (Array.isArray(rows) && rows.length > 0) updated = rows[0];
       }
     } catch {}
 
-    sendVendorSuspensionEmailForVendor({
-      vendorId: updated.id,
-      vendorName: updated.name,
-      contactEmail: updated.contactEmail,
-      ownerId: updated.ownerId,
-      reason: reason ? String(reason).trim() : undefined,
-    }).catch((err) => req.log?.warn?.({ err, vendorId: updated.id }, "Failed to send vendor suspension email"));
+    // 2. Update MongoDB mongoSellers
+    try {
+      if (mongoSellers && typeof mongoSellers.update === "function") {
+        const idsToUpdate = Array.from(new Set([mSeller?.id, pgRow?.id, id].filter(Boolean))) as string[];
+        for (const targetId of idsToUpdate) {
+          const mRes = await mongoSellers.update(targetId, {
+            status: "suspended",
+            statusReason,
+            email: contactEmail || undefined,
+            contactEmail: contactEmail || undefined,
+            reactivationWelcomePending: false,
+            reactivationPending: false,
+          }).catch(() => null);
+          if (!updated && mRes) {
+            updated = {
+              id: mRes.id,
+              name: mRes.name || mRes.shopName || vendorName,
+              status: "suspended",
+              ownerId: mRes.ownerId || ownerId,
+              contactEmail: mRes.contactEmail || mRes.email || contactEmail,
+            };
+          }
+        }
+      }
+    } catch {}
+
+    if (!updated) {
+      updated = {
+        id: primaryId,
+        name: vendorName,
+        status: "suspended",
+        ownerId,
+        contactEmail,
+      };
+    }
+
+    // 3. Immediately invalidate existing seller authentication sessions/tokens
+    const userIdsToRevoke = Array.from(new Set([ownerId, primaryId, pgRow?.id, mSeller?.id].filter(Boolean))) as string[];
+    for (const uId of userIdsToRevoke) {
+      try {
+        await revokeAllUserSessions(uId, "seller", "seller_suspended");
+      } catch {}
+    }
+
+    // 4. Invalidate vendor cache
+    invalidateApprovedVendorDataCache();
+
+    // 5. Send notification email safely
+    if (typeof sendVendorSuspensionEmailForVendor === "function") {
+      try {
+        sendVendorSuspensionEmailForVendor({
+          vendorId: updated.id,
+          vendorName: updated.name,
+          contactEmail: updated.contactEmail,
+          ownerId: updated.ownerId,
+          reason: reason ? String(reason).trim() : undefined,
+        }).catch((err) => req.log?.warn?.({ err, vendorId: updated.id }, "Failed to send vendor suspension email"));
+      } catch {}
+    }
 
     writeAuditLog({ action: "vendor_suspended", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
     try {
       emitVendorEvent("vendor:updated", updated);
       emitAnalyticsEvent({ vendorId: updated.id, reason: "vendor_suspended" });
     } catch {}
-    res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status } });
+    res.json({ vendor: { id: updated.id, name: updated.name, status: updated.status, statusReason } });
   } catch (err) {
     req.log?.error?.({ err }, "Failed to suspend vendor");
     res.status(500).json({ error: "Failed to suspend vendor" });
@@ -1316,54 +1450,88 @@ router.post("/admin/vendors/:id/deactivate", requireAdminKey, async (req: any, r
   const { reason } = req.body ?? {};
   const deactivationReason = reason ? String(reason).trim() : "Vendor account deactivated by Super Admin.";
   try {
-    let updated: any = null;
-    try {
-      const rows = await db
-        .update(vendorsTable)
-        .set({ status: "deactivated" as any, statusReason: deactivationReason })
-        .where(or(eq(vendorsTable.id, id), eq(vendorsTable.ownerId, id), eq((vendorsTable as any).vendorId, id)))
-        .returning({
-          id: vendorsTable.id,
-          name: vendorsTable.name,
-          status: vendorsTable.status,
-          ownerId: vendorsTable.ownerId,
-          contactEmail: vendorsTable.contactEmail,
-        });
-      if (Array.isArray(rows) && rows.length > 0) updated = rows[0];
-    } catch {}
-
-    if (!updated) {
-      let mSeller: any = null;
-      try {
-        mSeller = (await mongoSellers.findById(id)) ||
-          (await mongoSellers.findBySellerId(id)) ||
-          (await mongoSellers.findByVendorId(id)) ||
-          (await mongoSellers.findByOwnerId(id));
-      } catch {}
-
-      if (mSeller) {
-        updated = {
-          id: mSeller.id,
-          name: mSeller.name || mSeller.shopName || "Seller Store",
-          status: "deactivated",
-          ownerId: mSeller.ownerId,
-          contactEmail: mSeller.contactEmail || mSeller.email,
-        };
-      }
-    }
-
-    if (!updated) {
+    const { mSeller, pgRow } = await findVendorAcrossDatabases(id);
+    if (!mSeller && !pgRow) {
       return res.status(404).json({ error: "Vendor not found" });
     }
 
+    const primaryId = pgRow?.id || mSeller?.id || id;
+    const vendorName = mSeller?.shopName || mSeller?.name || pgRow?.name || "Seller Store";
+    const contactEmail = mSeller?.email || mSeller?.contactEmail || pgRow?.contactEmail || null;
+    const ownerId = mSeller?.ownerId || pgRow?.ownerId || null;
+
+    let updated: any = null;
+
+    // 1. Update PostgreSQL
     try {
-      if (mongoSellers && typeof mongoSellers.update === "function") {
-        await mongoSellers.update(updated.id, {
-          status: "deactivated",
-          statusReason: deactivationReason,
-        });
+      const pgConditions: any[] = [];
+      if (pgRow?.id) pgConditions.push(eq(vendorsTable.id, pgRow.id));
+      if (mSeller?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mSeller.id)) {
+        pgConditions.push(eq(vendorsTable.id, mSeller.id));
+      }
+      if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+        pgConditions.push(eq(vendorsTable.id, id));
+      }
+      if (ownerId) pgConditions.push(eq(vendorsTable.ownerId, ownerId));
+      if (contactEmail && vendorsTable.contactEmail) {
+        pgConditions.push(eq(vendorsTable.contactEmail, contactEmail));
+      }
+      if (pgConditions.length > 0) {
+        const rows = await db
+          .update(vendorsTable)
+          .set({ status: "deactivated" as any, statusReason: deactivationReason })
+          .where(or(...pgConditions))
+          .returning({
+            id: vendorsTable.id,
+            name: vendorsTable.name,
+            status: vendorsTable.status,
+            ownerId: vendorsTable.ownerId,
+            contactEmail: vendorsTable.contactEmail,
+          });
+        if (Array.isArray(rows) && rows.length > 0) updated = rows[0];
       }
     } catch {}
+
+    // 2. Update MongoDB
+    try {
+      if (mongoSellers && typeof mongoSellers.update === "function") {
+        const idsToUpdate = Array.from(new Set([mSeller?.id, pgRow?.id, id].filter(Boolean))) as string[];
+        for (const targetId of idsToUpdate) {
+          const mRes = await mongoSellers.update(targetId, {
+            status: "deactivated" as any,
+            statusReason: deactivationReason,
+            email: contactEmail || undefined,
+            contactEmail: contactEmail || undefined,
+            reactivationWelcomePending: false,
+            reactivationPending: false,
+          }).catch(() => null);
+          if (!updated && mRes) {
+            updated = {
+              id: mRes.id,
+              name: mRes.name || mRes.shopName || vendorName,
+              status: "deactivated",
+              ownerId: mRes.ownerId || ownerId,
+              contactEmail: mRes.contactEmail || mRes.email || contactEmail,
+            };
+          }
+        }
+      }
+    } catch {}
+
+    if (!updated) {
+      updated = { id: primaryId, name: vendorName, status: "deactivated", ownerId, contactEmail };
+    }
+
+    // 3. Invalidate seller auth sessions immediately
+    const userIdsToRevoke = Array.from(new Set([ownerId, primaryId, pgRow?.id, mSeller?.id].filter(Boolean))) as string[];
+    for (const uId of userIdsToRevoke) {
+      try {
+        await revokeAllUserSessions(uId, "seller", "seller_deactivated");
+      } catch {}
+    }
+
+    // 4. Invalidate vendor cache
+    invalidateApprovedVendorDataCache();
 
     writeAuditLog({ action: "vendor_deactivated", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
     try {
@@ -1494,100 +1662,118 @@ router.post("/admin/vendors/:id/decline", requireAdminKey, handleVendorDeclineOr
 const handleVendorActivation = async (req: any, res: any) => {
   const { id } = req.params;
   try {
-    let currentStatus: string | null = null;
-    let vendorName = "Vendor";
-
-    try {
-      const [row] = await db
-        .select({
-          status: vendorsTable.status,
-          name: vendorsTable.name,
-          contactEmail: vendorsTable.contactEmail,
-          ownerId: vendorsTable.ownerId,
-        })
-        .from(vendorsTable)
-        .where(or(eq(vendorsTable.id, id), eq(vendorsTable.ownerId, id)))
-        .limit(1);
-      if (row) {
-        currentStatus = row.status;
-        vendorName = row.name;
-      }
-    } catch {}
-
-    let contactEmail: string | null = null;
-    let ownerId: string | null = null;
-
-    if (!currentStatus) {
-      let mSeller: any = null;
-      try {
-        if (mongoSellers) {
-          mSeller = (await mongoSellers.findById?.(id)) || (await mongoSellers.findByOwnerId?.(id));
-        }
-      } catch {}
-      if (mSeller) {
-        currentStatus = mSeller.status || "suspended";
-        vendorName = mSeller.name || mSeller.shopName || "Vendor";
-        contactEmail = mSeller.contactEmail || mSeller.email || null;
-        ownerId = mSeller.ownerId || null;
-      }
+    const { mSeller, pgRow } = await findVendorAcrossDatabases(id);
+    if (!mSeller && !pgRow) {
+      return res.status(404).json({ error: "Vendor not found" });
     }
 
-    if (!currentStatus) return res.status(404).json({ error: "Vendor not found" });
+    const currentStatus = pgRow?.status || mSeller?.status || "suspended";
+    const primaryId = pgRow?.id || mSeller?.id || id;
+    const vendorName = pgRow?.name || mSeller?.name || mSeller?.shopName || "Vendor";
+    let contactEmail = pgRow?.contactEmail || mSeller?.contactEmail || mSeller?.email || null;
+    let ownerId = pgRow?.ownerId || mSeller?.ownerId || null;
 
-    const isReactivation = currentStatus === "suspended" || currentStatus === "deactivated";
+    const isReactivation =
+      currentStatus === "suspended" ||
+      currentStatus === "deactivated" ||
+      currentStatus === "rejected" ||
+      currentStatus === "declined";
+
     const setValues: Record<string, any> = { status: "approved", statusReason: null };
     if (isReactivation) {
       setValues.reactivationWelcomePending = true;
     }
 
     let updated: any = null;
+
+    // 1. Update PostgreSQL vendorsTable
     try {
-      const [row] = await db
-        .update(vendorsTable)
-        .set(setValues)
-        .where(or(eq(vendorsTable.id, id), eq(vendorsTable.ownerId, id)))
-        .returning({
-          id: vendorsTable.id,
-          name: vendorsTable.name,
-          status: vendorsTable.status,
-          contactEmail: vendorsTable.contactEmail,
-          ownerId: vendorsTable.ownerId,
-        });
-      if (row) {
-        updated = row;
-        contactEmail = row.contactEmail || contactEmail;
-        ownerId = row.ownerId || ownerId;
+      const pgConditions: any[] = [];
+      if (pgRow?.id) pgConditions.push(eq(vendorsTable.id, pgRow.id));
+      if (mSeller?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mSeller.id)) {
+        pgConditions.push(eq(vendorsTable.id, mSeller.id));
+      }
+      if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+        pgConditions.push(eq(vendorsTable.id, id));
+      }
+      if (ownerId) pgConditions.push(eq(vendorsTable.ownerId, ownerId));
+      if (contactEmail && vendorsTable.contactEmail) {
+        pgConditions.push(eq(vendorsTable.contactEmail, contactEmail));
+      }
+
+      if (pgConditions.length > 0) {
+        const rows = await db
+          .update(vendorsTable)
+          .set(setValues)
+          .where(or(...pgConditions))
+          .returning({
+            id: vendorsTable.id,
+            name: vendorsTable.name,
+            status: vendorsTable.status,
+            contactEmail: vendorsTable.contactEmail,
+            ownerId: vendorsTable.ownerId,
+            reactivationWelcomePending: (vendorsTable as any).reactivationWelcomePending,
+          });
+        if (Array.isArray(rows) && rows.length > 0) {
+          updated = rows[0];
+          contactEmail = rows[0].contactEmail || contactEmail;
+          ownerId = rows[0].ownerId || ownerId;
+        }
       }
     } catch {}
 
     if (!updated) {
-      updated = { id, name: vendorName, status: "approved", reactivationWelcomePending: isReactivation };
+      updated = {
+        id: primaryId,
+        name: vendorName,
+        status: "approved",
+        contactEmail,
+        ownerId,
+        reactivationWelcomePending: isReactivation,
+      };
     }
 
+    // 2. Update MongoDB mongoSellers
     try {
       if (mongoSellers && typeof mongoSellers.update === "function") {
-        await mongoSellers.update(updated.id, {
-          status: "approved",
-          statusReason: null,
-          ...(isReactivation ? { reactivationWelcomePending: true } : {}),
-        });
+        const idsToUpdate = Array.from(new Set([mSeller?.id, pgRow?.id, id].filter(Boolean))) as string[];
+        for (const targetId of idsToUpdate) {
+          await mongoSellers.update(targetId, {
+            status: "active" as any,
+            approvalStatus: "approved" as any,
+            statusReason: null,
+            email: contactEmail || undefined,
+            contactEmail: contactEmail || undefined,
+            ...(isReactivation ? { reactivationWelcomePending: true, reactivationPending: true } : {}),
+          });
+        }
       }
     } catch {}
 
-    writeAuditLog({ action: "vendor_reactivated", module: "Vendors", details: { vendorId: updated.id, vendorName: updated.name }, ipAddress: getIp(req) }).catch(() => {});
+    // 3. Invalidate vendor cache
+    invalidateApprovedVendorDataCache();
 
-    if (isReactivation) {
-      sendVendorReactivationEmailForVendor({
-        vendorId: updated.id,
-        vendorName: updated.name,
-        contactEmail,
-        ownerId,
-      }).catch((err) => req.log?.warn?.({ err, vendorId: updated.id }, "Failed to send vendor reactivation email"));
+    writeAuditLog({
+      action: isReactivation ? "vendor_reactivated" : "vendor_activated",
+      module: "Vendors",
+      details: { vendorId: updated.id, vendorName: updated.name },
+      ipAddress: getIp(req),
+    }).catch(() => {});
+
+    if (isReactivation && typeof sendVendorReactivationEmailForVendor === "function") {
+      try {
+        sendVendorReactivationEmailForVendor({
+          vendorId: updated.id,
+          vendorName: updated.name,
+          contactEmail,
+          ownerId,
+        }).catch((err) => req.log?.warn?.({ err, vendorId: updated.id }, "Failed to send vendor reactivation email"));
+      } catch {}
     }
 
     try {
       emitVendorEvent("vendor:updated", updated);
-      emitAnalyticsEvent({ vendorId: updated.id, reason: "vendor_activated" });
+      emitAnalyticsEvent({ vendorId: updated.id, reason: isReactivation ? "vendor_reactivated" : "vendor_activated" });
     } catch {}
 
     res.json({ vendor: updated });

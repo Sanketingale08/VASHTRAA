@@ -102,6 +102,7 @@ vi.mock("../lib/transactionalEmail", () => ({
   sendVendorApprovalEmailForVendor: vi.fn().mockResolvedValue(undefined),
   sendVendorSuspensionEmailForVendor: vi.fn().mockResolvedValue(undefined),
   sendVendorRejectionEmailForVendor: vi.fn().mockResolvedValue(undefined),
+  sendVendorReactivationEmailForVendor: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../lib/auditLog", () => ({

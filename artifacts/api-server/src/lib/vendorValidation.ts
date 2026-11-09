@@ -175,3 +175,13 @@ export function isProductVendorValid(
 
   return false;
 }
+
+/**
+ * Invalidates the in-memory cached approved vendor data so that state changes
+ * (suspension, reactivation, approval) take effect immediately.
+ */
+export function invalidateApprovedVendorDataCache(): void {
+  cachedApprovedVendorData = null;
+  lastCacheTime = 0;
+}
+

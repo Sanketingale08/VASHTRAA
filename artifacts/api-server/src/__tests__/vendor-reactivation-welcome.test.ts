@@ -103,6 +103,30 @@ vi.mock("@workspace/db", () => {
     auditLogsTable:             tag("auditLogs",    ["id"]),
     vendorSettlementsTable:     tag("settlements",  ["id", "vendorId"]),
     stockHistoryTable:          tag("stockHistory", ["id", "productId"]),
+    mongoSellers: {
+      findById: vi.fn(() => Promise.resolve(state.vendor)),
+      findBySellerId: vi.fn(() => Promise.resolve(state.vendor)),
+      findByVendorId: vi.fn(() => Promise.resolve(state.vendor)),
+      findByOwnerId: vi.fn(() => Promise.resolve(state.vendor)),
+      update: vi.fn((id: string, vals: any) => {
+        if (state.vendor) {
+          state.vendor = { ...state.vendor, ...vals };
+        }
+        return Promise.resolve(state.vendor);
+      }),
+    },
+    mongoVendors: {
+      findById: vi.fn(() => Promise.resolve(state.vendor)),
+      findBySellerId: vi.fn(() => Promise.resolve(state.vendor)),
+      findByVendorId: vi.fn(() => Promise.resolve(state.vendor)),
+      findByOwnerId: vi.fn(() => Promise.resolve(state.vendor)),
+      update: vi.fn((id: string, vals: any) => {
+        if (state.vendor) {
+          state.vendor = { ...state.vendor, ...vals };
+        }
+        return Promise.resolve(state.vendor);
+      }),
+    },
     CATEGORIES:    ["silk", "cotton"],
     FABRICS:       [],
     OCCASIONS:     [],
@@ -145,6 +169,7 @@ vi.mock("../lib/transactionalEmail", () => ({
   sendVendorApprovalEmailForVendor:   vi.fn().mockResolvedValue(undefined),
   sendVendorSuspensionEmailForVendor: vi.fn().mockResolvedValue(undefined),
   sendVendorRejectionEmailForVendor:  vi.fn().mockResolvedValue(undefined),
+  sendVendorReactivationEmailForVendor: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/sellerNotifications", () => ({
   insertSellerNotification: vi.fn().mockResolvedValue(undefined),

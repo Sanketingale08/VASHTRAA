@@ -45,6 +45,7 @@ function fmt(n: number) {
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
     approved: { bg: "#f0fdf4", color: "#15803d", icon: <CheckCircle size={11} /> },
+    active: { bg: "#f0fdf4", color: "#15803d", icon: <CheckCircle size={11} /> },
     pending: { bg: "#fffbeb", color: "#b45309", icon: <Clock size={11} /> },
     rejected: { bg: "#fef2f2", color: "#b91c1c", icon: <XCircle size={11} /> },
     declined: { bg: "#fef2f2", color: "#b91c1c", icon: <XCircle size={11} /> },
@@ -108,6 +109,8 @@ function VendorsContent() {
     if (statusTab !== "all") {
       if (statusTab === "rejected") {
         v = v.filter((x) => x.status === "rejected" || x.status === "declined");
+      } else if (statusTab === "approved") {
+        v = v.filter((x) => x.status === "approved" || x.status === "active");
       } else {
         v = v.filter((x) => x.status === statusTab);
       }
@@ -176,7 +179,7 @@ function VendorsContent() {
   const tabCounts = useMemo(() => {
     const c: Record<string, number> = { all: vendors.length };
     for (const v of vendors) {
-      const s = v.status === "declined" ? "rejected" : v.status;
+      const s = v.status === "declined" ? "rejected" : (v.status === "active" ? "approved" : v.status);
       c[s] = (c[s] ?? 0) + 1;
     }
     return c;
@@ -364,7 +367,7 @@ function VendorsContent() {
                               />
                             </>
                           )}
-                          {v.status === "approved" && (
+                          {(v.status === "approved" || v.status === "active") && (
                             <>
                               <ActionBtn
                                 label="Suspend"

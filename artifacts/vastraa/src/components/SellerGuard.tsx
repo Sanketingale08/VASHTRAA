@@ -22,7 +22,8 @@ interface VendorProfile {
   statusReason: string | null;
   ownerId: string | null;
   vendorId: string | null;
-  reactivationWelcomePending: boolean;
+  reactivationWelcomePending?: boolean;
+  reactivationPending?: boolean;
   // Shop address
   shopStreet: string | null;
   shopAddressLine2: string | null;
@@ -214,7 +215,8 @@ export function SellerGuard({ children }: SellerGuardProps) {
       setStatus(data.status || "approved");
       setStatusReason(data.statusReason || null);
       const vId = data.id || data.vendorId;
-      if (data.reactivationWelcomePending && (!vId || !dismissedVendorIdsRef.current.has(vId))) {
+      const isReactivationPending = Boolean(data.reactivationWelcomePending || data.reactivationPending);
+      if (isReactivationPending && (!vId || !dismissedVendorIdsRef.current.has(vId))) {
         setShowWelcomeBack(true);
       } else {
         setShowWelcomeBack(false);
@@ -431,7 +433,7 @@ export function SellerGuard({ children }: SellerGuardProps) {
     if (currentVendorId) {
       dismissedVendorIdsRef.current.add(currentVendorId);
     }
-    setVendor((v) => v ? { ...v, reactivationWelcomePending: false } : null);
+    setVendor((v) => v ? { ...v, reactivationWelcomePending: false, reactivationPending: false } : null);
     try {
       await apiFetch("/api/seller/reactivation-welcome/dismiss", {
         method: "POST",
@@ -476,8 +478,11 @@ export function SellerGuard({ children }: SellerGuardProps) {
               Welcome Back!
             </h2>
 
+            <p className="text-sm text-gray-700 font-medium mb-2 leading-relaxed">
+              Your account has been successfully reactivated.
+            </p>
             <p className="text-sm text-gray-500 mb-7 leading-relaxed">
-              Your seller account has been reactivated successfully. Welcome back! You can now continue managing your store.
+              You can now access your VASTRAA Seller Dashboard and continue managing your shop.
             </p>
 
             <button
@@ -485,7 +490,7 @@ export function SellerGuard({ children }: SellerGuardProps) {
               className="w-full py-3 rounded-xl font-bold text-sm tracking-wide transition-opacity hover:opacity-90"
               style={{ background: MAROON, color: "#F4F5F7" }}
             >
-              Continue
+              Continue to Dashboard
             </button>
           </div>
         </div>

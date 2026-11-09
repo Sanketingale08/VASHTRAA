@@ -305,7 +305,7 @@ export const mongoSellers = {
       (await this.findByOwnerId(id)) ||
       (await this.findBySellerId(id)) ||
       (await this.findByVendorId(id)) ||
-      (cleanEmail ? await this.findByEmail(cleanEmail) : null);
+      (cleanEmail ? await this.findByEmail(cleanEmail) : (typeof id === "string" && id.includes("@") ? await this.findByEmail(id) : null));
 
     if (existing) {
       const targetId = existing.id || id;
@@ -313,7 +313,7 @@ export const mongoSellers = {
       // 1. Vendor ID Immutability: existing vendorId must NEVER be overwritten or changed
       if (existing.vendorId) {
         setObj.vendorId = existing.vendorId;
-      } else if (updateData.status === "approved") {
+      } else if ((updateData.status as any) === "approved" || (updateData.status as any) === "active") {
         // 2. Generate Vendor ID only upon approval if missing
         const seq = await getNextSequenceValue("vendor_id");
         const newVendorId = formatVendorId(seq);
@@ -322,9 +322,12 @@ export const mongoSellers = {
       }
 
       // 3. Seller Reactivation: set reactivationWelcomePending = true if reactivating from suspended or deactivated
-      if (((existing.status as any) === "suspended" || (existing.status as any) === "deactivated") && updateData.status === "approved") {
+      if (((existing.status as any) === "suspended" || (existing.status as any) === "deactivated") && ((updateData.status as any) === "approved" || (updateData.status as any) === "active")) {
         if (updateData.reactivationWelcomePending === undefined) {
           setObj.reactivationWelcomePending = true;
+        }
+        if ((updateData as any).reactivationPending === undefined) {
+          setObj.reactivationPending = true;
         }
       }
 

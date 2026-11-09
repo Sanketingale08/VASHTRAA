@@ -1183,18 +1183,53 @@ router.post("/seller/login", authRateLimiter, async (req: Request, res: Response
       } catch {}
     }
 
+    // Fetch freshest seller status directly from MongoDB
+    try {
+      let freshSeller: any = null;
+      if (seller.id) freshSeller = await mongoSellers.findById(seller.id);
+      if (!freshSeller && cleanEmail) freshSeller = await mongoSellers.findByEmail(cleanEmail);
+      if (!freshSeller && seller.ownerId) freshSeller = await mongoSellers.findByOwnerId(seller.ownerId);
+      if (freshSeller) {
+        seller = { ...seller, ...freshSeller };
+      }
+    } catch {}
+
     // Check status in Postgres vendorsTable if available for authoritative approval state
     let currentStatus = seller.status || "approved";
     let currentStatusReason = seller.statusReason || null;
     try {
-      const pgRows = await db
-        .select({ status: vendorsTable.status, statusReason: vendorsTable.statusReason })
-        .from(vendorsTable)
-        .where(or(eq(vendorsTable.id, seller.id), eq(vendorsTable.ownerId, seller.ownerId || seller.id)))
-        .limit(1);
-      if (pgRows.length > 0) {
-        currentStatus = pgRows[0].status;
-        currentStatusReason = pgRows[0].statusReason ?? currentStatusReason;
+      const isUuid = Boolean(seller.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(seller.id));
+      const pgConditions: any[] = [];
+      if (isUuid) pgConditions.push(eq(vendorsTable.id, seller.id));
+      if (seller.ownerId) pgConditions.push(eq(vendorsTable.ownerId, seller.ownerId));
+      if (cleanEmail && vendorsTable.contactEmail) pgConditions.push(eq(vendorsTable.contactEmail, cleanEmail));
+
+      if (pgConditions.length > 0) {
+        const pgRows = await db
+          .select({ status: vendorsTable.status, statusReason: vendorsTable.statusReason })
+          .from(vendorsTable)
+          .where(or(...pgConditions))
+          .limit(1);
+        if (pgRows.length > 0) {
+          const pgStatus = pgRows[0].status;
+          const mongoStatus = seller.status;
+
+          // If MongoDB has an active/approved account, do NOT let stale Postgres suspension block login!
+          if ((mongoStatus === "active" || mongoStatus === "approved") && (pgStatus === "suspended" || pgStatus === "deactivated")) {
+            currentStatus = mongoStatus;
+            currentStatusReason = null;
+            // Self-heal Postgres to synchronize with MongoDB active status
+            try {
+              await db
+                .update(vendorsTable)
+                .set({ status: "approved", statusReason: null })
+                .where(or(...pgConditions));
+            } catch {}
+          } else {
+            currentStatus = pgStatus || currentStatus;
+            currentStatusReason = pgRows[0].statusReason ?? currentStatusReason;
+          }
+        }
       }
     } catch {}
 
@@ -1284,6 +1319,8 @@ router.post("/seller/login", authRateLimiter, async (req: Request, res: Response
         name: seller.shopName || seller.name,
         shopName: seller.shopName || seller.name,
         status: currentStatus,
+        reactivationPending: Boolean(seller.reactivationPending || seller.reactivationWelcomePending),
+        reactivationWelcomePending: Boolean(seller.reactivationWelcomePending || seller.reactivationPending),
       },
     });
   } catch (err: any) {
@@ -1322,14 +1359,35 @@ router.post("/seller/refresh", refreshRateLimiter, async (req: Request, res: Res
     let currentStatus = seller?.status || "approved";
     let currentStatusReason = seller?.statusReason || null;
     try {
+      const isUuid = Boolean(sellerUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sellerUserId));
+      const pgConditions: any[] = [];
+      if (isUuid) pgConditions.push(eq(vendorsTable.id, sellerUserId));
+      pgConditions.push(eq(vendorsTable.ownerId, sellerUserId));
+      if (seller?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(seller.id)) {
+        pgConditions.push(eq(vendorsTable.id, seller.id));
+      }
+
       const pgRows = await db
         .select({ status: vendorsTable.status, statusReason: vendorsTable.statusReason })
         .from(vendorsTable)
-        .where(or(eq(vendorsTable.id, sellerUserId), eq(vendorsTable.ownerId, sellerUserId)))
+        .where(or(...pgConditions))
         .limit(1);
       if (pgRows.length > 0) {
-        currentStatus = pgRows[0].status;
-        currentStatusReason = pgRows[0].statusReason ?? currentStatusReason;
+        const pgStatus = pgRows[0].status;
+        const mongoStatus = seller?.status;
+        if ((mongoStatus === "active" || mongoStatus === "approved") && (pgStatus === "suspended" || pgStatus === "deactivated")) {
+          currentStatus = mongoStatus;
+          currentStatusReason = null;
+          try {
+            await db
+              .update(vendorsTable)
+              .set({ status: "approved", statusReason: null })
+              .where(or(...pgConditions));
+          } catch {}
+        } else {
+          currentStatus = pgStatus || currentStatus;
+          currentStatusReason = pgRows[0].statusReason ?? currentStatusReason;
+        }
       }
     } catch {}
 

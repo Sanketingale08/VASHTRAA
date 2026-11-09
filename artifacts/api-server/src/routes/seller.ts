@@ -141,7 +141,8 @@ router.get("/seller/profile", requireVendorAuth, async (req: any, res: any) => {
     status: vendor.status || "approved",
     statusReason: vendor.statusReason ?? null,
     ownerId: vendor.ownerId,
-    reactivationWelcomePending: vendor.reactivationWelcomePending ?? false,
+    reactivationWelcomePending: Boolean(vendor.reactivationWelcomePending ?? vendor.reactivationPending ?? false),
+    reactivationPending: Boolean(vendor.reactivationWelcomePending ?? vendor.reactivationPending ?? false),
     shopStreet: vendor.shopStreet ?? null,
     shopAddressLine2: vendor.shopAddressLine2 ?? null,
     shopLandmark: vendor.shopLandmark ?? null,
@@ -3219,17 +3220,34 @@ router.get("/seller/settlements/:settlementId", requireVendorAuth, async (req: a
 // ── Reactivation welcome dismiss ─────────────────────────────────────────────
 // Called by the frontend after the seller closes the one-time "Welcome Back!" popup.
 // Clears the flag so the popup never shows again for this reactivation event.
-router.post("/seller/reactivation-welcome/dismiss", requireVendorAuth, async (req: any, res: any) => {
+const handleReactivationDismiss = async (req: any, res: any) => {
   const vendorId = req.vendorId;
+  const vendor = req.vendor;
   try {
-    await db
-      .update(vendorsTable)
-      .set({ reactivationWelcomePending: false })
-      .where(eq(vendorsTable.id, vendorId));
+    const isUuid = Boolean(vendorId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vendorId));
+    const pgConditions: any[] = [];
+    if (isUuid) pgConditions.push(eq(vendorsTable.id, vendorId));
+    if (vendor?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vendor.id)) {
+      pgConditions.push(eq(vendorsTable.id, vendor.id));
+    }
+    if (vendor?.ownerId) pgConditions.push(eq(vendorsTable.ownerId, vendor.ownerId));
+
+    if (pgConditions.length > 0) {
+      await db
+        .update(vendorsTable)
+        .set({ reactivationWelcomePending: false })
+        .where(or(...pgConditions));
+    }
 
     try {
-      if (typeof isMongoDbConnected === "function" && isMongoDbConnected() && mongoSellers && typeof mongoSellers.update === "function") {
-        await mongoSellers.update(vendorId, { reactivationWelcomePending: false });
+      if (mongoSellers && typeof mongoSellers.update === "function") {
+        const idsToUpdate = Array.from(new Set([vendorId, vendor?.id, vendor?.sellerId, vendor?.vendorId, vendor?.ownerId].filter(Boolean))) as string[];
+        for (const targetId of idsToUpdate) {
+          await mongoSellers.update(targetId, {
+            reactivationWelcomePending: false,
+            reactivationPending: false,
+          });
+        }
       }
     } catch {}
 
@@ -3238,7 +3256,11 @@ router.post("/seller/reactivation-welcome/dismiss", requireVendorAuth, async (re
     req.log?.error?.({ err }, "seller/reactivation-welcome/dismiss failed");
     res.status(500).json({ error: "Failed to dismiss welcome" });
   }
-});
+};
+
+router.post("/seller/reactivation-welcome/dismiss", requireVendorAuth, handleReactivationDismiss);
+router.post("/seller/reactivation/dismiss", requireVendorAuth, handleReactivationDismiss);
+router.post("/seller/reactivation/acknowledge", requireVendorAuth, handleReactivationDismiss);
 
 // ── VENDOR DIRECT SHIPPING FLOW ENDPOINTS ──────────────────────────────────────
 

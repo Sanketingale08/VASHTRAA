@@ -4,6 +4,7 @@ export interface Seller {
   sellerId: string;
   vendorId?: string;
   reactivationWelcomePending?: boolean;
+  reactivationPending?: boolean;
   name: string;
   sellerName?: string;
   shopName?: string;
@@ -18,7 +19,7 @@ export interface Seller {
   rating?: number;
   sareesCount?: number;
   productsCount?: number;
-  status: "pending" | "approved" | "suspended" | "rejected";
+  status: "pending" | "approved" | "suspended" | "rejected" | "active" | "deactivated";
   statusReason?: string | null;
 
   // Business details

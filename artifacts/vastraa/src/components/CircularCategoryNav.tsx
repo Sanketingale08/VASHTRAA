@@ -9,6 +9,8 @@ export interface CircularCategoryItem {
   name: string;
   slug: string;
   image?: string;
+  imageUpdatedAt?: Date | string | null;
+  imageVersion?: number | string | null;
   fallbackImage?: string;
   route?: string;
   itemCount?: number;
@@ -295,7 +297,7 @@ export function CircularCategoryNav({
                   >
                     <div className="w-full h-full rounded-full overflow-hidden relative aspect-square">
                       <img
-                        src={getProductImageSrc(resolvedImage)}
+                        src={getProductImageSrc(resolvedImage, item.imageUpdatedAt || item.imageVersion || (item as any).updatedAt)}
                         alt={item.name}
                         onError={replaceProductImageWithFallback}
                         className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500 rounded-full"

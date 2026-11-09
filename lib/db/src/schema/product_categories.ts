@@ -10,6 +10,8 @@ export const productCategoriesTable = pgTable("product_categories", {
   sellerId: text("seller_id"),
   sellerName: text("seller_name"),
   coverImage: text("cover_image"),
+  imageUpdatedAt: timestamp("image_updated_at"),
+  imageVersion: text("image_version"),
   status: text("status").notNull().default("approved"), // 'pending' | 'approved' | 'rejected'
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),

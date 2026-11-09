@@ -471,7 +471,11 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
             };
             res.setHeader("Content-Type", mimeTypes[ext] || "application/octet-stream");
             res.setHeader("Content-Length", stat.size);
-            res.setHeader("Cache-Control", "public, max-age=31536000");
+            const hasVersion = Boolean(req.query.v || req.query.version);
+            const cacheHeader = hasVersion
+              ? "public, max-age=31536000, immutable"
+              : "public, max-age=86400, stale-while-revalidate=3600";
+            res.setHeader("Cache-Control", cacheHeader);
             fs.createReadStream(localPath).pipe(res);
             return;
           }
@@ -486,7 +490,11 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
         const buf = Buffer.from((record as any).bufferBase64, "base64");
         res.setHeader("Content-Type", record.contentType || "image/webp");
         res.setHeader("Content-Length", buf.length);
-        res.setHeader("Cache-Control", "public, max-age=31536000");
+        const hasVersion = Boolean(req.query.v || req.query.version);
+        const cacheHeader = hasVersion
+          ? "public, max-age=31536000, immutable"
+          : "public, max-age=86400, stale-while-revalidate=3600";
+        res.setHeader("Cache-Control", cacheHeader);
         res.send(buf);
         return;
       }

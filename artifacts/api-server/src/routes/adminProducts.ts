@@ -343,6 +343,7 @@ router.patch("/admin/products/:id", requireAdminKey, async (req: any, res: any) 
     "brand", "fabric", "color", "occasion", "active", "isFeatured", "isBestSeller",
     "isNewArrival", "deliveryInfo", "returnPolicy", "stock", "lowStockThreshold",
     "status", "rejectionReason", "approvalRemark", "featuredOrder", "featuredUntil",
+    "images", "image", "imageUpdatedAt", "imageVersion", "videos", "variants", "specifications",
   ];
   const updates: Record<string, any> = {};
   for (const f of allowed) {
@@ -350,6 +351,11 @@ router.patch("/admin/products/:id", requireAdminKey, async (req: any, res: any) 
   }
   if (!Object.keys(updates).length) {
     return res.status(400).json({ error: "No fields to update" });
+  }
+
+  if (updates.images !== undefined || updates.image !== undefined) {
+    updates.imageUpdatedAt = new Date();
+    updates.imageVersion = Date.now();
   }
 
   // Business rules: approval implicitly activates; rejection implicitly deactivates

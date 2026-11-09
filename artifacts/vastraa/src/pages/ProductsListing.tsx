@@ -506,7 +506,8 @@ export function ProductsListing({
         return { categories: [] };
       }
     },
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
@@ -623,6 +624,8 @@ export function ProductsListing({
           name: cat.name.replace(/ Sarees$/i, ""),
           slug: cat.slug,
           image: resolvedImg,
+          imageUpdatedAt: dbCat?.imageUpdatedAt || dbCat?.updatedAt || null,
+          imageVersion: dbCat?.imageVersion || null,
           fallbackImage: "/images/hero-paithani-1.png",
           route: `/${cat.slug}`,
         };
@@ -666,6 +669,8 @@ export function ProductsListing({
             name: sc.name,
             slug: sc.slug,
             image: resolvedImg,
+            imageUpdatedAt: dbSub?.imageUpdatedAt || dbSub?.updatedAt || null,
+            imageVersion: dbSub?.imageVersion || null,
             fallbackImage: dbParent?.coverImage || matchedSaree.coverImage,
             route: sc.route,
             subtypes: sc.subtypes,
@@ -721,6 +726,8 @@ export function ProductsListing({
           name: sc.name,
           slug: sc.slug,
           image: resolvedImg,
+          imageUpdatedAt: dbSub?.imageUpdatedAt || dbSub?.updatedAt || null,
+          imageVersion: dbSub?.imageVersion || null,
           fallbackImage: dbParent?.coverImage || matchedCategoryDef?.coverImage || "/images/hero-paithani-1.png",
           route: sc.route,
           subtypes: sc.subtypes,

@@ -47,9 +47,11 @@ router.get("/categories", async (req: any, res: any) => {
 
     const categories = await globalCache.getOrFetch(cacheKey, async () => {
       return await mongoProductCategories.listActive(sellerId);
-    }, 300_000);
+    }, 15_000);
 
-    res.setHeader("Cache-Control", "public, max-age=180, stale-while-revalidate=120");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.json({ categories });
   } catch (err) {
     try {
@@ -316,8 +318,16 @@ router.patch("/admin/categories/:id", requireAdminKey, async (req: any, res: any
   if (active !== undefined) updates.active = Boolean(active);
   if (status !== undefined) updates.status = String(status).trim();
   if (type !== undefined) updates.type = String(type).trim();
-  if (coverImage !== undefined) updates.coverImage = coverImage ? String(coverImage).trim() : null;
-  if (bannerImage !== undefined) updates.bannerImage = bannerImage ? String(bannerImage).trim() : null;
+  if (coverImage !== undefined) {
+    updates.coverImage = coverImage ? String(coverImage).trim() : null;
+    updates.imageUpdatedAt = new Date();
+    updates.imageVersion = Date.now();
+  }
+  if (bannerImage !== undefined) {
+    updates.bannerImage = bannerImage ? String(bannerImage).trim() : null;
+    updates.imageUpdatedAt = new Date();
+    updates.imageVersion = Date.now();
+  }
   if (description !== undefined) updates.description = description ? String(description).trim() : null;
   if (displayOrder !== undefined) updates.displayOrder = typeof displayOrder === "number" ? displayOrder : parseInt(String(displayOrder), 10) || 0;
   if (parentId !== undefined) updates.parentId = parentId && String(parentId).trim() ? String(parentId).trim() : null;
@@ -375,7 +385,8 @@ router.patch("/admin/categories/:id", requireAdminKey, async (req: any, res: any
 
     if (!updatedDoc) return res.status(404).json({ error: "Category not found" });
     safeInvalidatePattern(/categories/);
-    globalCache.invalidate("categories:active");
+    safeClearCache();
+    globalCache.del("categories:active");
     try {
       emitProductEvent("category:updated", { categoryId: id, type: "updated" });
       emitProductEvent("catalog:updated", { action: "category_updated", categoryId: id });
@@ -616,7 +627,13 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
   }
 
   try {
-    let updatedDoc = await mongoProductCategories.update(id, { coverImage: cleanUrl });
+    const now = new Date();
+    const imageVersion = now.getTime();
+    let updatedDoc = await mongoProductCategories.update(id, {
+      coverImage: cleanUrl,
+      imageUpdatedAt: now,
+      imageVersion,
+    });
 
     // If doc was not found directly, check if it's a known static subcategory or category
     if (!updatedDoc) {
@@ -671,6 +688,8 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
           type: "subcategory",
           parentId: foundParentCat.id || foundParentCat.slug,
           coverImage: cleanUrl,
+          imageUpdatedAt: now,
+          imageVersion,
           status: "approved",
           createdBy: "admin",
         });
@@ -682,6 +701,8 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
             name: catDef.name,
             type: "main",
             coverImage: cleanUrl,
+            imageUpdatedAt: now,
+            imageVersion,
             status: "approved",
             createdBy: "admin",
           });
@@ -696,22 +717,27 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
     // Also update embedded subcategory in any parent category document
     try {
       const col = (await import("@workspace/db")).getCollection("product_categories");
+      const subUpdateObj = {
+        "subcategories.$[elem].coverImage": cleanUrl,
+        "subcategories.$[elem].imageUpdatedAt": now,
+        "subcategories.$[elem].imageVersion": imageVersion,
+      };
       await col.updateMany(
         { "subcategories.id": id },
-        { $set: { "subcategories.$[elem].coverImage": cleanUrl } },
+        { $set: subUpdateObj },
         { arrayFilters: [{ "elem.id": id }] }
       );
       if (updatedDoc?.id && updatedDoc.id !== id) {
         await col.updateMany(
           { "subcategories.id": updatedDoc.id },
-          { $set: { "subcategories.$[elem].coverImage": cleanUrl } },
+          { $set: subUpdateObj },
           { arrayFilters: [{ "elem.id": updatedDoc.id }] }
         );
       }
       if (updatedDoc?.slug) {
         await col.updateMany(
           { "subcategories.slug": updatedDoc.slug },
-          { $set: { "subcategories.$[elem].coverImage": cleanUrl } },
+          { $set: subUpdateObj },
           { arrayFilters: [{ "elem.slug": updatedDoc.slug }] }
         );
       }
@@ -725,6 +751,8 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
             for (const s of p.subcategories) {
               if (s.id === id || s.slug === id || s.id === updatedDoc?.id || s.slug === updatedDoc?.slug) {
                 s.coverImage = cleanUrl;
+                s.imageUpdatedAt = now;
+                s.imageVersion = imageVersion;
               }
             }
           }
@@ -735,27 +763,42 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
     try {
       await db
         .update(productCategoriesTable)
-        .set({ coverImage: cleanUrl, updatedAt: new Date() })
+        .set({ coverImage: cleanUrl, imageUpdatedAt: now, imageVersion: String(imageVersion), updatedAt: now })
         .where(eq(productCategoriesTable.id, id));
     } catch {}
 
     safeInvalidatePattern(/categories/);
+    safeClearCache();
     globalCache.del("categories:active");
     try {
-      emitProductEvent("category:updated", { categoryId: id, type: "image_updated" });
-      emitProductEvent("catalog:updated", { action: "category_image_updated", categoryId: id });
+      emitProductEvent("category:updated", {
+        categoryId: id,
+        type: "image_updated",
+        coverImage: cleanUrl,
+        imageUpdatedAt: now,
+        imageVersion,
+      });
+      emitProductEvent("catalog:updated", {
+        action: "category_image_updated",
+        categoryId: id,
+        coverImage: cleanUrl,
+        imageUpdatedAt: now,
+        imageVersion,
+      });
     } catch {}
 
     res.json({
       success: true,
       message: "Cover image updated successfully",
       coverImage: cleanUrl,
+      imageUpdatedAt: now,
+      imageVersion,
       category: updatedDoc,
     });
   } catch (err: any) {
     console.error("[CoverImage Update Error]:", err);
     req.log?.error?.({ err }, "Failed to update cover image");
-    res.status(500).json({ error: err?.message || "Failed to update cover image" });
+    res.status(500).json({ error: err?.message || "Failed to update cover image in database" });
   }
 });
 
@@ -763,17 +806,23 @@ router.post("/admin/categories/:id/cover-image", requireAdminKey, async (req: an
 router.delete("/admin/categories/:id/cover-image", requireAdminKey, async (req: any, res: any) => {
   const { id } = req.params;
   try {
-    const updatedDoc = await mongoProductCategories.update(id, { coverImage: null });
+    const now = new Date();
+    const imageVersion = now.getTime();
+    const updatedDoc = await mongoProductCategories.update(id, {
+      coverImage: null,
+      imageUpdatedAt: now,
+      imageVersion,
+    });
     try {
       const col = (await import("@workspace/db")).getCollection("product_categories");
       await col.updateMany(
         { "subcategories.id": id },
-        { $set: { "subcategories.$[elem].coverImage": null } },
+        { $set: { "subcategories.$[elem].coverImage": null, "subcategories.$[elem].imageUpdatedAt": now, "subcategories.$[elem].imageVersion": imageVersion } },
         { arrayFilters: [{ "elem.id": id }] }
       );
       await col.updateMany(
         { "subcategories.slug": id },
-        { $set: { "subcategories.$[elem].coverImage": null } },
+        { $set: { "subcategories.$[elem].coverImage": null, "subcategories.$[elem].imageUpdatedAt": now, "subcategories.$[elem].imageVersion": imageVersion } },
         { arrayFilters: [{ "elem.slug": id }] }
       );
     } catch {}
@@ -786,6 +835,8 @@ router.delete("/admin/categories/:id/cover-image", requireAdminKey, async (req: 
             for (const s of p.subcategories) {
               if (s.id === id || s.slug === id) {
                 s.coverImage = null;
+                s.imageUpdatedAt = now;
+                s.imageVersion = imageVersion;
               }
             }
           }
@@ -796,21 +847,24 @@ router.delete("/admin/categories/:id/cover-image", requireAdminKey, async (req: 
     try {
       await db
         .update(productCategoriesTable)
-        .set({ coverImage: null, updatedAt: new Date() })
+        .set({ coverImage: null, imageUpdatedAt: now, imageVersion: String(imageVersion), updatedAt: now })
         .where(eq(productCategoriesTable.id, id));
     } catch {}
 
     safeInvalidatePattern(/categories/);
+    safeClearCache();
     globalCache.del("categories:active");
     try {
-      emitProductEvent("category:updated", { categoryId: id, type: "image_removed" });
-      emitProductEvent("catalog:updated", { action: "category_image_updated", categoryId: id });
+      emitProductEvent("category:updated", { categoryId: id, type: "image_removed", imageUpdatedAt: now, imageVersion });
+      emitProductEvent("catalog:updated", { action: "category_image_updated", categoryId: id, imageUpdatedAt: now, imageVersion });
     } catch {}
 
     res.json({
       success: true,
       message: "Cover image removed successfully",
       coverImage: null,
+      imageUpdatedAt: now,
+      imageVersion,
       category: updatedDoc,
     });
   } catch (err: any) {

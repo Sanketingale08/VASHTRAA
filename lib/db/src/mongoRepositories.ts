@@ -534,6 +534,8 @@ export const mongoProducts = {
       occasion: "festival",
       vendorName: "",
       images: [],
+      imageUpdatedAt: (data as any).imageUpdatedAt || new Date(),
+      imageVersion: (data as any).imageVersion || Date.now(),
       videos: [],
       variants: [],
       specifications: [],
@@ -597,7 +599,11 @@ export const mongoProducts = {
     const canonicalId = existing?.id || strId;
     const mongoId = (existing as any)?._id || (updateData as any)?._id || strId;
 
-    const updateWithTimestamp = { ...updateData, updatedAt: now };
+    const updateWithTimestamp: any = { ...updateData, updatedAt: now };
+    if (updateData.images !== undefined || (updateData as any).image !== undefined || (updateData as any).imageUpdatedAt !== undefined) {
+      updateWithTimestamp.imageUpdatedAt = (updateData as any).imageUpdatedAt ? new Date((updateData as any).imageUpdatedAt) : now;
+      updateWithTimestamp.imageVersion = (updateData as any).imageVersion ? Number((updateData as any).imageVersion) : now.getTime();
+    }
     const updated = { ...(existing || {}), ...updateWithTimestamp, id: canonicalId, _id: mongoId } as Product;
 
     inMemoryProductsMap.set(canonicalId, updated);
@@ -645,7 +651,8 @@ export const mongoProducts = {
           );
         }
       } catch (err: any) {
-        console.warn(`[mongoProducts.update] Warning updating ${id}:`, err?.message || err);
+        console.error(`[mongoProducts.update] MongoDB update error for ${id}:`, err?.message || err);
+        throw err;
       }
     }
     return updated;
@@ -2836,6 +2843,8 @@ export interface ProductCategoryDoc {
   sellerName?: string | null;
   coverImage?: string | null;
   bannerImage?: string | null;
+  imageUpdatedAt?: Date | string | null;
+  imageVersion?: number | string | null;
   description?: string | null;
   displayOrder?: number;
   subcategoriesCount?: number;
@@ -3602,6 +3611,8 @@ export const mongoProductCategories = {
               name: child.name,
               slug: child.slug,
               coverImage: child.coverImage || null,
+              imageUpdatedAt: child.imageUpdatedAt || (child as any).updatedAt || null,
+              imageVersion: child.imageVersion || null,
               route: child.route || `/${mainCat.slug}?subcategory=${child.slug}`,
               subtypes: (child as any).subtypes || [],
             });
@@ -3614,8 +3625,14 @@ export const mongoProductCategories = {
               subtypes: (child as any).subtypes || [],
             });
           } else {
-            if (child.coverImage) {
+            if (child.coverImage !== undefined) {
               existingSubs[existingIdx].coverImage = child.coverImage;
+            }
+            if (child.imageUpdatedAt) {
+              existingSubs[existingIdx].imageUpdatedAt = child.imageUpdatedAt;
+            }
+            if (child.imageVersion) {
+              existingSubs[existingIdx].imageVersion = child.imageVersion;
             }
           }
         }
@@ -4131,7 +4148,8 @@ export const mongoProductCategories = {
     const existing = (await this.findById(id)) || (await this.findBySlug(id));
     if (!existing) return null;
 
-    const setObj: Partial<ProductCategoryDoc> = { updatedAt: new Date() };
+    const now = new Date();
+    const setObj: Partial<ProductCategoryDoc> = { updatedAt: now };
     if (updates.name !== undefined) {
       setObj.name = String(updates.name).trim();
       setObj.slug = slugifyCategoryName(setObj.name);
@@ -4147,9 +4165,19 @@ export const mongoProductCategories = {
     }
     if (updates.coverImage !== undefined) {
       setObj.coverImage = updates.coverImage ? String(updates.coverImage).trim() : null;
+      setObj.imageUpdatedAt = updates.imageUpdatedAt ? new Date(updates.imageUpdatedAt) : now;
+      setObj.imageVersion = updates.imageVersion ? Number(updates.imageVersion) : now.getTime();
     }
     if (updates.bannerImage !== undefined) {
       setObj.bannerImage = updates.bannerImage ? String(updates.bannerImage).trim() : null;
+      setObj.imageUpdatedAt = updates.imageUpdatedAt ? new Date(updates.imageUpdatedAt) : now;
+      setObj.imageVersion = updates.imageVersion ? Number(updates.imageVersion) : now.getTime();
+    }
+    if (updates.imageUpdatedAt !== undefined) {
+      setObj.imageUpdatedAt = updates.imageUpdatedAt ? new Date(updates.imageUpdatedAt) : now;
+    }
+    if (updates.imageVersion !== undefined) {
+      setObj.imageVersion = updates.imageVersion ? Number(updates.imageVersion) : now.getTime();
     }
     if (updates.description !== undefined) {
       setObj.description = updates.description ? String(updates.description).trim() : null;
@@ -4189,19 +4217,29 @@ export const mongoProductCategories = {
         // If this is a subcategory, also update any parent category's embedded subcategory array
         if (existing.parentId || existing.type === "subcategory" || updates.coverImage !== undefined) {
           const effectiveCover = setObj.coverImage !== undefined ? setObj.coverImage : existing.coverImage;
+          const subSetPayload: Record<string, any> = {
+            "subcategories.$[elem].coverImage": effectiveCover,
+          };
+          if (setObj.imageUpdatedAt) {
+            subSetPayload["subcategories.$[elem].imageUpdatedAt"] = setObj.imageUpdatedAt;
+          }
+          if (setObj.imageVersion) {
+            subSetPayload["subcategories.$[elem].imageVersion"] = setObj.imageVersion;
+          }
           await col.updateMany(
             { "subcategories.id": existing.id },
-            { $set: { "subcategories.$[elem].coverImage": effectiveCover } },
+            { $set: subSetPayload },
             { arrayFilters: [{ "elem.id": existing.id }] }
           );
           await col.updateMany(
             { "subcategories.slug": existing.slug },
-            { $set: { "subcategories.$[elem].coverImage": effectiveCover } },
+            { $set: subSetPayload },
             { arrayFilters: [{ "elem.slug": existing.slug }] }
           );
         }
-      } catch {
-        setMongoConnected(false);
+      } catch (dbErr: any) {
+        console.error("[mongoProductCategories.update] Database update failed:", dbErr);
+        throw dbErr;
       }
     }
 
@@ -4212,6 +4250,8 @@ export const mongoProductCategories = {
           if (sub.id === existing.id || sub.slug === existing.slug) {
             if (setObj.coverImage !== undefined) sub.coverImage = setObj.coverImage;
             if (setObj.name !== undefined) sub.name = setObj.name;
+            if (setObj.imageUpdatedAt) sub.imageUpdatedAt = setObj.imageUpdatedAt;
+            if (setObj.imageVersion) sub.imageVersion = setObj.imageVersion;
           }
         }
       }

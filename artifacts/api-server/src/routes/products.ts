@@ -61,7 +61,9 @@ router.get("/products/search-suggestions", async (req, res) => {
 });
 
 router.get("/products", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=30");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   const query = req.query as Record<string, any>;
   const pageNum = Math.max(1, parseInt(query.page as string) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(query.limit as string) || 24));
@@ -186,7 +188,8 @@ router.get("/products/facets", async (req, res) => {
 
     const cacheKey = globalCache.generateKey("products:facets", searchOptions as any);
     const facets = await globalCache.getOrFetch(cacheKey, () => getProductFacets(searchOptions), 60_000);
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=30");
+    res.setHeader("Cache-Control", "no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     res.json(facets);
   } catch (err) {
     req.log?.error({ err }, "Failed to compute facets");

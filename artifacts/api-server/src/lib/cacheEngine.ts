@@ -62,6 +62,15 @@ export class CacheEngine {
     return this.cache.delete(key);
   };
 
+  public invalidate = (keyOrPattern: string | RegExp): void => {
+    if (keyOrPattern instanceof RegExp) {
+      this.invalidatePattern(keyOrPattern);
+    } else {
+      this.del(keyOrPattern);
+      this.invalidatePattern(new RegExp(`^${keyOrPattern}`));
+    }
+  };
+
   public clear = (): void => {
     this.cache.clear();
     this.inFlight.clear();

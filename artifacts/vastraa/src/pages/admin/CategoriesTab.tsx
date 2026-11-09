@@ -386,6 +386,9 @@ export function CategoriesTab({
       qc.invalidateQueries({ queryKey: ["admin-categories"] });
       qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
       qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      qc.invalidateQueries({ queryKey: ["categories"] });
+      await qc.refetchQueries({ queryKey: ["admin-categories"] });
+      await qc.refetchQueries({ queryKey: ["/api/categories"] });
     } catch (e: any) {
       toast.err(e.message || "Failed to update category status");
     }
@@ -489,6 +492,9 @@ export function CategoriesTab({
       qc.invalidateQueries({ queryKey: ["admin-categories"] });
       qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
       qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      qc.invalidateQueries({ queryKey: ["categories"] });
+      await qc.refetchQueries({ queryKey: ["admin-categories"] });
+      await qc.refetchQueries({ queryKey: ["/api/categories"] });
     } catch (e: any) {
       toast.err(e.message || "Failed to save category");
     } finally {
@@ -567,6 +573,9 @@ export function CategoriesTab({
       setManageSubImage(null);
       qc.invalidateQueries({ queryKey: ["admin-categories"] });
       qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      qc.invalidateQueries({ queryKey: ["categories"] });
+      await qc.refetchQueries({ queryKey: ["admin-categories"] });
+      await qc.refetchQueries({ queryKey: ["/api/categories"] });
     } catch (e: any) {
       toast.err(e.message || "Failed to update subcategory image");
     } finally {
@@ -585,6 +594,9 @@ export function CategoriesTab({
       qc.invalidateQueries({ queryKey: ["admin-categories"] });
       qc.invalidateQueries({ queryKey: ["admin-products-stats"] });
       qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      qc.invalidateQueries({ queryKey: ["categories"] });
+      await qc.refetchQueries({ queryKey: ["admin-categories"] });
+      await qc.refetchQueries({ queryKey: ["/api/categories"] });
     } catch (e: any) {
       toast.err(e.message || "Failed to delete category");
     } finally {
@@ -829,7 +841,7 @@ export function CategoriesTab({
                             >
                               {c.coverImage ? (
                                 <img
-                                  src={getProductImageSrc(c.coverImage)}
+                                  src={getProductImageSrc(c.coverImage, (c as any).imageUpdatedAt || (c as any).updatedAt || (c as any).imageVersion)}
                                   alt={c.name}
                                   className="w-full h-full object-cover group-hover/img:scale-105 transition-transform"
                                   onError={replaceProductImageWithFallback}
@@ -1029,7 +1041,7 @@ export function CategoriesTab({
                                               >
                                                 {sub.coverImage || (sub as any).image ? (
                                                   <img
-                                                    src={getProductImageSrc(sub.coverImage || (sub as any).image)}
+                                                    src={getProductImageSrc(sub.coverImage || (sub as any).image, (sub as any).imageUpdatedAt || (sub as any).updatedAt || (sub as any).imageVersion)}
                                                     alt={sub.name}
                                                     className="w-full h-full object-cover object-center"
                                                     onError={replaceProductImageWithFallback}

@@ -1092,9 +1092,10 @@ export default function ProductDetail() {
 
   const themeClasses = "bg-[#F4F5F7] text-[#3D1A1A]";
 
+  const productVersion = (product as any)?.imageUpdatedAt || (product as any)?.updatedAt || (product as any)?.imageVersion;
   const images = Array.isArray(product?.images) && product.images.length > 0
-    ? product.images.map(getProductImageSrc)
-    : [getProductImageSrc()];
+    ? product.images.map((img) => getProductImageSrc(img, productVersion))
+    : [getProductImageSrc(undefined, productVersion)];
 
   useEffect(() => {
     setActiveImage(0);
@@ -1543,7 +1544,7 @@ export default function ProductDetail() {
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-amber-300 shrink-0 shadow-2xs"
                         >
                           <img
-                            src={getProductImageSrc(bImg)}
+                            src={getProductImageSrc(bImg, productVersion)}
                             alt={`Blouse detail ${idx + 1}`}
                             className="w-full h-full object-cover"
                             onError={replaceProductImageWithFallback}

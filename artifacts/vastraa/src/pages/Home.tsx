@@ -377,7 +377,8 @@ function SareeCategoriesShowcaseSection() {
         return { categories: [] };
       }
     },
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   // Official main categories (sarees, kurtis, kurta-sets, ethnic-dresses, western-dresses, winter-wear, tops)
@@ -396,6 +397,8 @@ function SareeCategoriesShowcaseSection() {
         name: dbMatch?.name || fallback.name,
         slug: fallback.slug,
         image: dbMatch?.coverImage || dbMatch?.image || fallback.coverImage || "/images/product-4.png",
+        imageUpdatedAt: dbMatch?.imageUpdatedAt || dbMatch?.updatedAt || null,
+        imageVersion: dbMatch?.imageVersion || null,
         description: dbMatch?.description || fallback.description,
         displayOrder: typeof dbMatch?.displayOrder === "number" ? dbMatch.displayOrder : fallback.displayOrder,
         productCount: typeof dbMatch?.productCount === "number" ? dbMatch.productCount : undefined,
@@ -426,7 +429,7 @@ function SareeCategoriesShowcaseSection() {
                 >
                   <div className="relative aspect-[4/5] w-full rounded-xl overflow-hidden bg-gray-100 mb-3 shadow-2xs">
                     <img
-                      src={getProductImageSrc(cat.image)}
+                      src={getProductImageSrc(cat.image, cat.imageUpdatedAt || cat.imageVersion)}
                       alt={cat.name}
                       onError={replaceProductImageWithFallback}
                       className="w-full h-full object-cover object-top group-hover:scale-108 transition-transform duration-500"

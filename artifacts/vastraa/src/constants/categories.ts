@@ -22,6 +22,8 @@ export interface CatalogSubcategoryItem {
   subtypes: string[];
   coverImage?: string | null;
   image?: string | null;
+  imageUpdatedAt?: Date | string | null;
+  imageVersion?: number | string | null;
 }
 
 export interface CatalogCategoryItem {
@@ -33,6 +35,8 @@ export interface CatalogCategoryItem {
   description: string;
   coverImage: string;
   bannerImage: string;
+  imageUpdatedAt?: Date | string | null;
+  imageVersion?: number | string | null;
   subcategories: CatalogSubcategoryItem[];
 }
 
@@ -1493,6 +1497,8 @@ export function getSubcategoriesForCategory(catVal?: string | null, dbCategories
               match.coverImage = sub.coverImage;
               match.image = sub.coverImage;
             }
+            if (sub.imageUpdatedAt) match.imageUpdatedAt = sub.imageUpdatedAt;
+            if (sub.imageVersion) match.imageVersion = sub.imageVersion;
           } else {
             staticSubs.push({
               id: sub.id || sub.slug,
@@ -1500,6 +1506,8 @@ export function getSubcategoriesForCategory(catVal?: string | null, dbCategories
               slug: sub.slug,
               coverImage: sub.coverImage || null,
               image: sub.coverImage || null,
+              imageUpdatedAt: sub.imageUpdatedAt || sub.updatedAt || null,
+              imageVersion: sub.imageVersion || null,
               route: sub.route || `/${parentDef?.slug || norm}?subcategory=${sub.slug}`,
               group: sub.group,
               subtypes: sub.subtypes || [],
@@ -1515,6 +1523,8 @@ export function getSubcategoriesForCategory(catVal?: string | null, dbCategories
             match.coverImage = c.coverImage;
             match.image = c.coverImage;
           }
+          if (c.imageUpdatedAt) match.imageUpdatedAt = c.imageUpdatedAt;
+          if (c.imageVersion) match.imageVersion = c.imageVersion;
         } else {
           staticSubs.push({
             id: c.id || c.slug,
@@ -1522,6 +1532,8 @@ export function getSubcategoriesForCategory(catVal?: string | null, dbCategories
             slug: c.slug,
             coverImage: c.coverImage || null,
             image: c.coverImage || null,
+            imageUpdatedAt: c.imageUpdatedAt || c.updatedAt || null,
+            imageVersion: c.imageVersion || null,
             route: c.route || `/${parentDef?.slug || norm}?subcategory=${c.slug}`,
             group: c.group,
             subtypes: c.subtypes || [],

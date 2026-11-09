@@ -177,6 +177,8 @@ export const productsTable = pgTable("products", {
   vendorId: uuid("vendor_id").references(() => vendorsTable.id),
   vendorName: text("vendor_name").notNull().default(""),
   images: jsonb("images").$type<string[]>().notNull().default([]),
+  imageUpdatedAt: timestamp("image_updated_at"),
+  imageVersion: text("image_version"),
   videos: jsonb("videos").$type<string[]>().notNull().default([]),
   variants: jsonb("variants").$type<ProductVariant[]>().notNull().default([]),
   specifications: jsonb("specifications").$type<ProductSpecification[]>().notNull().default([]),

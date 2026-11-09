@@ -165,7 +165,8 @@ export function Navbar() {
         return { categories: [] };
       }
     },
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const activeDbCategories = (dbCategoriesData?.categories || []).filter(
@@ -188,6 +189,8 @@ export function Navbar() {
         name: c.name || fallback?.name,
         slug: c.slug || fallback?.slug,
         image: c.image || c.coverImage || fallback?.coverImage || "/images/product-1.png",
+        imageUpdatedAt: c.imageUpdatedAt || c.updatedAt || null,
+        imageVersion: c.imageVersion || null,
         description: c.description || fallback?.description,
         productCount: typeof c.productCount === "number" ? c.productCount : undefined,
       };
@@ -362,7 +365,7 @@ export function Navbar() {
                             <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-gray-100 border border-gray-200 shadow-2xs">
                               {cat.image ? (
                                 <img
-                                  src={getProductImageSrc(cat.image)}
+                                  src={getProductImageSrc(cat.image, cat.imageUpdatedAt || cat.imageVersion)}
                                   alt={cat.name}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                                   onError={replaceProductImageWithFallback}
@@ -517,7 +520,7 @@ export function Navbar() {
                                 className="flex items-center gap-3 px-4 py-3 hover:bg-[#F4F5F7] transition-colors border-b border-gray-50 last:border-b-0 group"
                               >
                                 <img
-                                  src={getProductImageSrc(product.image || product.images?.[0])}
+                                  src={getProductImageSrc(product.image || product.images?.[0], (product as any).imageUpdatedAt || (product as any).updatedAt || (product as any).imageVersion)}
                                   alt={product.name}
                                   className="w-11 h-11 rounded-md object-cover shrink-0 border border-gray-100 group-hover:scale-105 transition-transform"
                                   onError={replaceProductImageWithFallback}
@@ -840,7 +843,7 @@ export function Navbar() {
                             <div className="w-7 h-7 rounded-md overflow-hidden shrink-0 bg-white/10 border border-white/15">
                               {cat.image ? (
                                 <img
-                                  src={getProductImageSrc(cat.image)}
+                                  src={getProductImageSrc(cat.image, cat.imageUpdatedAt || cat.imageVersion)}
                                   alt={cat.name}
                                   className="w-full h-full object-cover"
                                   onError={replaceProductImageWithFallback}

@@ -184,7 +184,17 @@ const SellerSupport = safeLazy(() => import("@/pages/seller/SellerSupport"));
 const SellerReturns = safeLazy(() => import("@/pages/seller/SellerReturns"));
 
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15_000,
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      gcTime: 5 * 60_000,
+    },
+  },
+});
 
 interface ErrorBoundaryProps {
   children: ReactNode;

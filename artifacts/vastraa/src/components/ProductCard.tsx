@@ -72,6 +72,7 @@ export function ProductCard({ product, index = 0, onQuickView, flashSaleEndMs }:
   const image = getProductImageSrc(
     (product.images && product.images.length > 0 ? product.images[0] : undefined) ??
     product.image,
+    (product as any).imageUpdatedAt || (product as any).updatedAt || (product as any).imageVersion
   );
 
   const discount = product.originalPrice

@@ -42,7 +42,6 @@ import {
   ProductSpecForm,
   ImageUploadGallery,
   AttributeVariantBuilder,
-  LiveEarningsEstimator,
 } from "./SellerProductForm";
 import { apiFetch, getApiUrl } from "@/lib/api";
 import {
@@ -1630,11 +1629,6 @@ export default function SellerProductNew() {
                     />
                     <p className="text-[11px] text-gray-400 mt-1">Optional internal stock reference.</p>
                   </div>
-                </div>
-
-                {/* Amazon-style Earnings Breakdown */}
-                <div className="pt-3 border-t border-[#F0F2F5]">
-                  <LiveEarningsEstimator priceInput={form.price} />
                 </div>
               </div>
             </div>

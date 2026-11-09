@@ -38,6 +38,7 @@ export interface ProductsListingProps {
   title?: string;
   subtitle?: string;
   description?: string;
+  hideDescription?: boolean;
   badgeLabel?: string;
   headerContent?: React.ReactNode;
   hideHero?: boolean;
@@ -193,6 +194,7 @@ export function ProductsListing({
   title,
   subtitle,
   description,
+  hideDescription,
   heroBanner,
   badgeLabel,
   headerContent,
@@ -594,6 +596,40 @@ export function ProductsListing({
       norm === "cat-tops-default"
     );
   }, [filteredCategory]);
+
+  // Target 7 main categories where category descriptions and promotional subtitles are removed
+  const isMainCategory = useMemo(() => {
+    if (!filteredCategory) return false;
+    const norm = filteredCategory.toLowerCase();
+    const targetCategories = [
+      "sarees",
+      "saree",
+      "cat-sarees-default",
+      "kurtis",
+      "kurti",
+      "cat-kurtis-default",
+      "kurta-sets",
+      "kurta-set",
+      "cat-kurta-sets-default",
+      "ethnic-dresses",
+      "ethnic-dress",
+      "cat-ethnic-dresses-default",
+      "western-dresses",
+      "western-dress",
+      "cat-western-dresses-default",
+      "winter-wear",
+      "cat-winter-wear-default",
+      "tops",
+      "top",
+      "cat-tops-default",
+      "womens-tops",
+      "girls-tops",
+      "ladies-tops",
+    ];
+    return targetCategories.includes(norm);
+  }, [filteredCategory]);
+
+  const shouldHideDescription = hideDescription || isMainCategory;
 
   const groupedSubcategories = useMemo(() => {
     if (!availableSubcategories || availableSubcategories.length === 0) return null;
@@ -1605,12 +1641,12 @@ export function ProductsListing({
                 <h1 className="font-serif text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
                   {displayTitle}
                 </h1>
-                {displaySubtitle && (
+                {!shouldHideDescription && displaySubtitle && (
                   <p className="text-xs sm:text-sm uppercase tracking-[0.2em] font-bold text-[#C7CCD1] mb-2">
                     {displaySubtitle}
                   </p>
                 )}
-                {displayDescription && (
+                {!shouldHideDescription && displayDescription && (
                   <p className="text-xs sm:text-sm text-gray-300 leading-relaxed font-light max-w-2xl">
                     {displayDescription}
                   </p>
@@ -1627,16 +1663,16 @@ export function ProductsListing({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ref={gridTopRef}>
           {/* Category Title & Subtitle when hero section is hidden */}
           {hideHero && (
-            <div className="mb-6">
+            <div className={cn("mb-4", !shouldHideDescription && (displaySubtitle || displayDescription) && "mb-6")}>
               <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#0A1F44] tracking-tight">
                 {displayTitle}
               </h1>
-              {displaySubtitle && (
+              {!shouldHideDescription && displaySubtitle && (
                 <p className="text-xs sm:text-sm font-medium text-gray-600 mt-1">
                   {displaySubtitle}
                 </p>
               )}
-              {displayDescription && displayDescription !== displaySubtitle && (
+              {!shouldHideDescription && displayDescription && displayDescription !== displaySubtitle && (
                 <p className="text-xs text-gray-500 mt-1 max-w-3xl leading-relaxed font-light">
                   {displayDescription}
                 </p>

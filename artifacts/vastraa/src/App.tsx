@@ -515,23 +515,23 @@ function Router() {
           <Route path="/" component={Home} />
           <Route path="/products">{() => <ProductsListing />}</Route>
           <Route path="/category/:category">{(params: any) => <ProductsListing category={params?.category} />}</Route>
-          <Route path="/sarees">{() => <ProductsListing category="sarees" title="Sarees" subtitle="Centuries of Royal Heritage & Master Artisanal Weaves" />}</Route>
-          <Route path="/sarees/:subcategory">{(params: any) => <ProductsListing category="sarees" subcategory={params?.subcategory} title="Sarees" subtitle="Centuries of Royal Heritage & Master Artisanal Weaves" />}</Route>
-          <Route path="/kurtis">{() => <ProductsListing category="kurtis" title="Kurtis" subtitle="Everyday Elegance & Contemporary Designer Silhouettes" />}</Route>
-          <Route path="/kurtis/:subcategory">{(params: any) => <ProductsListing category="kurtis" subcategory={params?.subcategory} title="Kurtis" subtitle="Everyday Elegance & Contemporary Designer Silhouettes" />}</Route>
-          <Route path="/kurta-sets">{() => <ProductsListing category="kurta-sets" title="Kurta Sets" subtitle="Coordinated Ethnic Sets & Festive Ensembles" />}</Route>
-          <Route path="/kurta-sets/:subcategory">{(params: any) => <ProductsListing category="kurta-sets" subcategory={params?.subcategory} title="Kurta Sets" subtitle="Coordinated Ethnic Sets & Festive Ensembles" />}</Route>
-          <Route path="/ethnic-dresses">{() => <ProductsListing category="ethnic-dresses" title="Ethnic Dresses" subtitle="Timeless Indian Aesthetics with Flowing Modern Gowns" />}</Route>
-          <Route path="/ethnic-dresses/:subcategory">{(params: any) => <ProductsListing category="ethnic-dresses" subcategory={params?.subcategory} title="Ethnic Dresses" subtitle="Timeless Indian Aesthetics with Flowing Modern Gowns" />}</Route>
-          <Route path="/western-dresses">{() => <ProductsListing category="western-dresses" title="Western Dresses" subtitle="Global Trends & Runway Chic Silhouettes" />}</Route>
-          <Route path="/western-dresses/:subcategory">{(params: any) => <ProductsListing category="western-dresses" subcategory={params?.subcategory} title="Western Dresses" subtitle="Global Trends & Runway Chic Silhouettes" />}</Route>
-          <Route path="/winter-wear">{() => <ProductsListing category="winter-wear" title="Winter Wear" subtitle="Opulent Warmth & Snug Luxury Ensembles" />}</Route>
-          <Route path="/winter-wear/:subcategory">{(params: any) => <ProductsListing category="winter-wear" subcategory={params?.subcategory} title="Winter Wear" subtitle="Opulent Warmth & Snug Luxury Ensembles" />}</Route>
-          <Route path="/tops">{() => <ProductsListing category="tops" title="Tops" subtitle="Chic, Contemporary & Everyday Tops for Women and Girls" />}</Route>
-          <Route path="/tops/:subcategory">{(params: any) => <ProductsListing category="tops" subcategory={params?.subcategory} title="Tops" subtitle="Chic, Contemporary & Everyday Tops for Women and Girls" />}</Route>
-          <Route path="/ladies-tops">{() => <ProductsListing category="tops" title="Tops" subtitle="Chic, Contemporary & Everyday Tops for Women" />}</Route>
-          <Route path="/womens-tops">{() => <ProductsListing category="tops" subcategory="womens-tops" title="Women's Tops" subtitle="Chic, Contemporary & Everyday Tops for Women" />}</Route>
-          <Route path="/girls-tops">{() => <ProductsListing category="tops" subcategory="girls-tops" title="Girls' Tops" subtitle="Charming, Playful & Everyday Tops for Girls" />}</Route>
+          <Route path="/sarees">{() => <ProductsListing category="sarees" title="Sarees" />}</Route>
+          <Route path="/sarees/:subcategory">{(params: any) => <ProductsListing category="sarees" subcategory={params?.subcategory} title="Sarees" />}</Route>
+          <Route path="/kurtis">{() => <ProductsListing category="kurtis" title="Kurtis" />}</Route>
+          <Route path="/kurtis/:subcategory">{(params: any) => <ProductsListing category="kurtis" subcategory={params?.subcategory} title="Kurtis" />}</Route>
+          <Route path="/kurta-sets">{() => <ProductsListing category="kurta-sets" title="Kurta Sets" />}</Route>
+          <Route path="/kurta-sets/:subcategory">{(params: any) => <ProductsListing category="kurta-sets" subcategory={params?.subcategory} title="Kurta Sets" />}</Route>
+          <Route path="/ethnic-dresses">{() => <ProductsListing category="ethnic-dresses" title="Ethnic Dresses" />}</Route>
+          <Route path="/ethnic-dresses/:subcategory">{(params: any) => <ProductsListing category="ethnic-dresses" subcategory={params?.subcategory} title="Ethnic Dresses" />}</Route>
+          <Route path="/western-dresses">{() => <ProductsListing category="western-dresses" title="Western Dresses" />}</Route>
+          <Route path="/western-dresses/:subcategory">{(params: any) => <ProductsListing category="western-dresses" subcategory={params?.subcategory} title="Western Dresses" />}</Route>
+          <Route path="/winter-wear">{() => <ProductsListing category="winter-wear" title="Winter Wear" />}</Route>
+          <Route path="/winter-wear/:subcategory">{(params: any) => <ProductsListing category="winter-wear" subcategory={params?.subcategory} title="Winter Wear" />}</Route>
+          <Route path="/tops">{() => <ProductsListing category="tops" title="Tops" />}</Route>
+          <Route path="/tops/:subcategory">{(params: any) => <ProductsListing category="tops" subcategory={params?.subcategory} title="Tops" />}</Route>
+          <Route path="/ladies-tops">{() => <ProductsListing category="tops" title="Tops" />}</Route>
+          <Route path="/womens-tops">{() => <ProductsListing category="tops" subcategory="womens-tops" title="Women's Tops" />}</Route>
+          <Route path="/girls-tops">{() => <ProductsListing category="tops" subcategory="girls-tops" title="Girls' Tops" />}</Route>
           <Route path="/new-arrivals" component={NewArrivals} />
           <Route path="/shop-by-budget" component={ShopByBudget} />
           <Route path="/paithani" component={Paithani} />

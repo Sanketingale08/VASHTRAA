@@ -169,20 +169,19 @@ describe("Circular Category Cards Navigation", () => {
   });
 
   describe("Main Sarees Page (/sarees)", () => {
-    it("renders all 12 official Saree categories as circular cards with Explore All", () => {
+    it("renders all 12 official Saree categories as circular cards with Explore All and no promotional subtitle", () => {
       mockLocation = "/sarees";
       renderWithClient(
         <ProductsListing
           category="sarees"
           title="Sarees"
-          subtitle="Centuries of Royal Heritage & Master Artisanal Weaves"
           hideHero={true}
         />
       );
 
-      // Heading and Subtitle preserved
+      // Heading preserved, promotional subtitle removed
       expect(screen.getByRole("heading", { level: 1, name: "Sarees" })).toBeInTheDocument();
-      expect(screen.getByText("Centuries of Royal Heritage & Master Artisanal Weaves")).toBeInTheDocument();
+      expect(screen.queryByText("Centuries of Royal Heritage & Master Artisanal Weaves")).not.toBeInTheDocument();
 
       // Check for Explore All card
       expect(screen.getByText("Explore All")).toBeInTheDocument();
@@ -204,8 +203,7 @@ describe("Circular Category Cards Navigation", () => {
       renderWithClient(
         <ProductsListing
           category="sarees"
-          title="Sarees"
-          subtitle="Centuries of Royal Heritage & Master Artisanal Weaves"
+          
           hideHero={true}
         />
       );

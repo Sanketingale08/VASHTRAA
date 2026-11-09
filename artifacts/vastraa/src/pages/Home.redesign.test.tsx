@@ -211,14 +211,14 @@ describe("Home — Artisan Handloom Hero and New Arrivals Redesign", () => {
       expect(viewAllLink).toHaveAttribute("href", "/kurtis");
     });
 
-    it("switches to Women's Tops category tab when clicked and updates View All link", () => {
+    it("switches to Tops category tab when clicked and updates View All link", () => {
       render(<Home />);
 
-      const topsTab = screen.getByRole("tab", { name: /Women's Tops/i });
+      const topsTab = screen.getByRole("tab", { name: /Tops/i });
       fireEvent.click(topsTab);
 
       expect(topsTab).toHaveAttribute("aria-selected", "true");
-      const viewAllLink = screen.getByRole("link", { name: /View All Women's Tops/i });
+      const viewAllLink = screen.getByRole("link", { name: /View All Tops/i });
       expect(viewAllLink).toBeInTheDocument();
       expect(viewAllLink).toHaveAttribute("href", "/tops");
     });

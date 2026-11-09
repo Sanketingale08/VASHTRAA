@@ -31,6 +31,7 @@ export interface CircularCategoryNavProps {
   subtitle?: string;
   className?: string;
   showScrollButtons?: boolean;
+  hideExploreAll?: boolean;
 }
 
 export function CircularCategoryNav({
@@ -47,6 +48,7 @@ export function CircularCategoryNav({
   subtitle,
   className,
   showScrollButtons = true,
+  hideExploreAll = false,
 }: CircularCategoryNavProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -200,66 +202,69 @@ export function CircularCategoryNav({
           }}
         >
           {/* 1. Explore All / All [Category] Circular Card */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isExploreAllActive}
-            data-active={isExploreAllActive ? "true" : "false"}
-            onClick={onExploreAll}
-            className="shrink-0 snap-start flex flex-col items-center group cursor-pointer text-center focus:outline-none select-none transition-transform w-[86px] sm:w-[104px] lg:w-[118px]"
-          >
-            <div
-              className={cn(
-                "relative rounded-full p-0.5 transition-all duration-300",
-                isExploreAllActive
-                  ? "ring-2 ring-offset-2 ring-[#0A1F44] shadow-lg shadow-[#0A1F44]/20 scale-105"
-                  : "hover:scale-105 hover:shadow-md"
-              )}
+          {!hideExploreAll && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isExploreAllActive}
+              data-active={isExploreAllActive ? "true" : "false"}
+              onClick={onExploreAll}
+              className="shrink-0 snap-start flex flex-col items-center group cursor-pointer text-center focus:outline-none select-none transition-transform w-[86px] sm:w-[104px] lg:w-[118px]"
             >
               <div
                 className={cn(
-                  "w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 aspect-square rounded-full overflow-hidden bg-gradient-to-br from-[#0A1F44] to-[#1E2D4A] flex items-center justify-center p-0.5 border-2 transition-colors",
+                  "relative rounded-full p-0.5 transition-all duration-300",
                   isExploreAllActive
-                    ? "border-[#D4AF37]"
-                    : "border-gray-200/90 group-hover:border-[#D4AF37]/80"
+                    ? "ring-2 ring-offset-2 ring-[#0A1F44] shadow-lg shadow-[#0A1F44]/20 scale-105"
+                    : "hover:scale-105 hover:shadow-md"
                 )}
               >
-                <div className="w-full h-full rounded-full overflow-hidden relative aspect-square">
-                  <img
-                    src={getProductImageSrc(defaultExploreAllImg)}
-                    alt={exploreAllLabel}
-                    onError={replaceProductImageWithFallback}
-                    className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500 rounded-full"
-                  />
-                  <div className="absolute inset-0 bg-[#0A1F44]/35 flex flex-col items-center justify-center text-white backdrop-blur-[0.5px]">
-                    <Sparkles size={18} className="text-[#D4AF37] animate-pulse" />
+                <div
+                  className={cn(
+                    "w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 aspect-square rounded-full overflow-hidden bg-gradient-to-br from-[#0A1F44] to-[#1E2D4A] flex items-center justify-center p-0.5 border-2 transition-colors",
+                    isExploreAllActive
+                      ? "border-[#D4AF37]"
+                      : "border-gray-200/90 group-hover:border-[#D4AF37]/80"
+                  )}
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden relative aspect-square">
+                    <img
+                      src={getProductImageSrc(defaultExploreAllImg)}
+                      alt={exploreAllLabel}
+                      onError={replaceProductImageWithFallback}
+                      className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500 rounded-full"
+                    />
+                    <div className="absolute inset-0 bg-[#0A1F44]/35 flex flex-col items-center justify-center text-white backdrop-blur-[0.5px]">
+                      <Sparkles size={18} className="text-[#D4AF37] animate-pulse" />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <span
-              title={exploreAllLabel}
-              className={cn(
-                "text-xs sm:text-[13px] lg:text-sm text-center mt-2.5 max-w-[85px] sm:max-w-[100px] lg:max-w-[115px] line-clamp-2 leading-tight transition-colors break-words",
-                isExploreAllActive
-                  ? "font-bold text-[#0A1F44]"
-                  : "font-medium text-gray-700 group-hover:text-[#0A1F44]"
+              <span
+                title={exploreAllLabel}
+                className={cn(
+                  "text-xs sm:text-[13px] lg:text-sm text-center mt-2.5 max-w-[85px] sm:max-w-[100px] lg:max-w-[115px] line-clamp-2 leading-tight transition-colors break-words",
+                  isExploreAllActive
+                    ? "font-bold text-[#0A1F44]"
+                    : "font-medium text-gray-700 group-hover:text-[#0A1F44]"
+                )}
+              >
+                {exploreAllLabel}
+              </span>
+
+              {isExploreAllActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] mt-1 shadow-xs animate-in fade-in zoom-in duration-200" />
               )}
-            >
-              {exploreAllLabel}
-            </span>
-
-            {isExploreAllActive && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] mt-1 shadow-xs animate-in fade-in zoom-in duration-200" />
-            )}
-          </button>
+            </button>
+          )}
 
           {/* 2. Category / Subcategory Circular Cards */}
           {items.map((item) => {
             const isSelected =
               activeSlug?.toLowerCase() === item.slug.toLowerCase() ||
-              activeSlug?.toLowerCase() === item.name.toLowerCase();
+              activeSlug?.toLowerCase() === item.name.toLowerCase() ||
+              (item.slug.toLowerCase() === "all" && (!activeSlug || activeSlug === "all" || activeSlug === ""));
 
             const resolvedImage =
               item.image ||

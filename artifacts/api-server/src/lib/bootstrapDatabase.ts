@@ -76,7 +76,7 @@ export async function bootstrapDatabase(): Promise<void> {
         .insert(productCategoriesTable)
         .values({
           id: "cat-tops-default" as any,
-          name: "Women's Tops",
+          name: "Tops",
           slug: "tops",
           type: "main",
           createdBy: "system",

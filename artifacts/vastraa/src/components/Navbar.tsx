@@ -186,7 +186,7 @@ export function Navbar() {
       const fallback = CATALOG_CATEGORIES.find((cat) => cat.slug === c.slug || cat.id === c.id);
       return {
         id: c.id || fallback?.id || c.slug,
-        name: c.name || fallback?.name,
+        name: (c.slug === "tops" || fallback?.slug === "tops") ? "Tops" : (c.name || fallback?.name),
         slug: c.slug || fallback?.slug,
         image: c.image || c.coverImage || fallback?.coverImage || "/images/product-1.png",
         imageUpdatedAt: c.imageUpdatedAt || c.updatedAt || null,

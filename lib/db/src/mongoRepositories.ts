@@ -3537,6 +3537,26 @@ export const mongoProductCategories = {
               active: existing.active !== undefined ? existing.active : true,
               updatedAt: new Date(),
             };
+            if (cat.slug === "tops") {
+              updates.name = "Tops";
+              if (Array.isArray(cat.subcategories)) {
+                const currentSubs: any[] = Array.isArray(existing.subcategories) ? [...existing.subcategories] : [];
+                for (const s of cat.subcategories) {
+                  const subIndex = currentSubs.findIndex((x) => x.id === s.id || x.slug === s.slug);
+                  if (subIndex === -1) {
+                    currentSubs.push(s);
+                  } else {
+                    currentSubs[subIndex] = {
+                      ...s,
+                      coverImage: currentSubs[subIndex].coverImage || s.coverImage,
+                      imageUpdatedAt: currentSubs[subIndex].imageUpdatedAt || s.imageUpdatedAt,
+                      imageVersion: currentSubs[subIndex].imageVersion || s.imageVersion,
+                    };
+                  }
+                }
+                updates.subcategories = currentSubs;
+              }
+            }
             await col.updateOne(
               { _id: (existing as any)._id },
               { $set: updates }
@@ -3583,6 +3603,9 @@ export const mongoProductCategories = {
     }
 
     categories = categories.map((c) => {
+      if (c.slug === "tops" || c.id === "cat-tops-default") {
+        c.name = "Tops";
+      }
       if (subcategorySlugsToParent[c.slug]) {
         return {
           ...c,
@@ -3698,6 +3721,9 @@ export const mongoProductCategories = {
     }
 
     categories = categories.map((c) => {
+      if (c.slug === "tops" || c.id === "cat-tops-default") {
+        c.name = "Tops";
+      }
       if (subcategorySlugsToParent[c.slug]) {
         return {
           ...c,

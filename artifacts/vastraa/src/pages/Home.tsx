@@ -394,7 +394,7 @@ function SareeCategoriesShowcaseSection() {
       if (dbMatch && dbMatch.active === false) return null;
       return {
         id: dbMatch?.id || fallback.id,
-        name: dbMatch?.name || fallback.name,
+        name: slug === "tops" ? "Tops" : (dbMatch?.name || fallback.name),
         slug: fallback.slug,
         image: dbMatch?.coverImage || dbMatch?.image || fallback.coverImage || "/images/product-4.png",
         imageUpdatedAt: dbMatch?.imageUpdatedAt || dbMatch?.updatedAt || null,

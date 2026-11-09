@@ -106,12 +106,12 @@ describe("Ladies & Girls Tops Category Listing", () => {
     renderWithClient(
       <ProductsListing
         category="tops"
-        title="Ladies & Girls Tops"
+        title="Tops"
         description="Discover chic, comfortable, and trendy tops for women and girls."
       />
     );
 
-    expect(screen.getByRole("heading", { name: "Ladies & Girls Tops" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tops" })).toBeInTheDocument();
     expect(screen.getByText("All Tops")).toBeInTheDocument();
     expect(screen.getByText("Women's Tops")).toBeInTheDocument();
     expect(screen.getByText("Girls' Tops")).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("Ladies & Girls Tops Category Listing", () => {
     renderWithClient(
       <ProductsListing
         category="tops"
-        title="Ladies & Girls Tops"
+        title="Tops"
       />
     );
 
@@ -131,6 +131,33 @@ describe("Ladies & Girls Tops Category Listing", () => {
     fireEvent.click(cropTopBtn);
 
     expect(mockNavigate).toHaveBeenCalledWith("/tops/crop-tops");
+  });
+
+  it("renders circular subcategory cards and handles selection", () => {
+    renderWithClient(
+      <ProductsListing
+        category="tops"
+        title="Tops"
+      />
+    );
+
+    // Verify all 4 circular profile cards exist
+    const allTopsBtn = screen.getByRole("tab", { name: /All Tops/i });
+    const womensTopsBtn = screen.getByRole("tab", { name: /Women's Tops/i });
+    const girlsTopsBtn = screen.getByRole("tab", { name: /Girls' Tops/i });
+    const seasonalTopsBtn = screen.getByRole("tab", { name: /Seasonal Tops/i });
+
+    expect(allTopsBtn).toBeInTheDocument();
+    expect(womensTopsBtn).toBeInTheDocument();
+    expect(girlsTopsBtn).toBeInTheDocument();
+    expect(seasonalTopsBtn).toBeInTheDocument();
+
+    // All Tops is active by default
+    expect(allTopsBtn).toHaveAttribute("aria-selected", "true");
+
+    // Click Women's Tops
+    fireEvent.click(womensTopsBtn);
+    expect(mockNavigate).toHaveBeenCalledWith("/tops?category=tops&subcategory=womens-tops");
   });
 
   it("renders Tops-specific filters (Size, Sleeve Length, Neck Style) in filter panel and hides saree-specific filters", () => {

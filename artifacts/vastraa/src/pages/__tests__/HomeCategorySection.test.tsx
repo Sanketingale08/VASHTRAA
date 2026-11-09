@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import Home from "../Home";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -79,26 +79,28 @@ describe("Home — Explore by Category Section with Tops", () => {
       </QueryClientProvider>
     );
 
-    expect(screen.getByText("Explore by Category")).toBeInTheDocument();
+    const section = screen.getByLabelText("Explore by Category");
+    expect(section).toBeInTheDocument();
 
-    // Verify all 7 categories are displayed
-    expect(screen.getByText("Sarees")).toBeInTheDocument();
-    expect(screen.getByText("Kurtis")).toBeInTheDocument();
-    expect(screen.getByText("Kurta Sets")).toBeInTheDocument();
-    expect(screen.getByText("Ethnic Dresses")).toBeInTheDocument();
-    expect(screen.getByText("Western Dresses")).toBeInTheDocument();
-    expect(screen.getByText("Winter Wear")).toBeInTheDocument();
-    expect(screen.getByText("Women's Tops")).toBeInTheDocument();
+    // Verify all 7 categories are displayed in the Explore by Category section
+    expect(within(section).getByText("Sarees")).toBeInTheDocument();
+    expect(within(section).getByText("Kurtis")).toBeInTheDocument();
+    expect(within(section).getByText("Kurta Sets")).toBeInTheDocument();
+    expect(within(section).getByText("Ethnic Dresses")).toBeInTheDocument();
+    expect(within(section).getByText("Western Dresses")).toBeInTheDocument();
+    expect(within(section).getByText("Winter Wear")).toBeInTheDocument();
+    expect(within(section).getByText("Tops")).toBeInTheDocument();
   });
 
-  it("clicking the Women's Tops category card navigates to /tops", () => {
+  it("clicking the Tops category card navigates to /tops", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <Home />
       </QueryClientProvider>
     );
 
-    const topsLink = screen.getByText("Women's Tops").closest("a");
+    const section = screen.getByLabelText("Explore by Category");
+    const topsLink = within(section).getByText("Tops").closest("a");
     expect(topsLink).toBeInTheDocument();
     expect(topsLink).toHaveAttribute("href", "/tops");
 

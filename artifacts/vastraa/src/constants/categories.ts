@@ -638,10 +638,10 @@ export const CATALOG_CATEGORIES: CatalogCategoryItem[] = [
     ],
   },
 
-  // 7. TOPS (Women's Tops - 42 official subcategories across Women's, Girls', and Seasonal)
+  // 7. TOPS (Tops - 46 official subcategories across Women's, Girls', and Seasonal)
   {
     id: "cat-tops-default",
-    name: "Women's Tops",
+    name: "Tops",
     slug: "tops",
     prefix: "TP",
     displayOrder: 7,
@@ -649,6 +649,44 @@ export const CATALOG_CATEGORIES: CatalogCategoryItem[] = [
     coverImage: "/images/product-4.png",
     bannerImage: "/images/hero-designer-banner.png",
     subcategories: [
+      // Primary Subcategories for Tops Profile Cards & Management
+      {
+        id: "sub-tops-all",
+        name: "All Tops",
+        slug: "all-tops",
+        route: "/tops?category=tops",
+        group: "All Tops",
+        coverImage: "/images/product-4.png",
+        subtypes: ["All Tops Styles", "Women's & Girls' Tops", "Seasonal Ensembles"],
+      },
+      {
+        id: "sub-tops-womens",
+        name: "Women's Tops",
+        slug: "womens-tops",
+        route: "/tops?category=tops&subcategory=womens-tops",
+        group: "Women's Tops",
+        coverImage: "/images/product-4.png",
+        subtypes: ["Casual Tops", "Crop Tops", "Peplum Tops", "Tunic Tops", "Shirt Style Tops", "Blouse Tops", "Tank Tops", "Party Wear Tops"],
+      },
+      {
+        id: "sub-tops-girls",
+        name: "Girls' Tops",
+        slug: "girls-tops",
+        route: "/tops?category=tops&subcategory=girls-tops",
+        group: "Girls' Tops",
+        coverImage: "/images/product-3.png",
+        subtypes: ["Girls Casual Tops", "Girls Printed Tops", "Girls Graphic Tops", "Girls Crop Tops", "Girls Party Wear Tops"],
+      },
+      {
+        id: "sub-tops-seasonal",
+        name: "Seasonal Tops",
+        slug: "seasonal-tops",
+        route: "/tops?category=tops&subcategory=seasonal-tops",
+        group: "Seasonal Tops",
+        coverImage: "/images/product-2.png",
+        subtypes: ["Winter Tops", "Sweatshirt Tops", "Sweater Tops", "Thermal Tops", "Full-Sleeve Tops"],
+      },
+
       // A. Women's Tops (24 Subcategories)
       {
         id: "sub-tops-casual",

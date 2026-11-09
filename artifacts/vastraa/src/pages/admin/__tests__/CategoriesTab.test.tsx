@@ -120,7 +120,7 @@ const mockCategories: ProductCategory[] = [
   },
   {
     id: "cat-tops-default",
-    name: "Women's Tops",
+    name: "Tops",
     slug: "tops",
     type: "main",
     displayOrder: 7,
@@ -429,16 +429,16 @@ describe("Admin CategoriesTab — Redesigned UI", () => {
     });
   });
 
-  it("renders Women's Tops main category and displays its subcategories with group badges when expanded", async () => {
+  it("renders Tops main category and displays its subcategories with group badges when expanded", async () => {
     renderComponent();
 
-    // Verify Women's Tops is listed among main categories
-    expect(await screen.findByText("Women's Tops")).toBeInTheDocument();
+    // Verify Tops is listed among main categories
+    expect(await screen.findByText("Tops")).toBeInTheDocument();
     expect(screen.getByText("4 Products")).toBeInTheDocument();
     expect(screen.getByText("42 Subcategories")).toBeInTheDocument();
 
-    // Expand Women's Tops
-    const topsToggle = screen.getByLabelText("Toggle subcategories for Women's Tops");
+    // Expand Tops
+    const topsToggle = screen.getByLabelText("Toggle subcategories for Tops");
     fireEvent.click(topsToggle);
 
     // Verify subcategories appear

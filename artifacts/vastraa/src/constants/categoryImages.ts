@@ -19,9 +19,16 @@ export const SAREE_CATEGORY_IMAGES: Record<string, string> = {
   silk: "/images/hero-silk-1.png",
   "other-traditional": "/images/hero-traditional-1.png",
   tops: "/images/product-4.png",
+  "all-tops": "/images/product-4.png",
 };
 
 export const SAREE_SUBCATEGORY_IMAGES: Record<string, string> = {
+  // Tops subcategories
+  "all-tops": "/images/product-4.png",
+  "womens-tops": "/images/product-4.png",
+  "girls-tops": "/images/product-3.png",
+  "seasonal-tops": "/images/product-2.png",
+
   // Paithani subcategories
   bridal: "/images/hero-paithani-2.png",
   "wedding-paithani-main": "/images/hero-paithani-3.png",

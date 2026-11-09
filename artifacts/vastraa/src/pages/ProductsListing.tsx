@@ -610,6 +610,121 @@ export function ProductsListing({
 
   // Build Circular Category Navigation Config:
   const circularNavConfig = useMemo(() => {
+    // 0. TOPS CATEGORY PAGE:
+    // Show the four circular subcategory profile cards in a horizontal row:
+    // 1. All Tops | 2. Women's Tops | 3. Girls' Tops | 4. Seasonal Tops
+    if (isTopsCategory) {
+      const dbTops = dbCategoriesData?.categories?.find(
+        (c: any) => c.slug === "tops" || c.id === "cat-tops-default" || c.id === "tops"
+      );
+
+      const dbSubs: any[] = dbTops?.subcategories || dbCategoriesData?.categories?.filter(
+        (c: any) => c.parentId === "cat-tops-default" || c.parentId === "tops" || c.parentCategory === "tops"
+      ) || [];
+
+      const allTopsSub = dbSubs.find((s: any) => s.slug === "all-tops" || s.slug === "all" || s.id === "sub-tops-all");
+      const womensSub = dbSubs.find((s: any) => s.slug === "womens-tops" || s.id === "sub-tops-womens" || s.name === "Women's Tops");
+      const girlsSub = dbSubs.find((s: any) => s.slug === "girls-tops" || s.id === "sub-tops-girls" || s.name === "Girls' Tops");
+      const seasonalSub = dbSubs.find((s: any) => s.slug === "seasonal-tops" || s.id === "sub-tops-seasonal" || s.name === "Seasonal Tops");
+
+      const items: CircularCategoryItem[] = [
+        {
+          id: allTopsSub?.id || "sub-tops-all",
+          name: "All Tops",
+          slug: "all",
+          image: allTopsSub?.coverImage || dbTops?.coverImage || getCategoryOrSubcategoryImage("all-tops", "tops", "/images/product-4.png"),
+          imageUpdatedAt: allTopsSub?.imageUpdatedAt || dbTops?.imageUpdatedAt || allTopsSub?.updatedAt || dbTops?.updatedAt || null,
+          imageVersion: allTopsSub?.imageVersion || dbTops?.imageVersion || null,
+          fallbackImage: "/images/product-4.png",
+          route: "/tops?category=tops",
+        },
+        {
+          id: womensSub?.id || "sub-tops-womens",
+          name: "Women's Tops",
+          slug: "womens-tops",
+          image: womensSub?.coverImage || getCategoryOrSubcategoryImage("womens-tops", "tops", "/images/product-4.png"),
+          imageUpdatedAt: womensSub?.imageUpdatedAt || womensSub?.updatedAt || null,
+          imageVersion: womensSub?.imageVersion || null,
+          fallbackImage: "/images/product-4.png",
+          route: "/tops?category=tops&subcategory=womens-tops",
+        },
+        {
+          id: girlsSub?.id || "sub-tops-girls",
+          name: "Girls' Tops",
+          slug: "girls-tops",
+          image: girlsSub?.coverImage || getCategoryOrSubcategoryImage("girls-tops", "tops", "/images/product-3.png"),
+          imageUpdatedAt: girlsSub?.imageUpdatedAt || girlsSub?.updatedAt || null,
+          imageVersion: girlsSub?.imageVersion || null,
+          fallbackImage: "/images/product-3.png",
+          route: "/tops?category=tops&subcategory=girls-tops",
+        },
+        {
+          id: seasonalSub?.id || "sub-tops-seasonal",
+          name: "Seasonal Tops",
+          slug: "seasonal-tops",
+          image: seasonalSub?.coverImage || getCategoryOrSubcategoryImage("seasonal-tops", "tops", "/images/product-2.png"),
+          imageUpdatedAt: seasonalSub?.imageUpdatedAt || seasonalSub?.updatedAt || null,
+          imageVersion: seasonalSub?.imageVersion || null,
+          fallbackImage: "/images/product-2.png",
+          route: "/tops?category=tops&subcategory=seasonal-tops",
+        },
+      ];
+
+      // Determine active slug for profile cards
+      let currentActive = "all";
+      const currentSub = (appliedFilters.subcategory || "").toLowerCase();
+      if (currentSub === "womens-tops" || availableSubcategories.some((s) => (s as any).group === "Women's Tops" && s.slug === currentSub)) {
+        currentActive = "womens-tops";
+      } else if (currentSub === "girls-tops" || availableSubcategories.some((s) => (s as any).group === "Girls' Tops" && s.slug === currentSub)) {
+        currentActive = "girls-tops";
+      } else if (currentSub === "seasonal-tops" || availableSubcategories.some((s) => (s as any).group === "Seasonal Tops" && s.slug === currentSub)) {
+        currentActive = "seasonal-tops";
+      } else if (currentSub && currentSub !== "all") {
+        currentActive = currentSub;
+      }
+
+      return {
+        items,
+        hideExploreAll: true,
+        activeSlug: currentActive,
+        parentCategoryName: undefined,
+        onBackToParent: undefined,
+        onSelect: (item: CircularCategoryItem) => {
+          if (item.slug === "all") {
+            setAppliedFilters((prev) => {
+              const updated = { ...prev, subcategory: undefined, subtype: undefined };
+              setPendingFilters(updated);
+              return updated;
+            });
+            setPage(1);
+            navigate("/tops?category=tops");
+          } else {
+            const isAlreadyActive = appliedFilters.subcategory === item.slug;
+            const newSub = isAlreadyActive ? undefined : item.slug;
+            setAppliedFilters((prev) => {
+              const updated = { ...prev, subcategory: newSub, subtype: undefined };
+              setPendingFilters(updated);
+              return updated;
+            });
+            setPage(1);
+            navigate(newSub ? `/tops?category=tops&subcategory=${newSub}` : "/tops?category=tops");
+          }
+          if (gridTopRef.current && typeof gridTopRef.current.scrollIntoView === "function") {
+            gridTopRef.current.scrollIntoView({ behavior: "smooth" });
+          }
+        },
+        onExploreAll: () => {
+          setAppliedFilters((prev) => {
+            const updated = { ...prev, subcategory: undefined, subtype: undefined };
+            setPendingFilters(updated);
+            return updated;
+          });
+          setPage(1);
+          navigate("/tops?category=tops");
+        },
+      };
+    }
+
     // 1. MAIN SAREES PAGE (No specific subcategory active):
     // Show all 12 Saree Categories as circular image cards
     if (isSareesMainPage && (!appliedFilters.subcategory || appliedFilters.subcategory === "all")) {
@@ -1529,126 +1644,70 @@ export function ProductsListing({
             </div>
           )}
 
-          {/* Tops Subcategory Navigation (clean pills & group tabs, no misleading images) */}
-          {isTopsCategory ? (
-            <div className="mb-6 bg-white rounded-2xl border border-[#C7CCD1]/30 p-4 shadow-xs">
-              <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-[#C7CCD1]/20">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mr-1">
-                  Collection:
-                </span>
-                {[
-                  { label: "All Tops", subcategory: undefined },
-                  { label: "Women's Tops", subcategory: "womens-tops" },
-                  { label: "Girls' Tops", subcategory: "girls-tops" },
-                  { label: "Seasonal Tops", subcategory: "seasonal-tops" },
-                ].map((grp) => {
-                  const isActive =
-                    (!grp.subcategory && !appliedFilters.subcategory) ||
-                    (grp.subcategory && appliedFilters.subcategory === grp.subcategory) ||
-                    (grp.subcategory === "womens-tops" &&
-                      availableSubcategories.some(
-                        (s) => (s as any).group === "Women's Tops" && s.slug === appliedFilters.subcategory
-                      )) ||
-                    (grp.subcategory === "girls-tops" &&
-                      availableSubcategories.some(
-                        (s) => (s as any).group === "Girls' Tops" && s.slug === appliedFilters.subcategory
-                      )) ||
-                    (grp.subcategory === "seasonal-tops" &&
-                      availableSubcategories.some(
-                        (s) => (s as any).group === "Seasonal Tops" && s.slug === appliedFilters.subcategory
-                      ));
+          {/* Circular Category / Subcategory Navigation */}
+          {circularNavConfig && circularNavConfig.items.length > 0 && (
+            <CircularCategoryNav
+              items={circularNavConfig.items}
+              activeSlug={circularNavConfig.activeSlug}
+              onSelect={circularNavConfig.onSelect}
+              exploreAllLabel={circularNavConfig.exploreAllLabel}
+              exploreAllImage={circularNavConfig.exploreAllImage}
+              hideExploreAll={(circularNavConfig as any).hideExploreAll}
+              onExploreAll={circularNavConfig.onExploreAll}
+              parentCategoryName={circularNavConfig.parentCategoryName}
+              parentCategorySlug={filteredCategory}
+              onBackToParent={circularNavConfig.onBackToParent}
+            />
+          )}
+
+          {/* Granular Styles horizontal scroller for Tops */}
+          {isTopsCategory && availableSubcategories.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-4 -mt-3 mb-2 no-scrollbar px-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 shrink-0">
+                Styles:
+              </span>
+              {availableSubcategories
+                .filter((sc) => !["all-tops", "womens-tops", "girls-tops", "seasonal-tops"].includes(sc.slug))
+                .filter((sc) => {
+                  if (!appliedFilters.subcategory || appliedFilters.subcategory === "all") return true;
+                  if (appliedFilters.subcategory === "womens-tops") return (sc as any).group === "Women's Tops";
+                  if (appliedFilters.subcategory === "girls-tops") return (sc as any).group === "Girls' Tops";
+                  if (appliedFilters.subcategory === "seasonal-tops") return (sc as any).group === "Seasonal Tops";
+                  const currentSub = availableSubcategories.find((s) => s.slug === appliedFilters.subcategory);
+                  return !currentSub?.group || (sc as any).group === currentSub.group;
+                })
+                .map((sc) => {
+                  const isSelected = appliedFilters.subcategory === sc.slug;
                   return (
                     <button
-                      key={grp.label}
+                      key={sc.id || sc.slug}
                       type="button"
                       onClick={() => {
+                        const newSub = isSelected ? undefined : sc.slug;
                         setAppliedFilters((prev) => {
                           const updated = {
                             ...prev,
-                            subcategory: grp.subcategory,
+                            subcategory: newSub,
                             subtype: undefined,
                           };
                           setPendingFilters(updated);
                           return updated;
                         });
                         setPage(1);
-                        navigate(grp.subcategory ? `/tops/${grp.subcategory}` : "/tops");
+                        navigate(newSub ? `/tops/${newSub}` : "/tops");
                       }}
                       className={cn(
-                        "px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer",
-                        isActive
-                          ? "bg-[#0A1F44] text-white border-[#0A1F44] shadow-xs"
-                          : "bg-[#F4F5F7] text-[#0A1F44] border-transparent hover:border-[#0A1F44]/30 hover:bg-[#E5E8EC]"
+                        "px-3 py-1 text-xs font-medium rounded-full border whitespace-nowrap transition-all cursor-pointer shrink-0",
+                        isSelected
+                          ? "bg-[#0A1F44] text-white border-[#0A1F44] font-bold shadow-2xs"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-[#0A1F44] hover:text-[#0A1F44]"
                       )}
                     >
-                      {grp.label}
+                      {sc.name}
                     </button>
                   );
                 })}
-              </div>
-
-              {/* Subcategories Horizontal Scroll */}
-              <div className="flex items-center gap-2 overflow-x-auto pt-3 pb-1 no-scrollbar">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 shrink-0">
-                  Styles:
-                </span>
-                {availableSubcategories
-                  .filter((sc) => {
-                    if (!appliedFilters.subcategory || appliedFilters.subcategory === "all") return true;
-                    if (appliedFilters.subcategory === "womens-tops") return (sc as any).group === "Women's Tops";
-                    if (appliedFilters.subcategory === "girls-tops") return (sc as any).group === "Girls' Tops";
-                    if (appliedFilters.subcategory === "seasonal-tops") return (sc as any).group === "Seasonal Tops";
-                    const currentSub = availableSubcategories.find((s) => s.slug === appliedFilters.subcategory);
-                    return !currentSub?.group || (sc as any).group === currentSub.group;
-                  })
-                  .map((sc) => {
-                    const isSelected = appliedFilters.subcategory === sc.slug;
-                    return (
-                      <button
-                        key={sc.id || sc.slug}
-                        type="button"
-                        onClick={() => {
-                          const newSub = isSelected ? undefined : sc.slug;
-                          setAppliedFilters((prev) => {
-                            const updated = {
-                              ...prev,
-                              subcategory: newSub,
-                              subtype: undefined,
-                            };
-                            setPendingFilters(updated);
-                            return updated;
-                          });
-                          setPage(1);
-                          navigate(newSub ? `/tops/${newSub}` : "/tops");
-                        }}
-                        className={cn(
-                          "px-3 py-1 text-xs font-medium rounded-full border whitespace-nowrap transition-all cursor-pointer shrink-0",
-                          isSelected
-                            ? "bg-[#0A1F44] text-white border-[#0A1F44] font-bold shadow-2xs"
-                            : "bg-white text-gray-700 border-gray-200 hover:border-[#0A1F44] hover:text-[#0A1F44]"
-                        )}
-                      >
-                        {sc.name}
-                      </button>
-                    );
-                  })}
-              </div>
             </div>
-          ) : (
-            /* Circular Category Cards Navigation */
-            circularNavConfig && circularNavConfig.items.length > 0 && (
-              <CircularCategoryNav
-                items={circularNavConfig.items}
-                activeSlug={circularNavConfig.activeSlug}
-                onSelect={circularNavConfig.onSelect}
-                exploreAllLabel={circularNavConfig.exploreAllLabel}
-                exploreAllImage={circularNavConfig.exploreAllImage}
-                onExploreAll={circularNavConfig.onExploreAll}
-                parentCategoryName={circularNavConfig.parentCategoryName}
-                parentCategorySlug={filteredCategory}
-                onBackToParent={circularNavConfig.onBackToParent}
-              />
-            )
           )}
 
           {/* Controls Header Bar: Count, Sort & Filters */}

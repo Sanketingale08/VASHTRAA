@@ -527,9 +527,9 @@ function Router() {
           <Route path="/western-dresses/:subcategory">{(params: any) => <ProductsListing category="western-dresses" subcategory={params?.subcategory} title="Western Dresses" subtitle="Global Trends & Runway Chic Silhouettes" />}</Route>
           <Route path="/winter-wear">{() => <ProductsListing category="winter-wear" title="Winter Wear" subtitle="Opulent Warmth & Snug Luxury Ensembles" />}</Route>
           <Route path="/winter-wear/:subcategory">{(params: any) => <ProductsListing category="winter-wear" subcategory={params?.subcategory} title="Winter Wear" subtitle="Opulent Warmth & Snug Luxury Ensembles" />}</Route>
-          <Route path="/tops">{() => <ProductsListing category="tops" title="Ladies & Girls Tops" subtitle="Chic, Contemporary & Everyday Tops for Women and Girls" />}</Route>
-          <Route path="/tops/:subcategory">{(params: any) => <ProductsListing category="tops" subcategory={params?.subcategory} title="Ladies & Girls Tops" subtitle="Chic, Contemporary & Everyday Tops for Women and Girls" />}</Route>
-          <Route path="/ladies-tops">{() => <ProductsListing category="tops" title="Ladies Tops" subtitle="Chic, Contemporary & Everyday Tops for Women" />}</Route>
+          <Route path="/tops">{() => <ProductsListing category="tops" title="Tops" subtitle="Chic, Contemporary & Everyday Tops for Women and Girls" />}</Route>
+          <Route path="/tops/:subcategory">{(params: any) => <ProductsListing category="tops" subcategory={params?.subcategory} title="Tops" subtitle="Chic, Contemporary & Everyday Tops for Women and Girls" />}</Route>
+          <Route path="/ladies-tops">{() => <ProductsListing category="tops" title="Tops" subtitle="Chic, Contemporary & Everyday Tops for Women" />}</Route>
           <Route path="/womens-tops">{() => <ProductsListing category="tops" subcategory="womens-tops" title="Women's Tops" subtitle="Chic, Contemporary & Everyday Tops for Women" />}</Route>
           <Route path="/girls-tops">{() => <ProductsListing category="tops" subcategory="girls-tops" title="Girls' Tops" subtitle="Charming, Playful & Everyday Tops for Girls" />}</Route>
           <Route path="/new-arrivals" component={NewArrivals} />

@@ -203,7 +203,7 @@ describe("Circular Category Cards Navigation", () => {
       renderWithClient(
         <ProductsListing
           category="sarees"
-          
+          title="Sarees"
           hideHero={true}
         />
       );

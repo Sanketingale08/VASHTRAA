@@ -290,6 +290,38 @@ export function formatVendorId(seq: number): string {
   return `TDV${numStr.padStart(6, "0")}`;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OBJECT_ID_REGEX = /^[0-9a-f]{24}$/i;
+
+export function isInternalRawId(id: any): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id) || OBJECT_ID_REGEX.test(id);
+}
+
+export function getCanonicalSellerId(v: any): string {
+  if (!v) return "";
+  if (typeof v === "string") {
+    return v;
+  }
+  // 1. Check sellerId if not internal raw id
+  if (v.sellerId && typeof v.sellerId === "string" && !isInternalRawId(v.sellerId)) {
+    return v.sellerId;
+  }
+  // 2. Check vendorId if not internal raw id
+  if (v.vendorId && typeof v.vendorId === "string" && !isInternalRawId(v.vendorId)) {
+    return v.vendorId;
+  }
+  // 3. Check custom display id or seller_id (from sql joins / raw queries)
+  if (v.seller_id && typeof v.seller_id === "string" && !isInternalRawId(v.seller_id)) {
+    return v.seller_id;
+  }
+  if (v.vendor_id && typeof v.vendor_id === "string" && !isInternalRawId(v.vendor_id)) {
+    return v.vendor_id;
+  }
+  // 4. Fallback to sellerId / vendorId / id even if raw id
+  return v.sellerId || v.vendorId || v.seller_id || v.vendor_id || v.id || v._id || "";
+}
+
 // Atomic Sequence Counter Generator
 export async function getNextSequenceValue(sequenceName: string): Promise<number> {
   if (!isMongoConnected) {

@@ -1,4 +1,4 @@
-import { db, mongoSellers, mongoProducts, mongoOrders, mongoGeneric } from "@workspace/db";
+import { db, mongoSellers, mongoProducts, mongoOrders, mongoGeneric, getCanonicalSellerId, isInternalRawId } from "@workspace/db";
 import {
   vendorsTable, productsTable, ordersTable, productReviewsTable,
   productQueriesTable, vendorSettlementsTable,
@@ -113,19 +113,44 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
   } catch {}
 
   // Combine MongoDB and SQL vendors, deduplicating by vendor keys
-  const vendorMapById = new Map<string, any>();
+  const vendorMapByKey = new Map<string, any>();
   const allRawVendors = [...vendors, ...sqlVendors];
 
   for (const v of allRawVendors) {
     if (!v) continue;
-    const primaryKey = String(v.id || v._id || v.vendorId || v.sellerId || "");
-    if (!primaryKey) continue;
-    if (!vendorMapById.has(primaryKey)) {
-      vendorMapById.set(primaryKey, v);
+    const cleanEmail = (v.email || v.contactEmail || v.ownerEmail || "").trim().toLowerCase();
+    const canonicalId = getCanonicalSellerId(v);
+    const key = cleanEmail
+      ? `email:${cleanEmail}`
+      : (canonicalId && !isInternalRawId(canonicalId)
+          ? `canon:${canonicalId}`
+          : (v.ownerId ? `owner:${v.ownerId}` : `id:${v.id || v._id || canonicalId}`
+        ));
+    if (!key) continue;
+    if (!vendorMapByKey.has(key)) {
+      const canonicalSellerId = getCanonicalSellerId(v);
+      vendorMapByKey.set(key, {
+        ...v,
+        vendorId: canonicalSellerId || v.vendorId,
+        sellerId: canonicalSellerId || v.sellerId,
+      });
+    } else {
+      const existing = vendorMapByKey.get(key);
+      const existingCanonical = getCanonicalSellerId(existing);
+      const bestCanonical = (canonicalId && !isInternalRawId(canonicalId))
+        ? canonicalId
+        : existingCanonical;
+      Object.assign(existing, {
+        ...v,
+        id: existing.id || v.id,
+        vendorId: bestCanonical || existing.vendorId || v.vendorId,
+        sellerId: bestCanonical || existing.sellerId || v.sellerId,
+        ownerId: existing.ownerId || v.ownerId,
+      });
     }
   }
 
-  const allVendors = [...vendorMapById.values()];
+  const allVendors = [...vendorMapByKey.values()];
 
   if (allVendors.length === 0) {
     return new Map();
@@ -163,14 +188,17 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
 
   const commissionRules = await loadActiveCommissionRules();
 
-  // Build ID lookup mapping (id / vendorId / sellerId / _id -> primary ID)
+  // Build ID lookup mapping (id / vendorId / sellerId / _id / ownerId -> primary ID)
   const vendorIdToPrimaryId = new Map<string, string>();
   for (const v of allVendors) {
-    const primaryId = String(v.id || v._id || v.vendorId || v.sellerId);
+    const canonicalId = getCanonicalSellerId(v);
+    const primaryId = canonicalId || String(v.id || v._id || v.vendorId || v.sellerId);
     if (v.id) vendorIdToPrimaryId.set(String(v.id), primaryId);
     if (v._id) vendorIdToPrimaryId.set(String(v._id), primaryId);
     if (v.vendorId) vendorIdToPrimaryId.set(String(v.vendorId), primaryId);
     if (v.sellerId) vendorIdToPrimaryId.set(String(v.sellerId), primaryId);
+    if (v.ownerId) vendorIdToPrimaryId.set(String(v.ownerId), primaryId);
+    if (canonicalId) vendorIdToPrimaryId.set(canonicalId, primaryId);
   }
 
   const productToVendor = new Map<string, string>();
@@ -193,7 +221,12 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
   const map = new Map<string, VendorAggregate>();
 
   for (const v of allVendors) {
-    const primaryId = String(v.id || v._id || v.vendorId || v.sellerId);
+    const canonicalId = getCanonicalSellerId(v);
+    const primaryId = canonicalId || String(v.id || v._id || v.vendorId || v.sellerId);
+    if (canonicalId) {
+      v.vendorId = canonicalId;
+      v.sellerId = canonicalId;
+    }
     
     const vendorProducts = products.filter(p => {
       const pVendor = String(p.vendorId || p.sellerId || "");
@@ -472,6 +505,23 @@ export async function computeAllVendorAggregates(): Promise<Map<string, VendorAg
         ? agg.deliveredSellerEarnings
         : roundCurrency((agg.ordersDelivered / Math.max(1, agg.ordersReceived)) * agg.netRevenue);
       agg.pendingSettlement = roundCurrency(Math.max(0, deliveredRevenue - agg.completedSettlement));
+    }
+  }
+
+  for (const [primaryId, agg] of Array.from(map.entries())) {
+    const v = agg.vendor as any;
+    const aliases = [
+      v.id,
+      v._id,
+      v.vendorId,
+      v.sellerId,
+      v.ownerId,
+      getCanonicalSellerId(v),
+    ].filter(Boolean).map(String);
+    for (const alias of aliases) {
+      if (!map.has(alias)) {
+        map.set(alias, agg);
+      }
     }
   }
 

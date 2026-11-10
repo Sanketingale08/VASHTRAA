@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, mongoSellers, mongoProducts, mongoOrders } from "@workspace/db";
+import { db, mongoSellers, mongoProducts, mongoOrders, getCanonicalSellerId } from "@workspace/db";
 import { vendorsTable, ordersTable, vendorSettlementsTable, productsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or } from "drizzle-orm";
 import { insertSellerNotification } from "../lib/sellerNotifications";
 import { emitVendorEvent, emitFinancialsEvent, emitAnalyticsEvent } from "../lib/socket";
 import {
@@ -18,9 +18,11 @@ import { requireAdminKey } from "../middlewares/isAdmin";
 function summarize(agg: VendorAggregate, responseScore: number) {
   const perf = computePerformanceScore(agg, responseScore);
   const v = agg.vendor as any;
+  const canonicalSellerId = getCanonicalSellerId(v);
   return {
     id: String(v.id || (v as any)._id),
-    vendorId: String(v.vendorId || v.sellerId || v.id || (v as any)._id),
+    vendorId: canonicalSellerId || String(v.vendorId || v.sellerId || v.id || (v as any)._id),
+    sellerId: canonicalSellerId || String(v.sellerId || v.vendorId || v.id || (v as any)._id),
     name: v.shopName || v.name || v.storeName || v.brandName || "Vendor",
     shopName: v.shopName || v.name || v.storeName || v.brandName || "Vendor",
     ownerId: v.ownerId ?? null,
@@ -224,17 +226,23 @@ router.get("/admin/vendor-analytics/:id", requireAdminKey, async (req: any, res:
 
   try {
     let vendor: any = null;
-    try { vendor = await mongoSellers.findById(id); } catch {}
+    try {
+      vendor = (await mongoSellers.findById(id)) ||
+               (await mongoSellers.findByVendorId(id)) ||
+               (await mongoSellers.findBySellerId(id)) ||
+               (await mongoSellers.findByOwnerId(id));
+    } catch {}
     if (!vendor) {
       try {
-        const rows = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
+        const rows = await db.select().from(vendorsTable).where(or(eq(vendorsTable.id, id), eq(vendorsTable.vendorId, id), eq(vendorsTable.ownerId, id))).limit(1);
         if (rows.length > 0) vendor = rows[0];
       } catch {}
     }
     if (!vendor) return res.status(404).json({ error: "Vendor not found" });
 
+    const canonicalSellerId = getCanonicalSellerId(vendor);
     const aggMap = await computeAllVendorAggregates();
-    const agg = aggMap.get(id) || aggMap.get(vendor.vendorId) || aggMap.get(vendor.sellerId);
+    const agg = aggMap.get(id) || (canonicalSellerId && aggMap.get(canonicalSellerId)) || aggMap.get(vendor.vendorId) || aggMap.get(vendor.sellerId) || aggMap.get(vendor.id);
     if (!agg) return res.status(404).json({ error: "Vendor analytics not found" });
 
     const responseScores = await computeResponseScores();
@@ -334,6 +342,8 @@ router.get("/admin/vendor-analytics/:id", requireAdminKey, async (req: any, res:
     res.json({
       shop: {
         id: vendor.id,
+        vendorId: canonicalSellerId || vendor.vendorId || vendor.sellerId || vendor.id,
+        sellerId: canonicalSellerId || vendor.sellerId || vendor.vendorId || vendor.id,
         name: vendor.shopName || vendor.name || "Vendor",
         location: vendor.location || vendor.shopCity || "India",
         bio: vendor.bio ?? null,

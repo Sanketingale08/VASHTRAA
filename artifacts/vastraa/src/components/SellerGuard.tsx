@@ -22,6 +22,7 @@ interface VendorProfile {
   statusReason: string | null;
   ownerId: string | null;
   vendorId: string | null;
+  sellerId?: string | null;
   reactivationWelcomePending?: boolean;
   reactivationPending?: boolean;
   // Shop address

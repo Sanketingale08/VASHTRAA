@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { db, vendorsTable, mongoVendors, mongoSellers, mongoUsers, eq, or } from "@workspace/db";
+import { db, vendorsTable, mongoVendors, mongoSellers, mongoUsers, eq, or, getCanonicalSellerId } from "@workspace/db";
 import { verifyAccessToken } from "../lib/jwt";
 import { findSessionInStore } from "../lib/sessions";
 import { logger } from "../lib/logger";
@@ -277,8 +277,9 @@ export async function requireVendorAuth(req: any, res: any, next: any) {
     }
 
     req.vendor = vendor;
-    req.vendorId = vendor.vendorId || vendor.id || vendor.sellerId;
-    req.sellerId = vendor.sellerId || vendor.vendorId || vendor.id;
+    const canonicalSellerId = getCanonicalSellerId(vendor);
+    req.vendorId = canonicalSellerId || vendor.vendorId || vendor.id || vendor.sellerId;
+    req.sellerId = canonicalSellerId || vendor.sellerId || vendor.vendorId || vendor.id;
     req.userId = userId;
     req.userEmail = email || vendor.email || vendor.contactEmail;
     req.userRole = role || "seller";

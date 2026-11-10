@@ -646,7 +646,7 @@ export default function SellerProfile() {
                 )}
               </div>
 
-              {/* Vendor ID — read-only, always shown */}
+              {/* Seller ID — read-only, always shown */}
               {vendor && (
                 <div className="bg-white rounded-2xl border border-[#C7CCD1]/20 p-6">
                   <h3 className="font-serif font-bold text-sm mb-3" style={{ color: MAROON }}>Account</h3>
@@ -655,9 +655,9 @@ export default function SellerProfile() {
                       <FileText size={13} style={{ color: MAROON }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: "#9a8070" }}>Vendor ID</p>
-                      {vendor.vendorId ? (
-                        <p className="text-sm font-semibold font-mono" style={{ color: "#2d1f14" }}>{vendor.vendorId}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: "#9a8070" }}>Seller ID</p>
+                      {(vendor.sellerId || vendor.vendorId) ? (
+                        <p className="text-sm font-semibold font-mono" style={{ color: "#2d1f14" }}>{vendor.sellerId || vendor.vendorId}</p>
                       ) : (
                         <p className="text-sm italic" style={{ color: "#bfae9e" }}>
                           {vendor.status === "approved" ? "Not Generated (legacy account)" : "Not Generated"}

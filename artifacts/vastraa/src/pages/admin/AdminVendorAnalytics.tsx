@@ -21,6 +21,7 @@ export interface VendorAnalyticsItem {
   name: string;
   shopName?: string;
   vendorId?: string;
+  sellerId?: string;
   status: string;
   location: string;
   contactEmail?: string;
@@ -679,7 +680,14 @@ function AnalyticsContent() {
                   <tr key={v.id} className="hover:bg-gray-50/80 transition-colors cursor-pointer" onClick={() => setLocation(`/admin/vendor-analytics/${v.id}`)}>
                     <td className="px-4 py-3.5">
                       <div className="font-bold text-sm" style={{ color: NAVY }}>{v.name || v.shopName || "Seller"}</div>
-                      {v.contactEmail && <div className="text-xs text-gray-400 mt-0.5">{v.contactEmail}</div>}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {(v.sellerId || v.vendorId) && (
+                          <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
+                            {v.sellerId || v.vendorId}
+                          </span>
+                        )}
+                        {v.contactEmail && <span className="text-xs text-gray-400">{v.contactEmail}</span>}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5"><StatusBadge status={v.status} /></td>
                     <td className="px-4 py-3.5 hidden lg:table-cell">

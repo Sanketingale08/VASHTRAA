@@ -29,6 +29,7 @@ interface Vendor {
   kycVerified: boolean;
   featured: boolean;
   vendorId: string | null;
+  sellerId?: string | null;
   createdAt?: string | null;
   termsAcceptedAt?: string | null;
   bankVerified?: boolean;
@@ -124,6 +125,7 @@ function VendorsContent() {
           (x.contactEmail ?? "").toLowerCase().includes(q) ||
           (x.gstin ?? "").toLowerCase().includes(q) ||
           x.location.toLowerCase().includes(q) ||
+          (x.sellerId ?? "").toLowerCase().includes(q) ||
           (x.vendorId ?? "").toLowerCase().includes(q)
       );
     }
@@ -300,8 +302,8 @@ function VendorsContent() {
                         )}
                       </td>
                       <td className="px-4 py-3.5 hidden md:table-cell">
-                        {v.vendorId
-                          ? <span className="text-xs font-mono font-semibold" style={{ color: NAVY }}>{v.vendorId}</span>
+                        {(v.sellerId || v.vendorId)
+                          ? <span className="text-xs font-mono font-semibold" style={{ color: NAVY }}>{v.sellerId || v.vendorId}</span>
                           : <span className="text-xs italic text-gray-400">
                             {v.status === "approved" ? "Not Generated (legacy)" : "Not Generated"}
                           </span>}

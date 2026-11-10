@@ -133,6 +133,14 @@ vi.mock("@workspace/db", () => {
     COLORS: [],
     CATEGORY_PREFIX: {},
     isMongoDbConnected: vi.fn(() => false),
+    isInternalRawId: vi.fn((id: any) => typeof id === "string" && (id.includes("-") || id.length === 24)),
+    getCanonicalSellerId: vi.fn((v: any) => {
+      if (!v) return "";
+      if (typeof v === "string") return v;
+      if (v.sellerId && !v.sellerId.includes("-")) return v.sellerId;
+      if (v.vendorId && !v.vendorId.includes("-")) return v.vendorId;
+      return v.sellerId || v.vendorId || v.id || "";
+    }),
   };
 });
 

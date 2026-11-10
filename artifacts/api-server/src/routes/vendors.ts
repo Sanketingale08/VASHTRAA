@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, mongoSellers, mongoVendors, mongoProducts, mongoOrders, mongoR2Assets, mongoUsers, getNextSequenceValue, formatVendorId } from "@workspace/db";
+import { db, mongoSellers, mongoVendors, mongoProducts, mongoOrders, mongoR2Assets, mongoUsers, getNextSequenceValue, formatVendorId, getCanonicalSellerId, isInternalRawId } from "@workspace/db";
 import { vendorsTable, productsTable, ordersTable } from "@workspace/db";
 import { eq, sql, desc, and, or } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
@@ -316,9 +316,12 @@ router.get("/vendors/:id", async (req: any, res: any) => {
       if (prodCountRes[0]?.count !== undefined) activeCount = prodCountRes[0].count;
     } catch {}
 
+    const canonicalSellerId = getCanonicalSellerId(v);
+
     res.json({
       id: v.id || v.vendorId || id,
-      vendorId: v.vendorId || v.id || id,
+      vendorId: canonicalSellerId || v.vendorId || v.id || id,
+      sellerId: canonicalSellerId || v.sellerId || v.vendorId || v.id || id,
       name: v.shopName || v.name,
       shopName: v.shopName || v.name,
       location: v.location,
@@ -727,11 +730,14 @@ async function handleSellerRegistration(req: any, res: any) {
       }
     }
 
+    const canonicalSellerId = getCanonicalSellerId(vendor) || assignedVendorId;
+
     return res.status(201).json({
       id: vendor.id,
       name: vendor.name || vendorValues.name,
       status: vendor.status || vendorValues.status,
-      vendorId: vendor.vendorId || assignedVendorId || vendor.id,
+      vendorId: canonicalSellerId || vendor.vendorId || assignedVendorId || vendor.id,
+      sellerId: canonicalSellerId || vendor.sellerId || assignedVendorId || vendor.id,
       shiprocketPickupStatus: vendor.shiprocketPickupStatus || "unregistered",
       shiprocketPickupLocationName: vendor.shiprocketPickupLocationName || null,
     });
@@ -982,11 +988,12 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         if (v.name) namesSet.add(String(v.name).trim());
         if (v.shopName) namesSet.add(String(v.shopName).trim());
 
+        const canonicalSellerId = getCanonicalSellerId(v);
         const merged = {
           ...v,
           id: v.id || v.vendorId || v.sellerId || (ownerId ? `v_${ownerId}` : `v_${newIdx}`),
-          vendorId: v.vendorId || v.sellerId || v.id || null,
-          sellerId: v.sellerId || v.vendorId || v.id || null,
+          vendorId: canonicalSellerId || v.vendorId || v.sellerId || v.id || null,
+          sellerId: canonicalSellerId || v.sellerId || v.vendorId || v.id || null,
           name: v.name || v.shopName || "Seller Store",
           shopName: v.shopName || v.name || "Seller Store",
           email: email || null,
@@ -1009,8 +1016,20 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         const existing = consolidatedVendors[targetIdx];
 
         existing.id = existing.id || v.id;
-        existing.vendorId = existing.vendorId || v.vendorId || v.sellerId || v.id;
-        existing.sellerId = existing.sellerId || v.sellerId || v.vendorId || v.id;
+        const vCanonical = getCanonicalSellerId(v);
+        const existingCanonical = getCanonicalSellerId(existing);
+        const bestCanonical = (vCanonical && !isInternalRawId(vCanonical))
+          ? vCanonical
+          : (existingCanonical && !isInternalRawId(existingCanonical))
+            ? existingCanonical
+            : (vCanonical || existingCanonical);
+        if (bestCanonical) {
+          existing.vendorId = bestCanonical;
+          existing.sellerId = bestCanonical;
+        } else {
+          existing.vendorId = existing.vendorId || v.vendorId || v.sellerId || v.id;
+          existing.sellerId = existing.sellerId || v.sellerId || v.vendorId || v.id;
+        }
         existing.name = existing.name || v.name || v.shopName;
         existing.shopName = existing.shopName || v.shopName || v.name;
         existing.email = existing.email || email;
@@ -1153,7 +1172,8 @@ router.get("/admin/vendors", requireAdminKey, async (req: any, res: any) => {
         featured: !!v.featured,
         revenue: vendorRevenue.get(i) || 0,
         totalOrders: vendorOrders.get(i) || 0,
-        vendorId: v.vendorId || v.sellerId || v.id || null,
+        vendorId: getCanonicalSellerId(v) || v.vendorId || v.sellerId || v.id || null,
+        sellerId: getCanonicalSellerId(v) || v.sellerId || v.vendorId || v.id || null,
         createdAt: v.createdAt || v.termsAcceptedAt || null,
         termsAcceptedAt: v.termsAcceptedAt || null,
         shopStreet: v.shopStreet ?? null,
@@ -2022,15 +2042,20 @@ router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => 
     let allOrders: any[] = [];
 
     try {
-      vendor = await mongoSellers.findById(id);
+      vendor = (await mongoSellers.findById(id)) ||
+               (await mongoSellers.findByVendorId(id)) ||
+               (await mongoSellers.findBySellerId(id)) ||
+               (await mongoSellers.findByOwnerId(id));
       const prods = await mongoProducts.findMany({});
-      vendorProducts = prods.filter((p: any) => p.vendorId === id || p.vendorId === vendor?.vendorId || p.vendorId === vendor?.sellerId);
+      const vVendorId = vendor?.vendorId;
+      const vSellerId = vendor?.sellerId;
+      vendorProducts = prods.filter((p: any) => p.vendorId === id || p.vendorId === vVendorId || p.vendorId === vSellerId || p.sellerId === id || p.sellerId === vSellerId);
       allOrders = await mongoOrders.findMany({});
     } catch {}
 
     if (!vendor) {
       try {
-        const rows = await db.select().from(vendorsTable).where(eq(vendorsTable.id, id)).limit(1);
+        const rows = await db.select().from(vendorsTable).where(or(eq(vendorsTable.id, id), eq(vendorsTable.vendorId, id), eq(vendorsTable.ownerId, id))).limit(1);
         if (rows.length > 0) vendor = rows[0];
         vendorProducts = await db
           .select({ id: productsTable.id, active: productsTable.active })
@@ -2102,7 +2127,8 @@ router.get("/admin/vendors/:id", requireAdminKey, async (req: any, res: any) => 
       commissionEarned: Math.round(totalRevenue * COMMISSION_RATE),
       statusBreakdown,
       monthlyRevenue: sortedMonths.map(m => ({ month: m, revenue: monthlyRevenue[m] })),
-      vendorId: vendor.vendorId ?? vendor.sellerId ?? vendor.id ?? null,
+      vendorId: getCanonicalSellerId(vendor) || vendor.vendorId || vendor.sellerId || vendor.id || null,
+      sellerId: getCanonicalSellerId(vendor) || vendor.sellerId || vendor.vendorId || vendor.id || null,
     });
   } catch (err: any) {
     req.log?.error?.({ err }, "Failed to fetch admin vendor detail");

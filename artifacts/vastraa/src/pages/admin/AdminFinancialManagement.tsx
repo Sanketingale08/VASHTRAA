@@ -861,8 +861,8 @@ function CommissionRulesPanel({ syncTrigger, onSynced }: PanelProps) {
           )}
           {scope === "vendor" && (
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Vendor ID</label>
-              <input value={vendorId} onChange={(e) => setVendorId(e.target.value)} placeholder="vendor UUID" className="text-xs px-2 py-2 rounded-lg border border-gray-200 w-56" />
+              <label className="text-xs text-gray-400 block mb-1">Seller ID</label>
+              <input value={vendorId} onChange={(e) => setVendorId(e.target.value)} placeholder="e.g. TDV000001" className="text-xs px-2 py-2 rounded-lg border border-gray-200 w-56" />
             </div>
           )}
           <div>

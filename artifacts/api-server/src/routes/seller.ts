@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
-import { db, mongoProducts, mongoOrders, mongoVendors, mongoSellers, mongoShipments, mongoSettlements, isMongoDbConnected, getNextSequenceValue, getCollection, mongoGeneric } from "@workspace/db";
+import { db, mongoProducts, mongoOrders, mongoVendors, mongoSellers, mongoShipments, mongoSettlements, isMongoDbConnected, getNextSequenceValue, getCollection, mongoGeneric, getCanonicalSellerId } from "@workspace/db";
 import { ordersTable, productsTable, stockHistoryTable, vendorSettlementsTable, vendorsTable, shipmentsTable, bulkImportBatchesTable, CATEGORIES, FABRICS, OCCASIONS, COLORS, CATEGORY_PREFIX, validateCategoryAndSubcategory, resolveCategoryData, findCategoryDefinition } from "@workspace/db";
 import { eq, desc, asc, inArray, and, lte, sql, or } from "drizzle-orm";
 import { isSeller as requireVendorAuth } from "../middlewares/isSeller";
@@ -112,7 +112,8 @@ router.post("/seller/resend-verification-code", otpRateLimiter, async (req: any,
  * 403 for non-vendors (handled by requireVendorAuth).
  */
 router.get("/seller/status", requireVendorAuth, (req: any, res: any) => {
-  res.json({ isSeller: true, vendorId: req.vendor.id, vendorName: req.vendor.name });
+  const canonicalSellerId = getCanonicalSellerId(req.vendor);
+  res.json({ isSeller: true, vendorId: canonicalSellerId || req.vendor.id, sellerId: canonicalSellerId || req.vendor.id, vendorName: req.vendor.name });
 });
 
 import { executeVendorProfileUpdate } from "../lib/updateVendorProfile";
@@ -123,9 +124,12 @@ router.get("/seller/profile", requireVendorAuth, async (req: any, res: any) => {
     return res.status(404).json({ error: "Vendor profile not found" });
   }
 
+  const canonicalSellerId = getCanonicalSellerId(vendor);
+
   res.json({
     id: vendor.id,
-    vendorId: vendor.id || vendor.vendorId || vendor.sellerId,
+    vendorId: canonicalSellerId || vendor.vendorId || vendor.sellerId || vendor.id,
+    sellerId: canonicalSellerId || vendor.sellerId || vendor.vendorId || vendor.id,
     name: vendor.shopName || vendor.name,
     shopName: vendor.shopName || vendor.name,
     location: vendor.location,
@@ -520,6 +524,8 @@ router.get("/seller/dashboard", requireVendorAuth, async (req: any, res: any) =>
       })
       .filter(Boolean);
 
+    const canonicalSellerId = getCanonicalSellerId(vendor);
+
     res.json({
       monthlyRevenue,
       orderCount: allTimeOrderCount,
@@ -527,6 +533,8 @@ router.get("/seller/dashboard", requireVendorAuth, async (req: any, res: any) =>
       avgRating: vendor?.rating ?? 4.8,
       recentOrders,
       topProducts,
+      sellerId: canonicalSellerId || vendorId,
+      vendorId: canonicalSellerId || vendorId,
     });
   } catch (err: any) {
     req.log?.error({ err }, "seller/dashboard failed");

@@ -823,7 +823,12 @@ function VendorTab({ period, from, to }: { period: Period; from: string; to: str
               <tbody className="divide-y divide-gray-100">
                 {top.map((v: any) => (
                   <tr key={v.vendorId} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-semibold text-[#0A1F44]">{v.vendorName}</td>
+                    <td className="px-5 py-3.5 font-semibold text-[#0A1F44]">
+                      {v.vendorName}
+                      {(v.sellerId || v.vendorId) && (
+                        <span className="text-xs font-mono text-gray-400 font-normal ml-1.5">({v.sellerId || v.vendorId})</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5 text-right text-gray-600 font-medium">{v.settlementCount}</td>
                     <td className="px-5 py-3.5 text-right font-bold text-[#0A1F44]">{fmt(v.totalRevenue)}</td>
                     <td className="px-5 py-3.5 text-right font-medium text-red-600">-{fmt(v.commission)}</td>

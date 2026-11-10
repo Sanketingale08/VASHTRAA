@@ -182,7 +182,14 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white truncate">{vendor.shopName || vendor.name}</p>
-              <p className="text-[10px] text-white/50 truncate">{vendor.location}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {(vendor.sellerId || vendor.vendorId) && (
+                  <span className="text-[10px] font-mono text-amber-300/90 font-medium">
+                    ID: {vendor.sellerId || vendor.vendorId}
+                  </span>
+                )}
+                {vendor.location && <span className="text-[10px] text-white/50 truncate">• {vendor.location}</span>}
+              </div>
             </div>
           </div>
         )}
@@ -370,7 +377,14 @@ export function SellerLayout({ children, title }: { children: React.ReactNode; t
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-white truncate">{vendor.shopName || vendor.name}</p>
-                    <p className="text-[10px] text-white/50 truncate">{vendor.location}</p>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {(vendor.sellerId || vendor.vendorId) && (
+                        <span className="text-[10px] font-mono text-amber-300/90 font-medium">
+                          ID: {vendor.sellerId || vendor.vendorId}
+                        </span>
+                      )}
+                      {vendor.location && <span className="text-[10px] text-white/50 truncate">• {vendor.location}</span>}
+                    </div>
                   </div>
                 </div>
               )}
@@ -582,9 +596,16 @@ export default function SellerDashboard() {
             )}
           </div>
           <div className="flex-1">
-            <h2 className="font-serif text-xl font-bold" style={{ color: MAROON }}>
-              Welcome back, {vendor?.shopName || vendor?.name}!
-            </h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-serif text-xl font-bold" style={{ color: MAROON }}>
+                Welcome back, {vendor?.shopName || vendor?.name}!
+              </h2>
+              {(vendor?.sellerId || vendor?.vendorId) && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                  Seller ID: {vendor.sellerId || vendor.vendorId}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-0.5">
               {vendor?.tagline ?? vendor?.location ?? "Manage your store from here."}
             </p>

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getCollection, getNextSequenceValue, isMongoDbConnected, setMongoConnected, formatVendorId } from "./mongo";
+import { getCollection, getNextSequenceValue, isMongoDbConnected, setMongoConnected, formatVendorId, isInternalRawId, getCanonicalSellerId } from "./mongo";
 import { ObjectId, type Filter, type Sort } from "mongodb";
 
 // Type definitions matching existing Drizzle schema models
@@ -32,12 +32,23 @@ function deduplicateSellers(sellers: (Seller & Vendor)[]): (Seller & Vendor)[] {
       map.set(key, { ...s });
     } else {
       const existing = map.get(key)!;
+      const canonicalVendorId = (s.vendorId && !isInternalRawId(s.vendorId))
+        ? s.vendorId
+        : (existing.vendorId && !isInternalRawId(existing.vendorId))
+          ? existing.vendorId
+          : (existing.vendorId || s.vendorId);
+      const canonicalSellerId = (s.sellerId && !isInternalRawId(s.sellerId))
+        ? s.sellerId
+        : (existing.sellerId && !isInternalRawId(existing.sellerId))
+          ? existing.sellerId
+          : (canonicalVendorId || existing.sellerId || s.sellerId);
+
       map.set(key, {
         ...existing,
         ...s,
         id: existing.id || s.id,
-        vendorId: existing.vendorId || s.vendorId,
-        sellerId: existing.sellerId || s.sellerId,
+        vendorId: canonicalVendorId,
+        sellerId: canonicalSellerId,
         ownerId: existing.ownerId || s.ownerId,
         email: existing.email || s.email,
         contactEmail: existing.contactEmail || s.contactEmail,
@@ -206,14 +217,18 @@ export const mongoSellers = {
 
     const id = data.id || crypto.randomUUID();
     const status = data.status || "pending";
-    let vendorId = data.vendorId || data.sellerId || null;
+    let vendorId = (data.vendorId && !isInternalRawId(data.vendorId))
+      ? data.vendorId
+      : (data.sellerId && !isInternalRawId(data.sellerId))
+        ? data.sellerId
+        : null;
 
     if (!vendorId) {
       const seq = await getNextSequenceValue("vendor_id");
       vendorId = formatVendorId(seq);
     }
 
-    const sellerId = vendorId || data.sellerId || id;
+    const sellerId = vendorId;
     const now = new Date();
 
     const doc = {
@@ -310,9 +325,16 @@ export const mongoSellers = {
     if (existing) {
       const targetId = existing.id || id;
 
-      // 1. Vendor ID Immutability: existing vendorId must NEVER be overwritten or changed
-      if (existing.vendorId) {
-        setObj.vendorId = existing.vendorId;
+      // 1. Seller & Vendor ID Immutability: existing canonical Seller ID must NEVER be overwritten or changed
+      const canonicalId = (existing.sellerId && !isInternalRawId(existing.sellerId))
+        ? existing.sellerId
+        : (existing.vendorId && !isInternalRawId(existing.vendorId))
+          ? existing.vendorId
+          : (existing.sellerId || existing.vendorId);
+
+      if (canonicalId) {
+        setObj.vendorId = canonicalId;
+        setObj.sellerId = canonicalId;
       } else if ((updateData.status as any) === "approved" || (updateData.status as any) === "active") {
         // 2. Generate Vendor ID only upon approval if missing
         const seq = await getNextSequenceValue("vendor_id");

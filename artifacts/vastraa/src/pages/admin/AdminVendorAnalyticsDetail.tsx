@@ -18,7 +18,7 @@ const GOLD = "#C7CCD1";
 
 interface AnalyticsDetail {
   shop: {
-    id: string; name: string; location: string; bio: string | null; tagline: string | null;
+    id: string; vendorId?: string; sellerId?: string; name: string; location: string; bio: string | null; tagline: string | null;
     avatar: string; contactEmail: string | null; mobile: string | null; gstin: string | null;
     status: string; registeredAt: string | null;
     shopStreet: string | null; shopCity: string | null; shopState: string | null; shopPincode: string | null;
@@ -259,6 +259,12 @@ function DetailContent() {
                   {data.shop.tagline && <p className="text-xs text-gray-500 mt-0.5 italic">{data.shop.tagline}</p>}
                 </div>
               </div>
+              {(data.shop.sellerId || data.shop.vendorId) && (
+                <div className="mb-4 px-3 py-2 rounded-lg flex items-center justify-between" style={{ background: "rgba(199,204,209,0.08)", border: "1px solid rgba(199,204,209,0.25)" }}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: GOLD }}>Seller ID</span>
+                  <span className="text-sm font-mono font-semibold" style={{ color: NAVY }}>{data.shop.sellerId || data.shop.vendorId}</span>
+                </div>
+              )}
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-center gap-2.5 text-gray-600">
                   <MapPin size={13} className="shrink-0 text-gray-400" />

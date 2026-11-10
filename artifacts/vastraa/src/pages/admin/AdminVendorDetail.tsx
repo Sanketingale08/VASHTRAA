@@ -52,6 +52,7 @@ interface VendorDetail {
   statusBreakdown: Record<string, number>;
   monthlyRevenue: { month: string; revenue: number }[];
   vendorId: string | null;
+  sellerId?: string | null;
 }
 
 function fmt(n: number) {
@@ -287,10 +288,10 @@ function VendorDetailContent() {
                 </div>
               </div>
 
-              {vendor.vendorId && (
+              {(vendor.sellerId || vendor.vendorId) && (
                 <div className="mb-4 px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: "rgba(199,204,209,0.08)", border: "1px solid rgba(199,204,209,0.25)" }}>
                   <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: GOLD }}>Seller ID</span>
-                  <span className="text-sm font-mono font-semibold ml-auto" style={{ color: NAVY }}>{vendor.vendorId}</span>
+                  <span className="text-sm font-mono font-semibold ml-auto" style={{ color: NAVY }}>{vendor.sellerId || vendor.vendorId}</span>
                 </div>
               )}
 

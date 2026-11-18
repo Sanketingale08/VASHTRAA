@@ -1,0 +1,6 @@
+# Deploy the VASTRAA customer storefront (artifacts/vastraa).
+# The site was previously building artifacts/mockup-sandbox, a Replit
+# component-preview tool, which is why it showed "Component Preview Server".
+[build]
+  command = "pnpm --filter @workspace/twirldrape... run build"
+  publish = "artifacts/vastraa/dist/public"
